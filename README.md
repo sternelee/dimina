@@ -1,18 +1,14 @@
 <div align="center">
-  <img alt="Dimina" src="https://pt-starimg.didistatic.com/static/starimg/img/0Gd22Gzvni1634047896645.png" width="284" />
-  <br/>
-  <br/>
-  <a href="https://github.com/didi/dimina/blob/HEAD/LICENSE">
-    <img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Dimina is released under the Apache 2.0 license." />
-  </a>
-  <a href="https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md">
-    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome!" />
-  </a>
+
+![Dimina](https://s3-gz01.didistatic.com/packages-mait/img/yeGw4QBcQP1745495172856.png)
+
+[![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
+[![PRs welcome!](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
+
 </div>
 
-
-
 # 星河小程序(Dimina) - 滴滴开源小程序框架
+
 > Dimina 发音是 /diːminə/ ，意为 didi miniprogram 的缩写，致力于打造开源的小程序解决方案。
 
 ## 内容
