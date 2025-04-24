@@ -1,9 +1,28 @@
 <div align="center">
-<img alt="Dimina" src="https://pt-starimg.didistatic.com/static/starimg/img/0Gd22Gzvni1634047896645.png" width="284" />
+  <img alt="Dimina" src="https://pt-starimg.didistatic.com/static/starimg/img/0Gd22Gzvni1634047896645.png" width="284" />
+  <br/>
+  <br/>
+  <a href="https://github.com/didi/dimina/blob/HEAD/LICENSE">
+    <img src="https://img.shields.io/badge/license-Apache%202.0-blue" alt="Dimina is released under the Apache 2.0 license." />
+  </a>
+  <a href="https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md">
+    <img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg" alt="PRs welcome!" />
+  </a>
 </div>
+
+
 
 # 星河小程序(Dimina) - 滴滴开源小程序框架
 > Dimina 发音是 /diːminə/ ，意为 didi miniprogram 的缩写，致力于打造开源的小程序解决方案。
+
+## 内容
+
+- [简介](#简介)
+- [效果展示](#效果展示)
+- [开始使用](#开始使用)
+- [设计思路](#设计思路)
+- [已知差异](#已知差异)
+- [License](#license)
 
 ## 简介
 
@@ -11,12 +30,17 @@
 
 星河小程序当前适配了安卓、iOS、鸿蒙三个平台，开发者可以将小程序代码作为独立模块接入当前的 App 或者以小程序语法去开发并打包出一个独立的 APP。
 
-## 演示
+## 效果展示
+
 | Android | Harmony |
 | ---- | ---- |
 | ![Android](https://s3-gz01.didistatic.com/packages-mait/img/4UXIfwMOuJ1745485525250.jpg) | ![Harmony](https://s3-gz01.didistatic.com/packages-mait/img/9UeGKg9qdV1745485235803.jpg) |
 
 ## 开始使用
+
+* [Android 接入](./android/README.md)
+* [iOS 接入](./iOS/README.md)
+* [Harmony 接入](./harmony/README.md)
 
 ## 设计思路
 
@@ -26,7 +50,9 @@
 
 目前已支持的 API/组件/特性 有限，欢迎大家参与共建。
 
-## 已知差异（相比微信小程序）
+## 已知差异
+
+相比微信小程序，具有以下差异：
 
 1. 不支持未声明就使用变量，如视图中使用了 `{{text}}`，但对应 js 的 `data: {}` 未声明就进行调用 `this.setData({text: 'hello'})`
 2. 自定义组件的属性如果是布尔值，但传了空字符串，则认为是 [true](https://github.com/vuejs/vue/issues/4710)
