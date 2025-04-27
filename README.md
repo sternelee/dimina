@@ -2,28 +2,38 @@
 
 ![Dimina](https://s3-gz01.didistatic.com/packages-mait/img/yeGw4QBcQP1745495172856.png)
 
-[![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/license-Apache%202.0-blue)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
+[![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/License-Apache%202.0-blue)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
 [![PRs welcome!](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
 
 </div>
 
 # 星河小程序(Dimina) - 滴滴开源小程序框架
 
-> Dimina 发音是 /diːminə/ ，意为 didi miniprogram 的缩写，致力于打造开源的小程序解决方案。
+> Dimina 发音是 /diːminə/ ，意为 didi miniprogram 的缩写，致力于打造灵活、轻巧的小程序跨端框架。
 
-## 内容
+## 概览
 
 - [简介](#简介)
-- [效果展示](#效果展示)
-- [开始使用](#开始使用)
 - [设计思路](#设计思路)
-- [License](#license)
+- [效果展示](#效果展示)
+- [上手使用](#上手使用)
+- [开源协议](#开源协议)
 
 ## 简介
 
-星河小程序是滴滴自研的一套轻量级小程序跨端框架，旨在提供高性能、跨平台、低门槛的开发体验。
+星河小程序（以下统称为 `Dimina` ），是滴滴自研的一套轻量级小程序跨端框架，旨在提供高性能、跨平台、低门槛的开发体验。
 
-星河小程序当前适配了安卓、iOS、鸿蒙、Web四个平台，开发者可以将小程序代码作为独立模块接入当前的 App 或者以小程序语法去开发并打包出一个独立的 APP。
+Dimina 当前已经适配了 Android、iOS、Harmony、Web 四个平台，开发者可将 Dimina 作为**移动端跨平台框架**进行使用，将已有小程序代码编写的逻辑作为独立模块接入当前的 App 或者采用小程序语法去开发需求并打包出一个独立的原生 APP。
+
+## 设计思路
+
+Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)进行设计，API 当前对齐了大部分微信小程序实现，底层视图渲染框架使用了 Vue3。
+
+得益于 Vue3 丰富的功能特性，我们的框架本质上是将小程序的语法通过编译器转化成 Vue 的语法，并在此基础上实现了一套小程序标准的 Vue 组件和各大移动端系统的小程序加载容器。
+
+更多框架实现细节可参考[说明文档](./docs/README.md)。
+
+由于行业内个各大厂的小程序方案已迭代多年，目前星河并未完全支持小程序的所有 **API/组件/特性**。当前我们已支持的能力可参考[API说明](./docs/API-Reference.md)，欢迎大家 **Star、Fork、贡献代码与建议**。
 
 ## 效果展示
 
@@ -31,19 +41,13 @@
 | ---- | ---- |
 | ![Android](https://s3-gz01.didistatic.com/packages-mait/img/4UXIfwMOuJ1745485525250.jpg) | ![Harmony](https://s3-gz01.didistatic.com/packages-mait/img/9UeGKg9qdV1745485235803.jpg) |
 
-## 开始使用
+## 上手使用
 
-- [构建小程序](./fe/README.md)
-- [Android 接入](./android/README.md)
-- [iOS 接入](./iOS/README.md)
-- [Harmony 接入](./harmony/README.md)
+- [小程序打包说明](./fe/README.md)
+- [Android 接入说明](./android/README.md)
+- [iOS 接入说明](./iOS/README.md)
+- [Harmony 接入说明](./harmony/README.md)
 
-## 设计思路
+## 开源协议
 
-星河小程序对标行业内[小程序标准](https://www.w3.org/TR/mini-app-white-paper/)进行实现，API 当前对齐了大部分微信小程序，底层渲染框架使用了 Vue3。得益于 Vue 的功能特性和语法相似性，我们的框架本质上是将小程序的语法通过编译器转化成 Vue 的语法，并在此基础上实现了一套小程序标准的 Vue 组件。
-
-目前星河并未完全支持小程序的所有 **API/组件/特性**，当前已支持能力可参考[能力说明文档](./docs/README.md)，欢迎大家 Star、Fork、贡献代码与建议。
-
-## License
-
-Dimina 基于 [Apache-2.0](https://opensource.org/license/apache-2-0) 协议进行分发和使用，更多信息参见 [协议文件](LICENSE)。
+Dimina 基于 [Apache-2.0](https://opensource.org/license/apache-2-0) 协议进行分发和使用，更多信息参见[协议文件](LICENSE)。
