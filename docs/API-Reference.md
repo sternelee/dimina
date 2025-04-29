@@ -14,6 +14,7 @@ Vue 作为底层的渲染框架，自然会与小程序的语法存在一定的�
 
 - **组件属性的默认值**
     小程序中，组件属性如果为空字符串，会默认解析为 `false`；而在 Vue 中，空字符串会被解析为 [`true`](https://github.com/vuejs/vue/issues/4710)。这种行为差异需要在属性处理逻辑中进行适配。
+    另外针对字符串类型的组件属性，如果未赋值，微信小程序会处理成空字符串（伴有提示：`received type-uncompatible value: expected <String> but get null value. Use empty string instead.`），但是星河不会处理而是直接透传，这一点请注意。
 
 - **循环内的访问限制**
     在小程序中，`wx:for` 标签用于在元素上直接进行循环操作，并允许直接在该元素上使用`wx:if`直接访问循环实例的属性。而 `v-for`不支持这个特性，就需要解析器将该访问属性的方法移动到下一级节点。
