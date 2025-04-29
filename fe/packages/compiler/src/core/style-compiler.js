@@ -1,0 +1,217 @@
+import fs from 'node:fs'
+import path from 'node:path'
+import { isMainThread, parentPort } from 'node:worker_threads'
+import postcss from 'postcss'
+import autoprefixer from 'autoprefixer'
+import selectorParser from 'postcss-selector-parser'
+import cssnano from 'cssnano'
+import { compileStyle } from '@vue/compiler-sfc'
+import { getAppId, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
+import { collectAssets, tagWhiteList, transformRpx } from '../common/utils.js'
+
+const fileType = ['.wxss', '.ddss']
+const compileRes = new Map()
+// 用于缓存已处理的模块
+const processedModules = new Set()
+
+if (!isMainThread) {
+	parentPort.on('message', async ({ pages, storeInfo }) => {
+		try {
+			resetStoreInfo(storeInfo)
+
+			const progress = {
+				_completedTasks: 0,
+				get completedTasks() {
+					return this._completedTasks
+				},
+				set completedTasks(value) {
+					this._completedTasks = value
+
+					parentPort.postMessage({ completedTasks: this._completedTasks })
+				},
+			}
+
+			await compileSS(pages.mainPages, null, progress)
+
+			for (const [root, subPages] of Object.entries(pages.subPages)) {
+				await compileSS(subPages.info, root, progress)
+			}
+
+			parentPort.postMessage({ success: true })
+		}
+		catch (error) {
+			parentPort.postMessage({ success: false, error: error.message })
+		}
+	})
+}
+
+/**
+ *  编译样式文件
+ */
+async function compileSS(pages, root, progress) {
+	// page 样式
+	for (const page of pages) {
+		const code = await buildCompileCss(page, []) || ''
+		const filename = `${page.path.replace(/\//g, '_')}`
+		if (root) {
+			const subDir = `${getTargetPath()}/${root}`
+			if (!fs.existsSync(subDir)) {
+				fs.mkdirSync(subDir)
+			}
+
+			fs.writeFileSync(`${subDir}/${filename}.css`, code)
+		}
+		else {
+			const mainDir = `${getTargetPath()}/main`
+			if (!fs.existsSync(mainDir)) {
+				fs.mkdirSync(mainDir)
+			}
+
+			fs.writeFileSync(`${mainDir}/${filename}.css`, code)
+		}
+
+		progress.completedTasks++
+	}
+}
+
+async function buildCompileCss(module, depthChain = []) {
+	const currentPath = module.path
+
+	// Circular dependency detected
+	if (depthChain.includes(currentPath)) {
+		console.warn(`检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+	}
+	// Deep dependency chain detected
+	if (depthChain.length > 100) {
+		console.warn(`检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+	}
+	depthChain = [...depthChain, currentPath]
+	let result = await enhanceCSS(module) || ''
+
+	if (module.usingComponents) {
+		// component 样式
+		// 组件对应 wxss 文件的样式，只对组件 wxml 内的节点生效
+		// https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/wxml-wxss.html
+		for (const componentInfo of Object.values(module.usingComponents)) {
+			const componentModule = getComponent(componentInfo)
+			if (!componentModule) {
+				continue
+			}
+			result += await buildCompileCss(componentModule, depthChain)
+		}
+	}
+
+	// 将当前模块标记为已处理
+	processedModules.add(currentPath)
+	return result
+}
+
+async function enhanceCSS(module) {
+	const absolutePath = module.absolutePath ? module.absolutePath : getAbsolutePath(module.path)
+	if (!absolutePath) {
+		// 样式文件不存在
+		return
+	}
+
+	const inputCSS = getContentByPath(absolutePath)
+	if (!inputCSS) {
+		return
+	}
+
+	if (compileRes.has(absolutePath)) {
+		return compileRes.get(absolutePath)
+	}
+
+	const fixedCSS = inputCSS.replace(/@import.*?(?<!;)\s*$/gm, '$&;')
+
+	// 查找所有未以分号结尾的@import语句，并在它们后面添加分号。(?<!;) 是一个负向后向查找断言，确保前面没有分号
+	const ast = postcss.parse(fixedCSS)
+	const promises = []
+	ast.walk(async (node) => {
+		if (node.type === 'atrule' && node.name === 'import') {
+			// @import 样式导入
+			// 替换字符串首尾的引号
+			const str = node.params.replace(/^['"]|['"]$/g, '')
+			const importFullPath = path.resolve(absolutePath, `../${str}`)
+
+			node.remove()
+
+			promises.push(buildCompileCss({ absolutePath: importFullPath, id: module.id }))
+		}
+		else if (node.type === 'rule') {
+			// 处理 ::v-deep
+			if (node.selector.includes('::v-deep')) {
+				node.selector = node.selector.replace(/::v-deep\s+(\S[^{]*)/g, ':deep($1)')
+			}
+
+			node.selector = selectorParser((selectors) => {
+				selectors.walkTags((tag) => {
+					if (tagWhiteList.includes(tag.value)) {
+						// 将组件样式转换成类样式
+						tag.value = `.dd-${tag.value}`
+					}
+				})
+			}).processSync(node.selector)
+
+			// 普通css规则
+			node.walkDecls((decl) => {
+				// 处理样式中的资源
+				const match = decl.value.match(/url\("([^"]*)"\)/)
+				if (match) {
+					const imgSrc = match[1].trim()
+					// Skip processing if it's a data:image resource
+					if (imgSrc.startsWith('data:image')) {
+						return
+					}
+					const realSrc = collectAssets(getWorkPath(), absolutePath, imgSrc, getTargetPath(), getAppId())
+					decl.value = `url(${realSrc})`
+				}
+				else {
+					decl.value = transformRpx(decl.value)
+				}
+			})
+		}
+		else if (node.type === 'comment') {
+			// 移除注释
+			node.remove()
+		}
+	})
+
+	const cssCode = ast.toResult().css
+
+	// 样式隔离
+	const code = compileStyle({
+		source: cssCode,
+		id: module.id,
+		scoped: !!module.id,
+	}).code
+
+	const res = await postcss([autoprefixer({ overrideBrowserslist: ['cover 99.5%'] }), cssnano()]).process(code, {
+		from: undefined, // 未指定输入源文件路径
+	})
+
+	// 处理导入的样式
+	const importCss = (await Promise.all(promises))
+		.filter(Boolean)
+		.join('')
+
+	const result = importCss ? importCss + res.css : res.css
+
+	compileRes.set(module.path, result)
+
+	return result
+}
+
+function getAbsolutePath(modulePath) {
+	const workPath = getWorkPath()
+	const src = modulePath.startsWith('/') ? modulePath : `/${modulePath}`
+
+	for (const ssType of fileType) {
+		const ssFullPath = `${workPath}${src}${ssType}`
+		if (fs.existsSync(ssFullPath)) {
+			return ssFullPath
+		}
+	}
+}
+
+export default compileSS

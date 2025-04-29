@@ -1,0 +1,29 @@
+{
+	"name": "@dimina/render",
+	"private": true,
+	"author": "doslin",
+	"description": "渲染线程 SDK",
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"module": "./dist/render.js",
+	"exports": {
+		".": {
+			"import": "./dist/render.js"
+		}
+	},
+	"scripts": {
+		"dev": "vite build",
+		"build": "vite build"
+	},
+	"dependencies": {
+		"@dimina/common": "workspace:^",
+		"@dimina/components": "workspace:^",
+		"mitt": "^3.0.1",
+		"vue": "^3.5.13"
+	},
+	"devDependencies": {
+		"@vitejs/plugin-vue": "^5.2.3"
+	}
+}

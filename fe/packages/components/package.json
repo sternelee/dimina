@@ -1,0 +1,32 @@
+{
+	"name": "@dimina/components",
+	"author": "doslin",
+	"private": true,
+	"description": "内置组件",
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"module": "./dist/components.js",
+	"exports": {
+		".": {
+			"import": "./dist/components.js"
+		},
+		"./style": {
+			"import": "./dist/components.css"
+		}
+	},
+	"scripts": {
+		"dev": "vite build",
+		"build": "vite build"
+	},
+	"dependencies": {
+		"@dimina/common": "workspace:^",
+		"vue": "^3.5.13"
+	},
+	"devDependencies": {
+		"@vitejs/plugin-vue": "^5.2.3",
+		"terser": "^5.39.0",
+		"unplugin-auto-import": "^0.17.8"
+	}
+}

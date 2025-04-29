@@ -1,0 +1,14 @@
+node_modules
+.DS_Store
+dist
+dist-ssr
+*.local
+*.lock
+.vscode
+package-lock.json
+pnpm-lock.yaml
+coverage
+packages/container/jssdk
+example/*
+!example/subpackages
+!example/weui

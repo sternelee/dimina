@@ -1,0 +1,70 @@
+{
+	"name": "@dimina/compiler",
+	"version": "1.0.1",
+	"description": "星河编译工具",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"exports": {
+		".": {
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		},
+		"./view-compiler": {
+			"import": "./dist/core/view-compiler.js",
+			"require": "./dist/core/view-compiler.cjs"
+		},
+		"./logic-compiler": {
+			"import": "./dist/core/logic-compiler.mjs",
+			"require": "./dist/core/logic-compiler.js"
+		},
+		"./style-compiler": {
+			"import": "./dist/core/style-compiler.js",
+			"require": "./dist/core/style-compiler.cjs"
+		}
+	},
+	"bin": {
+		"dmcc": "dist/bin/index.js"
+	},
+	"scripts": {
+		"build": "vite build",
+		"test": "vitest run",
+		"test:dev": "vitest",
+		"coverage": "vitest run --coverage"
+	},
+	"author": "doslin",
+	"license": "Apache-2.0",
+	"keywords": [
+		"dimina",
+		"compiler",
+		"miniapp",
+		"小程序",
+		"星河"
+	],
+	"dependencies": {
+		"@babel/core": "^7.26.10",
+		"@babel/traverse": "^7.27.0",
+		"@babel/types": "^7.27.0",
+		"@vue/compiler-sfc": "^3.5.13",
+		"autoprefixer": "^10.4.21",
+		"cheerio": "1.0.0-rc.12",
+		"chokidar": "^3.6.0",
+		"commander": "^12.1.0",
+		"cssnano": "^6.1.2",
+		"esbuild": "^0.24.2",
+		"htmlparser2": "^9.1.0",
+		"listr2": "^8.3.2",
+		"postcss": "^8.5.3",
+		"postcss-selector-parser": "^6.1.2",
+		"shelljs": "^0.8.5"
+	},
+	"devDependencies": {
+		"vitest": "2.1.8"
+	},
+	"publishConfig": {
+		"registry": "https://registry.npmjs.org/"
+	}
+}

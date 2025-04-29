@@ -1,0 +1,24 @@
+import router from '@/core/router'
+import { invokeAPI } from '@/api/common'
+
+export function createCameraContext() {
+	return new CameraContext()
+}
+
+class CameraContext {
+	constructor() {
+		this.bridgeId = router.getPageInfo().id
+	}
+
+	takePhoto(data) {
+		invokeAPI('takePhoto', data)
+	}
+
+	startRecord() {
+		invokeAPI('startRecord')
+	}
+
+	stopRecord() {
+		invokeAPI('startRecord')
+	}
+}

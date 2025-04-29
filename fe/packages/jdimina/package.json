@@ -1,0 +1,22 @@
+{
+	"name": "jdimina-next",
+	"version": "0.0.1",
+	"private": true,
+	"author": "dujichong",
+	"description": "h5 js sdk",
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"module": "./dist/jdimina_next.js",
+	"exports": {
+		".": {
+			"import": "./dist/jdimina_next.js"
+		}
+	},
+	"scripts": {
+		"dev": "vite build",
+		"build:dev": "vite build --mode development",
+		"build": "vite build"
+	}
+}

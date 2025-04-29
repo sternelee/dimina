@@ -1,0 +1,156 @@
+.dimina-app__page-view {
+	position: absolute;
+	left: 0;
+	top: 0;
+	bottom: 0;
+	right: 0;
+	background-color: #ededed;
+}
+
+.dimina-app-navigation {
+	padding-top: logic(88px);
+	height: logic(88px);
+	box-sizing: content-box;
+	display: flex;
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	z-index: 10;
+	background-color: #ededed;
+
+	.dimina-app-navigation__content {
+		width: 100%;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		position: relative;
+	}
+
+	.dimina-app-navigation__blank {
+		width: logic(20px);
+		height: logic(88px);
+		position: absolute;
+		left: logic(34px);
+		top: 0;
+		background-size: logic(20px) logic(35px);
+	}
+
+	.dimina-app-navigation__left-btn {
+		width: logic(20px);
+		height: logic(88px);
+		position: absolute;
+		left: logic(34px);
+		top: 0;
+		background: url('@images/mini-arrow-left.png') no-repeat left center;
+		background-size: logic(20px) logic(35px);
+		cursor: pointer;
+		display: none;
+	}
+
+	.dimina-app-navigation__title {
+		text-align: center;
+		font-size: logic(34px);
+		color: #333;
+	}
+
+	.dimina-app-navigation__right-btn {
+		width: logic(45px);
+		height: logic(88px);
+		position: absolute;
+		right: logic(33px);
+		cursor: pointer;
+		top: 0;
+		background: url('@images/more.png') no-repeat center center;
+		background-size: logic(35px) auto;
+	}
+}
+
+.dimina-app__mini-content {
+	padding-top: logic(176px);
+	box-sizing: border-box;
+	height: 100%;
+
+	.dimina-app__mini-search {
+		padding: logic(30px) logic(16px);
+		background-color: #ededed;
+	}
+
+	.dimina-app__mini-search-input {
+		height: logic(72px);
+		background-color: #ffffff;
+		border-radius: logic(10px);
+		display: flex;
+		justify-content: center;
+		align-items: center;
+	}
+
+	.dimina-app__mini-search-input-placeholder {
+		font-size: logic(33px);
+		color: #000000;
+		font-weight: 300;
+		text-align: center;
+		background: url('@images/search.jpg') no-repeat logic(40px) center;
+		background-size: logic(33px) logic(33px);
+		border: none;
+  		outline: none;
+		&::placeholder{
+			color: #b3b3b3;
+		}
+	}
+}
+
+.dimina-app__mini-used {
+	padding-left: logic(32px);
+	background-color: #fff;
+	border-bottom: 1px solid #e6e6e6;
+	border-top: 1px solid #e6e6e6;
+
+	.dimina-app__mini-used-title {
+		padding: logic(30px) 0;
+		font-weight: normal;
+		font-size: logic(26px);
+		color: #737373;
+	}
+
+	.dimina-app__mini-used-list {
+		overflow-y: auto;
+		height: logic(1100px);
+	}
+
+	.dimina-app__mini-used-list-item {
+		user-select: none;
+		padding-left: logic(158px);
+		list-style: none;
+		cursor: pointer;
+		position: relative;
+
+		&:last-child .dimina-app__mini-used-name {
+			border: none;
+		}
+	}
+
+	.dimina-app__mini-used-logo {
+		width: logic(100px);
+		height: logic(100px);
+		overflow: hidden;
+		left: logic(18px);
+		top: 50%;
+		transform: translateY(-50%);
+		border-radius: 50%;
+		position: absolute;
+
+		img {
+			width: 100%;
+			height: 100%;
+		}
+	}
+
+	.dimina-app__mini-used-name {
+		padding-top: logic(66px);
+		padding-bottom: logic(66px);
+		color: #333;
+		font-size: logic(33px);
+		border-bottom: 1px solid #e4e4e4;
+	}
+}

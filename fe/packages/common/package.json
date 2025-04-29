@@ -1,0 +1,26 @@
+{
+	"name": "@dimina/common",
+	"author": "doslin",
+	"private": true,
+	"description": "工具类 SDK",
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"module": "./dist/common.js",
+	"exports": {
+		".": {
+			"import": "./dist/common.js"
+		}
+	},
+	"scripts": {
+		"dev": "vite build",
+		"build": "vite build",
+		"test": "vitest run",
+		"test:dev": "vitest",
+		"coverage": "vitest run --coverage"
+	},
+	"dependencies": {
+		"dot-prop": "^9.0.0"
+	}
+}

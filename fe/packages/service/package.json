@@ -1,0 +1,27 @@
+{
+	"name": "@dimina/service",
+	"author": "doslin",
+	"private": true,
+	"description": "逻辑线程 SDK",
+	"type": "module",
+	"files": [
+		"dist"
+	],
+	"module": "./dist/service.js",
+	"exports": {
+		".": {
+			"import": "./dist/service.js"
+		}
+	},
+	"scripts": {
+		"dev": "vite build",
+		"build": "vite build",
+		"test": "vitest run",
+		"test:dev": "vitest",
+		"coverage": "vitest run --coverage"
+	},
+	"dependencies": {
+		"@dimina/common": "workspace:^",
+		"mitt": "^3.0.1"
+	}
+}

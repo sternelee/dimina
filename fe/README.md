@@ -28,23 +28,17 @@ pnpm install
 ### Development
 
 ```sh
+# Compile all Mini Programs in example/
+pnpm compile
 
 # Build (development, no minify)
 pnpm build:dev
-
-# Compile all Mini Programs in example/
-pnpm compile
 
 # Build (production, minified)
 pnpm build
 
 # Preview production build
 pnpm preview
-
-# Compile a specific Mini Program (in packages/compiler)
-npm link
-# Then in example/xx
-dmcc build
 
 # Web development
 pnpm dev
@@ -58,14 +52,4 @@ pnpm test
 
 ### compiler 编译工具
 
-See below for usage:
-
-```sh
-Usage: dmcc build -c <source_dir> -s <output_dir> -w # watch mode
-
-File mapping:
-- app.js, index.js → logic.js
-- index.wxml → view.js
-- app.wxss, index.wxss → style.css
-- app.json, index.json → config.json
-```
+请参考[编译工具使用说明](./packages/compiler/README.md)。
