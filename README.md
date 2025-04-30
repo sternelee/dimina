@@ -4,7 +4,7 @@
 
 [![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/License-Apache%202.0-blue)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-%20Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-brightgreen.svg)](#效果展示)
-[![PRs welcome!](https://img.shields.io/badge/PRs-welcome-orange.svg)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
+[![PRs welcome!](https://img.shields.io/badge/PRs-Welcome-orange.svg)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
 
 </div>
 
@@ -30,9 +30,9 @@ Dimina 当前已经适配了 Android、iOS、Harmony、Web 四个平台，开发
 
 Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)进行设计，API 当前对齐了大部分微信小程序实现，底层视图渲染框架使用了 Vue3。
 
-得益于 Vue3 丰富的功能特性，我们的框架本质上是将小程序的语法通过编译器转化成 Vue 的语法，并在此基础上实现了一套小程序标准的 Vue 组件和各大移动端系统的小程序加载容器。
+得益于 Vue 丰富的功能特性，星河框架中的渲染层本质上是将小程序的语法通过编译器转化成 Vue 的语法，并在此基础上实现了一套小程序标准的 Vue 组件。再把视图页面通过各大移动端系统的小程序容器进行加载展示。
 
-更多框架实现细节可参考[说明文档](./docs/README.md)。
+至于逻辑层和通信的交互部分，更多细节可参考[说明文档](./docs/README.md)。
 
 由于行业内个各大厂的小程序方案已迭代多年，目前星河并未完全支持小程序的所有 **API/组件/特性**。当前我们已支持的能力可参考[API说明](./docs/API-Reference.md)，欢迎大家 **Star、Fork、贡献代码与建议**。
 
