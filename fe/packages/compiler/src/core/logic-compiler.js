@@ -98,7 +98,7 @@ async function compileJS(pages, root, mainCompileRes, progress) {
 	return compileRes
 }
 
-function buildJSByPath(root, module, compileRes, mainCompileRes, addExtra, depthChain = [], putMain = false) {
+function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra, depthChain = [], putMain = false) {
 	// Track dependency chain to detect potential circular dependencies
 	const currentPath = module.path
 
@@ -148,10 +148,10 @@ function buildJSByPath(root, module, compileRes, mainCompileRes, addExtra, depth
 
 		for (const [name, path] of Object.entries(module.usingComponents)) {
 			let toMainSubPackage = true
-			if (root) {
+			if (packageName) {
 				// 如果依赖的组件不在当前的分包，则跳过该组件的编译逻辑，保证分包代码的独立性
-				// 获取分包名称，root格式为 'subpackage_packageName'
-				const rootPackageName = root.split('_')[1]
+				// 获取分包名称，packageName格式为 'sub_packageName'（由 env.js 中的 transSubDir 方法添加）
+				const rootPackageName = packageName.startsWith('sub_') ? packageName.slice(4) : packageName
 
 				// 考虑到路径可能是 'test/src' 这样的格式，使用前缀匹配而不是分割比较
 				const normalizedPath = path.startsWith('/') ? path.substring(1) : path
@@ -180,7 +180,7 @@ function buildJSByPath(root, module, compileRes, mainCompileRes, addExtra, depth
 				continue
 			}
 
-			buildJSByPath(root, componentModule, compileRes, mainCompileRes, true, depthChain, toMainSubPackage)
+			buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, depthChain, toMainSubPackage)
 
 			const props = types.objectProperty(types.identifier(`'${name}'`), types.stringLiteral(path))
 			components.value.properties.push(props)
@@ -210,7 +210,7 @@ function buildJSByPath(root, module, compileRes, mainCompileRes, addExtra, depth
 					const id = requireFullPath.split(`${getWorkPath()}/`)[1].split('.js')[0]
 					ap.node.arguments[0] = types.stringLiteral(id)
 					if (!processedModules.has(id)) {
-						buildJSByPath(root, { path: id }, compileRes, mainCompileRes, false, depthChain)
+						buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false, depthChain)
 					}
 				}
 			}
