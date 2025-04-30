@@ -1,5 +1,18 @@
 import { camelCaseToUnderscore, parsePath } from '@dimina/common'
 
+export function getActualBottom(element) {
+	if (!element) {
+		return 0
+	}
+	const rect = element.getBoundingClientRect()
+
+	// 考虑视口缩放
+	const visualViewport = window.visualViewport
+	const viewportHeight = visualViewport ? visualViewport.height : window.innerHeight
+
+	return viewportHeight - rect.bottom - rect.height
+}
+
 export function withInstall(comp) {
 	const name = camelCaseToUnderscore(comp.__name)
 	comp.__tagName = name

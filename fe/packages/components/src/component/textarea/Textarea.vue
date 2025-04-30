@@ -4,6 +4,7 @@
 
 import { isDesktop, sleep, transformRpx } from '@dimina/common'
 import { invokeAPI, triggerEvent, useInfo } from '@/common/events'
+import { getActualBottom } from '@/common/utils'
 
 const props = defineProps({
 	/**
@@ -346,17 +347,15 @@ function handleWrapperEvent(event) {
 				},
 			})
 			if (!isDesktop && props.adjustPosition) {
-				const textareaElement = textareaRef.value
-				if (!textareaElement)
+				const element = wrapperRef.value
+				if (!element) {
 					return
-				const rect = textareaElement.getBoundingClientRect()
-				const baseBottom = window.innerHeight - rect.bottom
-				const finalBottom = baseBottom - rect.height
-
+				}
+				const bottom = getActualBottom(element)
 				invokeAPI('adjustPosition', {
 					bridgeId: info.bridgeId,
 					params: {
-						bottom: finalBottom > 0 ? finalBottom : baseBottom,
+						bottom,
 					},
 				})
 			}

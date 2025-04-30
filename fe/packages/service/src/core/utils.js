@@ -59,8 +59,7 @@ export function filterData(obj) {
 			return acc
 		}
 		else if (isFunction(value)) {
-			// TODO: 需要支持函数引用传值
-			console.warn('[Service] 暂不支持函数引用传值')
+			console.warn('[Service] 值不支持函数引用', key)
 			return acc
 		}
 		else if (Array.isArray(value)) {
