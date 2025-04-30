@@ -62,7 +62,7 @@
 		"shelljs": "^0.8.5"
 	},
 	"devDependencies": {
-		"vitest": "2.1.8"
+		"vitest": "2.1.9"
 	},
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org/"
