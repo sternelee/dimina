@@ -6,6 +6,9 @@ import com.didi.dimina.Dimina
 class App: Application() {
     override fun onCreate() {
         super.onCreate()
-        Dimina.initialize(this, Dimina.DiminaConfig(debugMode = true))
+        Dimina.init(this, Dimina.DiminaConfig.Builder()
+            .setDebugMode(true)
+            .build()
+        )
     }
 }

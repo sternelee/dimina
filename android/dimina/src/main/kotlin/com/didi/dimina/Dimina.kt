@@ -19,14 +19,14 @@ class Dimina private constructor(context: Context) {
         /**
          * 初始化 SDK
          * @param context 应用上下文
-         * @param config 可选的配置参数
+         * @param config 配置参数
          * @return Dimina 实例
          */
-        fun initialize(context: Context, config: DiminaConfig? = null): Dimina {
+        fun init(context: Context, config: DiminaConfig): Dimina {
             return instance ?: synchronized(this) {
                 instance ?: Dimina(context.applicationContext).also { instance = it }.apply {
                     // 应用配置
-                    config?.let { applyConfig(it) }
+                    applyConfig(config)
                 }
             }
         }
@@ -36,14 +36,27 @@ class Dimina private constructor(context: Context) {
          * @throws IllegalStateException 如果尚未初始化
          */
         fun getInstance(): Dimina {
-            return instance ?: throw IllegalStateException("Dimina SDK not initialized. Please call initialize() first.")
+            return instance ?: throw IllegalStateException("Dimina SDK not initialized. Please call init() first.")
         }
     }
 
     // 配置类
-    data class DiminaConfig(
-        val debugMode: Boolean = false,
-    )
+    class DiminaConfig private constructor(builder: Builder) {
+        val debugMode: Boolean = builder.debugMode
+
+        class Builder {
+            var debugMode: Boolean = false
+
+            fun setDebugMode(debugMode: Boolean): Builder {
+                this.debugMode = debugMode
+                return this
+            }
+
+            fun build(): DiminaConfig {
+                return DiminaConfig(this)
+            }
+        }
+    }
 
     private val appContext: Context = context
 
