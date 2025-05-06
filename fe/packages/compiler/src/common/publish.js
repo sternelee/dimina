@@ -12,12 +12,15 @@ function createDist() {
 }
 /**
  * 发布到指定目录
- * @param {string} dist
+ * @param {string} dist 目标路径
+ * @param {boolean} useAppIdDir 是否在路径中包含appId
  */
-function publishToDist(dist) {
+function publishToDist(dist, useAppIdDir = true) {
 	const distPath = getTargetPath()
 	const appId = getAppId()
-	const absolutePath = `${path.resolve(process.cwd(), dist)}/${appId}`
+	const absolutePath = useAppIdDir 
+		? `${path.resolve(process.cwd(), dist)}/${appId}` 
+		: `${path.resolve(process.cwd(), dist)}`
 	shelljs.rm('-rf', absolutePath)
 	shelljs.mkdir('-p', absolutePath)
 	shelljs.cp('-r', `${distPath}/*`, absolutePath)

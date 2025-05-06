@@ -69,6 +69,7 @@ Usage: dmcc build [选项]
   -c, --work-path <path>     编译文件所在目录（默认为当前目录）
   -s, --target-path <path>   编译产物存放路径（默认为当前目录）
   -w, --watch                启用改动监听（实时编译）
+  --no-app-id-dir            产物根目录不包含appId，默认为 false
   -h, --help                 显示帮助信息
 ```
 
@@ -86,6 +87,9 @@ dmcc build -w
 
 # 完整示例：编译指定目录，输出到指定目录，并启用监听
 dmcc build -c ./src -s ./dist -w
+
+# 产物根目录不包含appId
+dmcc build --no-app-id-dir
 ```
 
 ### 编译流程说明
@@ -101,14 +105,25 @@ app.json, index.json  ->  config.json  (配置文件)
 
 ### 编译产物目录结构
 
-编译后，会在目标目录生成以小程序 id 命名的文件夹，项目结构如下：
+编译后，默认会在目标目录生成以小程序 id 命名的文件夹，项目结构如下：
 
 ```txt
 dist/
-  ├── logic.js      # 小程序逻辑代码
-  ├── view.js       # 小程序视图代码
-  ├── style.css     # 小程序样式
-  └── config.json   # 小程序配置
+  ├─ {appId}/      # 小程序 ID 目录（使用 --no-app-id-dir 参数可以去除此目录层级）
+    ├─ logic.js      # 小程序逻辑代码
+    ├─ view.js       # 小程序视图代码
+    ├─ style.css     # 小程序样式
+    └─ config.json   # 小程序配置
+```
+
+如果使用 `--no-app-id-dir` 参数，产物将直接输出到目标目录，而不会创建以 appId 命名的子目录：
+
+```txt
+dist/
+  ├─ logic.js      # 小程序逻辑代码
+  ├─ view.js       # 小程序视图代码
+  ├─ style.css     # 小程序样式
+  └─ config.json   # 小程序配置
 ```
 
 ### 常见问题

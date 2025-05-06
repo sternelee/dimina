@@ -13,8 +13,10 @@ let isPrinted = false
 /**
  * 构建命令入口
  * @param {string} targetPath 编译产物目标路径
+ * @param {string} workPath 编译工作目录
+ * @param {boolean} useAppIdDir 产物根目录是否包含appId
  */
-export default async function build(targetPath, workPath) {
+export default async function build(targetPath, workPath, useAppIdDir = true) {
 	if (!isPrinted) {
 		artCode()
 		isPrinted = true
@@ -89,7 +91,7 @@ export default async function build(targetPath, workPath) {
 			{
 				title: '输出编译产物',
 				task: () => {
-					publishToDist(targetPath)
+					publishToDist(targetPath, useAppIdDir)
 				},
 			},
 		],

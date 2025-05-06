@@ -1,6 +1,6 @@
 {
 	"name": "@dimina/compiler",
-	"version": "1.0.2",
+	"version": "1.0.3",
 	"description": "星河编译工具",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
@@ -62,7 +62,7 @@
 		"shelljs": "^0.8.5"
 	},
 	"devDependencies": {
-		"vitest": "2.1.9"
+		"vitest": "2.1.8"
 	},
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org/"
