@@ -82,7 +82,7 @@ export const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test
 
 export const isHarmonyOS = typeof navigator !== 'undefined' && /OpenHarmony|harmony/.test(navigator.userAgent)
 
-export const isDesktop = typeof navigator !== 'undefined' && /Mac|Windows|Linux/.test(navigator.userAgent)
+export const isDesktop = typeof navigator !== 'undefined' && !/Android|iPad|iPhone|iPod|OpenHarmony|harmony|Mobile/.test(navigator.userAgent)
 
 export const isWebWorker = (() => {
 	// eslint-disable-next-line no-undef
