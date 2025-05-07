@@ -40,7 +40,7 @@ Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-
 
 | Android | iOS | Harmony |
 | ---- | ---- | ---- |
-| ![Android](https://s3-gz01.didistatic.com/packages-mait/img/FMI3BPd9Tw1745828203615.jpg) | ![iOS](https://s3-gz01.didistatic.com/packages-mait/img/yoHVmEzYZ81745827909756.jpg) | ![Harmony](https://s3-gz01.didistatic.com/packages-mait/img/YkSQUH5cbv1745828204591.jpg) |
+| ![Android](./static/android.jpg) | ![iOS](./static/ios.jpg) | ![Harmony](./static/harmony.jpg) |
 
 ## 上手使用
 
