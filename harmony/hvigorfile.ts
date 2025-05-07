@@ -5,11 +5,19 @@ import path from 'path';
 
 // Paths configuration
 const SHARED_JSAPP_PATH = path.resolve(__dirname, '../shared/jsapp');
-const HARMONY_RAWFILE_PATH = path.resolve(__dirname, './entry/src/main/resources/rawfile/jsapp');
+const HARMONY_JSAPP_PATH = path.resolve(__dirname, './entry/src/main/resources/rawfile/jsapp');
 
-// Create destination directory if it doesn't exist
-if (!fs.existsSync(HARMONY_RAWFILE_PATH)) {
-    fs.mkdirSync(HARMONY_RAWFILE_PATH, { recursive: true });
+// JSSDK paths
+const SHARED_JSSDK_PATH = path.resolve(__dirname, '../shared/jssdk');
+const HARMONY_JSSDK_PATH = path.resolve(__dirname, './dimina/src/main/resources/rawfile/jssdk');
+
+// Create destination directories if they don't exist
+if (!fs.existsSync(HARMONY_JSAPP_PATH)) {
+    fs.mkdirSync(HARMONY_JSAPP_PATH, { recursive: true });
+}
+
+if (!fs.existsSync(HARMONY_JSSDK_PATH)) {
+    fs.mkdirSync(HARMONY_JSSDK_PATH, { recursive: true });
 }
 
 // Copy function to recursively copy directories
@@ -41,11 +49,17 @@ function copyDirectory(source, destination) {
 }
 hvigor.nodesEvaluated(hvigorNode => {
     try {
-        console.log(`Copying shared jsapp files from ${SHARED_JSAPP_PATH} to ${HARMONY_RAWFILE_PATH}`);
-        copyDirectory(SHARED_JSAPP_PATH, HARMONY_RAWFILE_PATH);
-        console.log('Copy completed successfully');
+        // Copy jsapp files
+        console.log(`Copying shared jsapp files from ${SHARED_JSAPP_PATH} to ${HARMONY_JSAPP_PATH}`);
+        copyDirectory(SHARED_JSAPP_PATH, HARMONY_JSAPP_PATH);
+        console.log('jsapp files copy completed successfully');
+        
+        // Copy jssdk files
+        console.log(`Copying shared jssdk files from ${SHARED_JSSDK_PATH} to ${HARMONY_JSSDK_PATH}`);
+        copyDirectory(SHARED_JSSDK_PATH, HARMONY_JSSDK_PATH);
+        console.log('jssdk files copy completed successfully');
     } catch (error) {
-        console.error('Error copying shared jsapp files:', error);
+        console.error('Error copying shared files:', error);
     }
 })
 

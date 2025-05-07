@@ -4,10 +4,14 @@
 
 ## 问题背景
 
-Dimina 作为一个跨平台的小程序框架，同时支持 Android、iOS 和 Harmony 操作系统。在原有的代码仓库结构中，小程序资源文件存在重复：
+Dimina 作为一个跨平台的小程序框架，同时支持 Android 、iOS 和 Harmony 操作系统。在原有的代码仓库结构中，小程序资源文件和 SDK 文件存在重复：
 
-- Android 平台: `app/src/main/assets/jsapp/[appId]/`
-- Harmony 平台: `rawfile/jsapp/[appId]/`
+- Android 平台: 
+  - 小程序资源：`app/src/main/assets/jsapp/[appId]/`
+  - SDK 资源：`dimina/src/main/assets/jssdk/`
+- Harmony 平台: 
+  - 小程序资源：`entry/src/main/resources/rawfile/jsapp/[appId]/`
+  - SDK 资源：`dimina/src/main/resources/rawfile/jssdk/`
 
 这种重复导致以下问题：
 1. 维护成本高（需要在多处更新相同文件）
@@ -24,6 +28,9 @@ Dimina 作为一个跨平台的小程序框架，同时支持 Android、iOS 和 
   - `[appId]/`：每个小程序的目录，以其唯一的 appId 命名
     - `config.json`：小程序的配置文件
     - `[appId].zip`：编译好的小程序包
+- `jssdk/`：包含被 Android 和 Harmony 平台共同使用的 SDK 文件
+  - `config.json`：SDK 的配置文件
+  - `main.zip`：SDK 核心文件
 
 ```
 /Users/doslin/Dev/GitHub/dimina/
@@ -35,15 +42,24 @@ Dimina 作为一个跨平台的小程序框架，同时支持 Android、iOS 和 
 │   │   └── [appId2]/
 │   │       ├── config.json
 │   │       └── [appId2].zip
+│   └── jssdk/
+│       ├── config.json
+│       └── main.zip
 ```
 
 ## 使用方法
 
 此目录中的资源在构建过程中会自动复制到相应的平台特定位置：
 
+### 小程序资源 (jsapp)
+
 - Android：`app/src/main/assets/jsapp/`
-- iOS：
 - Harmony：`entry/src/main/resources/rawfile/jsapp/`
+
+### SDK 资源 (jssdk)
+
+- Android：`dimina/src/main/assets/jssdk/`
+- Harmony：`dimina/src/main/resources/rawfile/jssdk/`
 
 ### 资源管理工具
 
@@ -55,19 +71,25 @@ Dimina 作为一个跨平台的小程序框架，同时支持 Android、iOS 和 
 
 #### 导入现有资源
 
-如果已经有现有的小程序资源，可以使用同步工具导入：
+如果已经有现有的小程序资源或 JS SDK 资源，可以使用同步工具导入：
 
 ```bash
+# 导入小程序资源 (jsapp)
 # 从Android导入
-node shared/scripts/sync-jsapp.js import-android
-
-# 从iOS导入
-
+node shared/scripts/sync-jsapp.js import-android-jsapp
 # 从Harmony导入
-node shared/scripts/sync-jsapp.js import-harmony
+node shared/scripts/sync-jsapp.js import-harmony-jsapp
+
+# 导入SDK资源 (jssdk)
+# 从Android导入
+node shared/scripts/sync-jsapp.js import-android-jssdk
+# 从Harmony导入
+node shared/scripts/sync-jsapp.js import-harmony-jssdk
 ```
 
 #### 验证资源同步状态
+
+验证所有平台的小程序资源和 SDK 资源是否与共享目录同步：
 
 ```bash
 node shared/scripts/sync-jsapp.js validate
@@ -75,8 +97,18 @@ node shared/scripts/sync-jsapp.js validate
 
 #### 清理平台资源目录
 
+清理所有平台的小程序资源和 SDK 资源目录：
+
 ```bash
 node shared/scripts/sync-jsapp.js clean
+```
+
+#### 同步资源
+
+清理平台资源目录并准备从共享目录同步：
+
+```bash
+node shared/scripts/sync-jsapp.js sync
 ```
 
 ## 添加新的小程序

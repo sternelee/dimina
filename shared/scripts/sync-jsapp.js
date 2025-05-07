@@ -1,12 +1,12 @@
 /**
  * Dimina Shared Assets Synchronization Tool
  * 
- * This script helps manage and synchronize jsapp assets between the shared directory
+ * This script helps manage and synchronize shared assets (jsapp and jssdk) between the shared directory
  * and platform-specific directories. It can be used to:
  * 
- * 1. Import existing jsapp files from Android or Harmony to the shared directory
- * 2. Validate that all platforms have the same jsapp files
- * 3. Clean up platform-specific jsapp directories
+ * 1. Import existing assets from Android or Harmony to the shared directory
+ * 2. Validate that all platforms have the same assets
+ * 3. Clean up platform-specific asset directories
  */
 
 const fs = require('fs');
@@ -15,9 +15,16 @@ const { execSync } = require('child_process');
 
 // Path configuration
 const ROOT_DIR = path.resolve(__dirname, '..');
+
+// jsapp paths
 const SHARED_JSAPP_DIR = path.resolve(ROOT_DIR, 'jsapp');
 const ANDROID_JSAPP_DIR = path.resolve(ROOT_DIR, '../android/app/src/main/assets/jsapp');
-const HARMONY_JSAPP_DIR = path.resolve(ROOT_DIR, '../harmony/dimina/src/main/resources/rawfile/jsapp');
+const HARMONY_JSAPP_DIR = path.resolve(ROOT_DIR, '../harmony/entry/src/main/resources/rawfile/jsapp');
+
+// jssdk paths
+const SHARED_JSSDK_DIR = path.resolve(ROOT_DIR, 'jssdk');
+const ANDROID_JSSDK_DIR = path.resolve(ROOT_DIR, '../android/dimina/src/main/assets/jssdk');
+const HARMONY_JSSDK_DIR = path.resolve(ROOT_DIR, '../harmony/dimina/src/main/resources/rawfile/jssdk');
 
 // Ensure directories exist
 function ensureDirectoryExists(dir) {
@@ -48,8 +55,8 @@ function copyDirectory(source, destination) {
   }
 }
 
-// Import jsapp files from platform to shared directory
-function importFromPlatform(platformDir) {
+// Import assets from platform to shared directory
+function importJsappFromPlatform(platformDir) {
   if (!fs.existsSync(platformDir)) {
     console.error(`Platform directory does not exist: ${platformDir}`);
     return;
@@ -57,11 +64,23 @@ function importFromPlatform(platformDir) {
   
   console.log(`Importing jsapp files from ${platformDir} to ${SHARED_JSAPP_DIR}`);
   copyDirectory(platformDir, SHARED_JSAPP_DIR);
-  console.log('Import completed');
+  console.log('jsapp import completed');
+}
+
+// Import jssdk files from platform to shared directory
+function importJssdkFromPlatform(platformDir) {
+  if (!fs.existsSync(platformDir)) {
+    console.error(`Platform directory does not exist: ${platformDir}`);
+    return;
+  }
+  
+  console.log(`Importing jssdk files from ${platformDir} to ${SHARED_JSSDK_DIR}`);
+  copyDirectory(platformDir, SHARED_JSSDK_DIR);
+  console.log('jssdk import completed');
 }
 
 // Validate that all platforms have the same jsapp files
-function validateSync() {
+function validateJsappSync() {
   const platforms = [
     { name: 'Android', dir: ANDROID_JSAPP_DIR },
     { name: 'Harmony', dir: HARMONY_JSAPP_DIR }
@@ -72,7 +91,7 @@ function validateSync() {
   // Check if shared directory exists
   if (!fs.existsSync(SHARED_JSAPP_DIR)) {
     console.error(`Shared jsapp directory does not exist: ${SHARED_JSAPP_DIR}`);
-    return;
+    return hasErrors;
   }
   
   // Get list of apps in shared directory
@@ -82,15 +101,15 @@ function validateSync() {
     ) : [];
   
   if (sharedApps.length === 0) {
-    console.log('No apps found in shared directory');
-    return;
+    console.log('No apps found in shared jsapp directory');
+    return hasErrors;
   }
   
-  console.log(`Found ${sharedApps.length} apps in shared directory: ${sharedApps.join(', ')}`);
+  console.log(`Found ${sharedApps.length} apps in shared jsapp directory: ${sharedApps.join(', ')}`);
   
   // Check each platform
   for (const platform of platforms) {
-    console.log(`\nChecking ${platform.name} platform...`);
+    console.log(`\nChecking ${platform.name} jsapp platform...`);
     
     if (!fs.existsSync(platform.dir)) {
       console.log(`${platform.name} jsapp directory does not exist: ${platform.dir}`);
@@ -149,25 +168,121 @@ function validateSync() {
     }
   }
   
-  if (!hasErrors) {
-    console.log('\n✅ All platforms are in sync with shared directory');
+  return hasErrors;
+}
+
+// Validate that all platforms have the same jssdk files
+function validateJssdkSync() {
+  const platforms = [
+    { name: 'Android', dir: ANDROID_JSSDK_DIR },
+    { name: 'Harmony', dir: HARMONY_JSSDK_DIR }
+  ];
+  
+  let hasErrors = false;
+  
+  // Check if shared directory exists
+  if (!fs.existsSync(SHARED_JSSDK_DIR)) {
+    console.error(`Shared jssdk directory does not exist: ${SHARED_JSSDK_DIR}`);
+    return hasErrors;
+  }
+  
+  // Get list of files in shared directory
+  const sharedFiles = fs.existsSync(SHARED_JSSDK_DIR) ? 
+    fs.readdirSync(SHARED_JSSDK_DIR) : [];
+  
+  if (sharedFiles.length === 0) {
+    console.log('No files found in shared jssdk directory');
+    return hasErrors;
+  }
+  
+  console.log(`Found ${sharedFiles.length} files in shared jssdk directory: ${sharedFiles.join(', ')}`);
+  
+  // Check each platform
+  for (const platform of platforms) {
+    console.log(`\nChecking ${platform.name} jssdk platform...`);
+    
+    if (!fs.existsSync(platform.dir)) {
+      console.log(`${platform.name} jssdk directory does not exist: ${platform.dir}`);
+      continue;
+    }
+    
+    const platformFiles = fs.readdirSync(platform.dir);
+    
+    // Check for missing files
+    const missingFiles = sharedFiles.filter(file => !platformFiles.includes(file));
+    if (missingFiles.length > 0) {
+      console.error(`${platform.name} jssdk is missing files: ${missingFiles.join(', ')}`);
+      hasErrors = true;
+    }
+    
+    // Check for extra files
+    const extraFiles = platformFiles.filter(file => !sharedFiles.includes(file) && file !== '.keep');
+    if (extraFiles.length > 0) {
+      console.warn(`${platform.name} jssdk has extra files not in shared directory: ${extraFiles.join(', ')}`);
+    }
+    
+    // Check file content
+    for (const file of sharedFiles) {
+      if (!platformFiles.includes(file)) continue;
+      
+      const sharedFilePath = path.join(SHARED_JSSDK_DIR, file);
+      const platformFilePath = path.join(platform.dir, file);
+      
+      const sharedStat = fs.statSync(sharedFilePath);
+      const platformStat = fs.statSync(platformFilePath);
+      
+      if (sharedStat.size !== platformStat.size) {
+        console.error(`File size mismatch for jssdk/${file}: shared=${sharedStat.size}, ${platform.name}=${platformStat.size}`);
+        hasErrors = true;
+      }
+    }
+  }
+  
+  return hasErrors;
+}
+
+// Validate that all platforms have the same assets
+function validateSync() {
+  console.log('Validating jsapp synchronization...');
+  const jsappErrors = validateJsappSync();
+  
+  console.log('\nValidating jssdk synchronization...');
+  const jssdkErrors = validateJssdkSync();
+  
+  if (!jsappErrors && !jssdkErrors) {
+    console.log('\n✅ All platforms are in sync with shared directories');
   } else {
     console.error('\n❌ Found sync issues. Run sync command to fix.');
   }
 }
 
-// Clean up platform-specific jsapp directories
+// Clean up platform-specific asset directories
 function cleanPlatforms() {
-  const platforms = [
-    { name: 'Android', dir: ANDROID_JSAPP_DIR },
-    { name: 'Harmony', dir: HARMONY_JSAPP_DIR }
+  const jsappPlatforms = [
+    { name: 'Android jsapp', dir: ANDROID_JSAPP_DIR },
+    { name: 'Harmony jsapp', dir: HARMONY_JSAPP_DIR }
   ];
   
-  for (const platform of platforms) {
+  const jssdkPlatforms = [
+    { name: 'Android jssdk', dir: ANDROID_JSSDK_DIR },
+    { name: 'Harmony jssdk', dir: HARMONY_JSSDK_DIR }
+  ];
+  
+  // Clean jsapp directories
+  for (const platform of jsappPlatforms) {
     if (fs.existsSync(platform.dir)) {
-      console.log(`Cleaning ${platform.name} jsapp directory: ${platform.dir}`);
+      console.log(`Cleaning ${platform.name} directory: ${platform.dir}`);
       fs.rmSync(platform.dir, { recursive: true, force: true });
-      console.log(`${platform.name} jsapp directory cleaned`);
+      console.log(`${platform.name} directory cleaned`);
+    }
+  }
+  
+  // Clean jssdk directories
+  for (const platform of jssdkPlatforms) {
+    if (fs.existsSync(platform.dir)) {
+      console.log(`Cleaning ${platform.name} directory: ${platform.dir}`);
+      fs.rmSync(platform.dir, { recursive: true, force: true });
+      console.log(`${platform.name} directory cleaned`);
     }
   }
 }
@@ -177,14 +292,22 @@ function main() {
   const args = process.argv.slice(2);
   const command = args[0];
   
+  // Ensure shared directories exist
   ensureDirectoryExists(SHARED_JSAPP_DIR);
+  ensureDirectoryExists(SHARED_JSSDK_DIR);
   
   switch (command) {
-    case 'import-android':
-      importFromPlatform(ANDROID_JSAPP_DIR);
+    case 'import-android-jsapp':
+      importJsappFromPlatform(ANDROID_JSAPP_DIR);
       break;
-    case 'import-harmony':
-      importFromPlatform(HARMONY_JSAPP_DIR);
+    case 'import-harmony-jsapp':
+      importJsappFromPlatform(HARMONY_JSAPP_DIR);
+      break;
+    case 'import-android-jssdk':
+      importJssdkFromPlatform(ANDROID_JSSDK_DIR);
+      break;
+    case 'import-harmony-jssdk':
+      importJssdkFromPlatform(HARMONY_JSSDK_DIR);
       break;
     case 'validate':
       validateSync();
@@ -204,11 +327,13 @@ Usage:
   node sync-jsapp.js <command>
 
 Commands:
-  import-android   Import jsapp files from Android to shared directory
-  import-harmony   Import jsapp files from Harmony to shared directory
-  validate         Validate that all platforms have the same jsapp files
-  clean            Clean up platform-specific jsapp directories
-  sync             Clean platforms and prepare for sync from shared directory
+  import-android-jsapp    Import jsapp files from Android to shared directory
+  import-harmony-jsapp    Import jsapp files from Harmony to shared directory
+  import-android-jssdk    Import jssdk files from Android to shared directory
+  import-harmony-jssdk    Import jssdk files from Harmony to shared directory
+  validate                Validate that all platforms have the same assets
+  clean                   Clean up platform-specific asset directories
+  sync                    Clean platforms and prepare for sync from shared directory
       `);
   }
 }
