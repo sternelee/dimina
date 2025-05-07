@@ -1,0 +1,14 @@
+{
+  "name": "@didi-dimina/dimina",
+  "version": "1.0.0",
+  "description": "Please describe the basic information.",
+  "main": "Index.ets",
+  "author": "",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "libdimina.so": "file:./src/main/cpp/types/libdimina",
+    "@ohos/imageknife": "2.1.2",
+    "@ohos/mmkv": "2.0.3",
+    "@ohos/photoview": "2.0.0"
+  }
+}

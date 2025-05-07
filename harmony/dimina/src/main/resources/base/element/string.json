@@ -1,0 +1,21 @@
+{
+  "string": [
+    {
+      "name": "shared_desc",
+      "value": "description",
+      "reason": "get network"
+    },
+    {
+      "name": "dialog_title",
+      "value": "提示"
+    },
+    {
+      "name": "dmp_dialog_button_cancel",
+      "value": "取消"
+    },
+    {
+      "name": "dmp_dialog_button_confirm",
+      "value": "确定"
+    }
+  ]
+}

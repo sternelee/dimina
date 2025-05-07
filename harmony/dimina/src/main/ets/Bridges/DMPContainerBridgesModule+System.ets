@@ -1,0 +1,197 @@
+
+import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
+import { DMPBridgeCallback } from './DMPTSUtil';
+import { DMPLogger } from '../EventTrack/DMPLogger';
+import batteryInfo from '@ohos.batteryInfo';
+import deviceInfo from '@ohos.deviceInfo';
+import { DMPDeviceUtil } from '../Utils/DMPDeviceUtils';
+import { bundleManager } from '@kit.AbilityKit';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { DMPMap } from '../Utils/DMPMap';
+import BuildProfile from '../../../../BuildProfile';
+import { access } from '@kit.ConnectivityKit';
+
+export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
+  private bundleInfo?: bundleManager.BundleInfo
+  private cachedResult?: DMPMap = undefined;
+  private cacheTimestamp = 0;
+
+  getExportMethods(): string[] {
+    return ['getSystemInfoSync', 'getEnv', 'getSystemInfoAsync', 'getAccountInfoSync', 'getSystemInfo',
+      'getDiminaCurStackPages', 'getSystemSetting','getWindowInfo'];
+  }
+
+  getWindowInfo(data: DMPMap, callback: DMPBridgeCallback){
+    const windowInfo =  DMPDeviceUtil.getSafeAreaAndDisplayWHSync()
+    this.invokeSuccessCallback(callback,windowInfo)
+    return windowInfo;
+  }
+
+  getDiminaCurStackPages(data: DMPMap, callback: DMPBridgeCallback) {
+    const list = this.app.navigatorManager.getCurNavigator()?.getNavigator().stacks.data;
+    let pages = Array<Object>();
+    if (list) {
+      for (let record of list) {
+        const pageInfo = new PageInfo();
+        pageInfo.route = record.pagePath
+        pageInfo.id = record.webViewId
+        pageInfo.query = record.params?.get('query')
+        pages.push(pageInfo)
+      }
+    }
+    return pages
+  }
+
+  getEnv(data: DMPMap, callback: DMPBridgeCallback) {
+    this.invokeSuccessCallback(callback, new DMPMap({ 'miniprogram': true }));
+  }
+
+  getSystemSetting(data: DMPMap, callback: DMPBridgeCallback) {
+    try {
+      let state = access.getState();
+      console.error(`let state = access.getState(): ${state}`);
+
+      return new DMPMap({
+        bluetoothEnabled: state === 0,
+        locationEnabled: true,
+        wifiEnabled: true,
+        deviceOrientation: 'portrait'
+      })
+
+    } catch (err) {
+      console.error('errCode: ' + (err as BusinessError).code + ', errMessage: ' + (err as BusinessError).message);
+      return new DMPMap();
+    }
+  }
+
+  getSystemInfoSync(data: DMPMap, callback: DMPBridgeCallback) {
+    const currentTime = Date.now();
+    // 检查缓存是否有效（10秒）
+    if (this.cachedResult && (currentTime - this.cacheTimestamp < 10000)) {
+      return this.cachedResult;
+    }
+    // 如果缓存无效，则重新获取系统信息
+    const result = this.systemInfo();
+    // 更新缓存
+    this.cachedResult = result;
+    this.cacheTimestamp = currentTime;
+
+    return result;
+  }
+
+  getSystemInfoAsync(data: DMPMap, callback: DMPBridgeCallback) {
+    this.invokeSuccessCallback(callback, this.systemInfo());
+  }
+
+  getSystemInfo(data: DMPMap, callback: DMPBridgeCallback) {
+    const info = this.systemInfo()
+    this.invokeSuccessCallback(callback, info);
+    return info;
+  }
+
+  getAccountInfoSync(data: DMPMap, callback: DMPBridgeCallback) {
+    if (this.app) {
+      return new DMPMap({
+        'miniProgram': { 'envVersion': 'release', 'appId': this.app.appConfig?.appId, 'version': this.app.appVersion }
+      })
+    }
+    return new DMPMap({ 'miniProgram': { 'envVersion': 'release' } })
+  }
+
+  private systemInfo(): DMPMap {
+    let result: DMPMap = new DMPMap();
+
+    result.set('errMsg', 'getSystemInfo:ok');
+
+    let batterySOCInfo: number = batteryInfo.batterySOC;
+    result.set('batteryLevel', batterySOCInfo);
+
+    // TODO 未实现 "benchmarkLevel": -1,
+
+
+    // "brand": "HUAWEI",
+    let brand: string = deviceInfo.brand;
+    result.set('brand', brand);
+
+    // TODO 未实现 "memorySize": 2048,
+
+    // "model": "iPhone X",
+    // "model": "HUAWEI Mate 60 Pro",
+    let marketName: string = deviceInfo.marketName;
+    result.set('model', marketName);
+
+    // "system": "iOS 10.0.1",
+    let osFullName: string = deviceInfo.osFullName;
+    result.set('system', osFullName);
+
+    // 小程序助手校验这个platform 暂时修改成android
+    result.set('platform', 'ohos');
+
+    // "pixelRatio": 3.25, 根据 px2vp() 推算出来
+    result.set('pixelRatio', 3.25);
+    if (!this.bundleInfo) {
+      this.bundleInfo =
+        bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)
+    }
+    //宿主App 版本
+    result.set('version', this.bundleInfo.versionName);
+
+    //星河sdk版本
+    result.set('SDKVersion', BuildProfile.HAR_VERSION);
+    result.set('debugEnv', this.app.appConfig.isDebugMode ? 1 : 0)
+    try {
+
+      result.set('appid', this.app.bundleManager.getBundleInfo().appId)
+      result.set('jssdkid', "")
+      result.set('jssdkVersion', this.app.bundleManager.getBundleInfo().currentJsSdkBundleConfig?.versionName)
+      result.set('sdkVersionName', this.app.bundleManager.getBundleInfo().currentJsSdkBundleConfig?.versionName)
+      result.set('sdkVersionCode', this.app.bundleManager.getBundleInfo().currentJsSdkBundleConfig?.versionCode)
+
+      result.set('appVersion', this.app.bundleManager.getBundleInfo().currentJsAppBundleConfig?.versionName)
+      result.set('appVersionName', this.app.bundleManager.getBundleInfo().currentJsAppBundleConfig?.versionName)
+      result.set('appVersionCode', this.app.bundleManager.getBundleInfo().currentJsAppBundleConfig?.versionCode)
+
+    } catch (e) {
+      DMPLogger.e("获取bundle 信息异常")
+    }
+
+
+    // "version": "8.0.5",
+    // "language": "en",
+    // "SDKVersion": "2.19.4",
+    // "enableDebug": false,
+    // "fontSizeScaleFactor": 1,
+    // "fontSizeSetting": 16,
+    // "mode": "default",
+    // "host": {
+    //   "env": "WeChat"
+    // },
+    // "bluetoothEnabled": true,
+    // "locationEnabled": true,
+    // "wifiEnabled": true,
+    // "locationReducedAccuracy": true,
+    // "albumAuthorized": true,
+    // "bluetoothAuthorized": true,
+    // "cameraAuthorized": true,
+    // "locationAuthorized": true,
+    // "microphoneAuthorized": true,
+    // "notificationAuthorized": true,
+    // "notificationAlertAuthorized": true,
+    // "notificationBadgeAuthorized": true,
+    // "notificationSoundAuthorized": true,
+    // "phoneCalendarAuthorized": true,
+    // "deviceOrientation": "portrait",
+    // "devicePixelRatio": 3
+
+    result.setAll(DMPDeviceUtil.getSafeAreaAndDisplayWHSync());
+
+    return result;
+  }
+}
+
+class PageInfo {
+  route?: string
+  id?: number
+  query?: Object
+}
+
