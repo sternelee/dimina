@@ -603,10 +603,26 @@ function getProps(attrs, tag) {
 		}
 		else if ((name === 'value' && (tag === 'input' || tag === 'textarea'))
 			|| ((name === 'x' || name === 'y') && tag === 'movable-view')) {
-			attrsList.push({
-				name: `v-model:${name}`,
-				value: parseBraceExp(value),
-			})
+			const parsedValue = parseBraceExp(value)
+			const conditionExp = generateVModelTemplate(parsedValue)
+			if (conditionExp) {
+				// v-model 不支持表达式
+				attrsList.push({
+					name: `:${name}`,
+					value: parsedValue,
+				})
+
+				attrsList.push({
+					name: `update:${name}`,
+					value: conditionExp,
+				})
+			}
+			else {
+				attrsList.push({
+					name: `v-model:${name}`,
+					value: parsedValue,
+				})
+			}
 		}
 		else if (name.startsWith('data-')) {
 			if (isWrappedByBraces(value)) {
@@ -663,6 +679,35 @@ function getProps(attrs, tag) {
 	})
 
 	return propsRes
+}
+
+function generateVModelTemplate(expression) {
+	let var1, var2, updateExpression
+
+	if (expression.includes('&&')) {
+		// 处理 "x && y"
+		[var1, var2] = expression.split('&&').map(v => v.trim())
+		// 对于 x && y，x 为真时更新 y，x 为假时更新 x
+		updateExpression = `${var1} ? (${var2} = $event) : (${var1} = $event)`
+	}
+	else if (expression.includes('||')) {
+		// 处理 "x || y"
+		[var1, var2] = expression.split('||').map(v => v.trim())
+		// 对于 x || y，x 为真时更新 x，x 为假时更新 y
+		updateExpression = `${var1} ? (${var1} = $event) : (${var2} = $event)`
+	}
+	else if (expression.includes('?')) {
+		// 处理 "x ? x : y"
+		const parts = expression.split(/[?:]/).map(v => v.trim())
+		var1 = parts[0]
+		var2 = parts[2]
+		// 对于 x ? x : y，x 为真时更新 x，x 为假时更新 y
+		updateExpression = `${var1} ? (${var1} = $event) : (${var2} = $event)`
+	}
+	else {
+		return false
+	}
+	return updateExpression
 }
 
 /**
@@ -867,4 +912,5 @@ export default {
 	parseBraceExp,
 	parseKeyExpression,
 	compileML,
+	generateVModelTemplate,
 }

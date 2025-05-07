@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import viewCompiler from '../src/core/view-compiler'
 
-const { parseBraceExp, parseClassRules, splitWithBraces, parseKeyExpression } = viewCompiler
+const { parseBraceExp, parseClassRules, splitWithBraces, parseKeyExpression, generateVModelTemplate } = viewCompiler
 
 describe('解析 key 表达式的值', () => {
 	it('简单取值', () => {
@@ -118,5 +118,39 @@ describe('解析样式类', () => {
 		expect(parseClassRules('item-container item-container-{{index}}')).toEqual(
 			'[\'item-container\',\'item-container-\'+index]',
 		)
+	})
+})
+
+describe('v-model 表达式转换', () => {
+	it('逻辑与表达式', () => {
+		expect(generateVModelTemplate('tempOffset && finalOffset')).to.equal(
+			'tempOffset ? (finalOffset = $event) : (tempOffset = $event)',
+		)
+	})
+
+	it('逻辑或表达式', () => {
+		expect(generateVModelTemplate('tempOffset || finalOffset')).to.equal(
+			'tempOffset ? (tempOffset = $event) : (finalOffset = $event)',
+		)
+	})
+
+	it('三元表达式', () => {
+		expect(generateVModelTemplate('tempOffset ? tempOffset : finalOffset')).to.equal(
+			'tempOffset ? (tempOffset = $event) : (finalOffset = $event)',
+		)
+	})
+
+	it('无效表达式', () => {
+		expect(generateVModelTemplate('invalidExpression')).to.equal(false)
+	})
+
+	it('带空格的表达式', () => {
+		expect(generateVModelTemplate('  tempOffset  &&  finalOffset  ')).to.equal(
+			'tempOffset ? (finalOffset = $event) : (tempOffset = $event)',
+		)
+	})
+
+	it('不同变量名', () => {
+		expect(generateVModelTemplate('a || b')).to.equal('a ? (a = $event) : (b = $event)')
 	})
 })
