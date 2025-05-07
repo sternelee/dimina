@@ -22,6 +22,21 @@
         "name": "release"
       }
     ],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "type": "HarmonyOS",
+        "material": {
+          "certpath": "/Users/doslin/.ohos/config/default_harmony_qnLrgx7AyPxgd0h3rHON86egTgyOmWbJqklF5abXm80=.cer",
+          "keyAlias": "debugKey",
+          "keyPassword": "0000001AE49F6BF480D5440464D799BE92A725709E76F4820108F517B6F4F64D5C271847AB6545613B72",
+          "profile": "/Users/doslin/.ohos/config/default_harmony_qnLrgx7AyPxgd0h3rHON86egTgyOmWbJqklF5abXm80=.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "/Users/doslin/.ohos/config/default_harmony_qnLrgx7AyPxgd0h3rHON86egTgyOmWbJqklF5abXm80=.p12",
+          "storePassword": "0000001A34480D672E64383EF53128162659037086F5927198E434EE39DFFF9377B2C1EF9C51E8420A27"
+        }
+      }
+    ]
   },
   "modules": [
     {

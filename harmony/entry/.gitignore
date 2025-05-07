@@ -4,3 +4,6 @@
 /build
 /.cxx
 /.test
+
+# Dimina jsapp files (copied from shared directory during build)
+/src/main/resources/rawfile/jsapp

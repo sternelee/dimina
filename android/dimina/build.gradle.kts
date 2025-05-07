@@ -42,6 +42,11 @@ android {
     buildFeatures {
         compose = true
     }
+    
+    // Add configuration to not compress jsapp files
+    androidResources {
+        noCompress += listOf("json", "zip") // Don't compress these files
+    }
 }
 
 dependencies {
@@ -96,4 +101,17 @@ afterEvaluate {
             }
         }
     }
+}
+
+// Add task to copy shared jsapp files to Android app's assets folder
+tasks.register<Copy>("copySharedJsappToAssets") {
+    from("${rootProject.projectDir}/../shared/jsapp")
+    into("${rootProject.projectDir}/app/src/main/assets/jsapp")
+    // Preserve directory structure
+    includeEmptyDirs = true
+}
+
+// Make the preBuild task depend on the copy task
+tasks.named("preBuild") {
+    dependsOn("copySharedJsappToAssets")
 }
