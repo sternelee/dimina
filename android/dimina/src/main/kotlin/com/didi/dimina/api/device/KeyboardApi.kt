@@ -6,6 +6,8 @@ import android.view.inputmethod.InputMethodManager
 import com.didi.dimina.api.APIResult
 import com.didi.dimina.api.AsyncResult
 import com.didi.dimina.api.BaseApiHandler
+import com.didi.dimina.api.NoneResult
+import com.didi.dimina.common.Utils
 import com.didi.dimina.ui.container.DiminaActivity
 import org.json.JSONObject
 
@@ -16,9 +18,10 @@ import org.json.JSONObject
 class KeyboardApi : BaseApiHandler() {
     private companion object {
         const val HIDE_KEYBOARD = "hideKeyboard"
+        const val ADJUST_POSITION = "adjustPosition"
     }
-
-    override val apiNames = setOf(HIDE_KEYBOARD)
+    
+    override val apiNames = setOf(HIDE_KEYBOARD, ADJUST_POSITION)
 
     override fun handleAction(
         activity: DiminaActivity,
@@ -33,6 +36,14 @@ class KeyboardApi : BaseApiHandler() {
                     val success = hideSoftKeyboard(activity)
                     put("errMsg", "$HIDE_KEYBOARD:${if (success) "ok" else "fail"}")
                 })
+            }
+
+            ADJUST_POSITION -> {
+                val bottom = params.optDouble("bottom", 0.0)
+                if (bottom > 0) {
+                    activity.adjustViewPosition(bottom)
+                }
+                NoneResult()
             }
 
             else ->
@@ -57,12 +68,11 @@ class KeyboardApi : BaseApiHandler() {
                 currentActivity.window.decorView.rootView?.let {
                     inputMethodManager.hideSoftInputFromWindow(it.windowToken, 0)
                     true
-                } ?: false
+                } == true
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // 处理可能的异常
             false
         }
     }
-
 }

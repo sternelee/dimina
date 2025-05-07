@@ -5,9 +5,12 @@ import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
+import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.View
+import android.view.WindowInsets
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.webkit.WebView
 import androidx.activity.ComponentActivity
@@ -56,6 +59,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.graphics.toColorInt
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.didi.dimina.bean.AppConfig
 import com.didi.dimina.bean.BridgeOptions
@@ -128,6 +133,22 @@ class DiminaActivity : ComponentActivity() {
     private lateinit var contactPicker: ContactPicker
 
     private var imageChooseCallback: ((List<String>) -> Unit)? = null
+    
+    private var adjustBottom = 0.0
+
+    // 屏幕高度
+    private var screenHeight = 0
+
+    /**
+     * 调整WebView的位置以适应键盘
+     * @param bottom 元素到屏幕底部的距离，单位为像素
+     */
+    fun adjustViewPosition(bottom: Double) {
+        // 获取设备像素比率（density）
+        val density = Resources.getSystem().displayMetrics.density
+        // CSS 像素转换为物理像素
+        adjustBottom = bottom * density
+    }
 
     fun handleChooseMedia(
         type: MediaType,
@@ -185,9 +206,44 @@ class DiminaActivity : ComponentActivity() {
         mediaType.value = MediaType.CAMERA
     }
 
+
+    fun getSoftKeyboardHeight(rootView: View, callback: (Int) -> Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            rootView.setOnApplyWindowInsetsListener { _, insets ->
+                // 获取软键盘的高度（px）
+                val imeHeight = insets.getInsets(WindowInsets.Type.ime()).bottom
+                callback(imeHeight)
+                insets // 返回 insets 以保持默认行为
+            }
+        } else {
+            ViewCompat.setOnApplyWindowInsetsListener(rootView) { _, insets ->
+                val imeHeight = insets.getInsets(WindowInsetsCompat.Type.ime()).bottom
+                callback(imeHeight)
+                insets
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        
+        // 获取屏幕高度
+        screenHeight = resources.displayMetrics.heightPixels
+
+        // 设置键盘监听
+        getSoftKeyboardHeight(window.decorView.rootView) { keyBoardHeight ->
+            withWebView { webView ->
+                if (adjustBottom > 0 && adjustBottom < keyBoardHeight) {
+                    val translationY = adjustBottom - keyBoardHeight
+                    webView.translationY = translationY.toFloat()
+                    LogUtils.d(tag, "调整WebView位置: translationY=$translationY, bottom=$adjustBottom, keyboardHeight=$keyBoardHeight")
+                } else {
+                    adjustBottom = 0.0
+                    webView.translationY = 0f
+                }
+            }
+        }
 
         // 接收 MiniProgram 对象
         val miniProgram = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

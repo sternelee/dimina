@@ -8,6 +8,7 @@ import android.graphics.Bitmap
 import android.graphics.drawable.BitmapDrawable
 import android.os.Environment
 import android.provider.MediaStore
+import android.util.TypedValue
 import android.widget.Toast
 import coil.imageLoader
 import coil.request.ImageRequest
@@ -263,5 +264,17 @@ object Utils {
 
         // Add full opacity (0xFF) and convert to Long
         return 0xFF000000 or rgbColor.toLong()
+    }
+
+    fun pxToDp(px: Float, context: Context): Float {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_PX, px, context.resources.displayMetrics
+        ) / context.resources.displayMetrics.density
+    }
+
+    fun dpToPx(dp: Float, context: Context): Float {
+        return TypedValue.applyDimension(
+            TypedValue.COMPLEX_UNIT_DIP, dp, context.resources.displayMetrics
+        )
     }
 }
