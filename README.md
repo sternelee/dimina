@@ -1,6 +1,6 @@
 <div align="center">
 
-![Dimina](https://s3-gz01.didistatic.com/packages-mait/img/yeGw4QBcQP1745495172856.png)
+![Dimina](./static/logo.png)
 
 [![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/License-Apache%202.0-blue)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-%20Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-brightgreen.svg)](#效果展示)
