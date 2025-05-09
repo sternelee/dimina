@@ -12,20 +12,20 @@
 - **common**：通用工具函数。
 - **server**：网络请求代理服务器。
 
-## Requirements
+## 环境要求
 
 建议使用 Node 18+, pnpm 8+。
 
-## Getting Started
+## 开始上手
 
-### Install
+### 安装说明
 
 ```sh
 # Install dependencies
 pnpm install
 ```
 
-### Development
+### 开发说明
 
 ```sh
 # Compile all Mini Programs in example/
@@ -50,6 +50,6 @@ pnpm dev:native
 pnpm test
 ```
 
-### compiler 编译工具
+### dmcc 编译工具
 
 请参考[编译工具使用说明](./packages/compiler/README.md)。
