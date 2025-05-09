@@ -509,12 +509,25 @@ class Runtime {
 		}, 300)
 	}
 
+	/**
+	 * https://developers.weixin.qq.com/miniprogram/dev/api/wxml/NodesRef.fields.html
+	 */
 	parseElement(targetElement, fields) {
 		const data = {}
+
+		if (fields.id) {
+			data.id = targetElement.id ?? ''
+		}
 
 		if (fields.dataset) {
 			data.dataset = targetElement._ds
 		}
+
+		// 是否返回节点 mark
+		if (fields.mark) {
+			data.mark = targetElement.dataset?.mark ?? ''
+		}
+
 		if (fields.rect) {
 			const { left, top, right, bottom, width, height } = targetElement.getBoundingClientRect()
 			data.left = left
@@ -525,13 +538,37 @@ class Runtime {
 			data.height = height
 		}
 
-		data.id = targetElement.id ?? ''
+		if (fields.size) {
+			data.width = targetElement.offsetWidth
+			data.height = targetElement.offsetHeight
+		}
 
 		if (fields.scrollOffset) {
 			data.scrollHeight = targetElement.scrollHeight
 			data.scrollLeft = targetElement.scrollLeft
 			data.scrollTop = targetElement.scrollTop
 			data.scrollWidth = targetElement.scrollWidth
+		}
+
+		// 指定属性名列表，返回节点对应属性名的当前属性值（只能获得组件文档中标注的常规属性值，id class style 和事件绑定的属性值不可获取）
+		if (fields.properties && Array.isArray(fields.properties)) {
+			const properties = {}
+			fields.properties.forEach((prop) => {
+				if (prop !== 'id' && prop !== 'class' && prop !== 'style' && !prop.startsWith('bind') && !prop.startsWith('on')) {
+					properties[prop] = targetElement.getAttribute(prop) ?? ''
+				}
+			})
+			data.properties = properties
+		}
+
+		// 指定样式名列表，返回节点对应样式名的当前值
+		if (fields.computedStyle && Array.isArray(fields.computedStyle)) {
+			const computedStyle = window.getComputedStyle(targetElement)
+			const styles = {}
+			fields.computedStyle.forEach((style) => {
+				styles[style] = computedStyle.getPropertyValue(style) || ''
+			})
+			data.computedStyle = styles
 		}
 
 		// TODO: 支持获取 Canvas 和 ScrollViewContext
