@@ -160,6 +160,7 @@ export class DMPNavigator {
         .putExtra("appIndex", this.app.appIndex)
         .putExtra("webViewId", pageRecord.webViewId)
         .putExtra("stackId", stackId)
+        .setNavMode(DMPOpenType.Insert)
         .start()
     } catch (err) {
       DMPLogger.e(Tags.NAVIGATOR, `msg: ${(err as BusinessError).message}`)

@@ -47,7 +47,7 @@ Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-
 - [小程序打包说明](./fe/packages/compiler/README.md)
 - [Android 接入说明](./android/README.md)
 - [iOS 接入说明](./iOS/README.md)
-- [Harmony 接入说明](./harmony/README.md)
+- [Harmony 接入说明](./harmony/dimina/README.md)
 
 ## 开源协议
 

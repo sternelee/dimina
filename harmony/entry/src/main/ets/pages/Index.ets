@@ -1,13 +1,16 @@
-import { DMPPage } from '@didi-dimina/dimina/src/main/ets/DPages/DMPPage';
-import { DMPAppConfig } from '@didi-dimina/dimina/src/main/ets/DAppManager/DMPAppConfig';
-import { DMPApp } from '@didi-dimina/dimina/src/main/ets/DApp/DMPApp';
-import { DMPPhotoPreview } from '@didi-dimina/dimina/src/main/ets/Bridges/PhotoView/DMPPhotoPreview';
+import {
+  DMPPage,
+  DMPAppConfig,
+  DMPApp,
+  DMPPhotoPreview,
+  DMPAppManager,
+  DMPLaunchConfig,
+  DMPOpenType,
+  DMPColorUtils
+} from '@didi-dimina/dimina';
 import { common } from '@kit.AbilityKit';
-import { DMPAppManager } from '@didi-dimina/dimina/src/main/ets/DApp/DMPAppManager';
-import { DMPLaunchConfig, DMPOpenType } from '@didi-dimina/dimina/src/main/ets/DAppManager/DMPLaunchConfig';
 import { MiniProgramDataSource, MiniProgramModel } from './data/MiniProgramDataSource';
 import { util } from '@kit.ArkTS';
-import { DMPColorUtils } from '@didi-dimina/dimina/src/main/ets/Utils/DMPColorUtils';
 
 @Entry
 @Component
@@ -17,7 +20,6 @@ struct Index {
   @StorageProp('bottomRectHeight') safeAreaHeight: number = 0;
   @StorageProp('topRectHeight') safeAreaTop: number = 0;
   private dataSource: MiniProgramDataSource = new MiniProgramDataSource();
-
   curProgram?: MiniProgramModel;
 
   aboutToAppear(): void {
@@ -33,21 +35,20 @@ struct Index {
       });
       if (config) {
         let configObj: Map<string, string> = JSON.parse(config)
-        const appId:string = configObj["appId"] ?? ""
+        const appId: string = configObj["appId"] ?? ""
         const name: string = configObj["name"] ?? ""
         this.dataSource.pushData(new MiniProgramModel(appId, name, DMPColorUtils.generateColorFromName(name)))
       }
     })
   }
 
-
   openDiminaApp(item: MiniProgramModel) {
     this.curProgram = item;
-    let appConfig: DMPAppConfig = new DMPAppConfig(item.name, item.appId)
+    const appConfig: DMPAppConfig = new DMPAppConfig(item.name, item.appId)
     this.app = DMPAppManager.sharedInstance().appWithConfig(appConfig)
     this.app.router.init(this.pageInfos)
     this.app.startPackageLoader(getContext(this) as common.UIAbilityContext)
-    let launchConfig: DMPLaunchConfig = new DMPLaunchConfig()
+    const launchConfig: DMPLaunchConfig = new DMPLaunchConfig()
     launchConfig.openType = DMPOpenType.NavigateTo
     this.app.launch(launchConfig)
   }
@@ -58,27 +59,26 @@ struct Index {
   @State flag: boolean = true
 
   build() {
-      Navigation(this.pageInfos) {
-        NavDestination() {
-          this.content()
-        }
-        .hideTitleBar(true)
-        .expandSafeArea([SafeAreaType.KEYBOARD])
-        .padding({ bottom: px2vp(this.safeAreaHeight) })
-        .onShown(() => {
-
-        })
-        .onHidden(() => {
-        })
-        .onBackPressed(() => {
-          return true;
-        })
+    Navigation(this.pageInfos) {
+      NavDestination() {
+        this.content()
       }
-      .hideBackButton(true)
-      .hideToolBar(true)
       .hideTitleBar(true)
-      .navDestination(this.routerFactory)
+      .expandSafeArea([SafeAreaType.KEYBOARD])
+      .padding({ bottom: px2vp(this.safeAreaHeight) })
+      .onShown(() => {
 
+      })
+      .onHidden(() => {
+      })
+      .onBackPressed(() => {
+        return true;
+      })
+    }
+    .hideBackButton(true)
+    .hideToolBar(true)
+    .hideTitleBar(true)
+    .navDestination(this.routerFactory)
 
   }
 
