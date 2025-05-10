@@ -564,4 +564,57 @@ export class MiniApp {
 		this.webviewsContainer.appendChild(dialog)
 		dialog.showModal()
 	}
+
+	showActionSheet(opts) {
+		const { itemList = [], itemColor = '#000', success, fail, complete } = opts || {};
+		if (!Array.isArray(itemList) || itemList.length === 0) {
+			fail && this.createCallbackFunction(fail)({ errMsg: 'showActionSheet:fail' });
+			complete && this.createCallbackFunction(complete)();
+			return;
+		}
+		// 创建遮罩层
+		const mask = document.createElement('div');
+		mask.className = 'dimina-action-sheet-mask';
+		// 创建 action sheet 容器
+		const sheet = document.createElement('div');
+		sheet.className = 'dimina-action-sheet';
+		// 选项
+		itemList.forEach((item, idx) => {
+			const btn = document.createElement('div');
+			btn.className = 'dimina-action-sheet-item';
+			btn.style.color = itemColor;
+			btn.innerText = item;
+			btn.onclick = () => {
+				cleanup();
+				success && this.createCallbackFunction(success)({ tapIndex: idx });
+				complete && this.createCallbackFunction(complete)();
+			};
+			sheet.appendChild(btn);
+		});
+		// 取消按钮
+		const cancelBtn = document.createElement('div');
+		cancelBtn.className = 'dimina-action-sheet-cancel';
+		cancelBtn.innerText = '取消';
+		cancelBtn.onclick = () => {
+			cleanup();
+			fail && this.createCallbackFunction(fail)({ errMsg: 'showActionSheet:fail cancel' });
+			complete && this.createCallbackFunction(complete)();
+		};
+		sheet.appendChild(cancelBtn);
+		// 清理方法
+		const cleanup = () => {
+			mask.remove();
+			sheet.remove();
+		};
+		mask.onclick = cleanup;
+		// 挂载到 webviewsContainer
+		this.webviewsContainer.appendChild(mask);
+		this.webviewsContainer.appendChild(sheet);
+		console.log(12345, itemList)
+		// 动画效果
+		setTimeout(() => {
+			sheet.classList.add('show');
+			mask.classList.add('show');
+		}, 10);
+	}
 }
