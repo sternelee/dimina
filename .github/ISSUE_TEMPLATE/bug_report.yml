@@ -1,0 +1,80 @@
+name: "🐞 Bug 报告 (Bug Report)"
+description: 创建一个报告以帮助我们改进 (Create a report to help us improve)
+title: '[Bug] 简要描述问题 (Short description)'
+labels: [bug]
+body:
+  - type: textarea
+    id: describe
+    attributes:
+      label: 描述问题 (Describe the bug)
+      description: 请清晰简明地描述你遇到的问题。
+      placeholder: 请简要描述你遇到的问题 / Please describe the bug concisely.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤 (To Reproduce)
+      description: 请详细描述如何重现该问题。
+      placeholder: |
+        1. 进入 '...'
+        2. 点击 '....'
+        3. 滚动到 '....'
+        4. 看到错误
+    validations:
+      required: true
+  - type: input
+    id: reproduce
+    attributes:
+      label: 复现链接 (Reproduce link)
+      description: |
+        请提供可复现此问题的仓库链接。
+        Please provide a URL of the repository that reproduces the problem.
+      placeholder: 粘贴链接 / paste link here
+  - type: textarea
+    id: expected
+    attributes:
+      label: 预期行为 (Expected behavior)
+      description: 请清晰简明地描述你期望发生的事情。
+      placeholder: 请描述你期望的行为 / Please describe the expected behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: screenshot
+    attributes:
+      label: 截图 (Screenshots)
+      description: 如果适用，请添加截图以帮助解释你的问题。
+      placeholder: 可拖拽图片至此 / Drag and drop images here if applicable.
+  - type: checkboxes
+    id: platform
+    attributes:
+      label: 平台 (Platform)
+      description: 请选择相关平台。
+      options:
+        - label: Android
+        - label: iOS
+        - label: Harmony
+        - label: Web
+  - type: input
+    id: os
+    attributes:
+      label: 操作系统 (OS)
+      description: 例如 macOS, Windows, Linux
+      placeholder: macOS, Windows, Linux
+  - type: input
+    id: browser
+    attributes:
+      label: 浏览器/终端 (Browser/Terminal)
+      description: 例如 Chrome, Safari, Node.js 版本等
+      placeholder: Chrome, Safari, Node.js
+  - type: textarea
+    id: env-other
+    attributes:
+      label: 其它相关环境信息 (Other info)
+      description: 其他有助于定位问题的信息。
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息 (Additional context)
+      description: 在此处添加关于问题的其它信息。
+

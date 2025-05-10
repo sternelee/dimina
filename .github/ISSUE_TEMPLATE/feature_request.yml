@@ -1,0 +1,41 @@
+name: "✨ 功能需求 (Feature Request)"
+description: 为项目提出一个新需求 (Suggest an idea for this project)
+title: '[Feature] 简要描述需求 (Short description)'
+labels: [enhancement]
+body:
+  - type: textarea
+    id: related
+    attributes:
+      label: 你的需求是否与某个问题相关？ (Is your feature request related to a problem?)
+      description: 请简明描述问题或需求的背景。
+      placeholder: 请描述相关问题或背景 / Please describe the related problem or background.
+  - type: textarea
+    id: solution
+    attributes:
+      label: 描述你想要的解决方案 (Describe the solution you'd like)
+      description: 请清晰简要地描述你希望实现的功能。
+      placeholder: 请描述你希望实现的功能 / Please describe the solution you'd like.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 描述你考虑过的替代方案 (Describe alternatives you've considered)
+      description: 请简要描述你考虑过的其它解决方案或替代方案。
+      placeholder: 其它可行的替代方案 / Other alternatives considered.
+  - type: checkboxes
+    id: platform
+    attributes:
+      label: 平台 (Platform)
+      description: 请选择需求相关的平台。
+      options:
+        - label: Android
+        - label: iOS
+        - label: Harmony
+        - label: Web
+  - type: textarea
+    id: additional
+    attributes:
+      label: 补充信息 (Additional context)
+      description: 在此处添加关于需求的其它信息。
+      placeholder: 其它有助于理解需求的补充信息 / Additional context or information.
