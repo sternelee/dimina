@@ -16,6 +16,12 @@ assignees: ''
 3. 滚动到 '....'
 4. 看到错误
 
+**复现链接 (Reproduce link)**
+请提供可复现此问题的仓库链接。
+Please provide a URL of the repository that reproduces the problem.
+
+> 粘贴链接 / paste link here
+
 **预期行为 (Expected behavior)**
 请清晰简明地描述你期望发生的事情。
 
