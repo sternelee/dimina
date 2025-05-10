@@ -18,6 +18,7 @@
 - [效果展示](#效果展示)
 - [上手使用](#上手使用)
 - [参与共建](#参与共建)
+- [星标趋势](#星标趋势)
 - [开源协议](#开源协议)
 
 ## 简介
@@ -47,7 +48,13 @@ Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-
 
 至于逻辑层和消息通道的交互部分，更多底层和实现细节可参考[说明文档](./docs/README.md)。
 
-由于行业内个各大厂的小程序方案已迭代多年，目前星河并未完全支持小程序的所有 **API/组件/特性**。当前我们已支持的能力可参考[API说明](./docs/API-Reference.md)，欢迎大家 **Star、Fork、贡献代码与建议**。
+由于行业内个各大厂的小程序方案已迭代多年，目前星河并未完全支持小程序的所有 **API/组件/特性**。当前我们已支持的能力可参考[API说明](./docs/API-Reference.md)，欢迎大家 **贡献代码与提出建议**。
+
+## 星标趋势
+
+如果你觉得 Dimina 有帮助，欢迎点击右上角 ⭐Star 支持我们，让更多人看到这个项目。
+
+[![Star History Chart](https://api.star-history.com/svg?repos=didi/dimina&type=Date)](https://star-history.com/#didi/dimina&Date)
 
 ## 开源协议
 
