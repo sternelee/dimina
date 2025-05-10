@@ -1,11 +1,16 @@
+<p align="right">
+  <a href="./README_EN.md">
+    <img src="https://img.shields.io/badge/README-English%20⤴-4B8CFF.svg" alt="English Version" />
+  </a>
+</p>
+
 <div align="center">
 
 ![Dimina](./static/logo.png)
 
-[![English Version](https://img.shields.io/badge/Readme-English%20⤴-4B8CFF.svg)](./README_EN.md)
-[![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/License-Apache%202.0-26A69A.svg)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-%20Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-4CAF50.svg)](#效果展示)
-[![PRs welcome!](https://img.shields.io/badge/PRs-Welcome-FF6F61.svg)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
+[![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/License-Apache%202.0-26A69A)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-%20Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-4CAF50)](#效果展示)
+[![PRs welcome!](https://img.shields.io/badge/PRs-Welcome-FF6F61)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
 
 </div>
 
