@@ -533,36 +533,46 @@ export class MiniApp {
 	}
 
 	showModal(opts) {
-		const { content = '', cancelText = '取消', confirmText = '确定', success, complete } = opts
+		const { content = '', cancelText = '取消', confirmText = '确定', success, complete } = opts;
+		const onSuccess = this.createCallbackFunction(success);
+		const onComplete = this.createCallbackFunction(complete);
 
-		const onSuccess = this.createCallbackFunction(success)
-		const onComplete = this.createCallbackFunction(complete)
-
-		const dialog = document.createElement('dialog')
-		dialog.setAttribute('class', 'dimina-dialog')
+		// 遮罩层
+		const mask = document.createElement('div');
+		mask.className = 'dimina-dialog-mask';
+		// 弹窗内容
+		const dialog = document.createElement('div');
+		dialog.className = 'dimina-dialog';
 		dialog.innerHTML = `<p>${content}</p>
 		<div>
 			<a id="cancelBtn" class="dimina-dialog__button" href="javascript:">${cancelText}</a>
 			<a id="confirmBtn" class="dimina-dialog__button" style="color: #576b95;" href="javascript:">${confirmText}</a>
-    	</div>
-  		`
+    	</div>`;
+
+		const cleanup = () => {
+			mask.remove();
+			dialog.remove();
+		};
 
 		dialog.querySelector('#cancelBtn').addEventListener('click', () => {
-			dialog.hidden = true
-			this.webviewsContainer.removeChild(dialog)
-			onSuccess?.({ cancel: true })
-			onComplete?.()
-		})
-
+			cleanup();
+			onSuccess?.({ cancel: true });
+			onComplete?.();
+		});
 		dialog.querySelector('#confirmBtn').addEventListener('click', () => {
-			dialog.hidden = true
-			this.webviewsContainer.removeChild(dialog)
-			onSuccess?.({ confirm: true })
-			onComplete?.()
-		})
+			cleanup();
+			onSuccess?.({ confirm: true });
+			onComplete?.();
+		});
+		mask.onclick = cleanup;
 
-		this.webviewsContainer.appendChild(dialog)
-		dialog.showModal()
+		this.webviewsContainer.appendChild(mask);
+		this.webviewsContainer.appendChild(dialog);
+		// 动画效果可选
+		setTimeout(() => {
+			mask.classList.add('show');
+			dialog.classList.add('show');
+		}, 10);
 	}
 
 	showActionSheet(opts) {

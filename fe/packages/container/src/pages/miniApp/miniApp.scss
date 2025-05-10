@@ -277,6 +277,21 @@
 	}
 }
 
+.dimina-dialog-mask {
+	position: fixed;
+	left: 0;
+	top: 0;
+	right: 0;
+	bottom: 0;
+	background: rgba(0,0,0,0.4);
+	z-index: 2000;
+	opacity: 0;
+	transition: opacity 0.2s;
+	&.show {
+		opacity: 1;
+	}
+}
+
 .dimina-dialog {
 	width: 320px;
 	margin: 0 auto;
@@ -294,6 +309,15 @@
 	display: flex;
 	justify-content: space-evenly;
 	align-items: center;
+	z-index: 2001;
+	background: #fff;
+	box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+	transition: transform 0.2s;
+	transform: translateY(-24px);
+	&.show {
+		transform: translateY(0);
+	}
+
 
 	p {
 		font-size: 16px;
