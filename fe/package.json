@@ -23,8 +23,7 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "vite": "^6.3.3",
-    "vitest": "^1.6.1"
+    "vite": "^6.3.3"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^2.27.3",
