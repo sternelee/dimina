@@ -8,9 +8,9 @@
 
 </div>
 
-# 星河小程序(Dimina) - 滴滴开源小程序框架
+# 星河小程序（Dimina）——滴滴开源跨端小程序框架
 
-> Dimina 发音是 /diːminə/ ，意为 didi miniprogram 的缩写，致力于打造灵活、轻巧的小程序跨端框架。
+> Dimina 发音为 /diːminə/，是 didi miniprogram 的缩写，旨在打造灵活、轻量的小程序跨端开发框架。
 
 ## 概览
 
@@ -23,9 +23,9 @@
 
 ## 简介
 
-星河小程序（以下统称为 `Dimina` ），是滴滴自研的一套轻量级小程序跨端框架，旨在提供高性能、跨平台、低门槛的开发体验。
+星河小程序（以下简称 `Dimina`）是滴滴自研的一套轻量级跨端小程序框架，致力于为开发者提供高性能、跨平台、低门槛的开发体验。
 
-Dimina 当前已经适配了 Android、iOS、Harmony、Web 四个平台，开发者可将 Dimina 作为**移动端跨平台框架**进行使用，将已有小程序代码编写的逻辑作为独立模块接入当前的 App 或者采用小程序语法去开发需求并打包出一个独立的原生 APP。
+目前，Dimina 已支持 Android、iOS、Harmony 和 Web 四大平台。开发者可以将 Dimina 作为**移动端跨平台开发框架**，将已有小程序逻辑以独立模块方式集成到现有 App，或直接采用小程序语法进行开发，并一键打包生成独立原生 App。
 
 ## 效果展示
 
@@ -42,20 +42,20 @@ Dimina 当前已经适配了 Android、iOS、Harmony、Web 四个平台，开发
 
 ## 参与共建
 
-Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)进行设计，API 当前对齐了大部分微信小程序实现，底层视图渲染框架使用了 Vue3。
+Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)进行设计，目前已对齐大部分微信小程序的功能接口。
 
-得益于 Vue 丰富的功能特性，星河框架中的渲染层本质上是将小程序的语法通过编译器转化成 Vue 的语法，并在此基础上实现了一套小程序标准的 Vue 组件。再把视图页面通过各大移动端系统的小程序容器进行加载展示。
+得益于 Vue3 与小程序语法的高度相似，Dimina 底层视图渲染框架基于 Vue 构建。框架通过定制化编译器将小程序语法转译为 Vue 语法，并在此基础上实现了完整的小程序标准 Vue 组件体系。最终，借助各大移动端系统的小程序容器，灵活加载并展示视图页面。
 
-至于逻辑层和消息通道的交互部分，更多底层和实现细节可参考[说明文档](./docs/README.md)。
+如需了解更多关于编译器原理、实现细节、逻辑层与消息通道的交互机制，欢迎查阅[详细文档](./docs/README.md)。
 
-由于行业内个各大厂的小程序方案已迭代多年，目前星河并未完全支持小程序的所有 **API/组件/特性**。当前我们已支持的能力可参考[API说明](./docs/API-Reference.md)，欢迎大家 **贡献代码与提出建议**。
+由于行业内各类小程序方案已深度演进，Dimina 目前尚未完全覆盖全部小程序 **API/组件/特性**。已支持能力详见[API 说明](./docs/API-Reference.md)。欢迎大家积极贡献代码、提出建议，与我们共同完善 Dimina。
 
 ## 星标趋势
 
-如果你觉得 Dimina 有帮助，欢迎点击右上角 ⭐Star 支持我们，让更多人看到这个项目。
+如果你觉得 Dimina 对你有帮助，欢迎点击右上角 ⭐Star 支持我们，让更多人了解和使用这个项目。
 
 [![Star History Chart](https://api.star-history.com/svg?repos=didi/dimina&type=Date)](https://star-history.com/#didi/dimina&Date)
 
 ## 开源协议
 
-Dimina 基于 [Apache-2.0](https://opensource.org/license/apache-2-0) 协议进行分发和使用，更多信息参见[协议文件](LICENSE)。
+Dimina 遵循 [Apache-2.0](https://opensource.org/license/apache-2-0) 协议进行分发和使用，更多详情请参见[协议文件](LICENSE)。
