@@ -71,7 +71,7 @@ class MyApplication : Application() {
 
 1. `config.json` - 小程序配置文件，包含以下字段：
 
-```json
+```json5
    {
      "appId": "wx92269e3b2f304afc", // 小程序唯一标识
      "name": "小程序名称",
