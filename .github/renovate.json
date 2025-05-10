@@ -1,0 +1,10 @@
+{
+  "extends": ["config:recommended", "schedule:weekly"],
+  "packageRules": [
+    {
+      "matchPaths": ["fe/**"],
+      "matchManagers": ["pnpm"],
+      "enabled": true
+    }
+  ]
+}
