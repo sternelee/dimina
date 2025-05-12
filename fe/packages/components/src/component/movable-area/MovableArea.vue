@@ -2,7 +2,7 @@
 // movable-area的可移动区域
 // https://developers.weixin.qq.com/miniprogram/dev/component/movable-area.html
 
-import { useInfo } from '@/common/events'
+import { triggerEvent, useInfo } from '@/common/events'
 
 const props = defineProps({
 	/**
@@ -15,11 +15,15 @@ const props = defineProps({
 	},
 })
 
-useInfo()
+const info = useInfo()
+
+function onClicked(event) {
+	triggerEvent('tap', { event, info })
+}
 </script>
 
 <template>
-	<div v-bind="$attrs" class="dd-movable-area">
+	<div v-bind="$attrs" class="dd-movable-area" @click="onClicked">
 		<slot />
 	</div>
 </template>
