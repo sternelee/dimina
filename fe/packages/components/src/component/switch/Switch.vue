@@ -112,7 +112,9 @@ function handleClicked(event) {
 	<div
 		v-else :id="id" v-bind="$attrs" class="dd-switch-input" :class="{ 'dd-switch-input-checked': isOn }"
 		@click="handleClicked"
-	/>
+	>
+		<i class="dd-switch-input-inner" />
+	</div>
 </template>
 
 <style lang="scss">
@@ -128,9 +130,6 @@ function handleClicked(event) {
 	box-sizing: border-box;
 	background-color: #dfdfdf;
 	transition: background-color 0.1s, border 0.1s;
-	color: v-bind('computedCheckColor') !important;
-	background-color: v-bind('computedColor') !important;
-	border-color: v-bind('computedColor') !important;
 
 	&::before {
 		content: ' ';
@@ -156,6 +155,18 @@ function handleClicked(event) {
 		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 		transition: transform 0.3s;
 	}
+}
+
+.dd-switch-input-inner {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	border-radius: inherit;
+	color: v-bind('computedCheckColor');
+	background-color: v-bind('computedColor');
+	border-color: v-bind('computedColor');
 }
 
 .dd-switch-input-checked {
