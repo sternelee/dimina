@@ -350,7 +350,7 @@ function handleWrapperEvent(event) {
 				if (!element) {
 					return
 				}
-				const bottom = getActualBottom(element)
+				const bottom = getActualBottom(element, true)
 				invokeAPI('adjustPosition', {
 					bridgeId: info.bridgeId,
 					params: {

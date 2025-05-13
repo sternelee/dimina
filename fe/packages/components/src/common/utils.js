@@ -1,6 +1,6 @@
 import { camelCaseToUnderscore, parsePath } from '@dimina/common'
 
-export function getActualBottom(element) {
+export function getActualBottom(element, includeHeight) {
 	if (!element) {
 		return 0
 	}
@@ -10,7 +10,7 @@ export function getActualBottom(element) {
 	const visualViewport = window.visualViewport
 	const viewportHeight = visualViewport ? visualViewport.height : window.innerHeight
 
-	return viewportHeight - rect.bottom - rect.height
+	return viewportHeight - rect.bottom - (includeHeight ? rect.height : 0)
 }
 
 export function withInstall(comp) {
