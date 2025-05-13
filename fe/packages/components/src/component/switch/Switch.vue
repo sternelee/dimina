@@ -108,7 +108,9 @@ function handleClicked(event) {
 	<div
 		v-if="type === 'checkbox'" :id="id" v-bind="$attrs" class="dd-checkbox-input"
 		:class="{ 'dd-checkbox-input-checked': isOn, 'dd-checkbox-input-disabled': disabled }" @click="handleClicked"
-	/>
+	>
+		<i class="dd-checkbox-input-inner" />
+	</div>
 	<div
 		v-else :id="id" v-bind="$attrs" class="dd-switch-input" :class="{ 'dd-switch-input-checked': isOn }"
 		@click="handleClicked"
@@ -170,8 +172,6 @@ function handleClicked(event) {
 }
 
 .dd-switch-input-checked {
-	background-color: rgb(4, 190, 2);
-	border-color: rgb(4, 190, 2);
 
 	&::before {
 		transform: scale(0);
@@ -192,20 +192,27 @@ function handleClicked(event) {
 	width: 22px;
 	height: 22px;
 	position: relative;
-	color: #09bb07;
 }
 
-.dd-checkbox-input-checked {
-	&::before {
-		font: normal normal normal 14px / 1 'weui';
-		content: '\EA08';
-		color: inherit;
-		font-size: 22px;
-		position: absolute;
-		top: 50%;
-		left: 50%;
-		transform: translate(-50%, -48%) scale(0.73);
-	}
+.dd-checkbox-input-inner {
+	position: absolute;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	border-radius: inherit;
+	color: v-bind('computedCheckColor');
+}
+
+.dd-checkbox-input-checked .dd-checkbox-input-inner::before {
+	font: normal normal normal 14px / 1 'weui';
+	content: '\EA08';
+	color: inherit;
+	font-size: 22px;
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	transform: translate(-50%, -48%) scale(0.73);
 }
 
 .dd-checkbox-input-disabled {
