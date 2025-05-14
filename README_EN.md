@@ -54,7 +54,7 @@ Thanks to the high similarity between Vue 3 and mini program syntax, Dimina's un
 
 For more information about the compiler's underlying principles, implementation details, and the interaction logic between the logic layer and the message channel, please refer to the [documentation](./docs/README.md).
 
-For currently supported capabilities, see the [API Reference](./docs/API-Reference.md).
+For currently supported capabilities, see the [Dimina capability reference guide](./docs/API-Reference.md).
 
 As the mini program ecosystem has evolved over the years, Dimina does not yet fully support all **APIs/components/features** of mini programs. Contributions and suggestions are highly welcome!
 
