@@ -60,31 +60,13 @@ watch(
 	{ immediate: true }, // 立即执行一次回调
 )
 
-const computedCheckColor = computed(() => {
-	if (props.color && isOn.value) {
-		if (props.type === 'checkbox') {
-			return props.color
-		}
-		else {
-			return 'initial'
-		}
+const computedStyle = computed(() => {
+	const checkedColor = isOn.value ? (props.color ?? '#04BE02') : undefined
+	if (props.type === 'checkbox') {
+		return { color: checkedColor }
 	}
 	else {
-		return 'initial'
-	}
-})
-
-const computedColor = computed(() => {
-	if (props.color && isOn.value) {
-		if (props.type !== 'checkbox') {
-			return props.color
-		}
-		else {
-			return '#dfdfdf'
-		}
-	}
-	else {
-		return '#dfdfdf'
+		return { backgroundColor: checkedColor }
 	}
 })
 
@@ -109,13 +91,15 @@ function handleClicked(event) {
 		v-if="type === 'checkbox'" :id="id" v-bind="$attrs" class="dd-checkbox-input"
 		:class="{ 'dd-checkbox-input-checked': isOn, 'dd-checkbox-input-disabled': disabled }" @click="handleClicked"
 	>
-		<i class="dd-checkbox-input-inner" />
+		<i
+			class="dd-checkbox-input-inner" :style="computedStyle"
+		/>
 	</div>
 	<div
 		v-else :id="id" v-bind="$attrs" class="dd-switch-input" :class="{ 'dd-switch-input-checked': isOn }"
 		@click="handleClicked"
 	>
-		<i class="dd-switch-input-inner" />
+		<i class="dd-switch-input-inner" :style="computedStyle" />
 	</div>
 </template>
 
@@ -132,6 +116,7 @@ function handleClicked(event) {
 	box-sizing: border-box;
 	background-color: #dfdfdf;
 	transition: background-color 0.1s, border 0.1s;
+	display: inline-block;
 
 	&::before {
 		content: ' ';
@@ -166,9 +151,6 @@ function handleClicked(event) {
 	right: 0;
 	bottom: 0;
 	border-radius: inherit;
-	color: v-bind('computedCheckColor');
-	background-color: v-bind('computedColor');
-	border-color: v-bind('computedColor');
 }
 
 .dd-switch-input-checked {
@@ -192,6 +174,7 @@ function handleClicked(event) {
 	width: 22px;
 	height: 22px;
 	position: relative;
+	display: inline-block;
 }
 
 .dd-checkbox-input-inner {
@@ -201,7 +184,6 @@ function handleClicked(event) {
 	right: 0;
 	bottom: 0;
 	border-radius: inherit;
-	color: v-bind('computedCheckColor');
 }
 
 .dd-checkbox-input-checked .dd-checkbox-input-inner::before {
