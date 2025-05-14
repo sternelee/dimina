@@ -54,9 +54,9 @@ Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-
 
 如需了解更多关于编译器原理、实现细节、逻辑层与消息通道的交互机制，欢迎查阅[详细文档](./docs/README.md)。
 
-由于行业内各类小程序方案已深度演进，Dimina 目前尚未完全覆盖全部小程序 **API/组件/特性**。
+已支持能力详见[API 说明](./docs/API-Reference.md)。
 
-已支持能力详见[API 说明](./docs/API-Reference.md)。欢迎大家积极贡献代码、提出建议，与我们共同完善 Dimina。
+由于行业内各类小程序方案已迭代多年，Dimina 目前尚未完全覆盖全部小程序 **API/组件/特性**。欢迎大家积极贡献代码、提出建议，与我们共同完善 Dimina。
 
 ## 星标趋势
 

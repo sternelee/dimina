@@ -64,7 +64,7 @@ DMPApp.init(dmpConfig);
      "appId": "wx92269e3b2f304afc", // 小程序唯一标识
      "name": "小程序名称",
      "path": "example/index", // 小程序入口路径
-     "versionCode": 1,
+     "versionCode": 1, // 启动小程序时会根据版本号确认是否需要更新
      "versionName": "1.0.0"
    }
    ```
