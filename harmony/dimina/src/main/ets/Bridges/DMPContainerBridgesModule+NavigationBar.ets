@@ -23,9 +23,11 @@ export class DMPContainerBridgesModuleNavigationBar extends DMPContainerBridgesM
   }
 
   setNavigationBarColor(data: DMPMap, callback: DMPBridgeCallback, webViewId: number) {
+    const frontColor: string = data.get("frontColor")
     const backgroundColor: string = data.get('backgroundColor');
     const navStyle =
       DMPMap.createFromDMPMap(this.app.navigatorManager.getPageRecordById(webViewId)!.pageStyle?.navStyle)
+    navStyle.set("navigationBarTextStyle", (frontColor === "white" || frontColor === "#ffffff") ? "" : "white")
     navStyle.set('navigationBarBackgroundColor', backgroundColor)
     this.app.navigatorManager.getPageRecordById(webViewId)!.pageStyle =
       new DMPPageStyle(navStyle ?? new DMPMap(), this.app.appIndex)

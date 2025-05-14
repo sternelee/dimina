@@ -30,16 +30,18 @@ export struct DMPPageTitle {
           .fontWeight('500')
           .textAlign(TextAlign.Center)
 
-        Image($r('app.media.ic_dmp_back_black'))
+        Image($r(this.getPageStyle(this.pageRecord)?.isStatusBarDarkMode() ? 'app.media.ic_dmp_back_black' :
+          'app.media.ic_dmp_back_white'))
           .width(55)
           .height('100%')
           .padding(15)
           .align(Alignment.Start)
           .onClick((event?: ClickEvent) => {
-            const embedController = DMPAppManager.sharedInstance().getApp(this.appIndex)?.getWebController(this.webViewId)?.subController
+            const embedController =
+              DMPAppManager.sharedInstance().getApp(this.appIndex)?.getWebController(this.webViewId)?.subController
             if (embedController?.accessBackward()) {
               embedController.backward()
-            } else  {
+            } else {
               DMPAppManager.sharedInstance().getApp(this.appIndex)?.navigatorManager.getCurNavigator()?.pop()
             }
           })
@@ -51,9 +53,9 @@ export struct DMPPageTitle {
     .backgroundColor(this.getPageStyle(this.pageRecord)?.getNavigationBarBackGroundColor() ?? '#ffffff')
   }
 
-
   private getPageStyle(_: DMPPageRecord): DMPPageStyle | undefined {
-    const pageRecord = DMPAppManager.sharedInstance().getApp(this.appIndex)?.navigatorManager.getPageRecordById(this.webViewId)
+    const pageRecord =
+      DMPAppManager.sharedInstance().getApp(this.appIndex)?.navigatorManager.getPageRecordById(this.webViewId)
     if (pageRecord) {
       return pageRecord.pageStyle
     }
