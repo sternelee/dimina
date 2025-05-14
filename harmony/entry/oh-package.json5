@@ -1,13 +1,13 @@
 {
   "name": "entry",
   "version": "1.0.0",
-  "description": "Please describe the basic information.",
+  "description": "星河小程序鸿蒙版演示工程",
   "main": "",
   "author": "",
   "license": "",
   "dependencies": {
-//    "@didi-dimina/dimina": "file:../dimina",
-//    "libdimina.so": "file:../dimina/src/main/cpp/types/libdimina"
+    "@didi-dimina/dimina": "file:../dimina",
+    "libdimina.so": "file:../dimina/src/main/cpp/types/libdimina"
   }
 }
 

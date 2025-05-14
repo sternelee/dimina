@@ -5,10 +5,20 @@
   "main": "Index.ets",
   "author": "ucodeustory",
   "license": "Apache-2.0",
+  "homepage": "https://github.com/didi/dimina",
+  "repository": "https://github.com/didi/dimina",
   "dependencies": {
     "libdimina.so": "file:./src/main/cpp/types/libdimina",
     "@ohos/imageknife": "2.1.2",
     "@ohos/mmkv": "2.0.3",
     "@ohos/photoview": "2.0.0"
-  }
+  },
+  "compatibleSdkVersion": "12",
+  "compatibleSdkType": "HarmonyOS",
+  "keywords": [
+    "dimina",
+    "小程序",
+    "滴滴",
+    "星河小程序"
+  ]
 }
