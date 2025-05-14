@@ -58,7 +58,16 @@ class Dimina private constructor(context: Context) {
         }
     }
 
+    /**
+     * 检查当前是否处于调试模式
+     * @return 是否为调试模式
+     */
+    fun isDebugMode(): Boolean {
+        return config.debugMode
+    }
+
     private val appContext: Context = context
+    private lateinit var config: DiminaConfig
 
     init {
         // 基础初始化逻辑
@@ -72,6 +81,9 @@ class Dimina private constructor(context: Context) {
 
     // 应用配置
     private fun applyConfig(config: DiminaConfig) {
+        // 存储配置到类属性
+        this.config = config
+        
         // 根据配置调整 SDK 行为
         if (config.debugMode) {
             enableDebugLogging()

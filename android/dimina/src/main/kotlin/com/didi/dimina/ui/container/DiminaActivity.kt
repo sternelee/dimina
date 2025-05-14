@@ -63,6 +63,7 @@ import androidx.core.graphics.toColorInt
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.didi.dimina.Dimina
 import com.didi.dimina.bean.AppConfig
 import com.didi.dimina.bean.BridgeOptions
 import com.didi.dimina.bean.MergedPageConfig
@@ -311,8 +312,29 @@ class DiminaActivity : ComponentActivity() {
             // 1.解压小程序资源包 jsApp
             val appId = miniProgram.appId
             try {
-                // 首页入口且版本号大于本地版本才需要解压
-                if (miniProgram.root && miniProgram.versionCode > VersionUtils.getAppVersion(appId)) {
+                // 是小程序首页入口
+                // 判断是否需要解压小程序包的逻辑：
+                // 1. 如果是调试模式，只要版本号大于本地版本就解压
+                // 2. 如果是发布模式，需要应用版本已升级且小程序版本号大于本地版本才解压
+                val shouldExtract = if (miniProgram.root) {
+                    val localVersion = VersionUtils.getAppVersion(appId)
+                    val isDebugMode = Dimina.getInstance().isDebugMode()
+                    val appVersionUpdated = VersionUtils.isAppVersionUpdated(this@DiminaActivity)
+                    
+                    when {
+                        isDebugMode -> {
+                            // 调试模式：版本号大于本地版本就解压
+                            miniProgram.versionCode > localVersion
+                        }
+                        appVersionUpdated -> {
+                            // 发布模式且应用版本已升级：版本号大于本地版本才解压
+                            miniProgram.versionCode > localVersion
+                        }
+                        else -> false
+                    }
+                } else false
+                // 使用上面的shouldExtract变量来决定是否解压
+                if (shouldExtract) {
                     if (Utils.unzipAssets(this@DiminaActivity, "jsapp/$appId/$appId.zip", "jsapp/$appId")) {
                         VersionUtils.setAppVersion(appId, miniProgram.versionCode)
                         LogUtils.d(tag, "Mini program extraction completed successfully")
