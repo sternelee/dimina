@@ -3,6 +3,7 @@ package com.didi.dimina.ui.container
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
+import android.app.ComponentCaller
 import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
@@ -99,6 +100,7 @@ class DiminaActivity : ComponentActivity() {
     // UI state for navigation bar
     private val showNavigationBar = mutableStateOf(true)
     private val navigationBarTitle = mutableStateOf("")
+    private val navigationBarTextColor = mutableStateOf(Color.Black)
     private val navigationBarBackgroundColor = mutableStateOf("#FFFFFF")
     private val backgroundColor = mutableStateOf("#FFFFFF")
 
@@ -126,8 +128,8 @@ class DiminaActivity : ComponentActivity() {
     // Reference to the MiniApp instance
     private lateinit var miniApp: MiniApp
 
-    // Current MiniProgram appId
-    private lateinit var currentAppId: String
+    // Current MiniProgram
+    private lateinit var miniProgram: MiniProgram
 
     // Contact picker for handling contact-related operations
     private lateinit var contactPicker: ContactPicker
@@ -138,6 +140,7 @@ class DiminaActivity : ComponentActivity() {
 
     // 屏幕高度
     private var screenHeight = 0
+
 
     /**
      * 调整WebView的位置以适应键盘
@@ -246,14 +249,14 @@ class DiminaActivity : ComponentActivity() {
         }
 
         // 接收 MiniProgram 对象
-        val miniProgram = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val program = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             intent.getParcelableExtra(MINI_PROGRAM_KEY, MiniProgram::class.java)
         } else {
             @Suppress("DEPRECATION")
             intent.getParcelableExtra(MINI_PROGRAM_KEY) as? MiniProgram
         }
 
-        if (miniProgram == null) {
+        if (program == null) {
             finish()
             return
         }
@@ -261,10 +264,10 @@ class DiminaActivity : ComponentActivity() {
         // Get MiniApp instance and JsCore for this MiniProgram
         try {
             miniApp = MiniApp.getInstance()
-            currentAppId = miniProgram.appId
+            miniProgram = program
             LogUtils.d(
                 tag,
-                "Successfully obtained MiniApp instance and JsCore for appId: $currentAppId"
+                "Successfully obtained MiniApp instance and JsCore for appId: ${miniProgram.appId}"
             )
         } catch (e: Exception) {
             LogUtils.e(tag, "Failed to get MiniApp instance or JsCore: ${e.message}")
@@ -294,7 +297,7 @@ class DiminaActivity : ComponentActivity() {
 
         // 使用协程初始化JS引擎并加载小程序
         CoroutineScope(Dispatchers.Main).launch {
-            initialize(miniProgram)
+            initialize()
         }
     }
 
@@ -302,7 +305,7 @@ class DiminaActivity : ComponentActivity() {
     /**
      * Create and initialize the QuickJS engine after UI setup
      */
-    private suspend fun initialize(miniProgram: MiniProgram) {
+    private suspend fun initialize() {
         // 在IO线程中执行耗时操作
         withContext(Dispatchers.IO) {
             // 1.解压小程序资源包 jsApp
@@ -370,7 +373,7 @@ class DiminaActivity : ComponentActivity() {
                         )
                     )
                     // Add bridge to MiniApp's bridge list for this appId
-                    miniApp.addBridge(currentAppId, entryPageBridge)
+                    miniApp.addBridge(miniProgram.appId, entryPageBridge)
 
                     withWebViewPageLoaded {
                         LogUtils.d(tag, "Page loaded, starting bridge")
@@ -412,16 +415,24 @@ class DiminaActivity : ComponentActivity() {
         navigationBarTitle.value = title
     }
 
-    fun setNavigationBarBackgroundColor(color: String) {
-        navigationBarBackgroundColor.value = color
+    fun setNavigationBarColor(frontColor:String, backgroundColor: String) {
+        updateActionColorStyle(frontColor)
+        navigationBarBackgroundColor.value = backgroundColor
     }
 
     /**
      * 设置状态栏样式
      */
     private fun updateActionColorStyle(color: String) {
-        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars =
-            color != "white"
+        if (color == "white" || color == "#ffffff") {
+            navigationBarTextColor.value = Color.White
+        } else {
+            navigationBarTextColor.value = Color.Black
+        }
+        runOnUiThread {
+            WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars =
+                color != "white"
+        }
     }
 
     fun pageScrollTo(scrollTop: Int, duration: Int) {
@@ -593,11 +604,11 @@ class DiminaActivity : ComponentActivity() {
 
     override fun onDestroy() {
         bridge?.let { cBridge ->
-            miniApp.removeBridge(currentAppId, cBridge)?.let { cApp ->
+            miniApp.removeBridge(miniProgram.appId, cBridge)?.let { cApp ->
                 cApp.destroy()
-                if (miniApp.isBridgeListEmpty(currentAppId)) {
+                if (miniApp.isBridgeListEmpty(miniProgram.appId)) {
                     // Clear resources for this specific MiniProgram
-                    miniApp.clear(currentAppId)
+                    miniApp.clear(miniProgram.appId)
                 } else if (miniApp.isBridgeListEmpty()) {
                     miniApp.clearAll()
                 }
@@ -667,7 +678,7 @@ class DiminaActivity : ComponentActivity() {
                         title = {
                             Text(
                                 text = navigationBarTitle.value,
-                                style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, color = navigationBarTextColor.value)
                             )
                         },
                         colors = TopAppBarDefaults.topAppBarColors(
@@ -840,6 +851,10 @@ class DiminaActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    fun getMiniProgram(): MiniProgram {
+        return this.miniProgram
     }
 
     companion object {
