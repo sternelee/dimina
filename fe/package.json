@@ -12,26 +12,27 @@
     "build": "pnpm --filter container... build --mode production",
     "compile": "node ./packages/compiler/src/bin/compile.js",
     "dev": "npm-run-all --parallel start:proxy start:dev",
-    "dev:native": "pnpm --filter container build && pnpm --filter container serve",
+    "dev:native": "pnpm --filter container serve",
     "start:proxy": "pnpm --filter server dev",
     "start:dev": "pnpm --filter container... dev --mode development",
     "preview": "pnpm --dir ./packages/container preview",
     "generate:sdk": "pnpm --filter container generate:sdk",
-    "test": "pnpm --filter dimina-fe-compiler --filter common --filter service test",
-    "coverage": "pnpm --filter dimina-fe-compiler --filter common --filter service coverage",
+    "test": "pnpm --filter compiler --filter common --filter service test",
+    "coverage": "pnpm --filter compiler --filter common --filter service coverage",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "vite": "^6.3.3"
+    "vite": "^6.3.5"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^2.27.3",
     "@eslint/eslintrc": "^3.3.1",
-    "eslint": "^9.25.1",
-    "npm-run-all": "^4.1.5"
+    "eslint": "^9.26.0",
+    "npm-run-all": "^4.1.5",
+    "vitest": "^3.1.3"
   },
   "volta": {
-    "node": "20.18.1"
+    "node": "22.15.0"
   }
 }
