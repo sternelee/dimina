@@ -249,32 +249,30 @@ export function animationToStyle(action) {
 		}
 	}
 
-	// 处理 transform
-	const transform = animates
-		.filter(animate => animate.type !== 'style')
-		.map((animate) => {
-			const { type, args } = animate
-			if (isFunction(transformHandler[type])) {
-				return transformHandler[type](args)
-			}
-			console.warn(`[Common] SDK inner warning (Transform Handler not found animation type: ${type})`)
-			return ''
-		})
-		.join(' ')
-
-	// 处理样式属性
+	const transformAnimations = []
 	const styles = {}
-	animates
-		.filter(animate => animate.type === 'style')
-		.forEach((animate) => {
+	for (let i = 0; i < animates.length; i++) {
+		const animate = animates[i]
+
+		if (animate.type === 'style') {
+			// 处理样式属性
 			const [prop, value] = animate.args
 			styles[prop] = value
-		})
+		} else {
+			// 处理 transform
+			const { type, args } = animate
+			if (isFunction(transformHandler[type])) {
+				transformAnimations.push(transformHandler[type](args))
+			} else {
+				console.warn(`[Common] SDK inner warning (Transform Handler not found animation type: ${type})`)
+			}
+		}
+	}
 
 	return {
 		keyframes: [
 			{
-				transform,
+				transform: transformAnimations.join(' '),
 				transformOrigin,
 				...styles,
 			},
