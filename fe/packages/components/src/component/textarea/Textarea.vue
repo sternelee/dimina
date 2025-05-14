@@ -257,7 +257,8 @@ const keyCode = ref(null)
 const iValue = ref(props.value)
 
 const placeholderShow = computed(() => {
-	return !iValue.value || iValue.value?.length === 0
+	return iValue.value === undefined || iValue.value === null || iValue.value === '' 
+		|| (typeof iValue.value === 'string' && iValue.value.length === 0)
 })
 
 /**
