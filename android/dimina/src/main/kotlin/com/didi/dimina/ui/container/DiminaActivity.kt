@@ -689,6 +689,7 @@ class DiminaActivity : ComponentActivity() {
                                 Icon(
                                     imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                     contentDescription = "Back",
+                                    tint = navigationBarTextColor.value,
                                     modifier = Modifier.size(30.dp)
                                 )
                             }
