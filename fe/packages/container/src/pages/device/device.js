@@ -24,7 +24,7 @@ export class Device {
 	outerGlow() {
 		const island = this.root.querySelector('.iphone__screen_dynamic-island')
 		island.addEventListener('click', () => {
-			window.open('https://github.com/didi/Dimina', '_blank')
+			window.open('https://github.com/didi/dimina', '_blank')
 		})
 		const syncPointer = ({ x: pointerX, y: pointerY }) => {
 			const x = pointerX.toFixed(2)
