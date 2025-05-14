@@ -67,55 +67,55 @@ Vue 作为底层的渲染框架，自然会与小程序的语法存在一定的�
 
 | 分类              | API 名称                          | Android | iOS | Harmony | Web |
 |-------------------|----------------------------------|---------|-----|---------|-----|
-| 基础              | env                              | ✓       | □   | ✓       | ✓   |
-|                   | canIUse                          | ✓       | □   | ✓       | ✓  |
-| 基础 - 系统        | openSystemBluetoothSetting       | ✓       | -   | -       | □   |
-|                   | getWindowInfo                    | ✓       | □   | ✓       | □   |
-|                   | getSystemSetting                 | ✓       | □   | ✓       | □   |
-|                   | getSystemInfoSync                | ✓       | □   | ✓       | □   |
-|                   | getSystemInfoAsync               | ✓       | □   | ✓       | □   |
-|                   | getSystemInfo                    | ✓       | □   | ✓       | □   |
-| 路由               | reLaunch                         | ✓       | □   | ✓       | □   |
-|                   | redirectTo                       | ✓       | □   | ✓       | ✓   |
-|                   | navigateTo                       | ✓       | □   | ✓       | ✓   |
-|                   | navigateBack                     | ✓       | □   | ✓       | ✓   |
-| 界面 - 交互        | showToast                        | ✓       | □   | ✓       | ✓   |
-|                   | showModal                        | ✓       | □   | ✓       | ✓   |
-|                   | showLoading                      | ✓       | □   | ✓       | ✓   |
-|                   | showActionSheet                  | ✓       | □   | ✓       | ✓   |
-|                   | hideToast                        | ✓       | □   | -       | ✓  |
-|                   | hideLoading                      | ✓       | □   | ✓       | ✓   |
-| 界面 - 导航栏       | setNavigationBarTitle            | ✓       | □   | ✓       | □   |
-|                   | setNavigationBarColor            | ✓       | □   | ✓       | □   |
-| 界面 - 滚动        | pageScrollTo                     | ✓       | □   | ✓       | □   |
-| 界面 - 菜单        | getMenuButtonBoundingClientRect  | ✓       | □   | ✓       | □   |
-| 网络               | request                          | ✓       | □   | ✓       | □   |
-|                   | downloadFile                     | ✓       | □   | ✓       | -   |
-|                   | uploadFile                       | ✓       | □   | ✓       | -   |
-| 数据缓存           | setStorageSync                   | ✓       | □   | ✓       | □   |
-|                   | getStorageSync                   | ✓       | □   | ✓       | □   |
-|                   | removeStorageSync                | ✓       | □   | ✓       | □   |
-|                   | clearStorageSync                 | ✓       | □   | ✓       | □   |
-|                   | setStorage                       | ✓       | □   | ✓       | □   |
-|                   | getStorage                       | ✓       | □   | ✓       | □   |
-|                   | removeStorage                    | ✓       | □   | ✓       | □   |
-|                   | clearStorage                     | ✓       | □   | ✓       | □   |
-|                   | getStorageInfoSync               | ✓       | □   | ✓       | □   |
-|                   | getStorageInfo                   | ✓       | □   | ✓       | □   |
-| 媒体 - 图片        | saveImageToPhotosAlbum           | ✓       | □   | ✓       | □   |
-|                   | previewImage                     | ✓       | □   | ✓       | □   |
-|                   | compressImage                    | ✓       | □   | ✓       | □   |
-|                   | chooseImage                      | ✓       | □   | ✓       | □   |
-| 媒体 - 视频        | chooseMedia                      | ✓       | □   | ✓       | □   |
-| 设备 - 联系人       | chooseContact                    | ✓       | □   | ✓       | □   |
-|                   | addPhoneContact                  | ✓       | □   | ✓       | □   |
-| 设备 - 剪贴板       | setClipboardData                 | ✓       | □   | ✓       | □   |
-|                   | getClipboardData                 | ✓       | □   | ✓       | □   |
-| 设备 - 震动        | vibrateShort                     | ✓       | □   | ✓       | -   |
-|                   | vibrateLong                      | ✓       | □   | ✓       | -   |
-| 设备 - 键盘        | hideKeyboard                     | ✓       | □   | ✓       | -   |
-| 设备 - 网络        | getNetworkType                   | ✓       | □   | ✓       | ✓   |
-| 设备 - 电话        | makePhoneCall                    | ✓       | □   | ✓       | -   |
+| 基础              | env                              | ✓       | ✓   | ✓       | ✓   |
+|                   | canIUse                          | ✓       | ✓   | ✓       | ✗  |
+| 基础 - 系统        | openSystemBluetoothSetting       | ✓       | ✗   | ✗       | ✗   |
+|                   | getWindowInfo                    | ✓       | ✓   | ✓       | ✗  |
+|                   | getSystemSetting                 | ✓       | ✓   | ✓       | ✗   |
+|                   | getSystemInfoSync                | ✓       | ✓   | ✓       | ✗   |
+|                   | getSystemInfoAsync               | ✓       | ✓   | ✓       | ✓   |
+|                   | getSystemInfo                    | ✓       | ✓   | ✓       | ✗  |
+| 路由               | reLaunch                         | ✓       | ✓   | ✓       | ✓   |
+|                   | redirectTo                       | ✓       | ✓   | ✓       | ✓   |
+|                   | navigateTo                       | ✓       | ✓   | ✓       | ✓   |
+|                   | navigateBack                     | ✓       | ✓   | ✓       | ✓   |
+| 界面 - 交互        | showToast                        | ✓       | ✓   | ✓       | ✓   |
+|                   | showModal                        | ✓       | ✓   | ✓       | ✓   |
+|                   | showLoading                      | ✓       | ✓   | ✓       | ✓   |
+|                   | showActionSheet                  | ✓       | ✓   | ✓       | ✓   |
+|                   | hideToast                        | ✓       | ✓   | □       | ✓  |
+|                   | hideLoading                      | ✓       | ✓   | ✓       | ✓   |
+| 界面 - 导航栏       | setNavigationBarTitle            | ✓       | ✓   | ✓       | ✓   |
+|                   | setNavigationBarColor            | ✓       | ✓   | ✓       | ✓   |
+| 界面 - 滚动        | pageScrollTo                     | ✓       | ✓   | ✓       | ✓   |
+| 界面 - 菜单        | getMenuButtonBoundingClientRect  | ✓       | ✓   | ✓       | ✓  |
+| 网络               | request                          | ✓       | ✓   | ✓       | ✓   |
+|                   | downloadFile                     | ✓       | ✓   | ✓       | ✗   |
+|                   | uploadFile                       | ✓       | ✓   | ✓       | ✗   |
+| 数据缓存           | setStorageSync                   | ✓       | ✓   | ✓       | ✗  |
+|                   | getStorageSync                   | ✓       | ✓   | ✓       | ✗   |
+|                   | removeStorageSync                | ✓       | ✓   | ✓       | ✗   |
+|                   | clearStorageSync                 | ✓       | ✓   | ✓       | ✗   |
+|                   | setStorage                       | ✓       | ✓   | ✓       | ✓   |
+|                   | getStorage                       | ✓       | ✓   | ✓       | ✓   |
+|                   | removeStorage                    | ✓       | ✓   | ✓       | ✓   |
+|                   | clearStorage                     | ✓       | ✓   | ✓       | ✓   |
+|                   | getStorageInfoSync               | ✓       | ✓   | ✓       | ✗   |
+|                   | getStorageInfo                   | ✓       | ✓   | ✓       | ✓   |
+| 媒体 - 图片        | saveImageToPhotosAlbum           | ✓       | ✓   | ✓       | ✗   |
+|                   | previewImage                     | ✓       | ✓   | ✓       | □   |
+|                   | compressImage                    | ✓       | ✓   | ✓       | ✗   |
+|                   | chooseImage                      | ✓       | ✓   | ✓       | ✗   |
+| 媒体 - 视频        | chooseMedia                      | ✓       | ✓   | ✓       | ✗   |
+| 设备 - 联系人       | chooseContact                    | ✓       | ✓   | ✓       | ✗   |
+|                   | addPhoneContact                  | ✓       | ✓   | ✓       | ✗   |
+| 设备 - 剪贴板       | setClipboardData                 | ✓       | ✓   | ✓       | ✓   |
+|                   | getClipboardData                 | ✓       | ✓   | ✓       | ✓   |
+| 设备 - 震动        | vibrateShort                     | ✓       | ✓   | ✓       | ✗   |
+|                   | vibrateLong                      | ✓       | ✓   | ✓       | ✗   |
+| 设备 - 键盘        | hideKeyboard                     | ✓       | ✓   | ✓       | ✗   |
+| 设备 - 网络        | getNetworkType                   | ✓       | ✓   | ✓       | ✓   |
+| 设备 - 电话        | makePhoneCall                    | ✓       | ✓   | ✓       | ✗   |
 
 说明：
 
