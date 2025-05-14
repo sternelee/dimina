@@ -2,9 +2,9 @@ import { DMPPageStyle } from '../DPages/DMPPageStyle';
 import { DMPLogger } from '../EventTrack/DMPLogger';
 import { Tags } from '../EventTrack/Tags';
 import { DMPMap } from '../Utils/DMPMap';
-import { DMPContainerBridgesModule } from './DMPContainerBridgesModule'
+import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
 
-import { DMPBridgeCallback } from './DMPTSUtil'
+import { DMPBridgeCallback } from './DMPTSUtil';
 
 export class DMPContainerBridgesModuleNavigationBar extends DMPContainerBridgesModule {
   getExportMethods(): string[] {
@@ -27,7 +27,7 @@ export class DMPContainerBridgesModuleNavigationBar extends DMPContainerBridgesM
     const backgroundColor: string = data.get('backgroundColor');
     const navStyle =
       DMPMap.createFromDMPMap(this.app.navigatorManager.getPageRecordById(webViewId)!.pageStyle?.navStyle)
-    navStyle.set("navigationBarTextStyle", (frontColor === "white" || frontColor === "#ffffff") ? "" : "white")
+    navStyle.set("navigationBarTextStyle", (frontColor === "white" || frontColor === "#ffffff") ? "white" : "black")
     navStyle.set('navigationBarBackgroundColor', backgroundColor)
     this.app.navigatorManager.getPageRecordById(webViewId)!.pageStyle =
       new DMPPageStyle(navStyle ?? new DMPMap(), this.app.appIndex)
