@@ -20,7 +20,8 @@ class Service {
 
 	init() {
 		this.message.on('loadResource', (msg) => {
-			const { appId, bridgeId, pagePath, root = '.' } = msg
+			const { appId, bridgeId, pagePath, root = '.', injectInfo } = msg
+			globalThis.injectInfo = injectInfo
 			loader.loadResource({ appId, bridgeId, pagePath, root })
 		})
 

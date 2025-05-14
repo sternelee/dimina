@@ -25,6 +25,7 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 		define: {
+			__DEV__: mode !== 'production',
 			__VUE_PROD_HYDRATION_MISMATCH_DETAILS__: false,
 		},
 		plugins: [vue()],

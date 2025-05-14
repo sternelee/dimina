@@ -4,5 +4,8 @@ import { invokeAPI } from '@/api/common'
  * https://developers.weixin.qq.com/miniprogram/dev/api/ui/menu/wx.getMenuButtonBoundingClientRect.html
  */
 export function getMenuButtonBoundingClientRect() {
+	if (globalThis.injectInfo) {
+		return globalThis.injectInfo.menuRect
+	}
 	return invokeAPI('getMenuButtonBoundingClientRect')
 }

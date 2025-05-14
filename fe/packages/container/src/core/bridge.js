@@ -123,6 +123,10 @@ export class Bridge {
 				appId: this.opts.appId,
 				pagePath: this.opts.pagePath,
 				root: this.opts.root,
+				injectInfo: {
+					// 注入同步 API 信息
+					menuRect: this.parent.getMenuButtonBoundingClientRect(),
+				},
 			},
 		})
 	}

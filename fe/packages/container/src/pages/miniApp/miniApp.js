@@ -235,6 +235,81 @@ export class MiniApp {
 		onSuccess?.()
 	}
 
+	reLaunch(opts) {
+		// 防抖处理
+		if (!this.webviewAnimaEnd) {
+			return
+		}
+		this.webviewAnimaEnd = false
+
+		const { url, success, fail, complete } = opts
+		const { query, pagePath } = queryPath(url)
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			// 检查页面路径是否存在
+			const pageConfig = this.appConfig.modules[pagePath]
+			// 合并页面配置
+			const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
+			
+			// 更新状态栏颜色模式
+			this.updateTargetPageColorStyle(mergeConfig)
+
+			// 销毁所有现有的 bridge
+			while (this.bridgeList.length > 0) {
+				const bridge = this.bridgeList.pop()
+				bridge.destroy()
+				if (bridge.webview && bridge.webview.el) {
+					bridge.webview.el.remove()
+				}
+			}
+
+			// 清空 webviews 容器
+			if (this.webviewsContainer) {
+				this.webviewsContainer.innerHTML = ''
+			}
+
+			// 创建新的入口页面的 bridge
+			this.createBridge({
+				pagePath,
+				query,
+				scene: this.appInfo.scene,
+				jscore: this.jscore,
+				isRoot: true, // 作为根页面
+				root: pageConfig?.root || 'main',
+				appId: this.appInfo.appId,
+				pages: this.appConfig.app.pages,
+				configInfo: mergeConfig,
+			}).then(bridge => {
+				// 添加到 bridgeList
+				this.bridgeList.push(bridge)
+				
+				// 启动新页面
+				bridge.start()
+				
+				// 设置 z-index
+				bridge.webview.el.style.zIndex = 1
+				
+				// 恢复动画状态
+				this.webviewAnimaEnd = true
+				
+				// 调用成功回调
+				onSuccess?.({ errMsg: 'reLaunch:ok' })
+				onComplete?.()
+			}).catch(error => {
+				onFail?.({ errMsg: `reLaunch:fail ${error.message}` })
+				onComplete?.()
+				this.webviewAnimaEnd = true
+			})
+		} catch (error) {
+			onFail?.({ errMsg: `reLaunch:fail ${error.message}` })
+			onComplete?.()
+			this.webviewAnimaEnd = true
+		}
+	}
+
 	redirectTo(opts) {
 		// 防抖处理
 		if (!this.webviewAnimaEnd) {
@@ -447,11 +522,16 @@ export class MiniApp {
 		// return { abort: controller.abort };
 	}
 
-	getSystemInfoSync() {
+	getSystemInfoAsync(opts) {
 		const bar = this.parent.parent.root.querySelector('.iphone__status-bar').getBoundingClientRect()
 		const wb = this.parent.el.querySelector('.dimina-native-webview__root').getBoundingClientRect()
 
-		return {
+		const { success, complete } = opts
+
+		const onSuccess = this.createCallbackFunction(success)
+		const onComplete = this.createCallbackFunction(complete)
+
+		onSuccess?.({
 			statusBarHeight: bar.height,
 			brand: 'devtools',
 			mode: 'default',
@@ -470,11 +550,8 @@ export class MiniApp {
 				left: wb.left,
 				right: wb.right,
 			},
-		}
-	}
-
-	getSystemInfo() {
-		return this.getSystemInfoSync()
+		})
+		onComplete?.()
 	}
 
 	getMenuButtonBoundingClientRect() {
@@ -533,98 +610,394 @@ export class MiniApp {
 	}
 
 	showModal(opts) {
-		const { content = '', cancelText = '取消', confirmText = '确定', success, complete } = opts;
-		const onSuccess = this.createCallbackFunction(success);
-		const onComplete = this.createCallbackFunction(complete);
+		const { content = '', cancelText = '取消', confirmText = '确定', success, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onComplete = this.createCallbackFunction(complete)
 
 		// 遮罩层
-		const mask = document.createElement('div');
-		mask.className = 'dimina-dialog-mask';
+		const mask = document.createElement('div')
+		mask.className = 'dimina-dialog-mask'
 		// 弹窗内容
-		const dialog = document.createElement('div');
-		dialog.className = 'dimina-dialog';
+		const dialog = document.createElement('div')
+		dialog.className = 'dimina-dialog'
 		dialog.innerHTML = `<p>${content}</p>
 		<div>
 			<a id="cancelBtn" class="dimina-dialog__button" href="javascript:">${cancelText}</a>
 			<a id="confirmBtn" class="dimina-dialog__button" style="color: #576b95;" href="javascript:">${confirmText}</a>
-    	</div>`;
+    	</div>`
 
 		const cleanup = () => {
-			mask.remove();
-			dialog.remove();
-		};
+			mask.remove()
+			dialog.remove()
+		}
 
 		dialog.querySelector('#cancelBtn').addEventListener('click', () => {
-			cleanup();
-			onSuccess?.({ cancel: true });
-			onComplete?.();
-		});
+			cleanup()
+			onSuccess?.({ cancel: true })
+			onComplete?.()
+		})
 		dialog.querySelector('#confirmBtn').addEventListener('click', () => {
-			cleanup();
-			onSuccess?.({ confirm: true });
-			onComplete?.();
-		});
-		mask.onclick = cleanup;
+			cleanup()
+			onSuccess?.({ confirm: true })
+			onComplete?.()
+		})
+		mask.onclick = cleanup
 
-		this.webviewsContainer.appendChild(mask);
-		this.webviewsContainer.appendChild(dialog);
+		this.webviewsContainer.appendChild(mask)
+		this.webviewsContainer.appendChild(dialog)
 		// 动画效果可选
 		setTimeout(() => {
-			mask.classList.add('show');
-			dialog.classList.add('show');
-		}, 10);
+			mask.classList.add('show')
+			dialog.classList.add('show')
+		}, 10)
 	}
 
 	showActionSheet(opts) {
-		const { itemList = [], itemColor = '#000', success, fail, complete } = opts || {};
+		const { itemList = [], itemColor = '#000', success, fail, complete } = opts || {}
 		if (!Array.isArray(itemList) || itemList.length === 0) {
-			fail && this.createCallbackFunction(fail)({ errMsg: 'showActionSheet:fail' });
-			complete && this.createCallbackFunction(complete)();
-			return;
+			fail && this.createCallbackFunction(fail)({ errMsg: 'showActionSheet:fail' })
+			complete && this.createCallbackFunction(complete)()
+			return
 		}
 		// 创建遮罩层
-		const mask = document.createElement('div');
-		mask.className = 'dimina-action-sheet-mask';
+		const mask = document.createElement('div')
+		mask.className = 'dimina-action-sheet-mask'
 		// 创建 action sheet 容器
-		const sheet = document.createElement('div');
-		sheet.className = 'dimina-action-sheet';
-		// 选项
-		itemList.forEach((item, idx) => {
-			const btn = document.createElement('div');
-			btn.className = 'dimina-action-sheet-item';
-			btn.style.color = itemColor;
-			btn.innerText = item;
-			btn.onclick = () => {
-				cleanup();
-				success && this.createCallbackFunction(success)({ tapIndex: idx });
-				complete && this.createCallbackFunction(complete)();
-			};
-			sheet.appendChild(btn);
-		});
-		// 取消按钮
-		const cancelBtn = document.createElement('div');
-		cancelBtn.className = 'dimina-action-sheet-cancel';
-		cancelBtn.innerText = '取消';
-		cancelBtn.onclick = () => {
-			cleanup();
-			fail && this.createCallbackFunction(fail)({ errMsg: 'showActionSheet:fail cancel' });
-			complete && this.createCallbackFunction(complete)();
-		};
-		sheet.appendChild(cancelBtn);
+		const sheet = document.createElement('div')
+		sheet.className = 'dimina-action-sheet'
+
 		// 清理方法
 		const cleanup = () => {
-			mask.remove();
-			sheet.remove();
-		};
-		mask.onclick = cleanup;
+			mask.remove()
+			sheet.remove()
+		}
+		// 选项
+		itemList.forEach((item, idx) => {
+			const btn = document.createElement('div')
+			btn.className = 'dimina-action-sheet-item'
+			btn.style.color = itemColor
+			btn.textContent = item
+			btn.onclick = () => {
+				cleanup()
+				success && this.createCallbackFunction(success)({ tapIndex: idx })
+				complete && this.createCallbackFunction(complete)()
+			}
+			sheet.appendChild(btn)
+		})
+		// 取消按钮
+		const cancelBtn = document.createElement('div')
+		cancelBtn.className = 'dimina-action-sheet-cancel'
+		cancelBtn.textContent = '取消'
+		cancelBtn.onclick = () => {
+			cleanup()
+			fail && this.createCallbackFunction(fail)({ errMsg: 'showActionSheet:fail cancel' })
+			complete && this.createCallbackFunction(complete)()
+		}
+		sheet.appendChild(cancelBtn)
+
+		mask.onclick = cleanup
 		// 挂载到 webviewsContainer
-		this.webviewsContainer.appendChild(mask);
-		this.webviewsContainer.appendChild(sheet);
-		console.log(12345, itemList)
+		this.webviewsContainer.appendChild(mask)
+		this.webviewsContainer.appendChild(sheet)
 		// 动画效果
 		setTimeout(() => {
-			sheet.classList.add('show');
-			mask.classList.add('show');
-		}, 10);
+			sheet.classList.add('show')
+			mask.classList.add('show')
+		}, 10)
+	}
+
+	setNavigationBarTitle(opts) {
+		const { title, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+		try {
+			const currentBridge = this.bridgeList[this.bridgeList.length - 1]
+			const navigationTitle = currentBridge.webview.el.querySelector('.dimina-native-webview__navigation-title')
+			if (navigationTitle) {
+				navigationTitle.textContent = title || ''
+				onSuccess?.({ errMsg: 'setNavigationBarTitle:ok' })
+			}
+			else {
+				onFail?.({ errMsg: `setNavigationBarTitle:fail Navigation title element not found` })
+			}
+		}
+		catch (error) {
+			onFail?.({ errMsg: `setNavigationBarTitle:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
+	}
+
+	setNavigationBarColor(opts) {
+		const { frontColor, backgroundColor, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			const currentBridge = this.bridgeList[this.bridgeList.length - 1]
+			const navigation = currentBridge.webview.el.querySelector('.dimina-native-webview__navigation')
+			if (navigation) {
+				// 设置前景色（文字颜色）
+				if (frontColor) {
+					navigation.querySelector('.dimina-native-webview__navigation-title').style.color = frontColor
+				}
+				// 设置背景色
+				if (backgroundColor) {
+					navigation.style.backgroundColor = backgroundColor
+				}
+				onSuccess?.({ errMsg: 'setNavigationBarColor:ok' })
+			}
+			else {
+				onFail?.({ errMsg: `setNavigationBarColor:fail Navigation element not found` })
+			}
+		}
+		catch (error) {
+			onFail?.({ errMsg: `setNavigationBarColor:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
+	}
+
+	/**
+	 * 页面滚动到指定位置
+	 */
+	pageScrollTo(opts) {
+		const { scrollTop, duration = 300, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			const currentBridge = this.bridgeList[this.bridgeList.length - 1]
+			const webviewRoot = currentBridge.webview.iframe.contentWindow.document.documentElement
+			if (webviewRoot) {
+				webviewRoot.scrollTo({
+					top: scrollTop,
+					behavior: duration > 0 ? 'smooth' : 'auto',
+				})
+
+				// 模拟滚动动画时间
+				setTimeout(() => {
+					onSuccess?.({ errMsg: 'pageScrollTo:ok' })
+					onComplete?.()
+				}, duration)
+			}
+			else {
+				onFail?.({ errMsg: `pageScrollTo:fail Webview root element not found` })
+				onComplete?.()
+			}
+		}
+		catch (error) {
+			onFail?.({ errMsg: `pageScrollTo:fail ${error.message}` })
+			onComplete?.()
+		}
+	}
+
+	/**
+	 * 设置剪贴板数据
+	 */
+	setClipboardData(opts) {
+		const { data, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			navigator.clipboard.writeText(data).then(() => {
+				onSuccess?.({ errMsg: 'setClipboardData:ok' })
+				onComplete?.()
+			}).catch((error) => {
+				onFail?.({ errMsg: `setClipboardData:fail ${error.message}` })
+				onComplete?.()
+			})
+		}
+		catch (error) {
+			onFail?.({ errMsg: `setClipboardData:fail ${error.message}` })
+			onComplete?.()
+		}
+	}
+
+	/**
+	 * 获取剪贴板数据
+	 */
+	getClipboardData(opts) {
+		const { success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			navigator.clipboard.readText().then((data) => {
+				onSuccess?.({ data, errMsg: 'getClipboardData:ok' })
+				onComplete?.()
+			}).catch((error) => {
+				onFail?.({ errMsg: `getClipboardData:fail ${error.message}` })
+				onComplete?.()
+			})
+		}
+		catch (error) {
+			onFail?.({ errMsg: `getClipboardData:fail ${error.message}` })
+			onComplete?.()
+		}
+	}
+
+	setStorage(opts) {
+		const { key, data, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			// 按appId区分存储数据
+			const storageKey = `${this.appId}_${key}`
+			// 将数据转为字符串存储
+			const dataString = typeof data === 'object' ? JSON.stringify(data) : String(data)
+			localStorage.setItem(storageKey, dataString)
+			onSuccess?.({ errMsg: 'setStorage:ok' })
+		}
+		catch (error) {
+			onFail?.({ errMsg: `setStorage:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
+	}
+
+	getStorage(opts) {
+		const { key, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			// 按appId区分存储数据
+			const storageKey = `${this.appId}_${key}`
+			const data = localStorage.getItem(storageKey)
+			if (data !== null) {
+				// 尝试解析JSON数据
+				let parsedData = data
+				try {
+					parsedData = JSON.parse(data)
+				}
+				catch (e) {
+					// 如果解析失败，保持原始字符串
+				}
+				onSuccess?.({ data: parsedData, errMsg: 'getStorage:ok' })
+			}
+			else {
+				onFail?.({ errMsg: `getStorage:fail data not found` })
+			}
+		}
+		catch (error) {
+			onFail?.({ errMsg: `getStorage:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
+	}
+
+	removeStorage(opts) {
+		const { key, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			// 按appId区分存储数据
+			const storageKey = `${this.appId}_${key}`
+			if (localStorage.getItem(storageKey) !== null) {
+				localStorage.removeItem(storageKey)
+				onSuccess?.({ errMsg: 'removeStorage:ok' })
+			}
+			else {
+				// 即使key不存在也返回成功
+				onSuccess?.({ errMsg: 'removeStorage:ok' })
+			}
+		}
+		catch (error) {
+			onFail?.({ errMsg: `removeStorage:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
+	}
+
+	clearStorage(opts){
+		const { success, fail, complete } = opts || {}
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			// 只清除当前appId的存储数据
+			const appIdPrefix = `${this.appId}_`
+			const keysToRemove = []
+			
+			// 找出所有属于当前appId的keys
+			for (let i = 0; i < localStorage.length; i++) {
+				const key = localStorage.key(i)
+				if (key.startsWith(appIdPrefix)) {
+					keysToRemove.push(key)
+				}
+			}
+			
+			// 删除所有找到的keys
+			keysToRemove.forEach(key => localStorage.removeItem(key))
+			
+			onSuccess?.({ errMsg: 'clearStorage:ok' })
+		}
+		catch (error) {
+			onFail?.({ errMsg: `clearStorage:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
+	}
+
+
+	getStorageInfo(opts) {
+		const { success, fail, complete } = opts || {}
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		try {
+			const keys = []
+			let currentSize = 0
+			const limitSize = 10 * 1024 * 1024 // 假设限制为10MB
+			const appIdPrefix = `${this.appId}_`
+
+			// 只获取当前appId的存储信息
+			for (let i = 0; i < localStorage.length; i++) {
+				const fullKey = localStorage.key(i)
+				
+				// 只处理当前appId的keys
+				if (fullKey.startsWith(appIdPrefix)) {
+					// 移除appId前缀，返回原始key给小程序
+					const originalKey = fullKey.substring(appIdPrefix.length)
+					keys.push(originalKey)
+					
+					const item = localStorage.getItem(fullKey)
+					currentSize += item ? item.length * 2 : 0 // 估算字符串大小（UTF-16编码每个字符2字节）
+				}
+			}
+
+			onSuccess?.({
+				keys,
+				currentSize, // 当前占用空间，单位为字节
+				limitSize, // 存储限制，单位为字节
+				errMsg: 'getStorageInfo:ok'
+			})
+		}
+		catch (error) {
+			onFail?.({ errMsg: `getStorageInfo:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
 	}
 }

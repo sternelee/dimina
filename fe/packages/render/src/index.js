@@ -52,6 +52,32 @@ class Render {
 			const { success, data } = msg
 			success && callback.invoke(success, data)
 		})
+
+		if (__DEV__) {
+			// 可接收端容器或引擎日志
+			this.message.on('print', (msg) => {
+				const { type, detail } = msg
+				switch (type) {
+					case 'info':
+						// eslint-disable-next-line no-console
+						console.info(detail)
+						break
+					case 'debug':
+						// eslint-disable-next-line no-console
+						console.debug(detail)
+						break
+					case 'warn':
+						console.warn(detail)
+						break
+					case 'error':
+						console.error(detail)
+						break
+					default:
+						console.log(detail)
+						break
+				}
+			})
+		}
 	}
 }
 
