@@ -99,28 +99,37 @@ class MiniApp private constructor() {
                     if (initialized) {
                         context?.let {
                             try {
-                                val jsConfigString =
-                                    context.assets.open("jssdk/config.json").bufferedReader()
-                                        .use { it.readText() }
-                                val sdkObject = JSONObject(jsConfigString)
-                                val newVersionCode = sdkObject.getInt("versionCode")
-                                val oldVersionCode = VersionUtils.getJSVersion()
-                                val versionName = sdkObject.getString("versionName")
-                                if (newVersionCode > oldVersionCode) {
-                                    if (Utils.unzipAssets(
-                                            context,
-                                            "jssdk/main.zip",
-                                            "jssdk/$newVersionCode",
-                                        )
-                                    ) {
-                                        VersionUtils.setJSVersion(newVersionCode)
+                                // 检查是否需要检查 JSSDK 更新
+                                if (VersionUtils.isAppVersionUpdated(context)) {
+                                    LogUtils.d(tag, "Checking for JSSDK updates...")
+                                    val jsConfigString =
+                                        context.assets.open("jssdk/config.json").bufferedReader()
+                                            .use { it.readText() }
+                                    val sdkObject = JSONObject(jsConfigString)
+                                    val newVersionCode = sdkObject.getInt("versionCode")
+                                    val versionName = sdkObject.getString("versionName")
+                                    val oldVersionCode = VersionUtils.getJSVersion()
+                                    if (newVersionCode > oldVersionCode) {
+                                        LogUtils.d(tag, "JSSDK update found: $versionName($newVersionCode)")
+                                        if (Utils.unzipAssets(
+                                                context,
+                                                "jssdk/main.zip",
+                                                "jssdk/$newVersionCode",
+                                            )
+                                        ) {
+                                            VersionUtils.setJSVersion(newVersionCode)
+                                            LogUtils.d(tag, "JSSDK updated successfully to version $versionName($newVersionCode)")
+                                        } else {
+                                            LogUtils.e(
+                                                tag,
+                                                "Failed to extract JSSDK: $versionName($newVersionCode)"
+                                            )
+                                        }
                                     } else {
-                                        LogUtils.e(
-                                            tag,
-                                            "Failed to extract mini program for sdk: $versionName($newVersionCode)"
-                                        )
+                                        LogUtils.d(tag, "JSSDK is already up to date: $versionName($newVersionCode)")
                                     }
-                                    LogUtils.d(tag, "Js sdk extraction completed successfully")
+                                } else {
+                                    LogUtils.d(tag, "Skipping JSSDK update check, last check was recent")
                                 }
                                 evaluateFromFile(
                                     File(
