@@ -1,0 +1,362 @@
+{
+    "app": {
+        "pages": [
+            "page/tabBar/component/index",
+            "page/tabBar/API/index"
+        ],
+        "window": {
+            "navigationBarTextStyle": "black",
+            "navigationBarTitleText": "演示",
+            "navigationBarBackgroundColor": "#F8F8F8",
+            "backgroundColor": "#F8F8F8"
+        },
+        "tabBar": {
+            "color": "#7A7E83",
+            "selectedColor": "#3cc51f",
+            "borderStyle": "black",
+            "backgroundColor": "#ffffff",
+            "list": [
+                {
+                    "pagePath": "page/tabBar/component/index",
+                    "iconPath": "image/icon_component.png",
+                    "selectedIconPath": "image/icon_component_HL.png",
+                    "text": "组件"
+                },
+                {
+                    "pagePath": "page/tabBar/API/index",
+                    "iconPath": "image/icon_API.png",
+                    "selectedIconPath": "image/icon_API_HL.png",
+                    "text": "接口"
+                }
+            ]
+        },
+        "subPackages": [
+            {
+                "root": "page/component/",
+                "pages": [
+                    "pages/view/view",
+                    "pages/scroll-view/scroll-view",
+                    "pages/swiper/swiper",
+                    "pages/text/text",
+                    "pages/icon/icon",
+                    "pages/progress/progress",
+                    "pages/button/button",
+                    "pages/checkbox/checkbox",
+                    "pages/form/form",
+                    "pages/input/input",
+                    "pages/label/label",
+                    "pages/picker/picker",
+                    "pages/radio/radio",
+                    "pages/slider/slider",
+                    "pages/switch/switch",
+                    "pages/textarea/textarea",
+                    "pages/navigator/navigator",
+                    "pages/navigator/navigate",
+                    "pages/navigator/redirect",
+                    "pages/image/image",
+                    "pages/audio/audio",
+                    "pages/video/video",
+                    "pages/map/map",
+                    "pages/canvas/canvas"
+                ]
+            },
+            {
+                "root": "page/API/",
+                "pages": [
+                    "pages/login/login",
+                    "pages/get-user-info/get-user-info",
+                    "pages/request-payment/request-payment",
+                    "pages/share/share",
+                    "pages/share-button/share-button",
+                    "pages/custom-message/custom-message",
+                    "pages/template-message/template-message",
+                    "pages/set-navigation-bar-title/set-navigation-bar-title",
+                    "pages/navigation-bar-loading/navigation-bar-loading",
+                    "pages/navigator/navigator",
+                    "pages/pull-down-refresh/pull-down-refresh",
+                    "pages/animation/animation",
+                    "pages/action-sheet/action-sheet",
+                    "pages/modal/modal",
+                    "pages/toast/toast",
+                    "pages/get-network-type/get-network-type",
+                    "pages/on-network-status-change/on-network-status-change",
+                    "pages/get-system-info/get-system-info",
+                    "pages/on-compass-change/on-compass-change",
+                    "pages/make-phone-call/make-phone-call",
+                    "pages/scan-code/scan-code",
+                    "pages/request/request",
+                    "pages/web-socket/web-socket",
+                    "pages/upload-file/upload-file",
+                    "pages/download-file/download-file",
+                    "pages/image/image",
+                    "pages/voice/voice",
+                    "pages/file/file",
+                    "pages/on-accelerometer-change/on-accelerometer-change",
+                    "pages/canvas/canvas",
+                    "pages/background-audio/background-audio",
+                    "pages/video/video",
+                    "pages/get-location/get-location",
+                    "pages/open-location/open-location",
+                    "pages/choose-location/choose-location",
+                    "pages/storage/storage"
+                ]
+            }
+        ],
+        "networkTimeout": {
+            "request": 10000,
+            "connectSocket": 10000,
+            "uploadFile": 10000,
+            "downloadFile": 10000
+        },
+        "debug": false
+    },
+    "modules": {
+        "page/tabBar/component/index": {
+            "navigationBarTitleText": "小程序官方组件展示"
+        },
+        "page/tabBar/API/index": {
+            "navigationBarTitleText": "小程序接口能力展示"
+        },
+        "page/component/pages/view/view": {
+            "navigationBarTitleText": "view",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/scroll-view/scroll-view": {
+            "navigationBarTitleText": "scroll-view",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/swiper/swiper": {
+            "navigationBarTitleText": "swiper",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/text/text": {
+            "navigationBarTitleText": "text",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/icon/icon": {
+            "navigationBarTitleText": "icon",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/progress/progress": {
+            "navigationBarTitleText": "progress",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/button/button": {
+            "navigationBarTitleText": "button",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/checkbox/checkbox": {
+            "navigationBarTitleText": "checkbox",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/form/form": {
+            "navigationBarTitleText": "form",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/input/input": {
+            "navigationBarTitleText": "input",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/label/label": {
+            "navigationBarTitleText": "label",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/picker/picker": {
+            "navigationBarTitleText": "picker",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/radio/radio": {
+            "navigationBarTitleText": "radio",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/slider/slider": {
+            "navigationBarTitleText": "slider",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/switch/switch": {
+            "navigationBarTitleText": "switch",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/textarea/textarea": {
+            "navigationBarTitleText": "textarea",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/navigator/navigator": {
+            "navigationBarTitleText": "navigator",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/navigator/navigate": {
+            "navigationBarTitleText": "navigatePage",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/navigator/redirect": {
+            "navigationBarTitleText": "redirectPage",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/image/image": {
+            "navigationBarTitleText": "image",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/audio/audio": {
+            "navigationBarTitleText": "audio",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/video/video": {
+            "navigationBarTitleText": "video",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/map/map": {
+            "navigationBarTitleText": "map",
+            "root": "sub_page/component"
+        },
+        "page/component/pages/canvas/canvas": {
+            "navigationBarTitleText": "canvas",
+            "root": "sub_page/component"
+        },
+        "page/API/pages/login/login": {
+            "navigationBarTitleText": "微信登录",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/get-user-info/get-user-info": {
+            "navigationBarTitleText": "获取用户信息",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/request-payment/request-payment": {
+            "navigationBarTitleText": "发起支付",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/share/share": {
+            "navigationBarTitleText": "转发",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/share-button/share-button": {
+            "navigationBarTitleText": "转发按钮",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/custom-message/custom-message": {
+            "navigationBarTitleText": "客服消息",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/template-message/template-message": {
+            "navigationBarTitleText": "模板消息",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/set-navigation-bar-title/set-navigation-bar-title": {
+            "navigationBarTitleText": "设置页面标题",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/navigation-bar-loading/navigation-bar-loading": {
+            "navigationBarTitleText": "标题栏加载动画",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/navigator/navigator": {
+            "navigationBarTitleText": "页面跳转",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/pull-down-refresh/pull-down-refresh": {
+            "navigationBarTitleText": "下拉刷新",
+            "enablePullDownRefresh": true,
+            "root": "sub_page/API"
+        },
+        "page/API/pages/animation/animation": {
+            "navigationBarTitleText": "动画",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/action-sheet/action-sheet": {
+            "navigationBarTitleText": "操作菜单",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/modal/modal": {
+            "navigationBarTitleText": "模态弹窗",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/toast/toast": {
+            "navigationBarTitleText": "消息提示框",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/get-network-type/get-network-type": {
+            "navigationBarTitleText": "获取手机网络状态",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/on-network-status-change/on-network-status-change": {
+            "navigationBarTitleText": "监听手机网络变化",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/get-system-info/get-system-info": {
+            "navigationBarTitleText": "获取手机系统信息",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/on-compass-change/on-compass-change": {
+            "navigationBarTitleText": "监听罗盘数据",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/make-phone-call/make-phone-call": {
+            "navigationBarTitleText": "打电话",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/scan-code/scan-code": {
+            "navigationBarTitleText": "扫码",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/request/request": {
+            "navigationBarTitleText": "网络请求",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/web-socket/web-socket": {
+            "navigationBarTitleText": "Web Socket",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/upload-file/upload-file": {
+            "navigationBarTitleText": "上传文件",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/download-file/download-file": {
+            "navigationBarTitleText": "下载文件",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/image/image": {
+            "navigationBarTitleText": "图片",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/voice/voice": {
+            "navigationBarTitleText": "录音",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/file/file": {
+            "navigationBarTitleText": "文件",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/on-accelerometer-change/on-accelerometer-change": {
+            "navigationBarTitleText": "监听重力感应数据",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/canvas/canvas": {
+            "navigationBarTitleText": "创建画布",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/background-audio/background-audio": {
+            "navigationBarTitleText": "背景音乐",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/video/video": {
+            "navigationBarTitleText": "拍摄/选择视频",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/get-location/get-location": {
+            "navigationBarTitleText": "获取位置",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/open-location/open-location": {
+            "navigationBarTitleText": "查看位置",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/choose-location/choose-location": {
+            "navigationBarTitleText": "使用原生地图选择位置",
+            "root": "sub_page/API"
+        },
+        "page/API/pages/storage/storage": {
+            "navigationBarTitleText": "数据存储",
+            "root": "sub_page/API"
+        }
+    }
+}
