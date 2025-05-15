@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
 			minify: mode === 'production' ? 'terser' : false,
 			terserOptions: {
 				compress: {
-					pure_funcs: ['console.log'],
+					drop_console: true,
 					drop_debugger: true,
 					keep_fargs: false,
 					reduce_vars: true,

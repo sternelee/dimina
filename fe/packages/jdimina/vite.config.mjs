@@ -21,7 +21,6 @@ export default defineConfig(({ mode }) => {
 				},
 				format: {
 					comments: false,
-					// beautify: false,
 				},
 			},
 			lib: {
