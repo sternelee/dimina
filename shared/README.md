@@ -110,4 +110,3 @@ shared/jsapp/wx92269e3b2f304afc/
 ### Harmony 平台
 
 在 `harmony/hvigorfile.ts` 中添加配置阶段完成之后执行的回调函数，实现资源复制功能。
-
