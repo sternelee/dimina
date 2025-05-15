@@ -81,8 +81,6 @@ JSAppBundle.bundle/
       └── wxbaf4b47de04f1d8a.zip
 ```
 
-> 注意：您也可以使用共享资源方案，将小程序资源放在 `shared/jsapp` 目录中，构建时会自动复制到 `JSAppBundle.bundle` 目录。详情请参考项目根目录下的 `shared/README.md`。
-
 ### 步骤 4: 启动小程序
 
 ```swift

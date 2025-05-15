@@ -1,7 +1,6 @@
 # Dimina Android SDK
 
 [![](https://jitpack.io/v/didi/dimina.svg)](https://jitpack.io/#didi/dimina)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://github.com/didi/dimina/blob/master/LICENSE)
 
 ## 系统要求
 
