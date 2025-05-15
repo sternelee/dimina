@@ -38,7 +38,6 @@ export class DMPApp {
   appIndex: number;
   appConfig: DMPAppConfig
   customConfig: DMPCustomConfig = new DMPCustomConfig();
-  commonUserAgent: string
   appVersion: string = DMP_SDK_VERSION
   private onUpdateResult?: DMPBundleUpdateCallback
   private _container: DMPContainer = new DMPContainer(this)
@@ -61,8 +60,6 @@ export class DMPApp {
     this.appIndex = appIndex;
     this.appConfig = appConfig
     this._service = new DMPService(this.appIndex)
-    this.commonUserAgent =
-      'dimina miniProgram ' + this.appConfig.userAgent! + " native_sdk/" + DMP_SDK_VERSION + 'native_app_version/'
     this._bundleManager = new DMPBundleManager(this);
   }
 
