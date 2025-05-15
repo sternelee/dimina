@@ -17,9 +17,9 @@
 
 在传统网页开发中，JavaScript 通常在主线程执行。由于 JavaScript 的执行是同步的，耗时脚本会导致 UI 渲染阻塞，从而影响页面的性能和用户体验。尤其在性能要求高的小程序环境中，这种阻塞会显得尤为突出。因此，为了提升性能并避免影响 UI 渲染，采用了一种更加高效的策略。
 
-与传统网页开发中将所有 JS 脚本放置在页面底部等待加载完毕再执行不同，小程序采取了将 JavaScript 脚本放入一个独立的 JS 引擎中执行的方式。这样一来，JS 脚本的执行就不会与页面渲染过程直接冲突，从而避免了主线程阻塞，提高了 UI 渲染的效率。这种方法不仅有效避免了性能瓶颈，还使得小程序在运行时能够更接近原生应用的体验，提升了交互流畅度和整体性能。
+与传统网页开发中将所有 JS 脚本放置在页面底部等待加载完毕再执行不同，小程序将描述业务逻辑的 JavaScript 脚本放入一个独立线程的 JS 引擎中执行。这样一来，复杂脚本的执行就不会与页面渲染过程直接冲突，从而避免了主线程阻塞，提高了 UI 渲染的效率。这种方法不仅有效避免了性能瓶颈，还使得小程序在运行时能够更接近原生应用的体验，提升了交互流畅度和整体性能。
 
-此外，为了进一步提升性能，减少页面首次渲染时网络请求的加载时间，JS 资源文件可以被存储到本地，这样在后续访问时，页面加载速度将大大加快。这种本地存储的策略，尤其对于需要频繁访问的 JS 脚本，能显著提升小程序的启动速度和响应速度，增强用户体验。
+此外，为了进一步提升性能，减少页面首次渲染时网络请求的加载时间，资源文件可以被存储到本地。这样在后续访问时，页面加载速度将大大加快。这种本地存储的策略，尤其对于需要频繁访问的 JS 脚本，能显著提升小程序的启动速度和响应速度，增强用户体验。
 
 在小程序的架构中，客户端正好具备多线程操作的环境，这为性能优化提供了很大的帮助。通过将页面渲染与 JavaScript 执行的任务拆分，客户端能够充分利用多线程处理，避免了主线程的阻塞，从而提升了页面的响应速度和流畅度。拆分后的 JavaScript 执行可以被独立调度，减少对 UI 渲染的影响，这对提供更好的用户体验至关重要。
 
@@ -60,11 +60,11 @@
 
 传统的命令式编程更关注过程，它强耦合了视图与数据。而声明式编程中，数据操作和视图的分离可以很好的剥离复杂的 JS 逻辑。而抽出的这块 JS可以放在独立的 JS 环境中去执行。
 
-![编程范式比较](https://s3-gz01.didistatic.com/packages-mait/img/PHzYbtGAO91745723728674.png)
+<img src="../static/Programming-Paradigm-Comparison.png" alt="编程范式比较" width="800" />
 
 目前在 Android / Harmony 端使用了 QuickJS 引擎（网页版可以使用 Worker）去做这个事，iOS 则采用了自带的 JavaScriptCore。
 
-![双线程模型](https://s3-gz01.didistatic.com/packages-mait/img/U1K9edr7Ua1745723786355.png)
+<img src="../static/Threaded-Mode.png" alt="双线程模型" width="500" />
 
 ### 原生能力调用
 
@@ -91,13 +91,13 @@
 
 Webview 我们可以看成是一个浏览器，占用资源较大，所以大部分厂商的小程序对于页面打开深度做了限制。
 
-## 架构设计
+## 工程结构
 
-### 架构图
+### 架构设计
 
-![架构图](https://s3-gz01.didistatic.com/packages-mait/img/k11mRdIeHi1745723509029.png)
+<img src="../static/Architecture-Diagram.png" alt="架构图" width="500" />
 
-### 编译器设计
+### 编译器原理
 
 编译器和框架代码放到了同一个代码仓库(../fe)，我们先站在业务开发者的视角看看一个小程序的业务工程的形态，它包含了：
 
@@ -110,7 +110,7 @@ Webview 我们可以看成是一个浏览器，占用资源较大，所以大部
 > 页面级结构 `index.wxml`
 > 页面级样式 `index.wxss`
 
-![工程结构](https://s3-gz01.didistatic.com/packages-mait/img/rCle1IDo8r1745724424322.png)
+<img src="../static/Project-Structure.png" alt="项目结构" width="800" />
 
 它们最终形成的编译产物主要有四类文件：
 
@@ -169,7 +169,7 @@ else if (name.endsWith(':for') || name.endsWith(':for-items')) {
 
 最终实现的编译过程如下：
 
-![编译过程](https://s3-gz01.didistatic.com/packages-mait/img/3NKu0WPp5i1745723945537.png)
+<img src="../static/Compilation-Process.gif" alt="编译过程" width="500" />
 
 ### 交互时序
 
@@ -195,8 +195,8 @@ else if (name.endsWith(':for') || name.endsWith(':for-items')) {
 
 基于上述理解我们可以进一步细化出星河小程序的交互时序图：
 
-![交互时序图](https://s3-gz01.didistatic.com/packages-mait/img/ALc6vuXZVd1745724929850.png)
+<img src="../static/Interactive-Sequence-Diagram.png" alt="交互时序图" width="700" />
 
-与此同时事件响应与视图更新的交互时序如下：
+事件响应与视图更新的交互时序如下：
 
-![事件响应时序图](https://s3-gz01.didistatic.com/packages-mait/img/tmvyTUP9c51745725156268.png)
+<img src="../static/Event-Sequence-Diagram.png" alt="事件响应时序图" width="700" />
