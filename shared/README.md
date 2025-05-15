@@ -6,14 +6,18 @@
 
 Dimina 作为一个跨平台的小程序框架，同时支持 Android 、iOS 和 Harmony 操作系统。在原有的代码仓库结构中，小程序资源文件和 SDK 文件存在重复：
 
-- Android 平台: 
-  - 小程序资源：`app/src/main/assets/jsapp/[appId]/`
-  - SDK 资源：`dimina/src/main/assets/jssdk/`
-- Harmony 平台: 
-  - 小程序资源：`entry/src/main/resources/rawfile/jsapp/[appId]/`
-  - SDK 资源：`dimina/src/main/resources/rawfile/jssdk/`
+- Android 平台：
+  - 小程序资源：`android/app/src/main/assets/jsapp/[appId]/`
+  - SDK 资源：`android/dimina/src/main/assets/jssdk/`
+- iOS 平台：
+  - 小程序资源：`iOS/dimina/JSAppBundle.bundle/[appId]/`
+  - SDK 资源：`iOS/dimina/JSSDKBundle.bundle`
+- Harmony 平台：
+  - 小程序资源：`harmony/entry/src/main/resources/rawfile/jsapp/[appId]/`
+  - SDK 资源：`harmony/dimina/src/main/resources/rawfile/jssdk/`
 
 这种重复导致以下问题：
+
 1. 维护成本高（需要在多处更新相同文件）
 2. 仓库体积增大
 3. 平台之间可能出现资源不一致
@@ -32,8 +36,8 @@ Dimina 作为一个跨平台的小程序框架，同时支持 Android 、iOS 和
   - `config.json`：SDK 的配置文件
   - `main.zip`：SDK 核心文件
 
-```
-/Users/doslin/Dev/GitHub/dimina/
+```txt
+dimina/
 ├── shared/
 │   ├── jsapp/
 │   │   ├── [appId1]/
@@ -54,11 +58,13 @@ Dimina 作为一个跨平台的小程序框架，同时支持 Android 、iOS 和
 ### 小程序资源 (jsapp)
 
 - Android：`app/src/main/assets/jsapp/`
+- iOS：`dimina/JSAppBundle.bundle/`
 - Harmony：`entry/src/main/resources/rawfile/jsapp/`
 
 ### SDK 资源 (jssdk)
 
 - Android：`dimina/src/main/assets/jssdk/`
+- iOS：`dimina/JSSDKBundle.bundle/`
 - Harmony：`dimina/src/main/resources/rawfile/jssdk/`
 
 ## 添加新的小程序
@@ -70,13 +76,14 @@ Dimina 作为一个跨平台的小程序框架，同时支持 Android 、iOS 和
 3. 添加编译好的小程序包（`.zip` 文件）
 
 示例：
-```
+
+```txt
 shared/jsapp/wx92269e3b2f304afc/
 ├── config.json
 └── wx92269e3b2f304afc.zip
 ```
 
-## 构建过程
+## 共享资源配置
 
 每个平台的构建过程包含将这些共享资源复制到相应位置的脚本：
 
@@ -86,7 +93,19 @@ shared/jsapp/wx92269e3b2f304afc/
 
 ### iOS 平台
 
-待补充。
+在 iOS 项目中添加了 `copy-shared-resources.sh` 脚本，该脚本在构建过程中会自动执行，将共享资源复制到相应的 bundle 目录中。
+
+要在 Xcode 中设置此脚本：
+
+1. 打开 Xcode 项目
+2. 选择目标（Target）
+3. 选择「Build Phases」选项卡
+4. 点击「+」按钮，选择「New Run Script Phase」
+5. 将以下命令添加到脚本框中：
+
+   ```bash
+   "${SRCROOT}/copy-shared-resources.sh"
+   ```
 
 ### Harmony 平台
 
