@@ -50,7 +50,7 @@ Currently, Dimina supports four major platforms: Android, iOS, Harmony, and Web.
 
 Dimina is designed in accordance with the [Mini App Standard White Paper](https://www.w3.org/TR/mini-app-white-paper/) and currently aligns with most of the WeChat Mini Program's feature interfaces.
 
-Thanks to the high similarity between Vue 3 and mini program syntax, Dimina's underlying view rendering framework is built on Vue. The framework uses a custom compiler to transform mini program syntax into Vue syntax, implements a full set of standard mini program Vue components, and finally loads and displays views through mini program containers on major mobile platforms.
+Benefiting from the high similarity between Vue3 and Mini Program syntax, the Dimina framework's underlying view rendering is built on Vue. The Dimina framework uses DMCC (./fe/packages/compiler/README.md) to transpile Mini Program syntax into Vue syntax, and based on this, it implements a complete Mini Program standard Vue component system. Ultimately, by implementing a native Mini Program container on the client side, it provides native capabilities while flexibly loading and displaying view pages.
 
 For more information about the compiler's underlying principles, implementation details, and the interaction logic between the logic layer and the message channel, please refer to the [documentation](./docs/README.md).
 
