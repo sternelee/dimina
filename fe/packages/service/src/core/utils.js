@@ -59,7 +59,7 @@ export function filterData(obj) {
 			return acc
 		}
 		else if (isFunction(value)) {
-			console.warn('[Service] 值不支持函数引用', key)
+			console.warn('[service] 值不支持函数引用', key)
 			return acc
 		}
 		else if (Array.isArray(value)) {
@@ -164,7 +164,7 @@ function convertToStringType(type) {
 		if (stringType) {
 			return stringType
 		}
-		console.warn(`[Service] ignore unknown props type ${type}`)
+		console.warn(`[service] ignore unknown props type ${type}`)
 		return null
 	}
 }

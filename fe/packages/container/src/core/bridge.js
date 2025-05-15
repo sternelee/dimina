@@ -57,7 +57,7 @@ export class Bridge {
 			return
 		}
 
-		console.log(chalk.green(`[Container] receive msg from ${source}: `), msg)
+		console.log(chalk.green(`[container] receive msg from ${source}: `), msg)
 
 		const transMsg = {
 			type,

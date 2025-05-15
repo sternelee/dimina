@@ -76,7 +76,7 @@ class Loader {
 			this.staticModules[path] = componentModule
 		}
 		else {
-			console.error(`[Service] createModule ${type} error`)
+			console.error(`[service] createModule ${type} error`)
 		}
 	}
 

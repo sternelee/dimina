@@ -21,7 +21,7 @@ class Message {
 	}
 
 	handleMsg(msg) {
-		// console.log('[Service] receive msg: ', isWebWorker ? msg : JSON.stringify(msg))
+		console.log('[service] receive msg: ', isWebWorker ? msg : JSON.stringify(msg))
 		const { type, body } = msg
 		this.event.emit(type, body)
 	}

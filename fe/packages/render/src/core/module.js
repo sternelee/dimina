@@ -38,7 +38,7 @@ export class Module {
 		}
 		const result = TYPE_MAPS[type]
 		if (!result) {
-			console.warn(`[Render] unknown props type ${type}`)
+			console.warn('[system]', '[render]', `unknown props type ${type}`)
 		}
 		return result
 	}

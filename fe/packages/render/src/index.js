@@ -9,7 +9,7 @@ import runtime from './core/runtime'
  */
 class Render {
 	constructor() {
-		console.log('[Render] init')
+		console.log('[system]', '[render]', 'init')
 		this.env = env
 		this.message = message
 		window.__message = message
@@ -57,24 +57,12 @@ class Render {
 			// 可接收端容器或引擎日志
 			this.message.on('print', (msg) => {
 				const { type, detail } = msg
-				switch (type) {
-					case 'info':
-						// eslint-disable-next-line no-console
-						console.info(detail)
-						break
-					case 'debug':
-						// eslint-disable-next-line no-console
-						console.debug(detail)
-						break
-					case 'warn':
-						console.warn(detail)
-						break
-					case 'error':
-						console.error(detail)
-						break
-					default:
-						console.log(detail)
-						break
+				// eslint-disable-next-line no-console
+				const logMethod = console[type] || console.log;
+				if (typeof detail === 'string' && detail.startsWith('[service]')) {
+					logMethod('[system]', detail)
+				} else {
+					logMethod(detail)
 				}
 			})
 		}

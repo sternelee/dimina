@@ -241,35 +241,35 @@ export class Component {
 	 * TODO: 创建一个 IntersectionObserver 对象，选择器选取范围为这个组件实例内
 	 */
 	createIntersectionObserver() {
-		console.warn('[Service] 暂不支持 createIntersectionObserver')
+		console.warn('[service] 暂不支持 createIntersectionObserver')
 	}
 
 	/**
 	 * TODO: 创建一个 MediaQueryObserver 对象
 	 */
 	createMediaQueryObserver() {
-		console.warn('[Service] 暂不支持 createMediaQueryObserver')
+		console.warn('[service] 暂不支持 createMediaQueryObserver')
 	}
 
 	/**
 	 * TODO: 获取这个关系所对应的所有关联节点
 	 */
 	getRelationNodes() {
-		console.warn('[Service] 暂不支持 getRelationNodes')
+		console.warn('[service] 暂不支持 getRelationNodes')
 	}
 
 	/**
 	 * TODO: 执行关键帧动画
 	 */
 	animate() {
-		console.warn('[Service] 暂不支持 animate')
+		console.warn('[service] 暂不支持 animate')
 	}
 
 	/**
 	 * TODO: 清除关键帧动画
 	 */
 	clearAnimation() {
-		console.warn('[Service] 暂不支持 clearAnimation')
+		console.warn('[service] 暂不支持 clearAnimation')
 	}
 
 	/**

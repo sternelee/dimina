@@ -33,7 +33,7 @@ class Loader {
 					.filter(result => result.status === 'rejected')
 					.map(result => result.reason)
 				if (errors.length) {
-					console.error('[Render] 资源加载失败:', errors)
+					console.error('[system]', '[render]' ,'资源加载失败:', errors)
 				}
 			},
 		)

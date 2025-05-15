@@ -16,7 +16,7 @@ class Runtime {
 	createApp(opts) {
 		// app 实例只有一个，避免重复创建
 		if (this.app) {
-			console.log('[Service] app instance already existed')
+			console.log('[service] app instance already existed')
 			return
 		}
 
@@ -24,11 +24,11 @@ class Runtime {
 		const appModule = loader.getAppModule()
 
 		if (!appModule) {
-			console.log('[Service] app instance is not exist')
+			console.log('[service] app instance is not exist')
 			return
 		}
 
-		console.log('[Service] create app instance')
+		console.log('[service] create app instance')
 
 		this.app = new App(appModule, {
 			scene,
@@ -63,11 +63,11 @@ class Runtime {
 
 		const module = loader.getModuleByPath(path)
 		if (!module) {
-			console.error(`[Service] ${path} not exist`)
+			console.error(`[service] ${path} not exist`)
 			return
 		}
 
-		console.log(`[Service] create instance ${path}`)
+		console.log(`[service] create instance ${path}`)
 
 		this.instances[bridgeId] = this.instances[bridgeId] || {}
 
@@ -110,7 +110,7 @@ class Runtime {
 			return page
 		}
 		else {
-			console.error(`[Service] ${module.type} instance is not exist.`)
+			console.error(`[service] ${module.type} instance is not exist.`)
 		}
 	}
 
@@ -315,13 +315,13 @@ class Runtime {
 
 		const instances = this.instances[bridgeId]
 		if (!instances) {
-			console.warn(`[Service] No instances found for bridgeId: ${bridgeId}`)
+			console.warn(`[service] No instances found for bridgeId: ${bridgeId}`)
 			return
 		}
 
 		const instance = instances[moduleId]
 		if (!instance) {
-			console.warn(`[Service] triggerEvent ${bridgeId} ${moduleId} ${methodName}, instance is not exist`)
+			console.warn(`[service] triggerEvent ${bridgeId} ${moduleId} ${methodName}, instance is not exist`)
 			return
 		}
 
@@ -329,7 +329,7 @@ class Runtime {
 			return await instance[methodName](event)
 		}
 		else {
-			console.warn(`[Service] triggerEvent ${bridgeId} ${moduleId}, is: ${instance.is}, method: ${methodName} is not exist`)
+			console.warn(`[service] triggerEvent ${bridgeId} ${moduleId}, is: ${instance.is}, method: ${methodName} is not exist`)
 		}
 	}
 }

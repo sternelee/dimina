@@ -12,7 +12,7 @@ const actionMap = { navigateBack, navigateTo, reLaunch, redirectTo, switchTab }
  */
 class Service {
 	constructor() {
-		console.log('[Service] init')
+		console.log('[service] init')
 		this.env = env
 		this.message = message
 		this.init()
@@ -64,7 +64,7 @@ class Service {
 
 			const module = loader.getModuleByPath(pagePath)
 			if (!module) {
-				console.error(`[Service] resourceLoaded: module not found, pagePath: ${pagePath}`)
+				console.error(`[service] resourceLoaded: module not found, pagePath: ${pagePath}`)
 				return
 			}
 			const initialProps = loader.getPropsByPath(module.usingComponents)

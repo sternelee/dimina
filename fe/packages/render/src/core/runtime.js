@@ -397,7 +397,7 @@ class Runtime {
 			}
 		}
 		else {
-			console.warn(`[Render] module ${moduleId} is not exist.`)
+			console.warn('[system]', '[render]', `module ${moduleId} is not exist.`)
 		}
 	}
 
@@ -439,7 +439,7 @@ class Runtime {
 
 	async waitForElement(parent, selector, method, timeout = 500) {
 		if (!parent[method]) {
-			console.warn(`[Render] waitForElement method ${method} in ${parent.nodeType}`)
+			console.warn('[system]', '[render]', `waitForElement method ${method} in ${parent.nodeType}`)
 			return null
 		}
 		const elements = parent[method](selector)
@@ -472,12 +472,12 @@ class Runtime {
 				const { moduleId, selector, single, fields } = task
 				const el = await this.waitForEl(this.instance.get(moduleId))
 				if (!el) {
-					console.warn(`[Render] module ${moduleId} dom is not exist.`)
+					console.warn('[system]', '[render]', `module ${moduleId} dom is not exist.`)
 					return null
 				}
 
 				if (!el.querySelector) {
-					console.warn(`[Render] selectorQuery el node type is ${el.nodeType}`)
+					console.warn('system', '[render]', `selectorQuery el node type is ${el.nodeType}`)
 					return null
 				}
 
@@ -595,7 +595,7 @@ class Runtime {
 
 			const el = await this.waitForEl(this.instance.get(moduleId))
 			if (!el) {
-				console.error('[Render] Failed to find element for intersection observer')
+				console.error('[system]', '[render]', 'Failed to find element for intersection observer')
 				return
 			}
 			// 创建所有参考区域的观察器配置
@@ -621,7 +621,7 @@ class Runtime {
 				const targetEls = await this.waitForElement(el, targetSelector, options.observeAll ? 'querySelectorAll' : 'querySelector')
 
 				if (!relativeEl || !targetEls) {
-					console.warn(`[Render] Failed to find elements`)
+					console.warn('[system]', '[render]', 'Failed to find elements')
 					continue
 				}
 
@@ -658,7 +658,7 @@ class Runtime {
 
 			const targetEls = await this.waitForElement(el, targetSelector, options.observeAll ? 'querySelectorAll' : 'querySelector')
 			if (!targetEls) {
-				console.error('[Render] Failed to find target element for intersection observer')
+				console.error('[system]', '[render]', 'Failed to find target element for intersection observer')
 				return
 			}
 
