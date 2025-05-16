@@ -7,7 +7,6 @@ import com.didi.dimina.api.APIResult
 import com.didi.dimina.api.AsyncResult
 import com.didi.dimina.api.BaseApiHandler
 import com.didi.dimina.api.NoneResult
-import com.didi.dimina.common.Utils
 import com.didi.dimina.ui.container.DiminaActivity
 import org.json.JSONObject
 

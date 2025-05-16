@@ -1,4 +1,5 @@
 /build
 
-# Dimina jsapp files (copied from shared directory during build)
-/src/main/assets/jsapp/
+# Dimina JSApp files (copied from shared directory during build)
+/src/main/assets/jsapp/**
+!/src/main/assets/jsapp/.keep

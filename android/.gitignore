@@ -15,10 +15,6 @@ captures/
 *.apk
 output.json
 
-# Dimina shared files (copied from shared directory during build)
-app/src/main/assets/jsapp/
-dimina/src/main/assets/jssdk/
-
 # IntelliJ
 *.iml
 .idea/
