@@ -12,3 +12,4 @@ packages/container/jssdk
 example/*
 !example/subpackages
 !example/weui
+packages/components/auto-imports.d.ts
