@@ -258,12 +258,14 @@ export function animationToStyle(action) {
 			// 处理样式属性
 			const [prop, value] = animate.args
 			styles[prop] = value
-		} else {
+		}
+		else {
 			// 处理 transform
 			const { type, args } = animate
 			if (isFunction(transformHandler[type])) {
 				transformAnimations.push(transformHandler[type](args))
-			} else {
+			}
+			else {
 				console.warn(`[Common] SDK inner warning (Transform Handler not found animation type: ${type})`)
 			}
 		}

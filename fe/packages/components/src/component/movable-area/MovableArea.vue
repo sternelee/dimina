@@ -4,7 +4,7 @@
 
 import { triggerEvent, useInfo } from '@/common/events'
 
-const props = defineProps({
+defineProps({
 	/**
 	 * 当里面的movable-view设置为支持双指缩放时，设置此值可将缩放手势生效区域修改为整个movable-area
 	 */

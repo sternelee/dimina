@@ -121,10 +121,10 @@ async function enhanceCSS(module) {
 	if (compileRes.has(absolutePath)) {
 		return compileRes.get(absolutePath)
 	}
-
+	// 查找所有未以分号结尾的@import语句，并在它们后面添加分号。(?<!;) 是一个负向后向查找断言，确保前面没有分号
+	// eslint-disable-next-line regexp/no-super-linear-backtracking
 	const fixedCSS = inputCSS.replace(/@import.*?(?<!;)\s*$/gm, '$&;')
 
-	// 查找所有未以分号结尾的@import语句，并在它们后面添加分号。(?<!;) 是一个负向后向查找断言，确保前面没有分号
 	const ast = postcss.parse(fixedCSS)
 	const promises = []
 	ast.walk(async (node) => {

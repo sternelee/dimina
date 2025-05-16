@@ -2,7 +2,7 @@
 // 视频
 // https://developers.weixin.qq.com/miniprogram/dev/component/video.html
 
-const props = defineProps({
+defineProps({
 	/**
 	 * 要播放视频的资源地址，支持网络路径、本地临时路径
 	 */

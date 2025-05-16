@@ -35,18 +35,19 @@ async function updateConfigVersion() {
 	try {
 		// 读取配置文件
 		const config = await fsExtra.readJson(configPath)
-		
+
 		// 更新版本号
 		config.versionCode += 1
 		const versionParts = config.versionName.split('.')
-		versionParts[2] = (parseInt(versionParts[2]) + 1).toString()
+		versionParts[2] = (Number.parseInt(versionParts[2]) + 1).toString()
 		config.versionName = versionParts.join('.')
-		
+
 		// 写入更新后的配置
 		await fsExtra.writeJson(configPath, config, { spaces: 2 })
 		console.log(`配置版本已更新至 ${config.versionName} (${config.versionCode})`)
 		return config
-	} catch (err) {
+	}
+	catch (err) {
 		console.error('更新配置版本失败：', err)
 		throw err
 	}
@@ -67,10 +68,10 @@ async function generateSdk() {
 
 		// 压缩目录
 		await zipDirectory(mainDir, './jssdk/main.zip')
-		
+
 		// 更新配置版本
 		const updatedConfig = await updateConfigVersion()
-		
+
 		// 复制 main.zip 到 shared/jssdk 目录
 		await fsExtra.copy('./jssdk/main.zip', path.join(sharedJssdkDir, 'main.zip'))
 		console.log(`已将 main.zip 复制到 ${sharedJssdkDir}`)

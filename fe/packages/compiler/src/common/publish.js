@@ -18,8 +18,8 @@ function createDist() {
 function publishToDist(dist, useAppIdDir = true) {
 	const distPath = getTargetPath()
 	const appId = getAppId()
-	const absolutePath = useAppIdDir 
-		? `${path.resolve(process.cwd(), dist)}/${appId}` 
+	const absolutePath = useAppIdDir
+		? `${path.resolve(process.cwd(), dist)}/${appId}`
 		: `${path.resolve(process.cwd(), dist)}`
 	shelljs.rm('-rf', absolutePath)
 	shelljs.mkdir('-p', absolutePath)

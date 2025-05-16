@@ -4,7 +4,7 @@
 import { isAndroid, isDesktop, isHarmonyOS, isIOS } from '@dimina/common'
 import { useInfo } from '@/common/events'
 
-const props = defineProps({
+defineProps({
 	/**
 	 * 应用模式，只在初始化时有效，不能动态变更
 	 * 合法值 normal, scanCode
@@ -64,18 +64,6 @@ const props = defineProps({
 
 useInfo()
 const type = 'native/camera'
-
-watch([() => props.devicePosition, () => props.devicePosition, () => props.flash, () => props.frameSize], ([newDevicePosition, newFlash, newFrameSize], [oldDevicePosition, oldFlash, oldFrameSize]) => {
-
-})
-
-onMounted(() => {
-
-})
-
-onBeforeUnmount(() => {
-
-})
 </script>
 
 <template>

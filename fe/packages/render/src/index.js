@@ -58,10 +58,11 @@ class Render {
 			this.message.on('print', (msg) => {
 				const { type, detail } = msg
 				// eslint-disable-next-line no-console
-				const logMethod = console[type] || console.log;
+				const logMethod = console[type] || console.log
 				if (typeof detail === 'string' && detail.startsWith('[service]')) {
 					logMethod('[system]', detail)
-				} else {
+				}
+				else {
 					logMethod(detail)
 				}
 			})

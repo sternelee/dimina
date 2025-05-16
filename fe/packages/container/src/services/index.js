@@ -85,6 +85,7 @@ function hsvToRgb(h, s, v) {
 	const q = v * (1 - f * s)
 	const t = v * (1 - (1 - f) * s)
 
+	/* eslint-disable style/max-statements-per-line */
 	switch (i % 6) {
 		case 0: r = v; g = t; b = p; break
 		case 1: r = q; g = v; b = p; break
@@ -93,6 +94,7 @@ function hsvToRgb(h, s, v) {
 		case 4: r = t; g = p; b = v; break
 		case 5: r = v; g = p; b = q; break
 	}
+	/* eslint-enable style/max-statements-per-line */
 
 	return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)]
 }

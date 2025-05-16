@@ -35,7 +35,7 @@ const props = defineProps({
 	backgroundColor: {
 		type: String,
 		required: false,
-		validator: value => /^#([0-9A-F]{6}|[0-9A-F]{3})$/i.test(value),
+		validator: value => /^#(?:[0-9A-F]{6}|[0-9A-F]{3})$/i.test(value),
 	},
 	/**
 	 * 改变导航栏颜色时的动画时长，默认为 0 （即没有动画效果）

@@ -8,7 +8,7 @@ const props = defineProps({
 	 */
 	nodes: {
 		type: [Array, String],
-		default: [],
+		default: () => [],
 	},
 	/**
 	 * 显示连续空格

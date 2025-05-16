@@ -2,7 +2,7 @@
 // 从底部弹起的滚动选择器
 // https://developers.weixin.qq.com/miniprogram/dev/component/picker.html
 
-const props = defineProps({
+defineProps({
 	/**
 	 * 选择器的标题，仅安卓可用
 	 */
@@ -83,15 +83,19 @@ const props = defineProps({
 	 * 表示选择了 range 中的第几个（下标从 0 开始）
 	 */
 	value: {
-		type: [Number, String],
+		type: [Number, String, Array],
 		default: (props) => {
 			switch (props.mode) {
 				case 'selector':
 					return 0
 				case 'multiSelector':
 					return []
-				case 'time':
-					return
+				case 'time': {
+					const now = new Date()
+					const hours = String(now.getHours()).padStart(2, '0')
+					const minutes = String(now.getMinutes()).padStart(2, '0')
+					return `${hours}:${minutes}`
+				}
 				case 'date': {
 					const now = new Date()
 					const year = now.getFullYear()

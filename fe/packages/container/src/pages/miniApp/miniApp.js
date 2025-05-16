@@ -253,7 +253,7 @@ export class MiniApp {
 			const pageConfig = this.appConfig.modules[pagePath]
 			// 合并页面配置
 			const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
-			
+
 			// 更新状态栏颜色模式
 			this.updateTargetPageColorStyle(mergeConfig)
 
@@ -282,28 +282,29 @@ export class MiniApp {
 				appId: this.appInfo.appId,
 				pages: this.appConfig.app.pages,
 				configInfo: mergeConfig,
-			}).then(bridge => {
+			}).then((bridge) => {
 				// 添加到 bridgeList
 				this.bridgeList.push(bridge)
-				
+
 				// 启动新页面
 				bridge.start()
-				
+
 				// 设置 z-index
 				bridge.webview.el.style.zIndex = 1
-				
+
 				// 恢复动画状态
 				this.webviewAnimaEnd = true
-				
+
 				// 调用成功回调
 				onSuccess?.({ errMsg: 'reLaunch:ok' })
 				onComplete?.()
-			}).catch(error => {
+			}).catch((error) => {
 				onFail?.({ errMsg: `reLaunch:fail ${error.message}` })
 				onComplete?.()
 				this.webviewAnimaEnd = true
 			})
-		} catch (error) {
+		}
+		catch (error) {
 			onFail?.({ errMsg: `reLaunch:fail ${error.message}` })
 			onComplete?.()
 			this.webviewAnimaEnd = true
@@ -883,7 +884,7 @@ export class MiniApp {
 				try {
 					parsedData = JSON.parse(data)
 				}
-				catch (e) {
+				catch {
 					// 如果解析失败，保持原始字符串
 				}
 				onSuccess?.({ data: parsedData, errMsg: 'getStorage:ok' })
@@ -926,7 +927,7 @@ export class MiniApp {
 		}
 	}
 
-	clearStorage(opts){
+	clearStorage(opts) {
 		const { success, fail, complete } = opts || {}
 		const onSuccess = this.createCallbackFunction(success)
 		const onFail = this.createCallbackFunction(fail)
@@ -936,7 +937,7 @@ export class MiniApp {
 			// 只清除当前appId的存储数据
 			const appIdPrefix = `${this.appId}_`
 			const keysToRemove = []
-			
+
 			// 找出所有属于当前appId的keys
 			for (let i = 0; i < localStorage.length; i++) {
 				const key = localStorage.key(i)
@@ -944,10 +945,10 @@ export class MiniApp {
 					keysToRemove.push(key)
 				}
 			}
-			
+
 			// 删除所有找到的keys
 			keysToRemove.forEach(key => localStorage.removeItem(key))
-			
+
 			onSuccess?.({ errMsg: 'clearStorage:ok' })
 		}
 		catch (error) {
@@ -957,7 +958,6 @@ export class MiniApp {
 			onComplete?.()
 		}
 	}
-
 
 	getStorageInfo(opts) {
 		const { success, fail, complete } = opts || {}
@@ -974,13 +974,13 @@ export class MiniApp {
 			// 只获取当前appId的存储信息
 			for (let i = 0; i < localStorage.length; i++) {
 				const fullKey = localStorage.key(i)
-				
+
 				// 只处理当前appId的keys
 				if (fullKey.startsWith(appIdPrefix)) {
 					// 移除appId前缀，返回原始key给小程序
 					const originalKey = fullKey.substring(appIdPrefix.length)
 					keys.push(originalKey)
-					
+
 					const item = localStorage.getItem(fullKey)
 					currentSize += item ? item.length * 2 : 0 // 估算字符串大小（UTF-16编码每个字符2字节）
 				}
@@ -990,7 +990,7 @@ export class MiniApp {
 				keys,
 				currentSize, // 当前占用空间，单位为字节
 				limitSize, // 存储限制，单位为字节
-				errMsg: 'getStorageInfo:ok'
+				errMsg: 'getStorageInfo:ok',
 			})
 		}
 		catch (error) {
