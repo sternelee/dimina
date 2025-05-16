@@ -5,4 +5,6 @@
 /.cxx
 /.test
 
-/src/main/resources/rawfile/jssdk
+# Dimina JSSDK files (copied from shared directory during build)
+/src/main/resources/rawfile/jssdk/**
+!/src/main/resources/rawfile/jssdk/.keep
