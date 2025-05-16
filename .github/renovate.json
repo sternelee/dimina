@@ -1,9 +1,15 @@
 {
-  "extends": ["config:recommended", "schedule:weekly"],
+  "extends": ["config:recommended"],
+  "schedule": ["every weekend"],
   "packageRules": [
     {
       "matchPaths": ["fe/**"],
       "matchManagers": ["pnpm"],
+      "enabled": true
+    },
+    {
+      "matchPaths": ["android/**"],
+      "matchManagers": ["gradle", "gradle-wrapper"],
       "enabled": true
     }
   ]
