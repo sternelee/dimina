@@ -29,6 +29,7 @@ dependencyResolutionManagement {
 在应用模块的 `build.gradle` 或 `build.gradle.kts` 文件中添加：
 
 #### Groovy DSL
+
 ```groovy
 dependencies {
     // Dimina 核心库
@@ -38,6 +39,7 @@ dependencies {
 ```
 
 #### Kotlin DSL
+
 ```kotlin
 dependencies {
     // Dimina 核心库
@@ -56,7 +58,8 @@ class MyApplication : Application() {
         super.onCreate()
 
         Dimina.init(this, Dimina.DiminaConfig.Builder()
-            // 是否显示调试日志
+            // 是否启用调试模式：影响日志显示
+            // 调试模式不检测 App 是否已更新，都会进入 JSSDK 和 JSApp 的更新检测逻辑
             .setDebugMode(true)
             .build()
         )

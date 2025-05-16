@@ -3,7 +3,6 @@ package com.didi.dimina.ui.container
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
-import android.app.ComponentCaller
 import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
@@ -73,23 +72,23 @@ import com.didi.dimina.common.PathUtils
 import com.didi.dimina.common.Utils
 import com.didi.dimina.common.VersionUtils
 import com.didi.dimina.core.Bridge
-import com.didi.dimina.ui.view.DiminaWebView
 import com.didi.dimina.core.MiniApp
 import com.didi.dimina.ui.theme.DiminaAndroidTheme
 import com.didi.dimina.ui.view.ActionSheet
 import com.didi.dimina.ui.view.ContactPicker
+import com.didi.dimina.ui.view.DiminaWebView
 import com.didi.dimina.ui.view.MediaPickerRoot
 import com.didi.dimina.ui.view.MediaType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
 import org.json.JSONObject
 import java.io.File
 import java.io.IOException
 import kotlin.math.cos
 import kotlin.math.sin
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Author: Doslin
@@ -312,10 +311,10 @@ class DiminaActivity : ComponentActivity() {
             // 1.解压小程序资源包 jsApp
             val appId = miniProgram.appId
             try {
-                // 是小程序首页入口
-                // 判断是否需要解压小程序包的逻辑：
-                // 1. 如果是调试模式，只要版本号大于本地版本就解压
-                // 2. 如果是发布模式，需要应用版本已升级且小程序版本号大于本地版本才解压
+                // 判断是否需要更新小程序包的逻辑：
+                // 1. 是小程序首页入口
+                // 2. 如果是调试模式，只要版本号大于本地版本就解压
+                // 3. 如果是发布模式，需要应用版本已升级且小程序版本号大于本地版本才解压
                 val shouldExtract = if (miniProgram.root) {
                     val localVersion = VersionUtils.getAppVersion(appId)
                     val isDebugMode = Dimina.getInstance().isDebugMode()

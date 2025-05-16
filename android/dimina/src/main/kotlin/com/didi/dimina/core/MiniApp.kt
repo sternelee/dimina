@@ -2,6 +2,7 @@ package com.didi.dimina.core
 
 import android.app.Activity
 import android.content.Context
+import com.didi.dimina.Dimina
 import com.didi.dimina.api.ApiRegistry
 import com.didi.dimina.api.AsyncResult
 import com.didi.dimina.api.SyncResult
@@ -99,8 +100,8 @@ class MiniApp private constructor() {
                     if (initialized) {
                         context?.let {
                             try {
-                                // 检查是否需要检查 JSSDK 更新
-                                if (VersionUtils.isAppVersionUpdated(context)) {
+                                // 判断是否需要检测 JSSDK 的逻辑：调试模式或者 App 版本已更新
+                                if (Dimina.getInstance().isDebugMode() || VersionUtils.isAppVersionUpdated(context)) {
                                     LogUtils.d(tag, "Checking for JSSDK updates...")
                                     val jsConfigString =
                                         context.assets.open("jssdk/config.json").bufferedReader()
