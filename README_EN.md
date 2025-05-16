@@ -60,7 +60,7 @@ As the mini program ecosystem has evolved over the years, Dimina does not yet fu
 
 If you find Dimina helpful, please click the ⭐Star button in the upper right to support us and help more people discover this project.
 
-[![Star History Chart](https://api.star-history.com/svg?repos=didi/dimina&type=Date)](https://star-history.com/#didi/dimina&Date)
+<img src="https://api.star-history.com/svg?repos=didi/dimina&type=Date" style="width: 60%; height: auto;">
 
 ## License
 

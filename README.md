@@ -60,7 +60,7 @@ Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-
 
 如果你觉得 Dimina 对你有帮助，欢迎点击右上角 ⭐Star 支持我们，让更多人了解和使用这个项目。
 
-[![Star History Chart](https://api.star-history.com/svg?repos=didi/dimina&type=Date)](https://star-history.com/#didi/dimina&Date)
+<img src="https://api.star-history.com/svg?repos=didi/dimina&type=Date" style="width: 60%; height: auto;">
 
 ## 开源协议
 
