@@ -7,7 +7,6 @@
 		"dev": "vite",
 		"build": "vite build",
 		"preview": "vite preview",
-		"generate:sdk": "node src/utils/generateSdk.js",
 		"lint:fix": "eslint . --fix",
 		"serve": "qrcode --small \"http://$(ifconfig | grep 'inet ' | grep -v 127.0.0.1 | awk '{print $2}'):9966\" && http-server ./dist/ -c-1 -p 9966 -g"
 	},
@@ -16,9 +15,7 @@
 		"@dimina/components": "workspace:^",
 		"@dimina/render": "workspace:^",
 		"@dimina/service": "workspace:^",
-		"archiver": "^7.0.1",
 		"chalk": "^5.4.1",
-		"fs-extra": "^11.3.0",
 		"mitt": "^3.0.1",
 		"vconsole": "^3.15.1"
 	},

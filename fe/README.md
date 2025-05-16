@@ -21,34 +21,62 @@
 ### 安装说明
 
 ```sh
-# Install dependencies
+# 安装依赖
 pnpm install
 ```
 
 ### 开发说明
 
 ```sh
-# Compile all Mini Programs in example/
+# 编译 example/ 目录下的所有小程序
 pnpm compile
 
-# Build (development, no minify)
+# 构建（开发环境，不压缩）
 pnpm build:dev
 
-# Build (production, minified)
+# 构建（生产环境，压缩）
 pnpm build
 
-# Preview production build
+# 预览生产构建
 pnpm preview
 
-# Web development
+# Web开发
 pnpm dev
 
-# Native container debugging
+# 原生容器调试
 pnpm dev:native
 
-# Run tests
+# 运行测试
 pnpm test
+
+# 生成小程序包
+# 注意：需要 shared/jsapp 目录存在
+pnpm generate:app
+
+# 生成SDK包
+# 注意：需要先执行构建命令
+pnpm generate:sdk
 ```
+
+### 资源生成工具
+
+#### pnpm generate:app
+
+将编译好的小程序打包并复制到共享目录 `shared/jsapp` 中。
+
+**注意事项：**
+- 运行前必须确保 `shared/jsapp` 目录已存在，否则命令将终止
+- 会自动递增小程序的版本号
+- 生成的资源包括 `config.json` 配置文件和 `[appId].zip` 代码包
+
+#### pnpm generate:sdk
+
+将构建好的 SDK 打包并复制到共享目录 `shared/jssdk` 中。
+
+**注意事项：**
+- 运行前必须先执行构建命令 `pnpm build` 或 `pnpm build:dev`
+- 会自动递增 SDK 的版本号
+- 生成的资源包括 `config.json` 配置文件和 `main.zip` SDK 包
 
 ### dmcc 编译工具
 
