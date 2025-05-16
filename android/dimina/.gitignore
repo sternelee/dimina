@@ -2,4 +2,4 @@
 
 # Dimina JSSDK files (copied from shared directory during build)
 /src/main/assets/jssdk/**
-!/src/main/assets/jssdk/.keep
+!/src/main/assets/jssdk/.gitkeep

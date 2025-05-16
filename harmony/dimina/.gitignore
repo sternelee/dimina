@@ -7,4 +7,4 @@
 
 # Dimina JSSDK files (copied from shared directory during build)
 /src/main/resources/rawfile/jssdk/**
-!/src/main/resources/rawfile/jssdk/.keep
+!/src/main/resources/rawfile/jssdk/.gitkeep

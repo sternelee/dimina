@@ -7,4 +7,4 @@
 
 # Dimina JSApp files (copied from shared directory during build)
 /src/main/resources/rawfile/jsapp/**
-!/src/main/resources/rawfile/jsapp/.keep
+!/src/main/resources/rawfile/jsapp/.gitkeep

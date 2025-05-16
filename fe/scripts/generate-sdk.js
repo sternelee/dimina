@@ -112,22 +112,23 @@ async function generateSdk() {
 			// 复制 main.zip 到 shared/jssdk 目录
 			await fsExtra.copy(zipPath, path.join(sharedJssdkDir, 'main.zip'))
 			console.log(`已将 main.zip 复制到 ${sharedJssdkDir}`)
+
+			// 清理临时目录
+			try {
+				await fsExtra.remove(tempDir)
+				console.log('临时目录已清理')
+			}
+			catch (cleanupErr) {
+				console.warn('清理临时目录失败：', cleanupErr)
+			}
 		}
 		else {
 			console.log(`注意: ${sharedJssdkDir} 目录不存在，跳过复制操作`)
+			console.log(`SDK 当前存放地址为： ${tempDir}`)
 			// 使用默认版本信息
 			updatedConfig = { versionName: '1.0.0', versionCode: 1 }
 		}
-
 		console.log(`SDK 生成完成，版本 ${updatedConfig.versionName}`)
-
-		// 清理临时目录
-		try {
-			await fsExtra.remove(tempDir)
-		}
-		catch (cleanupErr) {
-			console.warn('清理临时目录失败：', cleanupErr)
-		}
 	}
 	catch (err) {
 		console.error('生成 SDK 过程中发生错误：', err)
