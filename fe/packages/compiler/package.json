@@ -1,6 +1,6 @@
 {
 	"name": "@dimina/compiler",
-	"version": "1.0.4",
+	"version": "1.0.5",
 	"description": "星河编译工具",
 	"main": "./dist/index.cjs",
 	"module": "./dist/index.js",
@@ -48,7 +48,7 @@
 		"@babel/core": "^7.27.1",
 		"@babel/traverse": "^7.27.1",
 		"@babel/types": "^7.27.1",
-		"@vue/compiler-sfc": "^3.5.13",
+		"@vue/compiler-sfc": "^3.5.14",
 		"autoprefixer": "^10.4.21",
 		"cheerio": "1.0.0-rc.12",
 		"chokidar": "^3.6.0",
