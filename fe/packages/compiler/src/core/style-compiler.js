@@ -121,9 +121,7 @@ async function enhanceCSS(module) {
 	if (compileRes.has(absolutePath)) {
 		return compileRes.get(absolutePath)
 	}
-	// 查找所有未以分号结尾的@import语句，并在它们后面添加分号。(?<!;) 是一个负向后向查找断言，确保前面没有分号
-	// eslint-disable-next-line regexp/no-super-linear-backtracking
-	const fixedCSS = inputCSS.replace(/@import.*?(?<!;)\s*$/gm, '$&;')
+	const fixedCSS = ensureImportSemicolons(inputCSS)
 
 	const ast = postcss.parse(fixedCSS)
 	const promises = []
@@ -214,4 +212,18 @@ function getAbsolutePath(modulePath) {
 	}
 }
 
+/**
+ * Ensures that all @import statements in CSS end with semicolons
+ * @param {string} css - The CSS content to process
+ * @returns {string} - The processed CSS with semicolons added to @import statements as needed
+ */
+function ensureImportSemicolons(css) {
+	// 查找所有未以分号结尾的@import语句，并在它们后面添加分号
+	return css.replace(/@import[^;\n]*$/gm, (match) => {
+		// Check if the match already ends with a semicolon
+		return match.endsWith(';') ? match : `${match};`
+	})
+}
+
+export { ensureImportSemicolons }
 export default compileSS

@@ -920,11 +920,11 @@ function parseBraceExp(exp) {
 	return group.join('').replace(/^\+|\+$/g, '')
 }
 
-export default {
+export {
 	splitWithBraces,
 	parseClassRules,
 	parseBraceExp,
 	parseKeyExpression,
-	compileML,
 	generateVModelTemplate,
 }
+export default compileML

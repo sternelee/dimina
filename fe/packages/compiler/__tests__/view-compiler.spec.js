@@ -1,7 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import viewCompiler from '../src/core/view-compiler'
-
-const { parseBraceExp, parseClassRules, splitWithBraces, parseKeyExpression, generateVModelTemplate } = viewCompiler
+import { generateVModelTemplate, parseBraceExp, parseClassRules, parseKeyExpression, splitWithBraces } from '../src/core/view-compiler'
 
 describe('解析 key 表达式的值', () => {
 	it('简单取值', () => {
