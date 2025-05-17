@@ -258,6 +258,20 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder) 
 			// 自定义组件统一添加根节点，，手动声明继承关系来移除 wrapper 节点， https://cn.vuejs.org/guide/components/attrs#nested-component-inheritance
 			content = `<wrapper>${content}</wrapper>`
 		}
+		else {
+			// 检查是否有唯一根节点，如果不是唯一根节点，则使用 <view></view> 包裹，以修复多节点导致的警告：
+			// attributes (class) were passed to component but could not be automatically inherited
+			const tempRoot = cheerio.load(content, {
+				xmlMode: true,
+				decodeEntities: false,
+			})
+			// 获取根级别的节点数量（不包括注释节点）
+			const rootNodes = tempRoot.root().children().toArray().filter(node => node.type !== 'comment')
+			// 如果根节点数量大于1，则使用 <view></view> 包裹
+			if (rootNodes.length > 1) {
+				content = `<view>${content}</view>`
+			}
+		}
 	}
 
 	const templateModule = []
