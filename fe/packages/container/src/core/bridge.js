@@ -50,6 +50,10 @@ export class Bridge {
 	 * @param {*} msg
 	 */
 	messageInvoke(source, msg) {
+		// 如果浏览器开启了移动设备模式，被误识别为 android/ios，需要手动转换字符串对象
+		if (typeof msg === 'string') {
+			msg = JSON.parse(msg)
+		}
 		const { type, body, target } = msg
 
 		// 按 id 过滤不同的 bridge 事件
