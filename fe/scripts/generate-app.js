@@ -35,12 +35,38 @@ appDirs.forEach((appId) => {
 		fs.mkdirSync(appSharedPath, { recursive: true })
 	}
 
+	// Check if app-config.json exists in the app's main directory
+	const appConfigPath = path.join(appPublicPath, 'main', 'app-config.json')
+	let appName = `App ${appId}`
+	let appPath = 'example/index'
+
+	// Extract name and path from app-config.json if it exists
+	if (fs.existsSync(appConfigPath)) {
+		try {
+			const appConfig = JSON.parse(fs.readFileSync(appConfigPath, 'utf8'))
+			if (appConfig.app && appConfig.projectName) {
+				appName = appConfig.projectName
+			}
+			// First try to get entryPagePath, if not available, use the first page from pages array
+			if (appConfig.app && appConfig.app.entryPagePath) {
+				appPath = appConfig.app.entryPagePath
+			}
+			else if (appConfig.app && appConfig.app.pages && appConfig.app.pages.length > 0) {
+				appPath = appConfig.app.pages[0]
+			}
+			console.log(`Extracted from app-config.json for ${appId}: name=${appName}, path=${appPath}`)
+		}
+		catch (error) {
+			console.error(`Error reading or parsing app-config.json for ${appId}:`, error)
+		}
+	}
+
 	// Check if config.json exists in shared/jsapp
 	const configPath = path.join(appSharedPath, 'config.json')
 	let config = {
 		appId,
-		name: `App ${appId}`,
-		path: 'example/index',
+		name: appName,
+		path: appPath,
 		versionCode: 1,
 		versionName: '1.0.0',
 	}
@@ -79,7 +105,7 @@ appDirs.forEach((appId) => {
 		fs.mkdirSync(tempDir, { recursive: true })
 
 		// Copy all files from public app directory to temp directory
-		execSync(`cp -R ${path.join(appPublicPath, 'main')}/* ${tempDir}`)
+		execSync(`cp -R ${appPublicPath}/* ${tempDir}`)
 
 		// Create zip file
 		const zipPath = path.join(appSharedPath, `${appId}.zip`)

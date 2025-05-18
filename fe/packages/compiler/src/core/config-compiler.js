@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import {
 	getAppConfigInfo,
+	getAppName,
 	getPageConfigInfo,
 	getTargetPath,
 } from '../env.js'
@@ -13,6 +14,7 @@ function compileConfig() {
 	const compileResInfo = {
 		app: getAppConfigInfo(),
 		modules: getPageConfigInfo(),
+		projectName: getAppName(),
 	}
 
 	const json = JSON.stringify(compileResInfo, null, 4)
