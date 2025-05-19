@@ -50,16 +50,16 @@
 		"@babel/types": "^7.27.1",
 		"@vue/compiler-sfc": "^3.5.14",
 		"autoprefixer": "^10.4.21",
-		"cheerio": "1.0.0-rc.12",
-		"chokidar": "^3.6.0",
-		"commander": "^12.1.0",
-		"cssnano": "^6.1.2",
-		"esbuild": "^0.24.2",
-		"htmlparser2": "^9.1.0",
+		"cheerio": "^1.0.0",
+		"chokidar": "^4.0.3",
+		"commander": "^14.0.0",
+		"cssnano": "^7.0.7",
+		"esbuild": "^0.25.4",
+		"htmlparser2": "^10.0.0",
 		"listr2": "^8.3.3",
 		"postcss": "^8.5.3",
-		"postcss-selector-parser": "^6.1.2",
-		"shelljs": "^0.8.5"
+		"postcss-selector-parser": "^7.1.0",
+		"shelljs": "^0.10.0"
 	},
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org/"
