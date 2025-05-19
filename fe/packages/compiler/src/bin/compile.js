@@ -43,6 +43,40 @@ function isCompilerModified(lastCompileTime) {
 	return isModified(COMPILER_SRC_DIR, lastCompileTime)
 }
 
+async function cleanUpOldApps(targetPath, appList) {
+	try {
+		// 清理目标目录
+		const targetDirs = fs.readdirSync(targetPath, { withFileTypes: true })
+			.filter(dirent => dirent.isDirectory())
+			.map(dirent => dirent.name)
+
+		// 从appList中提取所有appId
+		const validAppIds = appList.map(app => app.appId)
+
+		for (const dir of targetDirs) {
+			// 跳过特殊目录和文件
+			if (['images', '.gitignore', 'favicon.ico', 'appList.json'].includes(dir)) {
+				continue
+			}
+
+			// 如果目录名不在有效的appId列表中，则删除
+			if (!validAppIds.includes(dir)) {
+				const dirPath = path.join(targetPath, dir)
+				try {
+					fs.rmSync(dirPath, { recursive: true, force: true })
+					console.log(`已清理小程序产物目录: ${dirPath}`)
+				}
+				catch (error) {
+					console.error(`清理目录失败: ${dirPath}`, error)
+				}
+			}
+		}
+	}
+	catch (error) {
+		console.error('清理旧应用目录时出错:', error)
+	}
+}
+
 async function buildMiniApp() {
 	const currentDirectory = `${process.cwd()}/example`
 	const cache = loadCache()
@@ -92,8 +126,20 @@ async function buildMiniApp() {
 			return timeB - timeA
 		})
 
+		const targetPath = path.resolve('./packages/container/public')
 		const appListString = JSON.stringify(appList, null, 2)
-		fs.writeFileSync(path.resolve('./packages/container/public/appList.json'), appListString)
+		fs.writeFileSync(path.join(targetPath, 'appList.json'), appListString)
+
+		// 清理不存在的应用目录
+		await cleanUpOldApps(targetPath, appList)
+
+		// 清理缓存中不存在的应用配置
+		const cacheFileNames = Object.keys(cache.apps)
+		for (const fileName of cacheFileNames) {
+			if (!directories.includes(fileName)) {
+				delete cache.apps[fileName]
+			}
+		}
 
 		// 更新编译器的最后修改时间
 		cache.compilerLastModified = Date.now()
