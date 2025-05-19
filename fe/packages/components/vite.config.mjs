@@ -47,6 +47,7 @@ export default defineConfig(({ mode }) => {
 					enabled: true,
 				},
 				imports: ['vue'],
+				dts: false,
 			}),
 		],
 	}
