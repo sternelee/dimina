@@ -1,25 +1,34 @@
 <script setup>
 // 视图容器
 // https://developers.weixin.qq.com/miniprogram/dev/component/view.html
-import { triggerEvent, useInfo } from '@/common/events'
-import { useLongPress } from '@/common/useLongPress'
+import { hasEvent, triggerEvent, useInfo } from '@/common/events'
+import { useTouchEvents } from '@/common/useTouchEvents'
+import { useTapEvents } from '@/common/useTapEvents'
 
 const info = useInfo()
+const viewRef = ref(null)
 
-function onClicked(event) {
-	triggerEvent('tap', { event, info })
+// 判断是否有tap事件属性
+const hasTapEvent = hasEvent(info, 'tap')
+if (hasTapEvent) {
+	useTapEvents(viewRef, (event) => {
+		triggerEvent('tap', { event, info })
+	})
 }
 
-// 使用公共的长按逻辑
-// 传入组件信息、长按时间阈值和移动距离阈值
-const { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel } = useLongPress(info)
+// 判断是否有触摸相关事件属性
+const hasTouchEvents = hasEvent(info, 'touchstart') || hasEvent(info, 'touchmove')
+	|| hasEvent(info, 'touchend') || hasEvent(info, 'touchcancel')
+	|| hasEvent(info, 'longpress')
+
+// 只有当存在触摸相关事件属性时，才使用触摸事件处理逻辑
+if (hasTouchEvents) {
+	useTouchEvents(info, viewRef)
+}
 </script>
 
 <template>
-	<div
-		v-bind="$attrs" class="dd-view" @click="onClicked" @touchstart="onTouchStart" @touchmove="onTouchMove"
-		@touchend="onTouchEnd" @touchcancel="onTouchCancel"
-	>
+	<div ref="viewRef" v-bind="$attrs" class="dd-view">
 		<slot />
 	</div>
 </template>

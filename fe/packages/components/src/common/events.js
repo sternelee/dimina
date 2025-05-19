@@ -74,7 +74,7 @@ function isScrollable(element) {
 }
 
 /**
- * touchstart, touchmove, touchcancel, touchend, tap, longpress, longtap
+ * touchstart, touchmove, touchcancel, touchend, tap, longpress
  * @param {*} type
  * @param {*} any
  */
@@ -214,4 +214,26 @@ function offEvent(eventName) {
 	window.__message.off(eventName)
 }
 
-export { useInfo, triggerEvent, invokeAPI, onEvent, offEvent }
+/**
+ * 检查元素是否有指定事件类型的相关属性
+ * @param {object} info 组件信息对象
+ * @param {string} eventType 事件类型，默认为 'tap'
+ * @returns {boolean} 是否有相关属性
+ */
+function hasEvent(info, eventType = 'tap') {
+	const attrs = info.attrs || {}
+	return !!(attrs[`bind${eventType}`] || attrs[`bind:${eventType}`] || attrs[`catch${eventType}`] || attrs[`catch:${eventType}`])
+}
+
+/**
+ * 检查元素是否有指定事件类型的catch属性，支持写法：catchtouchstart、catch:touchstart
+ * @param {object} info 组件信息对象
+ * @param {string} eventType 事件类型，默认为 'tap'
+ * @returns {boolean} 是否有catch属性
+ */
+function hasCatchEvent(info, eventType = 'tap') {
+	const attrs = info.attrs || {}
+	return !!(attrs[`catch${eventType}`] || attrs[`catch:${eventType}`])
+}
+
+export { useInfo, triggerEvent, invokeAPI, onEvent, offEvent, hasEvent, hasCatchEvent }

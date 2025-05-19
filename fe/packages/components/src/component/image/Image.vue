@@ -1,7 +1,8 @@
 <script setup>
 // https://developers.weixin.qq.com/miniprogram/dev/component/image.html
-import { triggerEvent, useInfo } from '@/common/events'
-import { useLongPress } from '@/common/useLongPress'
+import { hasEvent, triggerEvent, useInfo } from '@/common/events'
+import { useTouchEvents } from '@/common/useTouchEvents'
+import { useTapEvents } from '@/common/useTapEvents'
 
 const props = defineProps({
 	src: {
@@ -70,28 +71,32 @@ function handleError(event) {
 	})
 }
 
-function handleClicked(event) {
-	if (!props.disabled) {
-		if (props.hoverStopPropagation) {
-			event.stopPropagation()
+// 判断是否有tap事件属性
+const hasTapEvent = hasEvent(info, 'tap')
+if (hasTapEvent) {
+	useTapEvents(conRef, (event) => {
+		if (!props.disabled) {
+			if (props.hoverStopPropagation) {
+				event.stopPropagation()
+			}
+			triggerEvent('tap', { event, info })
 		}
-		triggerEvent('tap', { event, info })
-	}
+	})
 }
 
-// 使用公共的长按逻辑
-// 传入组件信息、长按时间阈值和移动距离阈值
-const { onTouchStart, onTouchMove, onTouchEnd, onTouchCancel } = useLongPress(info)
+// 判断是否有触摸相关事件属性
+const hasTouchEvents = hasEvent(info, 'touchstart') || hasEvent(info, 'touchmove')
+	|| hasEvent(info, 'touchend') || hasEvent(info, 'touchcancel')
+	|| hasEvent(info, 'longpress')
+
+// 只有当存在触摸相关事件属性时，才使用触摸事件处理逻辑
+if (hasTouchEvents) {
+	useTouchEvents(info, conRef)
+}
 </script>
 
 <template>
-	<span
-		ref="conRef" v-bind="$attrs" class="dd-image" @click="handleClicked"
-		@touchstart="onTouchStart"
-		@touchmove="onTouchMove"
-		@touchend="onTouchEnd"
-		@touchcancel="onTouchCancel"
-	>
+	<span ref="conRef" v-bind="$attrs" class="dd-image">
 		<img
 			ref="imgRef" :class="dynamicClass" :src="src" alt="" decoding="async" loading="lazy" @load="handleLoaded"
 			@error="handleError"
