@@ -464,10 +464,10 @@ class Runtime {
 		})
 	}
 
-	selectorQuery(opts) {
-		setTimeout(async () => {
-			const { bridgeId, params: { tasks, success } } = opts
+	async selectorQuery(opts) {
+		const { bridgeId, params: { tasks, success } } = opts
 
+		const executeQuery = async () => {
 			const results = await Promise.all(tasks.map(async (task) => {
 				const { moduleId, selector, single, fields } = task
 				const el = await this.waitForEl(this.instance.get(moduleId))
@@ -482,19 +482,34 @@ class Runtime {
 				}
 
 				const selectors = selector.split(',').map(s => `${s.trim()}:not([data-dd-cloned] *)`).join(',')
+
 				if (single) {
 					// 排除任何带有 data-dd-cloned 属性的父元素的子元素
 					const targetElement = el.querySelector(selectors)
-					return targetElement ? this.parseElement(targetElement, fields) : null
+					return targetElement ? await this.parseElement(targetElement, fields) : null
 				}
 				else {
 					// 排除带有 data-dd-cloned 属性的元素
 					const targetElements = el.querySelectorAll(selectors)
-					return Array.from(targetElements).map(el => this.parseElement(el, fields))
+					const results = []
+					for (const el of targetElements) {
+						const result = await this.parseElement(el, fields)
+						results.push(result)
+					}
+					return results
 				}
 			}))
 
-			const res = results.filter(Boolean)
+			return results.filter(Boolean)
+		}
+
+		try {
+			// 使用 requestAnimationFrame 确保在下一帧执行
+			const res = await new Promise((resolve) => {
+				requestAnimationFrame(async () => {
+					resolve(await executeQuery())
+				})
+			})
 
 			message.send({
 				type: 'triggerCallback',
@@ -505,14 +520,56 @@ class Runtime {
 					args: res,
 				},
 			})
-		// 延迟为了解决获取元素高度为 0 导致异常
-		}, 300)
+		}
+		catch (error) {
+			console.error('[system]', '[render]', 'selectorQuery error:', error)
+		}
+	}
+
+	/**
+	 * 确保元素已准备好（有尺寸）
+	 */
+	ensureElementReady(element) {
+		return new Promise((resolve) => {
+			if (this.isElementReady(element)) {
+				return resolve(element)
+			}
+
+			const observer = new ResizeObserver((entries) => {
+				if (entries[0]?.contentRect?.height > 0 || entries[0]?.contentRect?.width > 0) {
+					observer.disconnect()
+					resolve(element)
+				}
+			})
+
+			observer.observe(element)
+
+			// 设置超时，防止无限等待
+			setTimeout(() => {
+				observer.disconnect()
+				resolve(element)
+			}, 500)
+		})
+	}
+
+	/**
+	 * 检查元素是否已准备好（有尺寸）
+	 */
+	isElementReady(element) {
+		if (!element) {
+			return false
+		}
+		const rect = element.getBoundingClientRect()
+		return rect.height > 0 || rect.width > 0
 	}
 
 	/**
 	 * https://developers.weixin.qq.com/miniprogram/dev/api/wxml/NodesRef.fields.html
 	 */
-	parseElement(targetElement, fields) {
+	async parseElement(targetElement, fields) {
+		// 确保元素已准备好（有尺寸）
+		await this.ensureElementReady(targetElement)
+
 		const data = {}
 
 		if (fields.id) {
@@ -722,18 +779,19 @@ class Runtime {
 					args: { observerId },
 				},
 			})
-		// 延迟为了解决当前父组件 watch 触发的 nextTick 优先于组件的 created 生命周期导致异常，eg: emit 事件发送先于注册事件执行导致没有回调
+		// Fixme: 延迟为了解决当前父组件 watch 触发的 nextTick 优先于组件的 created 生命周期导致异常，eg: emit 事件发送先于注册事件执行导致没有回调
 		}, 300)
 	}
 
 	removeIntersectionObserver({ params: { observerId } }) {
-		if (observerId) {
-			const observers = this.intersectionObservers.get(observerId)
-			if (observers) {
-				// 断开所有观察器的连接
-				observers.forEach(observer => observer.disconnect())
-				this.intersectionObservers.delete(observerId)
-			}
+		if (!observerId) {
+			return
+		}
+		const observers = this.intersectionObservers.get(observerId)
+		if (observers) {
+			// 断开所有观察器的连接
+			observers.forEach(observer => observer.disconnect())
+			this.intersectionObservers.delete(observerId)
 		}
 	}
 
