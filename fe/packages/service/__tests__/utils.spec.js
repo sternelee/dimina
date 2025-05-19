@@ -32,7 +32,7 @@ describe('数据监听器触发匹配逻辑', () => {
 		some: {
 			subfield: 6,
 		},
-		arr: Array(14).fill(8),
+		arr: Array.from({ length: 14 }).fill(8),
 	}
 
 	const funSubfield = vi.fn((subfield) => {

@@ -1,9 +1,9 @@
 import { callback, uuid } from '@dimina/common'
+import { navigateBack, navigateTo, redirectTo, reLaunch, switchTab } from './api/core/route'
 import env from './core/env'
-import message from './core/message'
 import loader from './core/loader'
+import message from './core/message'
 import runtime from './core/runtime'
-import { navigateBack, navigateTo, reLaunch, redirectTo, switchTab } from './api/core/route'
 
 const actionMap = { navigateBack, navigateTo, reLaunch, redirectTo, switchTab }
 

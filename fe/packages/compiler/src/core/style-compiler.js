@@ -1,13 +1,13 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { isMainThread, parentPort } from 'node:worker_threads'
-import postcss from 'postcss'
-import autoprefixer from 'autoprefixer'
-import selectorParser from 'postcss-selector-parser'
-import cssnano from 'cssnano'
 import { compileStyle } from '@vue/compiler-sfc'
-import { getAppId, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
+import autoprefixer from 'autoprefixer'
+import cssnano from 'cssnano'
+import postcss from 'postcss'
+import selectorParser from 'postcss-selector-parser'
 import { collectAssets, tagWhiteList, transformRpx } from '../common/utils.js'
+import { getAppId, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 
 const fileType = ['.wxss', '.ddss']
 const compileRes = new Map()

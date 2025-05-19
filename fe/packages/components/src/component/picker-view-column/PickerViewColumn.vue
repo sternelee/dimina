@@ -13,7 +13,7 @@ const getPickerHeight = inject('getPickerHeight', () => 0)
 const getItemIndex = inject('getItemIndex', () => 0)
 const itemIndex = getItemIndex()
 const setPickerValue = inject('setPickerValue', undefined)
-const itemValue = inject('itemValue', Array(itemIndex).fill(0))
+const itemValue = inject('itemValue', Array.from({ length: itemIndex }).fill(0))
 
 const indicatorClass = ref(pickerItemStyle.indicatorClass)
 const maskClass = ref(pickerItemStyle.maskClass)

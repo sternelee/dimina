@@ -1,6 +1,6 @@
 import { callback, isFunction } from '@dimina/common'
-import router from '../../core/router'
 import message from '../../core/message'
+import router from '../../core/router'
 
 export function invokeAPI(name, data, target = 'container') {
 	let params

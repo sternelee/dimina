@@ -2,8 +2,8 @@
 // 视图容器
 // https://developers.weixin.qq.com/miniprogram/dev/component/view.html
 import { hasEvent, triggerEvent, useInfo } from '@/common/events'
-import { useTouchEvents } from '@/common/useTouchEvents'
 import { useTapEvents } from '@/common/useTapEvents'
+import { useTouchEvents } from '@/common/useTouchEvents'
 
 const info = useInfo()
 const viewRef = ref(null)

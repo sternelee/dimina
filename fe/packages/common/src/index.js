@@ -1,6 +1,9 @@
 // 从 core/amd 导入
 export { modDefine, modRequire } from '@/core/amd'
 
+// 从 core/callback 导入
+export { default as callback } from '@/core/callback'
+
 // 从 core/utils 导入
 export {
 	animationToStyle,
@@ -25,6 +28,3 @@ export {
 	transformRpx,
 	uuid,
 } from '@/core/utils'
-
-// 从 core/callback 导入
-export { default as callback } from '@/core/callback'

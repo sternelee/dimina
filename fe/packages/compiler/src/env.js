@@ -1,6 +1,6 @@
 import fs from 'node:fs'
-import path from 'node:path'
 import os from 'node:os'
+import path from 'node:path'
 import { isObjectEmpty, uuid } from './common/utils.js'
 
 let pathInfo = {}
@@ -235,15 +235,15 @@ function getPages() {
 }
 
 export {
-	getPages,
-	getComponent,
-	getContentByPath,
-	storeInfo,
-	getTargetPath,
 	getAppConfigInfo,
-	getPageConfigInfo,
-	getWorkPath,
 	getAppId,
 	getAppName,
+	getComponent,
+	getContentByPath,
+	getPageConfigInfo,
+	getPages,
+	getTargetPath,
+	getWorkPath,
 	resetStoreInfo,
+	storeInfo,
 }

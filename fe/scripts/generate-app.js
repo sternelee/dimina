@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 
+const { execSync } = require('node:child_process')
 const fs = require('node:fs')
 const path = require('node:path')
-const { execSync } = require('node:child_process')
 const process = require('node:process')
 
 // Define paths

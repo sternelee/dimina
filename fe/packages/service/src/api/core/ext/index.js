@@ -1,6 +1,6 @@
 import { isFunction } from '@dimina/common'
-import message from '@/core/message'
 import { invokeAPI } from '@/api/common'
+import message from '@/core/message'
 /**
  * 第三方拓展的 bridge 接口
  */

@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
-import mitt from 'mitt'
 import { isWebWorker } from '@dimina/common'
+import mitt from 'mitt'
 
 class Message {
 	constructor() {

@@ -1,8 +1,8 @@
-import './appList.scss'
-import tpl from './appList.html?raw'
-import { closest } from '@/utils/util'
 import { AppManager } from '@/core/appManager'
 import { getAppList, getMiniAppInfo } from '@/services'
+import { closest } from '@/utils/util'
+import tpl from './appList.html?raw'
+import './appList.scss'
 
 export class AppList {
 	constructor() {

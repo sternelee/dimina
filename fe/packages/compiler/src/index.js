@@ -1,12 +1,12 @@
 import path from 'node:path'
-import { Worker } from 'node:worker_threads'
 import { fileURLToPath } from 'node:url'
+import { Worker } from 'node:worker_threads'
 import { Listr } from 'listr2'
-import { getAppConfigInfo, getAppId, getAppName, getPages, storeInfo } from './env.js'
-import { compileConfig } from './core/index.js'
 import { createDist, publishToDist } from './common/publish.js'
 import { artCode } from './common/utils.js'
 import { workerPool } from './common/worker-pool.js'
+import { compileConfig } from './core/index.js'
+import { getAppConfigInfo, getAppId, getAppName, getPages, storeInfo } from './env.js'
 
 let isPrinted = false
 

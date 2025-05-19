@@ -15,7 +15,7 @@ function modDefine(id, factory) {
 	}
 }
 // 模块加载函数
-const modRequire = function (id, callback, errorCallback) {
+function modRequire(id, callback, errorCallback) {
 	if (typeof id !== 'string') {
 		throw new TypeError('require args must be a string')
 	}
@@ -70,4 +70,4 @@ modRequire.async = async (id) => {
 	})
 }
 
-export { modRequire, modDefine }
+export { modDefine, modRequire }

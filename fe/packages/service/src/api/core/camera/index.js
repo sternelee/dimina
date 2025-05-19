@@ -1,5 +1,5 @@
-import router from '@/core/router'
 import { invokeAPI } from '@/api/common'
+import router from '@/core/router'
 
 export function createCameraContext() {
 	return new CameraContext()

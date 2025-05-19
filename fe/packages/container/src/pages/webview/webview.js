@@ -1,7 +1,7 @@
-import './webview.scss'
 import mitt from 'mitt'
-import tpl from './webview.html?raw'
 import { uuid } from '@/utils/util'
+import tpl from './webview.html?raw'
+import './webview.scss'
 
 export class WebView {
 	constructor(opts) {

@@ -236,4 +236,4 @@ function hasCatchEvent(info, eventType = 'tap') {
 	return !!(attrs[`catch${eventType}`] || attrs[`catch:${eventType}`])
 }
 
-export { useInfo, triggerEvent, invokeAPI, onEvent, offEvent, hasEvent, hasCatchEvent }
+export { hasCatchEvent, hasEvent, invokeAPI, offEvent, onEvent, triggerEvent, useInfo }

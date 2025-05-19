@@ -1,8 +1,8 @@
 import { cloneDeep, isFunction, isString, set } from '@dimina/common'
+import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
 import { addComputedData, filterData, filterInvokeObserver, isChildComponent, matchComponent } from '../../core/utils'
-import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 
 // 组件生命周期
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']

@@ -1,5 +1,5 @@
-import mitt from 'mitt'
 import { isAndroid, isIOS } from '@dimina/common'
+import mitt from 'mitt'
 
 class Message {
 	constructor() {

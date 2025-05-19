@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 
-import process from 'node:process'
 import path from 'node:path'
-import { program } from 'commander'
+import process from 'node:process'
 import chokidar from 'chokidar'
-import build from '../index.js'
+import { program } from 'commander'
 import pack from '../../package.json'
+import build from '../index.js'
 
 program
 	.command('build')

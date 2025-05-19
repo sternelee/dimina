@@ -1,8 +1,8 @@
 <script setup>
 // https://developers.weixin.qq.com/miniprogram/dev/component/image.html
 import { hasEvent, triggerEvent, useInfo } from '@/common/events'
-import { useTouchEvents } from '@/common/useTouchEvents'
 import { useTapEvents } from '@/common/useTapEvents'
+import { useTouchEvents } from '@/common/useTouchEvents'
 
 const props = defineProps({
 	src: {

@@ -1,10 +1,10 @@
 #!/usr/bin/env node
 
-const process = require('node:process')
-const path = require('node:path')
 const os = require('node:os')
-const fsExtra = require('fs-extra')
+const path = require('node:path')
+const process = require('node:process')
 const archiver = require('archiver')
+const fsExtra = require('fs-extra')
 
 // Define paths relative to the script location
 const rootDir = path.resolve(__dirname, '..')

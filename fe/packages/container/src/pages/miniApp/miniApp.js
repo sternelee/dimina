@@ -1,9 +1,9 @@
-import './miniApp.scss'
-import tpl from './miniApp.html?raw'
-import { mergePageConfig, queryPath, readFile, sleep, uuid } from '@/utils/util'
 import { AppManager } from '@/core/appManager'
 import { Bridge } from '@/core/bridge'
 import { JSCore } from '@/core/jscore'
+import { mergePageConfig, queryPath, readFile, sleep, uuid } from '@/utils/util'
+import tpl from './miniApp.html?raw'
+import './miniApp.scss'
 
 export class MiniApp {
 	constructor(opts) {

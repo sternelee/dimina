@@ -1,6 +1,6 @@
-import { queryPath } from '@/utils/util'
-import { getMiniAppInfo } from '@/services'
 import { MiniApp } from '@/pages/miniApp/miniApp'
+import { getMiniAppInfo } from '@/services'
+import { queryPath } from '@/utils/util'
 
 export class AppManager {
 	static appStack = []

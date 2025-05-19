@@ -1,5 +1,5 @@
-import './application.scss'
 import { sleep } from '@/utils/util'
+import './application.scss'
 
 export class Application {
 	constructor() {

@@ -1,14 +1,14 @@
 import fs from 'node:fs'
 import { isMainThread, parentPort } from 'node:worker_threads'
 import babel from '@babel/core'
-import types from '@babel/types'
 import _traverse from '@babel/traverse'
+import types from '@babel/types'
 import { compileTemplate } from '@vue/compiler-sfc'
 import * as cheerio from 'cheerio'
-import * as htmlparser2 from 'htmlparser2'
 import { transform } from 'esbuild'
-import { getAppId, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
+import * as htmlparser2 from 'htmlparser2'
 import { collectAssets, getAbsolutePath, tagWhiteList, transformRpx } from '../common/utils.js'
+import { getAppId, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 
 // https://github.com/babel/babel/issues/13855
 const traverse = _traverse.default ? _traverse.default : _traverse
@@ -921,10 +921,10 @@ function parseBraceExp(exp) {
 }
 
 export {
-	splitWithBraces,
-	parseClassRules,
-	parseBraceExp,
-	parseKeyExpression,
 	generateVModelTemplate,
+	parseBraceExp,
+	parseClassRules,
+	parseKeyExpression,
+	splitWithBraces,
 }
 export default compileML

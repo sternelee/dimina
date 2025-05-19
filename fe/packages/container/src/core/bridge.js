@@ -1,6 +1,6 @@
 import chalk from 'chalk'
-import { uuid } from '@/utils/util'
 import { WebView } from '@/pages/webview/webview'
+import { uuid } from '@/utils/util'
 
 export class Bridge {
 	constructor(opts) {

@@ -1,7 +1,7 @@
 import { animationToStyle, getDataAttributes, toCamelCase, transformRpx } from '@dimina/common'
-import components from './src/index'
-import { deepToRaw, install } from '@/common/utils'
 import { triggerEvent, useInfo } from '@/common/events'
+import { deepToRaw, install } from '@/common/utils'
+import components from './src/index'
 
 export * from './src/index'
 

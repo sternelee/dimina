@@ -1,11 +1,11 @@
 import { isFunction } from '@dimina/common'
 import { App } from '../instance/app/app'
-import { Page } from '../instance/page/page'
 import { Component } from '../instance/component/component'
 import { ComponentModule } from '../instance/component/component-module'
+import { Page } from '../instance/page/page'
 import { PageModule } from '../instance/page/page-module'
-import router from './router'
 import loader from './loader'
+import router from './router'
 
 class Runtime {
 	constructor() {

@@ -1,5 +1,5 @@
-import './device.scss'
 import tpl from './device.html?raw'
+import './device.scss'
 
 export class Device {
 	constructor() {

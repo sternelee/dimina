@@ -1,6 +1,6 @@
+import { getDataAttributes, set, uuid } from '@dimina/common'
+import { Components, deepToRaw, triggerEvent } from '@dimina/components'
 import {
-	Fragment,
-	Suspense,
 	createApp,
 	createBlock,
 	createCommentVNode,
@@ -9,6 +9,7 @@ import {
 	createSlots,
 	createTextVNode,
 	createVNode,
+	Fragment,
 	getCurrentInstance,
 	h,
 	inject,
@@ -26,13 +27,12 @@ import {
 	resolveComponent,
 	resolveDirective,
 	resolveDynamicComponent,
+	Suspense,
 	toDisplayString,
 	watch,
 	withCtx,
 	withDirectives,
 } from 'vue'
-import { Components, deepToRaw, triggerEvent } from '@dimina/components'
-import { getDataAttributes, set, uuid } from '@dimina/common'
 import loader from './loader'
 import message from './message'
 

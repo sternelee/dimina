@@ -1,5 +1,5 @@
-import { Module } from './module'
 import message from './message'
+import { Module } from './module'
 
 class Loader {
 	constructor() {

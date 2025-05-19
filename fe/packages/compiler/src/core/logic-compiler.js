@@ -2,11 +2,11 @@ import fs from 'node:fs'
 import { resolve } from 'node:path'
 import { isMainThread, parentPort } from 'node:worker_threads'
 import babel from '@babel/core'
-import types from '@babel/types'
 import _traverse from '@babel/traverse'
+import types from '@babel/types'
 import { transform } from 'esbuild'
-import { getAppConfigInfo, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 import { hasCompileInfo } from '../common/utils.js'
+import { getAppConfigInfo, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 
 // https://github.com/babel/babel/issues/13855
 const traverse = _traverse.default ? _traverse.default : _traverse

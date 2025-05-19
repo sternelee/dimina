@@ -1,7 +1,7 @@
-import '@/styles/app.scss'
 import { Application } from '@/pages/application/application'
-import { Device } from '@/pages/device/device'
 import { AppList } from '@/pages/appList/appList'
+import { Device } from '@/pages/device/device'
+import '@/styles/app.scss'
 
 window.onload = function () {
 	const device = new Device()

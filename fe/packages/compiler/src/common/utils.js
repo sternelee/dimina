@@ -1,5 +1,5 @@
-import path from 'node:path'
 import fs from 'node:fs'
+import path from 'node:path'
 import artCode from './art.js'
 
 function hasCompileInfo(modulePath, list, preList) {
@@ -167,13 +167,13 @@ const tagWhiteList = [
 ]
 
 export {
-	uuid,
 	artCode,
-	hasCompileInfo,
 	collectAssets,
-	isObjectEmpty,
-	getAbsolutePath,
-	transformRpx,
 	filterFilesByRegex,
+	getAbsolutePath,
+	hasCompileInfo,
+	isObjectEmpty,
 	tagWhiteList,
+	transformRpx,
+	uuid,
 }

@@ -1,5 +1,5 @@
-import mitt from 'mitt'
 import serviceURL from '@dimina/service?url'
+import mitt from 'mitt'
 
 export class JSCore {
 	constructor(parent) {

@@ -1,6 +1,6 @@
 import { parsePath } from '@dimina/common'
-import router from '@/core/router'
 import { invokeAPI } from '@/api/common'
+import router from '@/core/router'
 
 /**
  * 跳转到 tabBar 页面，并关闭其他所有非 tabBar 页面

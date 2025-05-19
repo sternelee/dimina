@@ -1,7 +1,7 @@
 import { isWebWorker, modRequire } from '@dimina/common'
 import { AppModule } from '../instance/app/app-module'
-import { PageModule } from '../instance/page/page-module'
 import { ComponentModule } from '../instance/component/component-module'
+import { PageModule } from '../instance/page/page-module'
 import message from './message'
 import router from './router'
 
