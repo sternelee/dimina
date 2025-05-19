@@ -1,5 +1,6 @@
 <script setup>
-import { triggerEvent, useInfo } from '@/common/events'
+import { hasEvent, triggerEvent, useInfo } from '@/common/events'
+import { useTapEvents } from '@/common/useTapEvents'
 // 文本
 // https://developers.weixin.qq.com/miniprogram/dev/component/text.html
 
@@ -95,20 +96,24 @@ onMounted(() => {
 })
 
 const info = useInfo()
-function handleClicked(event) {
-	if (!props.disabled) {
-		if (props.hoverStopPropagation) {
-			event.stopPropagation()
+
+// 判断是否有tap事件属性
+const hasTapEvent = hasEvent(info, 'tap')
+if (hasTapEvent) {
+	useTapEvents(textRef, (event) => {
+		if (!props.disabled) {
+			if (props.hoverStopPropagation) {
+				event.stopPropagation()
+			}
+			triggerEvent('tap', { event, info })
 		}
-		triggerEvent('tap', { event, info })
-	}
+	})
 }
 </script>
 
 <template>
 	<span
 		ref="textRef" v-bind="$attrs" class="dd-text" :class="{ 'dd-text-selectable': userSelect }"
-		@click="handleClicked"
 	>
 		<slot />
 	</span>
