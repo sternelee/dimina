@@ -99,11 +99,11 @@ function buildCompileView(module, isComponent = false, scriptRes, depthChain = [
 
 	// Circular dependency detected
 	if (depthChain.includes(currentPath)) {
-		console.warn(`检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+		console.warn('[view]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
 	}
 	// Deep dependency chain detected
 	if (depthChain.length > 100) {
-		console.warn(`检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+		console.warn('[view]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
 	}
 	depthChain = [...depthChain, currentPath]
 	compileModule(module, isComponent, scriptRes)

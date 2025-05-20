@@ -104,12 +104,12 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 
 	// Circular dependency detected
 	if (depthChain.includes(currentPath)) {
-		console.warn(`检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+		console.warn('[logic]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
 		// Continue compilation despite circular dependency
 	}
 	// Deep dependency chain detected
 	if (depthChain.length > 100) {
-		console.warn(`检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+		console.warn('[logic]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
 		// Continue compilation despite deep dependency chain
 	}
 	depthChain = [...depthChain, currentPath]
@@ -150,9 +150,6 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 			let toMainSubPackage = true
 			if (packageName) {
 				// 如果依赖的组件不在当前的分包，则跳过该组件的编译逻辑，保证分包代码的独立性
-				// 获取分包名称，packageName格式为 'sub_packageName'（由 env.js 中的 transSubDir 方法添加）
-				const rootPackageName = packageName.startsWith('sub_') ? packageName.slice(4) : packageName
-
 				// 考虑到路径可能是 'test/src' 这样的格式，使用前缀匹配而不是分割比较
 				const normalizedPath = path.startsWith('/') ? path.substring(1) : path
 
@@ -161,13 +158,6 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 					if (normalizedPath.startsWith(`${subPackage.root}/`)) {
 						toMainSubPackage = false
 						break
-					}
-				}
-
-				if (!toMainSubPackage) {
-					// 检查组件路径是否属于当前分包
-					if (!normalizedPath.startsWith(`${rootPackageName}/`)) {
-						continue
 					}
 				}
 			}
