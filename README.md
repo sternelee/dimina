@@ -48,7 +48,9 @@
 
 ## 参与共建
 
-Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)进行设计，目前已对齐大部分微信小程序的功能接口。已支持能力详见[Dimina 能力参考指南](./docs/API-Reference.md)。
+Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)进行设计，目前已对齐微信小程序的主要功能。
+
+已支持能力详见[Dimina 能力参考指南](./docs/API-Reference.md)。
 
 得益于 Vue3 与小程序语法的高度相似，Dimina 底层视图渲染框架选择基于 Vue 构建。 Dimina 框架通过[DMCC](./fe/packages/compiler/README.md)将小程序语法转译为 Vue 语法，并在此基础上实现了完整的小程序标准 Vue 组件体系。最终，通过实现端侧小程序容器来提供原生能力，同时灵活加载并展示视图页面。
 
