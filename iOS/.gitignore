@@ -62,7 +62,11 @@ fastlane/Preview.html
 fastlane/screenshots/**/*.png
 fastlane/test_output
 Pods
+Podfile.lock
 
-# Dimina shared files (copied from shared directory during build)
-/dimina/JSAppBundle.bundle
-/dimina/JSSDKBundle.bundle
+
+# Dimina JSSDK and JSApp files (copied from shared directory during build)
+/dimina/JSSDKBundle.bundle/**
+!/dimina/JSSDKBundle.bundle/.gitkeep
+/dimina/JSAppBundle.bundle/**
+!/dimina/JSAppBundle.bundle/.gitkeep

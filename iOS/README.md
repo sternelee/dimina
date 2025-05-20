@@ -2,7 +2,7 @@
 
 ## 系统要求
 
-- iOS 13.0+
+- iOS 14.0+
 - Swift 5.0+
 - Xcode 14.0+
 
@@ -26,14 +26,6 @@ pod 'Dimina', :git => 'https://github.com/didi/dimina.git'
 pod install
 ```
 
-#### Swift Package Manager
-
-在 Xcode 中，选择 `File > Add Packages...`，然后输入以下 URL：
-
-```
-https://github.com/didi/dimina.git
-```
-
 ### 步骤 2: 初始化 SDK
 
 在应用的 `AppDelegate` 或 `SceneDelegate` 中初始化 Dimina SDK：
@@ -45,7 +37,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // 初始化 Dimina SDK
         DMPResourceManager.prepareSdk()
-        
+
         return true
     }
 }
@@ -93,21 +85,21 @@ struct ContentView: View {
             launchMiniProgram()
         }
     }
-    
+
     func launchMiniProgram() {
         // 创建小程序配置
         let appConfig = DMPAppConfig(appName: "小程序名称", appId: "wx92269e3b2f304afc")
-        
+
         // 获取小程序实例
         let app = DMPAppManager.sharedInstance().appWithConfig(appConfig: appConfig)
-        
+
         // 准备小程序资源
         DMPResourceManager.prepareApp(appId: appConfig.appId)
-        
+
         // 创建启动配置
         let launchConfig = DMPLaunchConfig()
         launchConfig.openType = .navigateTo
-        
+
         // 启动小程序
         Task {
             await app.launch(launchConfig: launchConfig)
