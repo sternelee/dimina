@@ -89,7 +89,8 @@ shared/jsapp/wx92269e3b2f304afc/
 
 ### Android 平台
 
-在 `android/dimina/build.gradle.kts` 中添加构建任务 `copySharedJsappToAssets`。
+- 在 `android/app/build.gradle.kts` 中添加构建任务 `copySharedJsappToAssets`，实现 JSAapp 的资源复制；
+- 在 `android/dimina/build.gradle.kts` 中添加构建任务 `copySharedJssdkToAssets`，实现 JSSDK 的资源复制。
 
 ### iOS 平台
 
