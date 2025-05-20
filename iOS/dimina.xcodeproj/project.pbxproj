@@ -145,6 +145,7 @@
 /* Begin PBXShellScriptBuildPhase section */
 		95105B9A2DDC3FF3004B4A04 /* Copy Shared Resources */ = {
 			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
 			buildActionMask = 2147483647;
 			files = (
 			);
@@ -160,6 +161,7 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "\"${SRCROOT}/copy-shared-resources.sh\"\n";
+			showEnvVarsInLog = 0;
 		};
 		CEB89F58D51EE4FCB116AA0A /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
