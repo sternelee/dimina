@@ -90,6 +90,11 @@ set(QUICKJS_SOURCES
 # used in the AndroidManifest.xml file.
 add_library(dimina SHARED ${sources} ${QUICKJS_SOURCES})
 
+# Add linker option for 16KB page size compatibility
+# This helps ensure the .so is compatible with systems using 16KB page sizes,
+# especially when targeting older Android API levels where this isn't automatic.
+target_link_options(dimina PRIVATE "-Wl,-z,max-page-size=16384")
+
 # Specifies libraries CMake should link to your target library. You
 # can link libraries from various origins, such as libraries defined in this
 # build script, prebuilt third-party libraries, or Android system libraries.
