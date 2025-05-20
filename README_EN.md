@@ -47,7 +47,7 @@ For currently supported capabilities, see the [Dimina capability reference guide
 
 Benefiting from the high similarity between Vue3 and Mini Program syntax, the Dimina framework's underlying view rendering is built on Vue. The Dimina framework uses DMCC (./fe/packages/compiler/README.md) to transpile Mini Program syntax into Vue syntax, and based on this, it implements a complete Mini Program standard Vue component system. Ultimately, by implementing a native Mini Program container on the client side, it provides native capabilities while flexibly loading and displaying view pages.
 
-For more information about the compiler's underlying principles, implementation details, and the interaction logic between the logic layer and the message channel, please refer to the [documentation](./docs/README.md).
+For more information about the compiler's underlying principles, the underlying implementation of frameworks, and the interaction logic between the logic layer and the message channel, please refer to the [documentation](./docs/README.md).
 
 As the mini program ecosystem has evolved over the years, Dimina does not yet fully support all **APIs/components/features** of mini programs. Contributions and suggestions are highly welcome!
 
