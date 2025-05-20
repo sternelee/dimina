@@ -84,6 +84,7 @@
 				0A6F85D52DAE3D7D0047A006 /* Frameworks */,
 				0A6F85D62DAE3D7D0047A006 /* Resources */,
 				CEB89F58D51EE4FCB116AA0A /* [CP] Embed Pods Frameworks */,
+				95105B9A2DDC3FF3004B4A04 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -142,6 +143,23 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
+		95105B9A2DDC3FF3004B4A04 /* ShellScript */ = {
+			isa = PBXShellScriptBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "\"${SRCROOT}/copy-shared-resources.sh\"\n";
+		};
 		CEB89F58D51EE4FCB116AA0A /* [CP] Embed Pods Frameworks */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
