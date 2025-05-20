@@ -12,14 +12,22 @@ echo "Copying shared resources to iOS bundles..."
 mkdir -p "$IOS_JSAPP_BUNDLE_PATH"
 mkdir -p "$IOS_JSSDK_BUNDLE_PATH"
 
+# Function to copy files while preserving .gitkeep
+copy_files() {
+    local src=$1
+    local dest=$2
+    local name=$3
+    
+    echo "Copying shared $name files from $src to $dest"
+    # Use rsync to copy files while excluding .gitkeep from source but preserving in destination
+    rsync -a --exclude='.gitkeep' --delete "$src"/ "$dest"/
+    echo "$name files copy completed"
+}
+
 # Copy jsapp files
-echo "Copying shared jsapp files from $SHARED_JSAPP_PATH to $IOS_JSAPP_BUNDLE_PATH"
-cp -R "$SHARED_JSAPP_PATH"/* "$IOS_JSAPP_BUNDLE_PATH"/ 2>/dev/null || :
-echo "jsapp files copy completed"
+copy_files "$SHARED_JSAPP_PATH" "$IOS_JSAPP_BUNDLE_PATH" "jsapp"
 
 # Copy jssdk files
-echo "Copying shared jssdk files from $SHARED_JSSDK_PATH to $IOS_JSSDK_BUNDLE_PATH"
-cp -R "$SHARED_JSSDK_PATH"/* "$IOS_JSSDK_BUNDLE_PATH"/ 2>/dev/null || :
-echo "jssdk files copy completed"
+copy_files "$SHARED_JSSDK_PATH" "$IOS_JSSDK_BUNDLE_PATH" "jssdk"
 
 echo "Shared resources copy completed successfully"
