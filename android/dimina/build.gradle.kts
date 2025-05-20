@@ -103,23 +103,14 @@ afterEvaluate {
     }
 }
 
-// Add task to copy shared jsapp files to Android app's assets folder
-tasks.register<Copy>("copySharedJsappToAssets") {
-    from("${rootProject.projectDir}/../shared/jsapp")
-    into("${rootProject.projectDir}/app/src/main/assets/jsapp")
-    // Preserve directory structure
-    includeEmptyDirs = true
-}
-
 // Add task to copy shared jssdk files to Android dimina's assets folder
 tasks.register<Copy>("copySharedJssdkToAssets") {
     from("${rootProject.projectDir}/../shared/jssdk")
     into("${projectDir}/src/main/assets/jssdk")
-    // Preserve directory structure
     includeEmptyDirs = true
 }
 
 // Make the preBuild task depend on the copy tasks
 tasks.named("preBuild") {
-    dependsOn("copySharedJsappToAssets", "copySharedJssdkToAssets")
+    dependsOn("copySharedJssdkToAssets")
 }

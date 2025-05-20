@@ -64,3 +64,27 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
+// Add task to copy shared jsapp files to Android app's assets folder
+tasks.register<Copy>("copySharedJsappToAssets") {
+    // Delete all files except .gitkeep before copying
+    doFirst {
+        val targetDir = file("${rootProject.projectDir}/app/src/main/assets/jsapp")
+        if (targetDir.exists()) {
+            targetDir.listFiles()?.forEach { file ->
+                if (file.name != ".gitkeep") {
+                    if (file.isDirectory) file.deleteRecursively() else file.delete()
+                }
+            }
+        }
+    }
+    
+    from("${rootProject.projectDir}/../shared/jsapp")
+    into("${rootProject.projectDir}/app/src/main/assets/jsapp")
+    includeEmptyDirs = false
+}
+
+// Make the preBuild task depend on the copy tasks
+tasks.named("preBuild") {
+    dependsOn("copySharedJsappToAssets")
+}
