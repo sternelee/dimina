@@ -12,20 +12,13 @@
 [![Platform](https://img.shields.io/badge/Platform-%20Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-4CAF50)](#showcase)
 [![PRs welcome!](https://img.shields.io/badge/PRs-Welcome-FF6F61)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
 
-</div>
-
 # Dimina - Didi's Open Source Cross-Platform Mini Program Framework
 
 > Dimina is pronounced /diːminə/, short for didi miniprogram. It is designed to provide a flexible and lightweight cross-platform mini program framework.
 
-## Overview
+[Introduction](#introduction) • [Showcase](#showcase) • [Getting Started](#getting-started) • [Contributing](#contributing) • [Star Trend](#star-trend) • [License](#license)
 
-- [Introduction](#introduction)
-- [Showcase](#showcase)
-- [Getting Started](#getting-started)
-- [Contributing](#contributing)
-- [Star Trend](#star-trend)
-- [License](#license)
+</div>
 
 ## Introduction
 
