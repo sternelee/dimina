@@ -167,15 +167,7 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 				if (!toMainSubPackage) {
 					// 检查组件路径是否属于当前分包
 					if (!normalizedPath.startsWith(`${rootPackageName}/`)) {
-						const index = normalizedPath.indexOf('/')
-						const firstPart = index === -1 ? normalizedPath : normalizedPath.slice(0, index)
-						const secondPart = index === -1 ? '' : normalizedPath.slice(index + 1)
-						const subPackageConfig = allSubPackages.find(pkg => pkg.root === firstPart)
-						const shouldSkip = subPackageConfig?.pages?.some(subPath => subPath === secondPart)
-						// 页面不属于当前分包且配置在了其他分包内则跳过，但是其他分包配置文件如果未配置该页面，继续打包到当前页面中
-						if (shouldSkip) {
-							continue
-						}
+						continue
 					}
 				}
 			}
