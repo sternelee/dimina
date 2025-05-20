@@ -102,10 +102,20 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     public func setLoggerDelegate(_ delegate: DMPWebViewLoggerDelegate?) {
         self.logger?.setDelegate(delegate)
     }
+    private func injectConfigScript() {
+        let configScript = WKUserScript(source: """
+        (function() {
+            //禁止选择
+            document.documentElement.style.webkitUserSelect='none';
+            //禁止长按
+            document.documentElement.style.webkitTouchCallout='none';
+        })();
+        """, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        webView.configuration.userContentController.addUserScript(configScript)
+    }
 
-    // 注入CSS和JS资源修复脚本，同时处理两种资源类型
+    // 注入CSS JS IMG 资源
     private func injectResourceFixScript() {
-        // 创建一个更直接的资源修复脚本
         let resourceFixScript = WKUserScript(source: """
         (function() {
         
@@ -291,7 +301,7 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     }
 
     public func loadPageFrame() {
-        // 直接注入统一的资源修复脚本
+        injectConfigScript()
         injectResourceFixScript()
 
         let fileURL = URL(fileURLWithPath: DMPSandboxManager.sdkPageFramePath())
