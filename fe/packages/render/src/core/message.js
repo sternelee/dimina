@@ -8,6 +8,9 @@ class Message {
 	}
 
 	init() {
+		if (!window.DiminaRenderBridge) {
+			window.DiminaRenderBridge = {}
+		}
 		// window.DiminaRenderBridge 是容器提供，容器调用此方法给视图层发消息
 		window.DiminaRenderBridge.onMessage = (msg) => {
 			console.log('[system]', '[render]', 'receive msg: ', msg)

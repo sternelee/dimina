@@ -3,7 +3,6 @@ import env from './core/env'
 import loader from './core/loader'
 import message from './core/message'
 import runtime from './core/runtime'
-import './core/namespace'
 /**
  * 渲染层消息通道
  */
