@@ -82,9 +82,9 @@
 				D0982C07978D220939E63535 /* [CP] Check Pods Manifest.lock */,
 				0A6F85D42DAE3D7D0047A006 /* Sources */,
 				0A6F85D52DAE3D7D0047A006 /* Frameworks */,
+				95105B9A2DDC3FF3004B4A04 /* Copy Shared Resources */,
 				0A6F85D62DAE3D7D0047A006 /* Resources */,
 				CEB89F58D51EE4FCB116AA0A /* [CP] Embed Pods Frameworks */,
-				95105B9A2DDC3FF3004B4A04 /* ShellScript */,
 			);
 			buildRules = (
 			);
@@ -143,7 +143,7 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXShellScriptBuildPhase section */
-		95105B9A2DDC3FF3004B4A04 /* ShellScript */ = {
+		95105B9A2DDC3FF3004B4A04 /* Copy Shared Resources */ = {
 			isa = PBXShellScriptBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -152,6 +152,7 @@
 			);
 			inputPaths = (
 			);
+			name = "Copy Shared Resources";
 			outputFileListPaths = (
 			);
 			outputPaths = (

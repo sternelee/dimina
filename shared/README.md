@@ -101,7 +101,9 @@ shared/jsapp/wx92269e3b2f304afc/
 2. 选择目标（Target）
 3. 选择「Build Phases」选项卡
 4. 点击「+」按钮，选择「New Run Script Phase」
-5. 将以下命令添加到脚本框中：
+5. 将新添加的 Run Script 阶段重命名为 "Copy Shared Resources"
+6. 点击并拖动这个阶段，将其放在 "Copy Bundle Resources" 阶段之前
+7. 将以下命令添加到脚本框中：
 
    ```bash
    "${SRCROOT}/copy-shared-resources.sh"
