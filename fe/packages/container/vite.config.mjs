@@ -1,14 +1,11 @@
 import { resolve } from 'node:path'
 import process from 'node:process'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 import { createHtmlPlugin } from 'vite-plugin-html'
 
 export default defineConfig(({ mode }) => {
-	const env = loadEnv(mode, process.cwd(), ['VITE_'])
-	const enableHash = env.VITE_HASH === 'true'
-
 	return {
-		// base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/',
+		base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/',
 
 		server: {
 			open: true, // 启动后是否自动打开浏览器
@@ -51,11 +48,11 @@ export default defineConfig(({ mode }) => {
 			rollupOptions: {
 				output: {
 					// 设置入口文件（通常为主JavaScript文件）的命名规则
-					entryFileNames: enableHash ? 'assets/[name]-[hash].js' : 'assets/[name].js',
+					entryFileNames: 'assets/[name].js',
 					// 设置非入口 chunk（如按需加载的模块）的命名规则
-					chunkFileNames: enableHash ? 'assets/[name]-[hash].js' : 'assets/[name].js',
+					chunkFileNames: 'assets/[name].js',
 					// 设置静态资源（如图片、字体等）的命名规则
-					assetFileNames: enableHash ? 'assets/[name]-[hash][extname]' : 'assets/[name][extname]',
+					assetFileNames: 'assets/[name][extname]',
 				},
 			},
 		},
@@ -68,21 +65,11 @@ export default defineConfig(({ mode }) => {
 						entry: 'src/main.js',
 						filename: 'index.html',
 						template: 'index.html',
-						injectOptions: {
-							data: {
-								dimina: env.VITE_TITLE,
-							},
-						},
 					},
 					{
 						entry: 'src/pages/pageFrame/pageFrame.js',
 						filename: 'pageFrame.html',
 						template: 'pageFrame.html',
-						injectOptions: {
-							data: {
-								title: env.VITE_FRAME,
-							},
-						},
 					},
 				],
 			}),
