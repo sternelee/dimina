@@ -75,7 +75,7 @@ ${module.code}
 	else {
 		const mainDir = `${getTargetPath()}/main`
 		if (!fs.existsSync(mainDir)) {
-			fs.mkdirSync(mainDir)
+			fs.mkdirSync(mainDir, { recursive: true })
 		}
 		fs.writeFileSync(`${mainDir}/logic.js`, mergeCode)
 	}

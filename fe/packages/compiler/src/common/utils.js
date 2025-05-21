@@ -50,7 +50,7 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 
 		const targetStatic = `${targetPath}/main/static`
 		if (!fs.existsSync(targetStatic)) {
-			fs.mkdirSync(targetStatic)
+			fs.mkdirSync(targetStatic, { recursive: true })
 		}
 
 		getFilesWithExtension(dirPath, ext).forEach((file) => {

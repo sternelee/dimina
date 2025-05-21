@@ -20,7 +20,7 @@ function compileConfig() {
 	const json = JSON.stringify(compileResInfo, null, 4)
 	const mainDir = `${getTargetPath()}/main`
 	if (!fs.existsSync(mainDir)) {
-		fs.mkdirSync(mainDir)
+		fs.mkdirSync(mainDir, { recursive: true })
 	}
 	fs.writeFileSync(`${mainDir}/app-config.json`, json)
 }

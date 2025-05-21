@@ -56,7 +56,7 @@ async function compileSS(pages, root, progress) {
 		if (root) {
 			const subDir = `${getTargetPath()}/${root}`
 			if (!fs.existsSync(subDir)) {
-				fs.mkdirSync(subDir)
+				fs.mkdirSync(subDir, { recursive: true })
 			}
 
 			fs.writeFileSync(`${subDir}/${filename}.css`, code)
@@ -64,7 +64,7 @@ async function compileSS(pages, root, progress) {
 		else {
 			const mainDir = `${getTargetPath()}/main`
 			if (!fs.existsSync(mainDir)) {
-				fs.mkdirSync(mainDir)
+				fs.mkdirSync(mainDir, { recursive: true })
 			}
 
 			fs.writeFileSync(`${mainDir}/${filename}.css`, code)
