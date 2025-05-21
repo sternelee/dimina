@@ -12,6 +12,8 @@ export class WebView {
 		this.el.innerHTML = tpl
 		this.setInitialStyle()
 		this.iframe = this.el.querySelector('.dimina-native-webview__window')
+		// Update iframe src to include BASE_URL
+		this.iframe.src = `${import.meta.env.BASE_URL}pageFrame.html`
 		this.iframe.name = this.id
 		this.event = mitt()
 		this.bindBackEvent()
