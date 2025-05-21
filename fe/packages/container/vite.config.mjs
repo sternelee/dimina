@@ -7,14 +7,8 @@ export default defineConfig(({ mode }) => {
 	const env = loadEnv(mode, process.cwd(), ['VITE_'])
 	const enableHash = env.VITE_HASH === 'true'
 
-	// 从环境变量中获取 base path，或者使用默认值
-	const basePath = process.env.VITE_BASE_PATH || '/'
-	// 检测是否在 GitHub Actions 环境中运行
-	const isGitHubActions = Boolean(process.env.GITHUB_ACTIONS)
-
 	return {
-		// 在 GitHub Actions 环境下使用 /dimina/ 作为 base path，否则使用环境变量或默认值
-		base: isGitHubActions ? '/dimina/' : basePath,
+		base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/dimina',
 
 		server: {
 			open: true, // 启动后是否自动打开浏览器
@@ -76,7 +70,8 @@ export default defineConfig(({ mode }) => {
 						template: 'index.html',
 						injectOptions: {
 							data: {
-								dimina: env.VITE_TITLE,
+								// 提供默认值，避免环境变量未设置时出错
+								dimina: env.VITE_TITLE || 'Dimina 小程序',
 							},
 						},
 					},
@@ -86,7 +81,8 @@ export default defineConfig(({ mode }) => {
 						template: 'pageFrame.html',
 						injectOptions: {
 							data: {
-								title: env.VITE_FRAME,
+								// 提供默认值，避免环境变量未设置时出错
+								title: env.VITE_FRAME || 'Dimina Page Frame',
 							},
 						},
 					},
