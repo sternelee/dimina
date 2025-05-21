@@ -1,12 +1,11 @@
 import { resolve } from 'node:path'
 import process from 'node:process'
 import { defineConfig } from 'vite'
-import { createHtmlPlugin } from 'vite-plugin-html'
+import htmlMinifier from 'vite-plugin-html-minifier'
 
 export default defineConfig(({ mode }) => {
 	return {
 		base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/',
-
 		server: {
 			open: true, // 启动后是否自动打开浏览器
 		},
@@ -46,6 +45,10 @@ export default defineConfig(({ mode }) => {
 				},
 			},
 			rollupOptions: {
+				input: {
+					index: resolve(__dirname, 'index.html'),
+					pageFrame: resolve(__dirname, 'pageFrame.html'),
+				},
 				output: {
 					// 设置入口文件（通常为主JavaScript文件）的命名规则
 					entryFileNames: 'assets/[name].js',
@@ -57,21 +60,8 @@ export default defineConfig(({ mode }) => {
 			},
 		},
 		plugins: [
-			createHtmlPlugin({
+			htmlMinifier({
 				minify: mode === 'production',
-				viteNext: true,
-				pages: [
-					{
-						entry: 'src/main.js',
-						filename: 'index.html',
-						template: 'index.html',
-					},
-					{
-						entry: 'src/pages/pageFrame/pageFrame.js',
-						filename: 'pageFrame.html',
-						template: 'pageFrame.html',
-					},
-				],
 			}),
 		],
 	}
