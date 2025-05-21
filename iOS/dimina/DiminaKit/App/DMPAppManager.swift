@@ -5,7 +5,7 @@
 //  Created by Lehem on 2025/4/28.
 //
 
-class DMPAppManager {
+public class DMPAppManager {
     private static let instance = DMPAppManager()
     
     private var appPools: [Int: DMPApp] = [:]
@@ -13,7 +13,7 @@ class DMPAppManager {
     
     private init() {}
     
-    static func sharedInstance() -> DMPAppManager {
+    public static func sharedInstance() -> DMPAppManager {
         return instance
     }
     
@@ -28,7 +28,7 @@ class DMPAppManager {
         return newApp
     }
     
-    func appWithConfig(appConfig: DMPAppConfig) -> DMPApp {
+    public func appWithConfig(appConfig: DMPAppConfig) -> DMPApp {
         print("appWithConfig config=\(appConfig)")
         if let existingApp = existApp(appId: appConfig.appId) {
             print("appWithConfig return exist DMPApp")

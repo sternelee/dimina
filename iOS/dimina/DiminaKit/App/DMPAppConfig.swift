@@ -21,7 +21,7 @@ public struct DMPAppConfig : Identifiable {
     // 符合Identifiable协议的id属性
     public var id: String { appId }
 
-    init(appName: String, appId: String) {
+    public init(appName: String, appId: String) {
         self.appName = appName
         self.appId = appId
     }
