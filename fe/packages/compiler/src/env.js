@@ -31,14 +31,14 @@ function storePathInfo(workPath) {
 	pathInfo.workPath = workPath
 	// 使用工作区目录或系统临时目录，确保有写入权限
 	const tempDir = process.env.GITHUB_WORKSPACE || os.tmpdir()
-	const targetDir = path.join(tempDir, 'dimina-temp')
+	const targetDir = path.join(tempDir, `dimina-fe-dist-${Date.now()}`)
 
 	// 确保目录存在
 	if (!fs.existsSync(targetDir)) {
 		fs.mkdirSync(targetDir, { recursive: true })
 	}
 
-	pathInfo.targetPath = path.join(targetDir, `dimina-fe-dist-${Date.now()}`)
+	pathInfo.targetPath = targetDir
 }
 
 function storeProjectConfig() {
