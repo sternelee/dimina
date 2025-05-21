@@ -1,6 +1,6 @@
 # Dimina Android SDK
 
-[![](https://jitpack.io/v/didi/dimina.svg)](https://jitpack.io/#didi/dimina)
+[![dimina](https://jitpack.io/v/didi/dimina.svg)](https://jitpack.io/#didi/dimina)
 
 ## 系统要求
 
@@ -34,7 +34,6 @@ dependencyResolutionManagement {
 dependencies {
     // Dimina 核心库
     implementation 'com.github.didi.dimina:dimina:latest.release'
-    implementation 'com.github.didi.dimina:engine-qjs:latest.release'
 }
 ```
 
@@ -44,7 +43,6 @@ dependencies {
 dependencies {
     // Dimina 核心库
     implementation("com.github.didi.dimina:dimina:latest.release")
-    implementation("com.github.didi.dimina:engine-qjs:latest.release")
 }
 ```
 
