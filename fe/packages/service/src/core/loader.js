@@ -15,12 +15,12 @@ class Loader {
 	 * @param {*} opts
 	 */
 	loadResource(opts) {
-		const { appId, bridgeId, pagePath, root } = opts
+		const { appId, bridgeId, pagePath, root, baseUrl = '/' } = opts
 		// webworker 需要主动加载资源
 		if (isWebWorker) {
 			this.isScriptLoaded = this.isScriptLoaded || {}
 			if (!this.isScriptLoaded[root]) {
-				const logicResourcePath = `/${appId}/${root}/logic.js`
+				const logicResourcePath = `${baseUrl}${appId}/${root}/logic.js`
 				globalThis.importScripts(logicResourcePath)
 				this.isScriptLoaded[root] = true
 			}

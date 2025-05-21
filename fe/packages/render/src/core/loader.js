@@ -7,12 +7,12 @@ class Loader {
 	}
 
 	loadResource(opts) {
-		const { bridgeId, appId, pagePath, root } = opts
+		const { bridgeId, appId, pagePath, root, baseUrl = '/' } = opts
 
 		const filename = pagePath.replace(/\//g, '_')
-		const appStyleResourcePath = `/${appId}/main/app.css`
-		const styleResourcePath = `/${appId}/${root}/${filename}.css`
-		const viewResourcePath = `/${appId}/${root}/${filename}.js`
+		const appStyleResourcePath = `${baseUrl}${appId}/main/app.css`
+		const styleResourcePath = `${baseUrl}${appId}/${root}/${filename}.css`
+		const viewResourcePath = `${baseUrl}${appId}/${root}/${filename}.js`
 
 		Promise.allSettled([
 			this.loadStyleFile(appStyleResourcePath),

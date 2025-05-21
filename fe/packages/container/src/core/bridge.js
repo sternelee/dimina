@@ -116,6 +116,7 @@ export class Bridge {
 				appId: this.opts.appId,
 				pagePath: this.opts.pagePath,
 				root: this.opts.root,
+				baseUrl: import.meta.env.BASE_URL,
 			},
 		})
 
@@ -127,6 +128,7 @@ export class Bridge {
 				appId: this.opts.appId,
 				pagePath: this.opts.pagePath,
 				root: this.opts.root,
+				baseUrl: import.meta.env.BASE_URL,
 				injectInfo: {
 					// 注入同步 API 信息
 					menuRect: this.parent.getMenuButtonBoundingClientRect(),
