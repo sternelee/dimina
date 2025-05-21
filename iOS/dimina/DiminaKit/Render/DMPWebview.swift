@@ -102,18 +102,7 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     public func setLoggerDelegate(_ delegate: DMPWebViewLoggerDelegate?) {
         self.logger?.setDelegate(delegate)
     }
-    private func injectConfigScript() {
-        let configScript = WKUserScript(source: """
-        (function() {
-            //禁止选择
-            document.documentElement.style.webkitUserSelect='none';
-            //禁止长按
-            document.documentElement.style.webkitTouchCallout='none';
-        })();
-        """, injectionTime: .atDocumentStart, forMainFrameOnly: false)
-        webView.configuration.userContentController.addUserScript(configScript)
-    }
-
+    
     // 注入CSS JS IMG 资源
     private func injectResourceFixScript() {
         let resourceFixScript = WKUserScript(source: """
@@ -301,7 +290,6 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     }
 
     public func loadPageFrame() {
-        injectConfigScript()
         injectResourceFixScript()
 
         let fileURL = URL(fileURLWithPath: DMPSandboxManager.sdkPageFramePath())
