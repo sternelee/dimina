@@ -44,7 +44,7 @@ export class MiniApp {
 		// 3. 读取配置文件
 		const root = 'main'
 		const configPath = `${this.appInfo.appId}/${root}/app-config.json`
-		const configContent = await readFile(configPath)
+		const configContent = await readFile(`${import.meta.env.BASE_URL}${configPath}`)
 
 		if (!configContent) {
 			return
