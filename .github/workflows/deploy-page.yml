@@ -28,15 +28,22 @@ jobs:
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
+        id: node-setup
         with:
           node-version: '20'
           cache: 'pnpm'
-
-      - name: Setup PNPM
+          
+      - name: Install PNPM
         uses: pnpm/action-setup@v3
+        id: pnpm-setup
         with:
           version: 8
           run_install: true
+          
+      - name: Setup PNPM
+        run: |
+          echo "PNPM_HOME=$HOME/.local/share/pnpm" >> $GITHUB_ENV
+          echo "$HOME/.local/share/pnpm" >> $GITHUB_PATH
 
       - name: Install dependencies
         working-directory: ./fe
