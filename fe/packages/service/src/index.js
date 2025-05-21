@@ -20,9 +20,9 @@ class Service {
 
 	init() {
 		this.message.on('loadResource', (msg) => {
-			const { appId, bridgeId, pagePath, root = '.', injectInfo } = msg
+			const { appId, bridgeId, pagePath, root = '.', baseUrl = '/', injectInfo } = msg
 			globalThis.injectInfo = injectInfo
-			loader.loadResource({ appId, bridgeId, pagePath, root })
+			loader.loadResource({ appId, bridgeId, pagePath, root, baseUrl })
 		})
 
 		// 来自 components/events.js

@@ -61,6 +61,8 @@ jobs:
         run: |
           pnpm compile
           pnpm build
+        env: 
+          ASSETS_PATH_PREFIX: true
 
       - name: Setup Pages
         uses: actions/configure-pages@v4

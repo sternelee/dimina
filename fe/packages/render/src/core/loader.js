@@ -7,7 +7,7 @@ class Loader {
 	}
 
 	loadResource(opts) {
-		const { bridgeId, appId, pagePath, root, baseUrl = '/' } = opts
+		const { bridgeId, appId, pagePath, root, baseUrl } = opts
 
 		const filename = pagePath.replace(/\//g, '_')
 		const appStyleResourcePath = `${baseUrl}${appId}/main/app.css`

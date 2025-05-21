@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import path from 'node:path'
+import process from 'node:process'
 import artCode from './art.js'
 
 function hasCompileInfo(modulePath, list, preList) {
@@ -58,7 +59,8 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 		})
 
 		const filename = src.split('/').pop()
-		assetsMap[absolutePath] = `/${appId}/main/static/${prefix}_${filename}`
+		const pathPrefix = process.env.ASSETS_PATH_PREFIX ? '' : '/'
+		assetsMap[absolutePath] = `${pathPrefix}${appId}/main/static/${prefix}_${filename}`
 	}
 	catch (error) {
 		console.log(error)
