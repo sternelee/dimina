@@ -28,6 +28,8 @@ Currently, Dimina supports four major platforms: Android, iOS, Harmony, and Web.
 
 ## Showcase
 
+[https://didi.github.io/dimina/](https://didi.github.io/dimina/)
+
 | Android | iOS | Harmony |
 | ---- | ---- | ---- |
 | ![Android](./static/android.jpg) | ![iOS](./static/ios.jpg) | ![Harmony](./static/harmony.jpg) |

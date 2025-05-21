@@ -28,6 +28,8 @@
 
 ## 效果展示
 
+[https://didi.github.io/dimina/](https://didi.github.io/dimina/)
+
 | Android | iOS | Harmony |
 | ---- | ---- | ---- |
 | ![Android](./static/android.jpg) | ![iOS](./static/ios.jpg) | ![Harmony](./static/harmony.jpg) |
