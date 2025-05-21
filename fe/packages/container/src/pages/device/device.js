@@ -9,12 +9,7 @@ export class Device {
 	}
 
 	init() {
-		const envVar = import.meta.env
-		// 替换环境变量
-		this.root.innerHTML = tpl.replace(
-			/<%=\s*(\w+)\s*%>/g,
-			(_, p1) => envVar[p1] || '',
-		)
+		this.root.innerHTML = tpl
 
 		this.appContainer = this.root.querySelector('.iphone__apps')
 		this.updateDeviceBarColor('black')

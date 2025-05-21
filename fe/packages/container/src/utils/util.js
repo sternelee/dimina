@@ -62,7 +62,7 @@ export function closest(node, className) {
 
 export function readFile(filePath) {
 	return new Promise((resolve, _) => {
-		fetch(`/${filePath}`)
+		fetch(`${filePath}`)
 			.then(response => response.text())
 			.then((res) => {
 				resolve(res)

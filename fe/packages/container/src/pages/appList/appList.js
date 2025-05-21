@@ -12,12 +12,7 @@ export class AppList {
 	}
 
 	viewDidLoad() {
-		const envVar = import.meta.env
-		// 替换环境变量
-		this.el.innerHTML = tpl.replace(
-			/<%=\s*(\w+)\s*%>/g,
-			(_, p1) => envVar[p1] || '',
-		)
+		this.el.innerHTML = tpl
 
 		this.createAppList()
 		this.bindSearchEvent()
