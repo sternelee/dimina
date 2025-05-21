@@ -141,11 +141,7 @@ class DMPResourceManager {
 
     // jssdk的Bundle
     static var jssdkBundle: Bundle? = {
-        guard
-            let bundleURL = Bundle(for: DMPResourceManager.self)
-                .url(forResource: "DiminaJsSdk", withExtension: "bundle")
-        else {
-            print("无法找到 DiminaJsSdk bundle")
+        guard let bundleURL = Bundle(for: DMPResourceManager.self).url(forResource: "DiminaJsSdk", withExtension: "bundle") else {
             return nil
         }
         return Bundle(url: bundleURL)

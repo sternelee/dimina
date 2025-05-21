@@ -5,9 +5,6 @@ target 'dimina' do
   # Comment the next line if you don't want to use dynamic frameworks
   use_frameworks!
 
-  # Pods for dimina
-  pod 'MMKV', '2.2.2'
-  pod 'SSZipArchive', '2.4.3'
-  pod 'Alamofire', '5.10.2'
+  pod 'Dimina', :path => '../Dimina.podspec'  
 
 end

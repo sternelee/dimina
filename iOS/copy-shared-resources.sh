@@ -3,8 +3,8 @@
 # Define paths
 SHARED_JSAPP_PATH="${SRCROOT}/../shared/jsapp"
 SHARED_JSSDK_PATH="${SRCROOT}/../shared/jssdk"
-IOS_JSAPP_BUNDLE_PATH="${SRCROOT}/dimina/JSAppBundle.bundle"
-IOS_JSSDK_BUNDLE_PATH="${SRCROOT}/dimina/JSSDKBundle.bundle"
+IOS_JSAPP_BUNDLE_PATH="${SRCROOT}/dimina/Resources/JsApp.bundle"
+IOS_JSSDK_BUNDLE_PATH="${SRCROOT}/dimina/Resources/JsSdk.bundle"
 
 echo "Copying shared resources to iOS bundles..."
 
