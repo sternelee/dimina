@@ -65,8 +65,8 @@ Pods
 Podfile.lock
 
 
-# Dimina JSSDK and JSApp files (copied from shared directory during build)
-/dimina/JSSDKBundle.bundle/**
-!/dimina/JSSDKBundle.bundle/.gitkeep
-/dimina/JSAppBundle.bundle/**
-!/dimina/JSAppBundle.bundle/.gitkeep
+# Dimina JsSdk and JsApp files (copied from shared directory during build)
+/dimina/Resources/JsApp.bundle/**
+!/dimina/Resources/JsApp.bundle/.gitkeep
+/dimina/Resources/JsSdk.bundle/**
+!/dimina/Resources/JsSdk.bundle/.gitkeep

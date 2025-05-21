@@ -10,8 +10,8 @@ Dimina 作为一个跨平台的小程序框架，同时支持 Android 、iOS 和
   - 小程序资源：`android/app/src/main/assets/jsapp/[appId]/`
   - SDK 资源：`android/dimina/src/main/assets/jssdk/`
 - iOS 平台：
-  - 小程序资源：`iOS/dimina/JSAppBundle.bundle/[appId]/`
-  - SDK 资源：`iOS/dimina/JSSDKBundle.bundle`
+  - 小程序资源：`iOS/dimina/Resources/JsApp.bundle/[appId]/`
+  - SDK 资源：`iOS/dimina/Resources/JsSdk.bundle/`
 - Harmony 平台：
   - 小程序资源：`harmony/entry/src/main/resources/rawfile/jsapp/[appId]/`
   - SDK 资源：`harmony/dimina/src/main/resources/rawfile/jssdk/`
@@ -58,13 +58,13 @@ dimina/
 ### 小程序资源 (jsapp)
 
 - Android：`app/src/main/assets/jsapp/`
-- iOS：`dimina/JSAppBundle.bundle/`
+- iOS：`Resources/JsApp.bundle`
 - Harmony：`entry/src/main/resources/rawfile/jsapp/`
 
 ### SDK 资源 (jssdk)
 
 - Android：`dimina/src/main/assets/jssdk/`
-- iOS：`dimina/JSSDKBundle.bundle/`
+- iOS：`Resources/JsSdk.bundle/`
 - Harmony：`dimina/src/main/resources/rawfile/jssdk/`
 
 ## 添加新的小程序
