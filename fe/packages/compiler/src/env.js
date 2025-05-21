@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
+import process from 'node:process'
 import { isObjectEmpty, uuid } from './common/utils.js'
 
 let pathInfo = {}
@@ -28,8 +29,16 @@ function resetStoreInfo(opts) {
 
 function storePathInfo(workPath) {
 	pathInfo.workPath = workPath
-	// 使用系统临时目录，确保有写入权限
-	pathInfo.targetPath = path.join(os.tmpdir(), `dimina-fe-dist-${Date.now()}`)
+	// 使用工作区目录或系统临时目录，确保有写入权限
+	const tempDir = process.env.GITHUB_WORKSPACE || os.tmpdir()
+	const targetDir = path.join(tempDir, 'dimina-temp')
+
+	// 确保目录存在
+	if (!fs.existsSync(targetDir)) {
+		fs.mkdirSync(targetDir, { recursive: true })
+	}
+
+	pathInfo.targetPath = path.join(targetDir, `dimina-fe-dist-${Date.now()}`)
 }
 
 function storeProjectConfig() {
