@@ -32,16 +32,16 @@ struct ContentView: View {
         }
 
         // 创建小程序配置和实例
-        let manager: DMPAppManager = DMPAppManager.sharedInstance()
-        let appConfig: DMPAppConfig = DMPAppConfig(appName: item.appName, appId: item.id)
-        let app: DMPApp = manager.appWithConfig(appConfig: appConfig)
+        let manager = DMPAppManager.sharedInstance()
+        let appConfig = DMPAppConfig(appName: item.appName, appId: item.id)
+        let app = manager.appWithConfig(appConfig: appConfig)
 
         // 设置DMPNavigator
         app.getNavigator()!.setup(navigationController: navController)
 
         // 启动小程序
         Task { @MainActor in
-            let launchConfig: DMPLaunchConfig = DMPLaunchConfig()
+            let launchConfig = DMPLaunchConfig()
             await app.launch(launchConfig: launchConfig)
         }
     }
@@ -81,33 +81,35 @@ struct ContentView: View {
             }
             .navigationBarHidden(true)
             .onAppear {
-                // 在视图出现时获取并保存导航控制器
-                DispatchQueue.main.async {
-                    if ContentView.navigationController == nil,
-                       let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                       let window = windowScene.windows.first,
-                       let rootVC = window.rootViewController {
+                setupNavigationController()
+            }
+        }
+    }
 
-                        // 尝试获取根导航控制器
-                        if let navController = rootVC as? UINavigationController {
-                            ContentView.navigationController = navController
-                        } else {
-                            // 如果没有导航控制器，替换根视图控制器为导航控制器
-                            let navController = UINavigationController()
-                            
-                            // 创建一个新的ContentView作为根视图
-                            let contentView = ContentView()
-                            let hostingController = UIHostingController(rootView: contentView)
-                            // 设置标题
-                            hostingController.navigationItem.title = "星河小程序"
+    private func setupNavigationController() {
+        // 在视图出现时获取并保存导航控制器
+        DispatchQueue.main.async {
+            if ContentView.navigationController == nil,
+               let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+               let window = windowScene.windows.first,
+               let rootVC = window.rootViewController {
 
-                            // 设置为根视图
-                            navController.viewControllers = [hostingController]
-                            window.rootViewController = navController
+                // 尝试获取根导航控制器
+                if let navController = rootVC as? UINavigationController {
+                    ContentView.navigationController = navController
+                } else {
+                    // 如果没有导航控制器，替换根视图控制器为导航控制器
+                    let navController = UINavigationController()
+                    
+                    // 使用UIHostingController包装当前视图，避免重复创建ContentView
+                    let hostingController = UIHostingController(rootView: self)
+                    hostingController.navigationItem.title = "星河小程序"
 
-                            ContentView.navigationController = navController
-                        }
-                    }
+                    // 设置为根视图
+                    navController.viewControllers = [hostingController]
+                    window.rootViewController = navController
+
+                    ContentView.navigationController = navController
                 }
             }
         }
