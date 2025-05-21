@@ -26,26 +26,9 @@ pod 'Dimina', :git => 'https://github.com/didi/dimina.git'
 pod install
 ```
 
-### 步骤 2: 初始化 SDK
+### 步骤 2: 准备小程序资源
 
-在应用的 `AppDelegate` 或 `SceneDelegate` 中初始化 Dimina SDK：
-
-```swift
-import DiminaKit
-
-class AppDelegate: UIResponder, UIApplicationDelegate {
-    func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // 初始化 Dimina SDK
-        DMPResourceManager.prepareSdk()
-
-        return true
-    }
-}
-```
-
-### 步骤 3: 准备小程序资源
-
-将编译好的小程序压缩包放入 `JSAppBundle.bundle` 文件夹，文件夹以小程序id命名。每个小程序文件夹需包含以下内容：
+将编译好的小程序压缩包放入 `JsApp.bundle` 文件夹，文件夹以小程序id命名。每个小程序文件夹需包含以下内容：
 
 1. `config.json` - 小程序配置文件，包含以下字段：
 
@@ -64,7 +47,7 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
 目录结构示例：
 
 ```txt
-JSAppBundle.bundle/
+JsApp.bundle/
   ├── wx92269e3b2f304afc/
   │   ├── config.json
   │   └── wx92269e3b2f304afc.zip
@@ -73,10 +56,10 @@ JSAppBundle.bundle/
       └── wxbaf4b47de04f1d8a.zip
 ```
 
-### 步骤 4: 启动小程序
+### 步骤 3: 启动小程序
 
 ```swift
-import DiminaKit
+import Dimina
 import SwiftUI
 
 struct ContentView: View {
@@ -87,46 +70,65 @@ struct ContentView: View {
     }
 
     func launchMiniProgram() {
-        // 创建小程序配置
-        let appConfig = DMPAppConfig(appName: "小程序名称", appId: "wx92269e3b2f304afc")
+        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+            let window = windowScene.windows.first
+        {
+            let navController = UINavigationController()
 
-        // 获取小程序实例
-        let app = DMPAppManager.sharedInstance().appWithConfig(appConfig: appConfig)
+            // 创建一个新的 ContentView 作为根视图，可以自行替换
+            let contentView = ContentView()
+            let hostingController = UIHostingController(rootView: contentView)
+            
+            hostingController.navigationItem.title = "星河小程序"
 
-        // 准备小程序资源
-        DMPResourceManager.prepareApp(appId: appConfig.appId)
+            // 设置为根视图
+            navController.viewControllers = [hostingController]
+            window.rootViewController = navController
 
-        // 创建启动配置
-        let launchConfig = DMPLaunchConfig()
-        launchConfig.openType = .navigateTo
+            // 创建小程序配置和实例
+            let manager: DMPAppManager = DMPAppManager.sharedInstance()
+            let appConfig: DMPAppConfig = DMPAppConfig(appName: "小程序名称", appId: "wx92269e3b2f304afc")
+            let app: DMPApp = manager.appWithConfig(appConfig: appConfig)
 
-        // 启动小程序
-        Task {
-            await app.launch(launchConfig: launchConfig)
+            // 设置导航
+            app.getNavigator()!.setup(navigationController: navController)
+
+            // 启动小程序
+            Task { @MainActor in
+                let launchConfig: DMPLaunchConfig = DMPLaunchConfig()
+                await app.launch(launchConfig: launchConfig)
+            }
         }
     }
 }
 ```
 
-## 高级配置
 
-### 自定义导航
+### 关闭小程序
 
-您可以通过 `DMPNavigator` 类来自定义小程序的导航行为：
-
-```swift
-// 获取导航器
-let navigator = app.getNavigator()
-
-// 导航到指定页面
-navigator?.launch(to: "pages/index/index", query: ["key": "value"])
-```
-
-### 生命周期管理
-
-当不再需要小程序时，应该销毁它以释放资源：
+当不再需要小程序时，可以关闭它：
 
 ```swift
-// 销毁小程序
 app.destroy()
 ```
+
+## 权限处理
+
+小程序可能需要访问设备的各种权限，如相机、位置等。请确保在 Info.plist 中添加相应的权限描述：
+
+```xml
+<key>NSCameraUsageDescription</key>
+<string>小程序需要使用您的相机</string>
+<key>NSLocationWhenInUseUsageDescription</key>
+<string>小程序需要使用您的位置信息</string>
+```
+
+
+## 示例项目
+
+运行命令：
+```bash
+cd iOS && pod install
+```
+
+使用 Xcode 打开 dimina.xcworkspace 可以查看示例项目。
