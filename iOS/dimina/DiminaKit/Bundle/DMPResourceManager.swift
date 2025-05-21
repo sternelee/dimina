@@ -141,11 +141,26 @@ class DMPResourceManager {
 
     // jssdk的Bundle
     static var jssdkBundle: Bundle? = {
-        guard let bundleURL = Bundle(for: DMPResourceManager.self).url(forResource: "DiminaJsSdk", withExtension: "bundle") else {
-            return nil
+        if let bundleURL = Bundle(for: DMPResourceManager.self).url(forResource: "DiminaJsSdk", withExtension: "bundle") {
+            return Bundle(url: bundleURL)
         }
-        return Bundle(url: bundleURL)
+
+        if let bundleURL = Bundle.main.url(forResource: "JsSdk", withExtension: "bundle") {
+            return Bundle(url: bundleURL)
+        }
+
+        return nil
     }()
+
+
+    public static var assetsBundle: Bundle? = {
+        if let bundleURL = Bundle(for: DMPResourceManager.self).url(forResource: "DiminaAssets", withExtension: "bundle") {
+            return Bundle(url: bundleURL)
+        }
+
+        return Bundle.main
+    }()
+
 
     /// 获取所有JSAppBundle下的config.json文件
     /// - Returns: DMPAppConfig数组

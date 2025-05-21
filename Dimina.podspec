@@ -18,7 +18,7 @@ Pod::Spec.new do |s|
   s.source_files = 'iOS/dimina/DiminaKit/**/*'
   
   s.resource_bundles = {
-    'DiminaAssets' => ['iOS/dimina/Resources/Assets.bundle/**/*'],
+    'DiminaAssets' => ['iOS/dimina/Resources/Assets.xcassets'],
     'DiminaJsSdk' => ['shared/jssdk/**/*']
   }
   
