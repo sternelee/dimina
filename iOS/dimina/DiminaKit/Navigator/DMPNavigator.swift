@@ -44,32 +44,34 @@ public class DMPNavigator: NSObject {
     
     /// 创建自定义返回按钮
     public func createBackButton(darkStyle: Bool = false) -> UIBarButtonItem {
-        let imageName = darkStyle ? "arrow-back-dark" : "arrow-back-light"
-        
-        // 确保图片正确加载
-        guard let backImage = UIImage(named: imageName) else {
-            print("警告: 无法加载返回按钮图片 \(imageName)")
-            // 创建一个简单的返回按钮作为备用
-            return UIBarButtonItem(
-                title: "返回",
-                style: .plain,
-                target: self,
-                action: #selector(handleBackButtonTapped)
-            )
+        // 尝试加载DiminaAssets.bundle
+        if let bundleURL = Bundle(for: DMPResourceManager.self).url(forResource: "DiminaAssets", withExtension: "bundle"),
+           let bundle = Bundle(url: bundleURL) {
+            
+            let imageName = darkStyle ? "arrow-back-dark" : "arrow-back-light"
+            
+            // 尝试从Assets.car加载SVG图片
+            if let backImage = UIImage(named: imageName, in: bundle, compatibleWith: nil) {
+                // 创建渲染模式为原始图片的UIImage，保留SVG原始颜色
+                let originalImage = backImage.withRenderingMode(.alwaysOriginal)
+                
+                let backButton = UIBarButtonItem(
+                    image: originalImage,
+                    style: .plain,
+                    target: self,
+                    action: #selector(handleBackButtonTapped)
+                )
+                return backButton
+            }
         }
         
-        // 创建渲染模式为原始图片的UIImage，保留SVG原始颜色
-        let originalImage = backImage.withRenderingMode(.alwaysOriginal)
-        
-        // 创建自定义返回按钮
-        let backButton = UIBarButtonItem(
-            image: originalImage,
+        // 如果无法加载自定义图片，使用默认系统返回按钮
+        return UIBarButtonItem(
+            title: "返回",
             style: .plain,
             target: self,
             action: #selector(handleBackButtonTapped)
         )
-        
-        return backButton
     }
     
     /// 处理返回按钮点击事件
