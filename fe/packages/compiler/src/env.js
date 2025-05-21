@@ -30,8 +30,7 @@ function resetStoreInfo(opts) {
 function storePathInfo(workPath) {
 	pathInfo.workPath = workPath
 	// 使用工作区目录或系统临时目录，确保有写入权限
-	const tempDir = process.env.GITHUB_WORKSPACE || os.tmpdir()
-	const targetDir = path.join(tempDir, `dimina-fe-dist-${Date.now()}`)
+	const targetDir = process.env.GITHUB_WORKSPACE ? `${workPath}/dist` : path.join(os.tmpdir(), `dimina-fe-dist-${Date.now()}`)
 
 	// 确保目录存在
 	if (!fs.existsSync(targetDir)) {
