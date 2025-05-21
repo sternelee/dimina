@@ -54,7 +54,7 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./fe
-        run: pnpm install --frozen-lockfile
+        run: pnpm install
 
       - name: Build project
         working-directory: ./fe
