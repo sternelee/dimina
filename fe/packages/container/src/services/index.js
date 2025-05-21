@@ -13,7 +13,7 @@ function memoize(func) {
 }
 
 export const getAppList = memoize(async () => {
-	const appList = await fetch('/appList.json').then(res => res.json())
+	const appList = await fetch(`${import.meta.env.BASE_URL}appList.json`).then(res => res.json())
 	appList.forEach((appInfo) => {
 		const key = JSON.stringify(appInfo)
 		const logo = sessionStorage.getItem(key)
