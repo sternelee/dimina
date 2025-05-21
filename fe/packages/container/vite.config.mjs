@@ -8,7 +8,7 @@ export default defineConfig(({ mode }) => {
 	const enableHash = env.VITE_HASH === 'true'
 
 	return {
-		base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/dimina',
+		// base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/',
 
 		server: {
 			open: true, // 启动后是否自动打开浏览器
@@ -70,8 +70,7 @@ export default defineConfig(({ mode }) => {
 						template: 'index.html',
 						injectOptions: {
 							data: {
-								// 提供默认值，避免环境变量未设置时出错
-								dimina: env.VITE_TITLE || 'Dimina 小程序',
+								dimina: env.VITE_TITLE,
 							},
 						},
 					},
@@ -81,8 +80,7 @@ export default defineConfig(({ mode }) => {
 						template: 'pageFrame.html',
 						injectOptions: {
 							data: {
-								// 提供默认值，避免环境变量未设置时出错
-								title: env.VITE_FRAME || 'Dimina Page Frame',
+								title: env.VITE_FRAME,
 							},
 						},
 					},
