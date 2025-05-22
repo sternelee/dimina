@@ -104,4 +104,37 @@ public class DMPUIManager {
         _safeAreaInsets = nil
         _deviceDisplayInfo = nil
     }
+
+    // Function to get the current window
+    public static func getCurrentWindow() -> UIWindow? {
+        if #available(iOS 13.0, *) {
+            // Get all connected scenes
+            let connectedScenes = UIApplication.shared.connectedScenes
+                .filter { $0.activationState == .foregroundActive }
+
+            // First, try to get the foreground active scene
+            if let windowScene = connectedScenes.first as? UIWindowScene {
+                // Try to get the keyWindow
+                if let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }) {
+                    return keyWindow
+                }
+                // If there is no keyWindow, return the first window
+                if let firstWindow = windowScene.windows.first {
+                    return firstWindow
+                }
+            }
+
+            // If there is no foreground active scene, try to get any available scene
+            if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+                let firstWindow = windowScene.windows.first
+            {
+                return firstWindow
+            }
+
+            return nil
+        } else {
+            // For versions before iOS 13
+            return UIApplication.shared.keyWindow
+        }
+    }
 }

@@ -91,7 +91,7 @@ public class ImageAPI: DMPContainerApi {
             }
             let previewVC = DMPImagePreviewViewController(urls: realUrls, current: current, showMenu: showMenu)
             
-            if let topVC = getCurrentWindow()?.rootViewController?.topMostViewController() {
+            if let topVC = DMPUIManager.getCurrentWindow()?.rootViewController?.topMostViewController() {
                 topVC.present(previewVC, animated: true) {
                     DMPContainerApi.invokeSuccess(callback: callback, param: nil)
                 }
@@ -270,7 +270,7 @@ public class ImageAPI: DMPContainerApi {
         picker.allowedSourceTypes = sourceTypes
         
         // 获取 topVC
-        guard let topVC = getCurrentWindow()?.rootViewController?.topMostViewController() else {
+        guard let topVC = DMPUIManager.getCurrentWindow()?.rootViewController?.topMostViewController() else {
             DMPContainerApi.invokeFailure(callback: callback, param: nil, errMsg: "Cannot find view controller to present on")
             return
         }
@@ -325,38 +325,6 @@ extension UIImage {
         return renderer.image { (context) in
             self.draw(in: CGRect(origin: .zero, size: size))
         }
-    }
-}
-
-// 获取当前窗口的函数
-func getCurrentWindow() -> UIWindow? {
-    if #available(iOS 13.0, *) {
-        // 获取所有连接的场景
-        let connectedScenes = UIApplication.shared.connectedScenes
-            .filter { $0.activationState == .foregroundActive }
-        
-        // 首先尝试获取前台活跃的场景
-        if let windowScene = connectedScenes.first as? UIWindowScene {
-            // 尝试获取keyWindow
-            if let keyWindow = windowScene.windows.first(where: { $0.isKeyWindow }) {
-                return keyWindow
-            }
-            // 如果没有keyWindow，返回第一个窗口
-            if let firstWindow = windowScene.windows.first {
-                return firstWindow
-            }
-        }
-        
-        // 如果没有前台活跃的场景，尝试获取任何可用的场景
-        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-           let firstWindow = windowScene.windows.first {
-            return firstWindow
-        }
-        
-        return nil
-    } else {
-        // iOS 13之前的版本
-        return UIApplication.shared.keyWindow
     }
 }
 

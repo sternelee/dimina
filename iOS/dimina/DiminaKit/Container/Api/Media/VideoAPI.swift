@@ -172,7 +172,7 @@ public class VideoAPI: DMPContainerApi {
             picker.maxDuration = maxDuration
             picker.sourceType = .photoLibrary
 
-            guard let topVC = getCurrentWindow()?.rootViewController?.topMostViewController() else {
+            guard let topVC = DMPUIManager.getCurrentWindow()?.rootViewController?.topMostViewController() else {
                 DMPContainerApi.invokeFailure(callback: callback, param: nil, errMsg: "Cannot find view controller to present on")
                 return
             }
@@ -258,7 +258,7 @@ public class VideoAPI: DMPContainerApi {
         picker.sourceType = .camera
         picker.cameraDevice = camera == "front" ? .front : .rear
 
-        guard let topVC = getCurrentWindow()?.rootViewController?.topMostViewController() else {
+        guard let topVC = DMPUIManager.getCurrentWindow()?.rootViewController?.topMostViewController() else {
             DMPContainerApi.invokeFailure(callback: callback, param: nil, errMsg: "Cannot find view controller to present on")
             return
         }
@@ -404,7 +404,7 @@ public class VideoAPI: DMPContainerApi {
         picker.compressed = compressed
         picker.sourceType = .photoLibrary
 
-        guard let topVC = getCurrentWindow()?.rootViewController?.topMostViewController() else {
+        guard let topVC = DMPUIManager.getCurrentWindow()?.rootViewController?.topMostViewController() else {
             DMPContainerApi.invokeFailure(callback: callback, param: nil, errMsg: "Cannot find view controller to present on")
             return
         }
@@ -433,7 +433,7 @@ public class VideoAPI: DMPContainerApi {
         picker.sourceType = .camera
         picker.cameraDevice = camera == "front" ? .front : .rear
 
-        guard let topVC = getCurrentWindow()?.rootViewController?.topMostViewController() else {
+        guard let topVC = DMPUIManager.getCurrentWindow()?.rootViewController?.topMostViewController() else {
             DMPContainerApi.invokeFailure(callback: callback, param: nil, errMsg: "Cannot find view controller to present on")
             return
         }
