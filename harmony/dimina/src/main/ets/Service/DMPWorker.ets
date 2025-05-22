@@ -15,6 +15,7 @@ import {
   WorkerResponse
 } from './DMPSendableObjects';
 import { DMPContextUtils, DMPWorkerContext } from '../Utils/DMPContextUtils';
+import { DMPRawFileUtils } from '../Utils/DMPRawFileUtils';
 
 
 const workerPort: ThreadWorkerGlobalScope = worker.workerPort;
@@ -90,6 +91,9 @@ const serviceToContainer = (t: number, wid: number, msg: string, ab: ArrayBuffer
   } else if (t === 2) {
     workerPort.postMessage(new WorkerResponse(wid, ab), [ab]);
     return 0;
+  } else if (t === 3) {
+    workerPort.postMessage(new WorkerResponse(wid, ab, 'sendLogToContainer'), [ab]);
+    return 0;
   }
 
   return 0;
@@ -106,15 +110,14 @@ workerPort.onmessage = async (e: MessageEvents) => {
   let request: WorkerRequest = e.data;
   // DMPLogger.e(Tags.JS_ENGINE, `worker onmessage ${request.command}`);
   try {
-    let result: string = '';
-
     switch (request.command) {
       case 'init': {
         DMPLogger.d(Tags.LAUNCH, `Worker线程启动 appIndex 初始值: ${appIndex}`);
         // 记录当前是哪个 app 下
         let request: initPayload = e.data as initPayload;
         appIndex = request.appIndex;
-        jsEngine.initWithWorker(appIndex, serviceToContainer);
+        const isDebugMode: boolean = request.isDebugMode
+        jsEngine.initWithWorker(appIndex, serviceToContainer,isDebugMode);
         // 提前存储 context，在子线程使用
         const c = DMPWorkerContext.sharedInstance();
         c.context = request.context;

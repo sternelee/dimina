@@ -17,4 +17,6 @@ extern napi_value dispatchJsTaskAb(napi_env env, napi_callback_info info);
 extern napi_value dispatchJsTaskPath(napi_env env, napi_callback_info info);
 extern napi_value destroyJsEngine(napi_env env, napi_callback_info info);
 
+extern JSValue sendLogToContainer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv);
+extern bool isDebugMode;
 #endif //DIMINA_HARMONYOS_THREAD_H

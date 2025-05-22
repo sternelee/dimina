@@ -103,7 +103,7 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
   //加载底包
   async loadLocalPackage(bundleLoadInfo: DMPBundleLoadInfo) {
     try {
-      if (bundleLoadInfo.isAppUpdate() || DMPContextUtils.isDebugMode) {
+      if (bundleLoadInfo.isAppUpdate() || DMPContextUtils.debugMode) {
         DMPLogger.i(Tags.LOAD_LOCAL_BUNDLE, '应用有更新');
         //加载本地配置
         this.loadLocalBundleConfig(bundleLoadInfo);

@@ -1,8 +1,10 @@
+import { common,bundleManager } from '@kit.AbilityKit';
 import { isMainThread } from '../Bridges/DMPTSUtil';
-import { bundleManager, common } from "@kit.AbilityKit";
 
 export class DMPContextUtils {
   private static context: common.UIAbilityContext;
+
+  private static _debugMode: boolean | null = null;
 
   static init(context: common.UIAbilityContext) {
     DMPContextUtils.context = context;
@@ -17,16 +19,13 @@ export class DMPContextUtils {
     }
   }
 
-  //宿主模式
-  private static _isDebugMode: boolean | null = null;
-
-  public static get isDebugMode(): boolean {
-    if (DMPContextUtils._isDebugMode == null) {
+  public static get debugMode(): boolean {
+    if (DMPContextUtils._debugMode == null) {
       const bundleFlags = bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION;
       const bundleInfo = bundleManager.getBundleInfoForSelfSync(bundleFlags);
-      DMPContextUtils._isDebugMode = bundleInfo.appInfo.debug
+      DMPContextUtils._debugMode = bundleInfo.appInfo.debug
     }
-    return DMPContextUtils._isDebugMode
+    return DMPContextUtils._debugMode
   }
 }
 

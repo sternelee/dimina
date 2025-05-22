@@ -4,7 +4,7 @@
 #include "utils.h"
 #include <exception>
 #include <sstream>
-
+#include "js_thread.h"
 const char *js_engine_tag = "dimina/QuickJS";
 const int js_engine_domain = 0x8989;
 
@@ -73,11 +73,18 @@ static JSValue consoleLog(JSContext *ctx, JSValueConst this_val, int argc, JSVal
             level = LOG_FATAL;
             break;
         }
+        if (isDebugMode) {
+            // 调用 js_thread.cpp 中的 publish 方法
+            JSValue argv[3];                                // 根据 publish 的参数需求构造参数
+            argv[0] = JS_NewInt32(ctx, magic);                 // webViewId 示例值
+            argv[1] = JS_NewString(ctx, msg.str().c_str()); // 日志信息作为参数传入
+            sendLogToContainer(ctx, JS_UNDEFINED, 2, argv);
+        }
 
         OH_LOG_Print(LOG_APP, level, js_engine_domain, js_engine_tag, "[dimina][service]: %{public}s",
                      msg.str().c_str());
         
-        
+
     } catch (const std::exception &e) {
         OH_LOG_Print(LOG_APP, LOG_ERROR, js_engine_domain, js_engine_tag, "[dimina][service] exception: %{public}s",
                      e.what());
@@ -94,7 +101,9 @@ void consoleInit(JSContext *ctx) {
 
     // Register each console function
     JS_SetPropertyStr(ctx, console, "log",
-                      JS_NewCFunctionMagic(ctx, consoleLog, "log", 1, JS_CFUNC_generic_magic, 0)); // LOG
+                      JS_NewCFunctionMagic(ctx, consoleLog, "log", 1, JS_CFUNC_generic_magic, 5)); // LOG
+    JS_SetPropertyStr(ctx, console, "debug",
+                      JS_NewCFunctionMagic(ctx, consoleLog, "debug", 1, JS_CFUNC_generic_magic, 0)); // DEBUG
     JS_SetPropertyStr(ctx, console, "info",
                       JS_NewCFunctionMagic(ctx, consoleLog, "info", 1, JS_CFUNC_generic_magic, 1)); // INFO
     JS_SetPropertyStr(ctx, console, "warn",

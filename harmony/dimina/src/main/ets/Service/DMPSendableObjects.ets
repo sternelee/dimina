@@ -1,5 +1,6 @@
 // 因为 worker 线程不能直接使用 app 对象，这个类作用是用于更新数据
 import { DMPMap } from '../Utils/DMPMap';
+import { util } from '@kit.ArkTS';
 import common from '@ohos.app.ability.common';
 
 // 这个是传递用
@@ -62,11 +63,13 @@ export class initPayload {
   command: string;
   context: common.UIAbilityContext;
   appIndex: number;
+  isDebugMode: boolean;
 
-  constructor(command: string, appIndex: number, context: common.UIAbilityContext) {
+  constructor(command: string, appIndex: number, context: common.UIAbilityContext, isDebugMode: boolean) {
     this.command = command;
     this.appIndex = appIndex;
     this.context = context;
+    this.isDebugMode = isDebugMode;
   }
 }
 
@@ -105,10 +108,12 @@ export class WorkerAppDataRequest {
 export class WorkerResponse {
   id: number;
   ab: ArrayBuffer;
+  type?: string;
 
-  constructor(id: number, ab: ArrayBuffer) {
+  constructor(id: number, ab: ArrayBuffer, type?: string) {
     this.id = id;
     this.ab = ab;
+    this.type = type;
   }
 }
 

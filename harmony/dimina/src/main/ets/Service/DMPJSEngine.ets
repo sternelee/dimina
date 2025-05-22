@@ -1,5 +1,6 @@
 import diminaNative from 'libdimina.so'
 
+
 export class DMPJSEngine {
   private isRun = false;
   private appIndex: number = -1;
@@ -36,7 +37,9 @@ export class DMPJSEngine {
     diminaNative.destroyJsEngine(this.appIndex)
   }
 
-  initWithWorker(appIndex:number, serviceToContainer: (t: number, id: number, d: string, a: ArrayBuffer) => number | string | boolean | object) {
+  initWithWorker(appIndex: number,
+    serviceToContainer: (t: number, id: number, d: string, a: ArrayBuffer) => number | string | boolean | object,
+    isDebugMode: boolean) {
     this.appIndex = appIndex;
 
     this.isRun = true;
@@ -44,7 +47,7 @@ export class DMPJSEngine {
     diminaNative.StartJsEngine(this.appIndex, (t: number, id: number, data: string, ab: ArrayBuffer) => {
       // DMPLogger.d(Tags.JS_ENGINE, `StartJsEngine, ${t}, ${id}, ${data}`)
       return serviceToContainer(t, id, data, ab);
-    })
+    }, isDebugMode)
   }
 }
 

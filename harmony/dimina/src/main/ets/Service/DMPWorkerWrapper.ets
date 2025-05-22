@@ -16,6 +16,7 @@ import {
 } from './DMPSendableObjects';
 import { DMPWorkerCaller } from './DMPWorkerCaller';
 import common from '@ohos.app.ability.common';
+import { DMPContextUtils } from '../Utils/DMPContextUtils';
 
 
 export class DMPWorkerWrapper {
@@ -78,7 +79,8 @@ export class DMPWorkerWrapper {
 
   async initEngine(appIndex: number) {
     const context: common.UIAbilityContext = DMPApp.context;
-    let payload = new initPayload('init', appIndex, context);
+    const isDebugMode: boolean = DMPContextUtils.debugMode;
+    let payload = new initPayload('init', appIndex, context, isDebugMode);
     this.w.postMessage(payload);
   }
 
