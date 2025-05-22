@@ -32,9 +32,8 @@ import { DMPAppLifecycle } from './DMPAppLifecycle'
 import { DMPDeviceUtil } from '../Utils/DMPDeviceUtils'
 
 export type DMPBundleUpdateCallback = () => void;
-
+//小程序应用实例
 export class DMPApp {
-  // 启动相关
   appIndex: number;
   appConfig: DMPAppConfig
   customConfig: DMPCustomConfig = new DMPCustomConfig();
