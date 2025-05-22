@@ -154,6 +154,8 @@ public class DMPPageController: UIViewController {
 
                 // Set navigation bar button color
                 navigationController?.navigationBar.tintColor = textColor
+
+                DMPUIManager.updateWindowStyle(isDarkTheme: darkStyle)
             }
         }
 

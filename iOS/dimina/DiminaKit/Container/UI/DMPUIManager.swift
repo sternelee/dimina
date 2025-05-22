@@ -137,4 +137,12 @@ public class DMPUIManager {
             return UIApplication.shared.keyWindow
         }
     }
+
+    @MainActor
+    public static func updateWindowStyle(isDarkTheme: Bool) {
+        if let window = DMPUIManager.getCurrentWindow() {
+            window.overrideUserInterfaceStyle = isDarkTheme ? .dark : .light
+        }
+    }
+
 }
