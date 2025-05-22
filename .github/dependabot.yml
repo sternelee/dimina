@@ -9,12 +9,6 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "pnpm-dependencies"
-    # 自动合并 minor 和 patch 更新
-    ignore:
-      # Ignore major version updates
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-    automerge: true
 
   # Android dependencies (Gradle)
   - package-ecosystem: "gradle"
@@ -25,9 +19,3 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "gradle-dependencies"
-    # 自动合并 minor 和 patch 更新
-    ignore:
-      # Ignore major version updates
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-    automerge: true
