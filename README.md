@@ -28,7 +28,7 @@
 
 ## 效果展示
 
-在线演示：[https://didi.github.io/dimina/](https://didi.github.io/dimina/)
+在线演示：<https://didi.github.io/dimina/>
 
 | Android | iOS | Harmony |
 | ---- | ---- | ---- |
