@@ -3,26 +3,31 @@ updates:
   # Frontend dependencies (pnpm)
   - package-ecosystem: "npm"
     directory: "/fe"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
     open-pull-requests-limit: 10
     labels:
       - "pnpm-dependencies"
     # 自动合并 minor 和 patch 更新
-    package-rules:
-      - match-update-types: ["minor", "patch"]
-        automerge: true
+    ignore:
+      # Ignore major version updates
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    automerge: true
 
   # Android dependencies (Gradle)
   - package-ecosystem: "gradle"
     directory: "/android"
+    schedule:
+      interval: "weekly"
+      day: "saturday"
     open-pull-requests-limit: 10
     labels:
       - "gradle-dependencies"
     # 自动合并 minor 和 patch 更新
-    package-rules:
-      - match-update-types: ["minor", "patch"]
-        automerge: true
-
-# 全局日程配置
-schedule:
-  interval: "weekly"
-  day: "saturday"
+    ignore:
+      # Ignore major version updates
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    automerge: true
