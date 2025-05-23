@@ -3,6 +3,7 @@ package com.didi.dimina.ui.view
 import android.Manifest
 import android.content.Intent
 import android.provider.ContactsContract
+import android.app.Activity
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
@@ -45,7 +46,7 @@ class ContactPicker(private val activity: ComponentActivity) {
         }
         
         chooseContactLauncher = activity.registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-            if (result.resultCode == ComponentActivity.RESULT_OK) {
+            if (result.resultCode == Activity.RESULT_OK) {
                 val contactUri = result.data?.data ?: return@registerForActivityResult
                 val contentResolver = activity.contentResolver
                 
