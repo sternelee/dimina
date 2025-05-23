@@ -29,19 +29,22 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # 4. 赋予 Gradle 可执行权限
-      - name: Grant execute permission for gradlew
-        run: chmod +x ./gradlew
-
+      # 4. 进入 android 目录并设置 Gradle 可执行权限
+      - name: Set up Android build environment
+        run: |
+          cd android
+          chmod +x ./gradlew
+          
       # 5. 构建 Debug APK 并重命名为时间戳
       - name: Build Debug APK with Timestamp
         run: |
+          cd android
           ./gradlew assembleDebug
           # Set timezone to Beijing (UTC+8) for the timestamp
           export TZ='Asia/Shanghai'
           TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
           cp app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/app-debug-${TIMESTAMP}.apk
-          echo "APK_PATH=app/build/outputs/apk/debug/app-debug-${TIMESTAMP}.apk" >> $GITHUB_ENV
+          echo "APK_PATH=android/app/build/outputs/apk/debug/app-debug-${TIMESTAMP}.apk" >> $GITHUB_ENV
 
       # 6. 提取版本号
       - name: Extract versionName
