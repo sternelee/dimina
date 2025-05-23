@@ -42,8 +42,38 @@ function storePathInfo(workPath) {
 }
 
 function storeProjectConfig() {
-	const filePath = `${pathInfo.workPath}/project.config.json`
-	configInfo.projectInfo = parseContentByPath(filePath)
+	const privateConfigPath = `${pathInfo.workPath}/project.private.config.json`
+	const defaultConfigPath = `${pathInfo.workPath}/project.config.json`
+
+	let privateConfig = {}
+	let defaultConfig = {}
+
+	// Load default config if exists
+	if (fs.existsSync(defaultConfigPath)) {
+		try {
+			defaultConfig = parseContentByPath(defaultConfigPath)
+		}
+		catch (e) {
+			console.warn('Failed to parse project.config.json:', e.message)
+		}
+	}
+
+	// Load private config if exists
+	if (fs.existsSync(privateConfigPath)) {
+		try {
+			privateConfig = parseContentByPath(privateConfigPath)
+		}
+		catch (e) {
+			console.warn('Failed to parse project.private.config.json:', e.message)
+		}
+	}
+
+	// Merge configs with private config taking precedence
+	configInfo.projectInfo = { ...defaultConfig, ...privateConfig }
+}
+
+function getProjectConfig() {
+	return configInfo.projectInfo
 }
 
 function storeAppConfig() {
@@ -251,8 +281,10 @@ export {
 	getContentByPath,
 	getPageConfigInfo,
 	getPages,
+	getProjectConfig,
 	getTargetPath,
 	getWorkPath,
 	resetStoreInfo,
 	storeInfo,
+	storeProjectConfig,
 }
