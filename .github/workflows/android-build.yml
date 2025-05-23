@@ -81,3 +81,28 @@ jobs:
           files: ${{ env.APK_PATH }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # 9. 删除 Release 中的旧 APK（保留最新上传的）
+      - name: Clean up old APKs from Release
+        if: env.release_exists == 'true'
+        run: |
+          TAG_NAME="v${{ env.VERSION_NAME }}"
+          # 获取 release 中的 assets
+          RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+            "https://api.github.com/repos/${{ github.repository }}/releases/tags/$TAG_NAME")
+          
+          # 提取 assets 信息
+          ASSETS_URL=$(echo "$RESPONSE" | jq -r '.assets_url')
+          
+          # 获取所有 assets 并删除旧的 .apk 文件（保留最新的）
+          if [ "$ASSETS_URL" != "null" ]; then
+            # 获取所有 APK 资产，按创建时间排序（最新的在前）
+            ASSETS_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$ASSETS_URL")
+            echo "$ASSETS_RESPONSE" | jq -r 'sort_by(.created_at) | reverse | .[] | select(.name | endswith(".apk")) | .id' | tail -n +2 | while read -r asset_id; do
+              if [ -n "$asset_id" ]; then
+                echo "Deleting old APK asset ID: $asset_id"
+                curl -s -X DELETE -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" \
+                  "https://api.github.com/repos/${{ github.repository }}/releases/assets/$asset_id"
+              fi
+            done
+          fi
