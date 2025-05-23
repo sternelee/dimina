@@ -11,31 +11,59 @@ app.use(express.json())
 
 app.post('/proxy', async (req, res) => {
 	try {
-		const { url, data, header, timeout, method, responseType } = req.body
-		// 构建请求配置
+		// Input validation
+		const { url, data, header = {}, timeout = 30000, method = 'GET', responseType = 'json' } = req.body
+
+		if (!url) {
+			return res.status(400).json({ error: 'URL is required' })
+		}
+		if (!['GET', 'POST', 'PUT', 'DELETE', 'PATCH'].includes(method.toUpperCase())) {
+			return res.status(400).json({ error: 'Invalid HTTP method' })
+		}
+
+		// Build request config
 		const axiosConfig = {
 			method: method.toUpperCase(),
 			url,
-			timeout,
-			headers: header,
-			data,
+			timeout: Number.parseInt(timeout, 10) || 30000,
+			headers: {
+				'Content-Type': 'application/json',
+				...header,
+			},
+			// Only include data for non-GET requests
+			...(method.toUpperCase() !== 'GET' && { data }),
+			// For GET requests, move data to params
+			...(method.toUpperCase() === 'GET' && data && { params: data }),
 			responseType,
+			validateStatus: () => true, // Ensure we get the response even for error status codes
 		}
-		// 发送请求到目标服务
+
+		// Send request to target service
 		const response = await axios(axiosConfig)
-		// 转发响应给客户端
+
+		// Set appropriate content type based on response type
 		if (responseType === 'arraybuffer') {
-			// 对于 arraybuffer 响应，直接用 res.send 发送二进制数据
+			// For arraybuffer responses, set appropriate content type from response headers or default to application/octet-stream
+			const contentType = response.headers['content-type'] || 'application/octet-stream'
+			res.set('Content-Type', contentType)
 			res.status(response.status).send(response.data)
 		}
 		else {
+			// For JSON responses, ensure we have proper content type
+			res.set('Content-Type', 'application/json')
 			res.status(response.status).json(response.data)
 		}
 	}
 	catch (error) {
-		// 处理错误并返回给客户端
 		console.error('Error forwarding request:', error.message)
-		res.status(error.response ? error.response.status : 500).json({ error: error.message })
+		const statusCode = error.response?.status || 500
+		const errorMessage = error.response?.data?.message || error.message || 'Internal Server Error'
+
+		res.status(statusCode).json({
+			error: errorMessage,
+			status: statusCode,
+			timestamp: new Date().toISOString(),
+		})
 	}
 })
 

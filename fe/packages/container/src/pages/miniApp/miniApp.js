@@ -497,21 +497,24 @@ export class MiniApp {
 					error.code = response.status
 					throw error
 				}
+
+				// Convert the Headers object to a plain object
+				const headers = {}
+				response.headers.forEach((value, key) => {
+					headers[key] = value
+				})
+
 				switch (dataType) {
 					case 'json':
-						return response.json()
+						return response.json().then(data => ({ data: JSON.parse(data), header: headers, statusCode: response.status }))
 					case 'arraybuffer':
-						return response.arrayBuffer()
+						return response.arrayBuffer().then(data => ({ data, header: headers, statusCode: response.status }))
 					default:
-						return response.text()
+						return response.text().then(data => ({ data, header: headers, statusCode: response.status }))
 				}
 			})
 			.then((data) => {
-				onSuccess?.({
-					statusCode: 200,
-					data,
-					header: {},
-				})
+				onSuccess?.(data)
 			})
 			.catch((error) => {
 				onFail?.({ errMsg: error.message, errno: error.code })
