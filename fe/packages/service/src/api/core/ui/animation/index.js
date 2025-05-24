@@ -1,4 +1,4 @@
-import { isNumber } from '@dimina/common'
+import { suffixPixel } from '@dimina/common'
 /**
  * https://developers.weixin.qq.com/miniprogram/dev/api/ui/animation/wx.createAnimation.html
  * @returns { Animation } 动画对象
@@ -72,28 +72,25 @@ class Animation {
 	}
 
 	bottom(value) {
-		isNumber(value) && (value = `${value}px`)
 		this.currentStepAnimates.push({
 			type: 'style',
-			args: ['bottom', value],
+			args: ['bottom', suffixPixel(value)],
 		})
 		return this
 	}
 
 	height(value) {
-		isNumber(value) && (value = `${value}px`)
 		this.currentStepAnimates.push({
 			type: 'style',
-			args: ['height', value],
+			args: ['height', suffixPixel(value)],
 		})
 		return this
 	}
 
 	left(value) {
-		isNumber(value) && (value = `${value}px`)
 		this.currentStepAnimates.push({
 			type: 'style',
-			args: ['left', value],
+			args: ['left', suffixPixel(value)],
 		})
 		return this
 	}
@@ -157,10 +154,9 @@ class Animation {
 	}
 
 	right(value) {
-		isNumber(value) && (value = `${value}px`)
 		this.currentStepAnimates.push({
 			type: 'style',
-			args: ['right', value],
+			args: ['right', suffixPixel(value)],
 		})
 		return this
 	}
@@ -270,10 +266,9 @@ class Animation {
 	}
 
 	top(value) {
-		isNumber(value) && (value = `${value}px`)
 		this.currentStepAnimates.push({
 			type: 'style',
-			args: ['top', value],
+			args: ['top', suffixPixel(value)],
 		})
 		return this
 	}
@@ -311,10 +306,9 @@ class Animation {
 	}
 
 	width(value) {
-		isNumber(value) && (value = `${value}px`)
 		this.currentStepAnimates.push({
 			type: 'style',
-			args: ['width', value],
+			args: ['width', suffixPixel(value)],
 		})
 		return this
 	}

@@ -4,10 +4,6 @@ export function isFunction(value) {
 	return typeof value === 'function'
 }
 
-export function isNumber(value) {
-	return typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(value)
-}
-
 export function isString(value) {
 	return typeof value === 'string'
 }
@@ -68,21 +64,15 @@ export function getDataAttributes(attrs, handler) {
 	return result
 }
 
-/**
- * 判断内容是否是纯数字
- * @param {string} str
- */
-export function isPureNumber(str) {
-	return /^\d+$/.test(str)
-};
+const isBrowser = typeof window !== 'undefined' && typeof navigator !== 'undefined'
 
-export const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent)
+export const isAndroid = isBrowser && /Android/i.test(navigator.userAgent)
 
-export const isIOS = typeof navigator !== 'undefined' && /iPad|iPhone|iPod/.test(navigator.userAgent)
+export const isIOS = isBrowser && /iPad|iPhone|iPod/.test(navigator.userAgent)
 
-export const isHarmonyOS = typeof navigator !== 'undefined' && /OpenHarmony|harmony/.test(navigator.userAgent)
+export const isHarmonyOS = isBrowser && /OpenHarmony|harmony/.test(navigator.userAgent)
 
-export const isDesktop = typeof navigator !== 'undefined' && !/Android|iPad|iPhone|iPod|OpenHarmony|harmony|Mobile/.test(navigator.userAgent)
+export const isDesktop = isBrowser && !/Android|iPad|iPhone|iPod|OpenHarmony|harmony|Mobile/.test(navigator.userAgent)
 
 export const isWebWorker = (() => {
 	// eslint-disable-next-line no-undef
@@ -145,8 +135,9 @@ export function transformRpx(styleText) {
 	})
 }
 
-function suffixPixel(value) {
-	return isNumber(value) ? `${value}px` : value
+export function suffixPixel(value) {
+	const isNumber = typeof value === 'number' && Number.isFinite(value) && !Number.isNaN(value)
+	return isNumber ? `${value}px` : value
 }
 
 /**
