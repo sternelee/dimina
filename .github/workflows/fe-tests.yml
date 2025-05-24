@@ -5,8 +5,6 @@ on:
     paths:
       - 'fe/**'
   push:
-    branches:
-      - main
     paths:
       - 'fe/**'
 
