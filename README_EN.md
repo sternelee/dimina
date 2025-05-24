@@ -53,6 +53,9 @@ To learn more about the principles of the underlying implementation of framework
 
 As the mini program ecosystem has evolved over the years, Dimina does not yet fully support all **APIs/components/features** of mini programs. Contributions and suggestions are highly welcome!
 
+- Bug reports and new feature requests are filed in [Issues](https://github.com/didi/dimina/issues)
+- Discussions and proposals are discussed in [Discussions](https://github.com/didi/dimina/discussions)
+
 ## Star Trend
 
 If you find Dimina helpful, please click the ⭐Star button in the upper right to support us and help more people discover this project.

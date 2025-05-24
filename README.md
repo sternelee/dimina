@@ -53,6 +53,9 @@ Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-
 
 由于行业内各类小程序方案已迭代多年，Dimina 目前尚未完全覆盖全部小程序 **API/组件/特性**。欢迎大家积极贡献代码、提出建议，与我们共同完善 Dimina。
 
+- Bug 报告和新功能需求请提交到 [Issues](https://github.com/didi/dimina/issues)
+- 讨论和提案欢迎到 [Discussions](https://github.com/didi/dimina/discussions) 进行交流
+
 ## 星标趋势
 
 如果你觉得 Dimina 对你有帮助，欢迎点击右上角 ⭐Star 支持我们，让更多人了解和使用这个项目。
