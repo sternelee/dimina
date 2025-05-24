@@ -10,7 +10,7 @@ const props = defineProps({
 	 */
 	id: {
 		type: String,
-		default: `map_${Date.now()}_${String(Math.random()).slice(-3)}`,
+		default: () => `map-${useId()}`,
 	},
 	/**
 	 * 中心经度

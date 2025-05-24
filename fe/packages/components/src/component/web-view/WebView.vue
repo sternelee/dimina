@@ -10,10 +10,10 @@ const props = defineProps({
 	 */
 	id: {
 		type: String,
-		default: `web-view_${Date.now()}_${String(Math.random()).slice(-3)}`,
+		default: () => `webview-${useId()}`,
 	},
 	/**
-	 *	webview 指向网页的链接
+	 * webview 指向网页的链接
 	 */
 	src: {
 		type: String,
