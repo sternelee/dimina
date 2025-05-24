@@ -47,11 +47,17 @@ jobs:
         profile: Nexus 6
         disable-animations: true
         script: |
-          echo "Emulator setup complete"
+          echo "Waiting for device to be ready..."
+          adb wait-for-device
+          echo "Device is ready"
           adb devices
+          # Wait for boot to complete
+          adb shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 1; done; input keyevent 82'
+          # Disable animations
           adb shell settings put global window_animation_scale 0.0
           adb shell settings put global transition_animation_scale 0.0
           adb shell settings put global animator_duration_scale 0.0
+          echo "Emulator is ready"
     
     - name: Make gradlew executable
       run: chmod +x ./gradlew
@@ -61,9 +67,16 @@ jobs:
       working-directory: ./android
       run: ./gradlew test
       
+    - name: Verify emulator is ready
+      working-directory: ./android
+      run: |
+        adb wait-for-device
+        adb shell getprop sys.boot_completed | grep -q 1
+        
     - name: Run instrumentation tests
       working-directory: ./android
-      run: ./gradlew connectedAndroidTest
+      run: |
+        ./gradlew connectedDebugAndroidTest
       
     - name: Upload test results
       if: always()
