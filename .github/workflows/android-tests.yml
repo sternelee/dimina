@@ -50,7 +50,21 @@ jobs:
         script: |
           echo "Waiting for device to be ready..."
           adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 2; done; input keyevent 82'
-          echo "Device is ready"
+          echo "Device boot_completed. Restarting adb..."
+          adb kill-server
+          adb start-server
+          sleep 2
+          # Wait until the device is online (not offline)
+          for i in {1..10}; do
+            STATUS=$(adb devices | grep emulator-5554 | awk '{print $2}')
+            if [[ "$STATUS" == "device" ]]; then
+              echo "Emulator is online."
+              break
+            else
+              echo "Waiting for emulator to be online... (status: $STATUS)"
+              sleep 3
+            fi
+          done
           adb devices
           # Disable animations and set device settings
           adb shell settings put global window_animation_scale 0.0
