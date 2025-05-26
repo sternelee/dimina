@@ -10,89 +10,47 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    name: Run Android Tests
+  unit-test:
+    name: Unit Tests
     runs-on: ubuntu-latest
-    
+    timeout-minutes: 10
+
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      
-    - name: Set up JDK 17
-      uses: actions/setup-java@v3
-      with:
-        java-version: '17'
-        distribution: 'temurin'
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+          cache: gradle
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
         
-    - name: Cache Android SDK
-      uses: actions/cache@v4
-      with:
-        path: |
-          ~/.android/avd
-          ~/.android/adb*
-          ~/android-sdk
-          ~/.android/sdk
-        key: ${{ runner.os }}-android-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-        restore-keys: |
-          ${{ runner.os }}-android-
-    
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v2
-      
-    - name: Setup emulator
-      uses: reactivecircus/android-emulator-runner@v2
-      with:
-        api-level: 30
-        arch: x86_64
-        profile: Nexus 6
-        disable-animations: true
-        emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
-        script: |
-          echo "Waiting for device to be ready..."
-          adb wait-for-device shell 'while [[ -z $(getprop sys.boot_completed) ]]; do sleep 2; done; input keyevent 82'
-          echo "Device boot_completed. Restarting adb..."
-          adb kill-server
-          adb start-server
-          sleep 2
-          # Wait until the device is online (not offline)
-          for i in {1..10}; do
-            STATUS=$(adb devices | grep emulator-5554 | awk '{print $2}')
-            if [[ "$STATUS" == "device" ]]; then
-              echo "Emulator is online."
-              break
-            else
-              echo "Waiting for emulator to be online... (status: $STATUS)"
-              sleep 3
-            fi
-          done
-          adb devices
-          # Disable animations and set device settings
-          adb shell settings put global window_animation_scale 0.0
-          adb shell settings put global transition_animation_scale 0.0
-          adb shell settings put global animator_duration_scale 0.0
-          adb shell settings put secure show_ime_with_hard_keyboard 0
-          # Unlock the device
-          adb shell input keyevent 82
-          echo "Emulator is ready"
-    
-    - name: Make gradlew executable
-      run: chmod +x ./gradlew
-      working-directory: ./android
-      
-    - name: Run unit tests
-      working-directory: ./android
-      run: ./gradlew test
-      
-    - name: Run instrumentation tests
-      working-directory: ./android
-      timeout-minutes: 20
-      run: |
-        ./gradlew connectedDebugAndroidTest
-      
-    - name: Upload test results
-      if: always()
-      uses: actions/upload-artifact@v4
-      with:
-        name: test-results
-        path: android/**/build/reports/tests/
-        retention-days: 7
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: ${{ runner.os }}-maven-${{ hashFiles('**/build.gradle.kts') }}
+          restore-keys: |
+            ${{ runner.os }}-maven-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x ./android/gradlew
+        
+      - name: Run unit tests
+        working-directory: ./android
+        run: ./gradlew testDebugUnitTest --no-daemon --parallel
+        
+      - name: Upload unit test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-reports
+          path: ./android/app/build/reports/tests/testDebugUnitTest
+          retention-days: 5

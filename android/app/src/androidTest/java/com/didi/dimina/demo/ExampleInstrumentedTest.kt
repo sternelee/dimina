@@ -1,4 +1,4 @@
-package com.didi.dimina
+package com.didi.dimina.demo
 
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -19,6 +19,6 @@ class ExampleInstrumentedTest {
     fun useAppContext() {
         // Context of the app under test.
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
-        assertEquals("com.didi.dimina", appContext.packageName)
+        assertEquals("com.didi.dimina.demo", appContext.packageName)
     }
 }
