@@ -4,7 +4,6 @@ import { DMPFileManager } from '../Bundle/Util/DMPFileManager'
 import { DMPService } from '../Service/DMPService'
 import { DMPRender } from '../Render/DMPRender'
 import { DMPBridges } from '../Bridges/DMPBridges'
-import { DMP_SDK_VERSION } from '../DAppManager/DMPDefine'
 import { DMPBundleManager } from '../Bundle/DMPBundleManager'
 import { DMPBundleInstallConfig } from '../Bundle/Model/DMPBundleInstallConfig'
 import { DMPContextUtils } from '../Utils/DMPContextUtils'
@@ -37,7 +36,6 @@ export class DMPApp {
   appIndex: number;
   appConfig: DMPAppConfig
   customConfig: DMPCustomConfig = new DMPCustomConfig();
-  appVersion: string = DMP_SDK_VERSION
   private onUpdateResult?: DMPBundleUpdateCallback
   private _container: DMPContainer = new DMPContainer(this)
   private static _context: common.UIAbilityContext

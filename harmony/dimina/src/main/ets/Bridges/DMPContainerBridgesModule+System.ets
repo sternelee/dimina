@@ -1,4 +1,3 @@
-
 import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
 import { DMPBridgeCallback } from './DMPTSUtil';
 import { DMPLogger } from '../EventTrack/DMPLogger';
@@ -18,12 +17,12 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
 
   getExportMethods(): string[] {
     return ['getSystemInfoSync', 'getEnv', 'getSystemInfoAsync', 'getAccountInfoSync', 'getSystemInfo',
-      'getDiminaCurStackPages', 'getSystemSetting','getWindowInfo'];
+      'getDiminaCurStackPages', 'getSystemSetting', 'getWindowInfo'];
   }
 
-  getWindowInfo(data: DMPMap, callback: DMPBridgeCallback){
-    const windowInfo =  DMPDeviceUtil.getSafeAreaAndDisplayWHSync()
-    this.invokeSuccessCallback(callback,windowInfo)
+  getWindowInfo(data: DMPMap, callback: DMPBridgeCallback) {
+    const windowInfo = DMPDeviceUtil.getSafeAreaAndDisplayWHSync()
+    this.invokeSuccessCallback(callback, windowInfo)
     return windowInfo;
   }
 
@@ -92,7 +91,11 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
   getAccountInfoSync(data: DMPMap, callback: DMPBridgeCallback) {
     if (this.app) {
       return new DMPMap({
-        'miniProgram': { 'envVersion': 'release', 'appId': this.app.appConfig?.appId, 'version': this.app.appVersion }
+        'miniProgram': {
+          'envVersion': 'release',
+          'appId': this.app.appConfig?.appId,
+          'version': this.app.bundleManager.getBundleInfo().currentJsAppBundleConfig?.versionName
+        }
       })
     }
     return new DMPMap({ 'miniProgram': { 'envVersion': 'release' } })

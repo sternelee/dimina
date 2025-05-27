@@ -8,7 +8,6 @@ import common from '@ohos.app.ability.common';
 export class WorkerAppData {
   appIndex: number = -1;
   appId: string = '';
-  appVersion: string = '';
   jsAppVersion: string = '';
 }
 
@@ -16,7 +15,6 @@ export class WorkerAppData {
 export class AppData {
   appIndex: number = -1;
   appId: string = '';
-  appVersion: string = '';
   jsAppVersion: string = '';
 }
 
