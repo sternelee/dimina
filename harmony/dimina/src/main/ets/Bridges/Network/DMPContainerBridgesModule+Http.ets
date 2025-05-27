@@ -14,9 +14,9 @@ export class DMPContainerBridgesModuleHttp extends DMPContainerBridgesModule {
   request(data: DMPMap, callback: DMPBridgeCallback) {
     let service: DMPNetServiceNext;
     if (isMainThread()) {
-      service = new DMPNetServiceNext(data, this.app.appConfig.appId, this.app.appVersion);
+      service = new DMPNetServiceNext(data, this.app.appConfig.appId, this.appData.jsAppVersion);
     } else {
-      service = new DMPNetServiceNext(data, this.appData.appId, this.appData.appVersion);
+      service = new DMPNetServiceNext(data, this.appData.appId, this.appData.jsAppVersion);
     }
 
     service.request()

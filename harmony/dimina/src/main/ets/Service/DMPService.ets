@@ -73,7 +73,6 @@ export class DMPService {
     if (app) {
       this.appData.appIndex = this.appIndex;
       this.appData.appId = app.appConfig.appId;
-      this.appData.appVersion = app.appVersion;
       this.appData.jsAppVersion = app.bundleManager.bundleLoader.getJsAppVersion();
       this.ww.updateWorkerAppData(this.appData);
     }
