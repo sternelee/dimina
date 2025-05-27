@@ -1,8 +1,8 @@
 
 import { DMPBundleInstallConfig } from './Model/DMPBundleInstallConfig';
 import { DMPBundleLoadInfo } from './Model/DMPBundleLoadInfo';
-import { DMPBundleLoader } from './loader/DMPBundleLoader';
-import { DMPReleaseBundleLoader } from './loader/DMPReleaseBundleLoader';
+import { DMPBundleLoader } from './Loader/DMPBundleLoader';
+import { DMPReleaseBundleLoader } from './Loader/DMPReleaseBundleLoader';
 import { DMPLaunchType } from '../DAppManager/DMPAppConfig';
 import { DMPBundleAppConfigNext } from './Model/DMPBundleAppConfigNext';
 import { DMPApp } from '../DApp/DMPApp';

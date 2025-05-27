@@ -109,16 +109,10 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
     let batterySOCInfo: number = batteryInfo.batterySOC;
     result.set('batteryLevel', batterySOCInfo);
 
-    // TODO 未实现 "benchmarkLevel": -1,
-
-
     // "brand": "HUAWEI",
     let brand: string = deviceInfo.brand;
     result.set('brand', brand);
 
-    // TODO 未实现 "memorySize": 2048,
-
-    // "model": "iPhone X",
     // "model": "HUAWEI Mate 60 Pro",
     let marketName: string = deviceInfo.marketName;
     result.set('model', marketName);
@@ -157,34 +151,6 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
     } catch (e) {
       DMPLogger.e("获取bundle 信息异常")
     }
-
-
-    // "version": "8.0.5",
-    // "language": "en",
-    // "SDKVersion": "2.19.4",
-    // "enableDebug": false,
-    // "fontSizeScaleFactor": 1,
-    // "fontSizeSetting": 16,
-    // "mode": "default",
-    // "host": {
-    //   "env": "WeChat"
-    // },
-    // "bluetoothEnabled": true,
-    // "locationEnabled": true,
-    // "wifiEnabled": true,
-    // "locationReducedAccuracy": true,
-    // "albumAuthorized": true,
-    // "bluetoothAuthorized": true,
-    // "cameraAuthorized": true,
-    // "locationAuthorized": true,
-    // "microphoneAuthorized": true,
-    // "notificationAuthorized": true,
-    // "notificationAlertAuthorized": true,
-    // "notificationBadgeAuthorized": true,
-    // "notificationSoundAuthorized": true,
-    // "phoneCalendarAuthorized": true,
-    // "deviceOrientation": "portrait",
-    // "devicePixelRatio": 3
 
     result.setAll(DMPDeviceUtil.getSafeAreaAndDisplayWHSync());
 
