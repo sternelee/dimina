@@ -78,8 +78,24 @@
 			box-shadow: 0 1px hsl(0 0% 100% / 0.15) inset;
 			background: linear-gradient(var(--bg), var(--bg)) padding-box, var(--glow),
 				linear-gradient(black, black) border-box;
-			transition: background-size 0.24s;
+			transition: background-size 0.24s, width 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
+				height 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), 
+				margin 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 			touch-action: none;
+			
+			&.island-hover {
+				width: 126px;
+				height: 31.5px;
+				margin-top: -0.75px;
+				margin-left: -3px;
+			}
+
+			&:hover {
+				img {
+					opacity: 1;
+				}
+			}
+		
 			&::before {
 				content: '';
 				position: absolute;
@@ -107,6 +123,22 @@
 				position: relative;
 				inset: 0;
 				line-height: 30px;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				width: 100%;
+				
+				img {
+					max-width: 100%;
+					height: auto;
+					display: block;
+					opacity: 0.3;
+					transition: opacity 0.3s ease;
+					
+					@media (hover: none) and (pointer: coarse), (max-width: 768px) and (orientation: portrait) {
+						opacity: 1;
+					}
+				}
 			}
 		}
 

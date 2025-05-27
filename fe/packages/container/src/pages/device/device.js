@@ -21,6 +21,19 @@ export class Device {
 		island.addEventListener('click', () => {
 			window.open('https://github.com/didi/dimina', '_blank')
 		})
+		
+		// 鼠标进入灵动岛时放大效果
+		island.addEventListener('mouseenter', () => {
+			// 使用CSS类来添加缩放效果，而不是直接设置transform
+			island.classList.add('island-hover')
+		})
+		
+		// 鼠标离开灵动岛时恢复大小
+		island.addEventListener('mouseleave', () => {
+			// 移除CSS类来恢复大小
+			island.classList.remove('island-hover')
+		})
+		
 		const syncPointer = ({ x: pointerX, y: pointerY }) => {
 			const x = pointerX.toFixed(2)
 			const y = pointerY.toFixed(2)
