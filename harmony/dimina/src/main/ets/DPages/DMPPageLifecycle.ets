@@ -9,12 +9,6 @@ export class DMPPageLifecycle {
     this.app = app;
   }
 
-
-  // 新 FE 会调用，容器无需实现
-  // static onLoad() {
-  //
-  // }
-
   onShow(webviewId: number) {
     const msg: DMPMap = new DMPMap({
       type: 'pageShow',
@@ -24,11 +18,6 @@ export class DMPPageLifecycle {
     })
     DMPChannelProxyNext.ContainerToService(msg, this.app.appIndex)
   }
-
-  // 新 FE 会调用，容器无需实现
-  // static onReady() {
-  //
-  // }
 
   onHide(webviewId: number) {
     if (webviewId <= 0) {
@@ -54,9 +43,5 @@ export class DMPPageLifecycle {
     DMPChannelProxyNext.ContainerToService(msg, this.app.appIndex)
   }
 
-  // 新 FE 暂未有这个 api
-  // static onRouteDone() {
-  //
-  // }
 
 }

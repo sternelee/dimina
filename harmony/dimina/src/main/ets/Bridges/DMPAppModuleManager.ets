@@ -2,7 +2,6 @@ import { DMPExportModule } from './DMPExportModule';
 import { DMPContainerBridgesModuleActionSheet } from './DMPContainerBridgesModule+ActionSheet';
 import { DMPContainerBridgesModulePopUp } from './DMPContainerBridgesModule+Popup';
 import { DMPContainerBridgesModuleNavigator } from './DMPContainerBridgesModule+Navigator';
-import { DMPContainerBridgesModuleLaunch } from './DMPContainerBridgesModule+Launch';
 import { DMPContainerBridgesModuleDom } from './DMPContainerBridgesModule+Dom';
 import { DMPContainerBridgesModuleWeb } from './DMPContainerBridgesModule+Web';
 import { DMPContainerBridgesModuleSystem } from './DMPContainerBridgesModule+System';
@@ -51,7 +50,6 @@ export class DMPAppModuleManager extends DMPModuleManager {
     this.registerModule(new DMPContainerBridgesModuleBluetooth(app))
     this.registerModule(new DMPContainerBridgesModuleComponentAPI(app))
     this.registerModule(new DMPContainerBridgesModulePopUp(app))
-    this.registerModule(new DMPContainerBridgesModuleLaunch(app))
     this.registerModule(new DMPContainerBridgesModuleDom(app))
     this.registerModule(new DMPContainerBridgesModuleNavigator(app))
     this.registerModule(new DMPContainerBridgesModuleWeb(app))
