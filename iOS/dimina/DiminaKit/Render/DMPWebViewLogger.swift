@@ -8,7 +8,7 @@
 import Foundation
 import WebKit
 
-// 日志级别定义
+// Log level definition
 public enum DMPLogLevel: String {
     case log = "LOG"
     case error = "ERROR"
@@ -18,12 +18,12 @@ public enum DMPLogLevel: String {
     case resource = "RESOURCE"
 }
 
-// WebView日志委托协议
+// WebView log delegate protocol
 public protocol DMPWebViewLoggerDelegate: AnyObject {
     func webViewDidLog(webViewId: Int, level: DMPLogLevel, message: String)
 }
 
-// 为日志方法提供默认实现
+// Provide default implementation for log methods
 public extension DMPWebViewLoggerDelegate {
     func webViewDidLog(webViewId: Int, level: DMPLogLevel, message: String) {
         print("🔵 WebView[\(webViewId)] [\(level.rawValue)]: \(message)")
@@ -44,9 +44,12 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
         setupLogHandlers()
     }
     
-    // 设置日志处理器
+    // Set up log handlers
     private func setupLogHandlers() {
-        // 注册消息处理器
+        // Clean up possible old handlers first to avoid duplicate registration
+        cleanupHandlers()
+        
+        // Register message handlers
         webView.configuration.userContentController.add(self, name: "consoleLog")
         webView.configuration.userContentController.add(self, name: "consoleError")
         webView.configuration.userContentController.add(self, name: "consoleWarn")
@@ -55,45 +58,62 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
         webView.configuration.userContentController.add(self, name: "networkError")
         webView.configuration.userContentController.add(self, name: "resourceError")
         
-        // 配置WebView安全设置
+        print("🔧 WebViewLogger[\(webViewId)]: Log handlers registered")
+        
+        // Configure WebView security settings
         if #available(iOS 14.0, *) {
-            // 新版本iOS使用标准API
+            // Use standard API for newer iOS versions
             let pagePrefs = WKWebpagePreferences()
             pagePrefs.allowsContentJavaScript = true
             webView.configuration.defaultWebpagePreferences = pagePrefs
             
-            // 启用开发者工具（如果支持）
+            // Enable developer tools (if supported)
             if #available(iOS 16.4, *) {
                 webView.isInspectable = true
             }
             
-            print("WebView已配置为现代安全模式")
+            print("WebView configured with modern security mode")
         } else {
-            // 注意：这里不再使用私有API，因为它们可能导致崩溃
-            print("WebView使用默认安全设置")
+            // Note: No longer using private APIs as they may cause crashes
+            print("WebView using default security settings")
         }
         
-        // 注入日志捕获脚本
+        // Inject log capture script
         injectLoggerScript()
         
-        // 在首次导航完成后注入额外的JavaScript以处理跨域问题
-        print("WebView日志处理器初始化完成")
+        // Inject additional JavaScript after first navigation to handle cross-origin issues
+        print("WebView log handler initialization completed")
     }
     
-    // 注入日志捕获脚本
+    // Safe method to clean up handlers
+    private func cleanupHandlers() {
+        let handlerNames = ["consoleLog", "consoleError", "consoleWarn", "consoleInfo", "jsError", "networkError", "resourceError"]
+        
+        for handlerName in handlerNames {
+            do {
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: handlerName)
+                print("🧹 WebViewLogger[\(webViewId)]: Cleaned up handler \(handlerName)")
+            } catch {
+                // Ignore error if handler doesn't exist
+                print("🟡 WebViewLogger[\(webViewId)]: Handler \(handlerName) doesn't exist, skipping cleanup")
+            }
+        }
+    }
+    
+    // Inject log capture script
     private func injectLoggerScript() {
         let script = WKUserScript(source: getLoggerScript(), injectionTime: .atDocumentStart, forMainFrameOnly: false)
         webView.configuration.userContentController.addUserScript(script)
     }
     
-    // 获取日志捕获脚本
+    // Get log capture script
     private func getLoggerScript() -> String {
         return """
-        // 重写console方法和捕获错误的JavaScript
+        // JavaScript to override console methods and capture errors
         (function() {
-            // 解决"Script error."问题 - 标记所有脚本为可跨域
+            // Solve "Script error." problem - mark all scripts as cross-origin
             try {
-                // 尝试添加全局处理器使动态添加的script元素具有crossorigin属性
+                // Try to add global handler to make dynamically added script elements have crossorigin attribute
                 document.addEventListener('beforescriptexecute', function(e) {
                     if (e.target && !e.target.hasAttribute('crossorigin')) {
                         e.target.setAttribute('crossorigin', 'anonymous');
@@ -101,11 +121,11 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
                     }
                 }, true);
             } catch(e) {
-                // beforescriptexecute可能不被所有浏览器支持
+                // beforescriptexecute may not be supported by all browsers
                 console.log('CrossOrigin auto-fix not supported in this browser');
             }
             
-            // 监控动态创建的script元素并添加crossorigin
+            // Monitor dynamically created script elements and add crossorigin
             const originalCreateElement = document.createElement;
             document.createElement = function(tagName) {
                 const element = originalCreateElement.call(document, tagName);
@@ -124,7 +144,7 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
             var originalWarn = console.warn;
             var originalInfo = console.info;
             
-            // 构造消息时添加更多上下文
+            // Add more context when constructing messages
             function enhanceLogMessage() {
                 var args = Array.from(arguments);
                 var callerInfo = '';
@@ -135,9 +155,9 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
                     if (e.stack) {
                         var stackLines = e.stack.split('\\n');
                         if (stackLines.length > 2) {
-                            // 跳过当前函数和console包装函数
+                            // Skip current function and console wrapper function
                             callerInfo = stackLines[2].trim();
-                            // 提取源文件和行号
+                            // Extract source file and line number
                             var matches = callerInfo.match(/at\\s+(.+)$/);
                             if (matches && matches[1]) {
                                 callerInfo = '[' + matches[1] + '] ';
@@ -173,130 +193,121 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
                 originalInfo.apply(console, arguments);
             };
             
-            // 启用跨域详细错误信息
+            // Enable cross-origin detailed error information
             window.addEventListener('error', function(event) {
-                // 添加crossorigin属性以获取更多跨域错误信息
+                // Add crossorigin attribute to get more cross-origin error information
                 if (event.target && (event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK' || event.target.tagName === 'IMG')) {
                     event.target.crossOrigin = 'anonymous';
                 }
                 
-                var errorData = {
-                    message: event.message || 'Unknown Error',
-                    filename: event.filename || '',
+                var errorInfo = {
+                    message: event.message || 'Unknown error',
+                    filename: event.filename || 'Unknown file',
                     lineno: event.lineno || 0,
                     colno: event.colno || 0,
-                    stack: event.error ? (event.error.stack || '') : '',
-                    target: event.target ? event.target.tagName || '' : '',
-                    timeStamp: event.timeStamp,
-                    type: event.type
+                    error: event.error ? {
+                        name: event.error.name,
+                        message: event.error.message,
+                        stack: event.error.stack
+                    } : null,
+                    timestamp: Date.now(),
+                    userAgent: navigator.userAgent,
+                    url: window.location.href,
+                    // Get more error properties
+                    type: event.type,
+                    target: event.target ? {
+                        tagName: event.target.tagName,
+                        src: event.target.src || event.target.href,
+                        id: event.target.id,
+                        className: event.target.className
+                    } : null
                 };
                 
-                if (event.error) {
-                    // 获取更多错误属性
-                    Object.getOwnPropertyNames(event.error).forEach(function(key) {
-                        try {
-                            errorData[key] = String(event.error[key]);
-                        } catch(e) {
-                            errorData[key] = 'Could not stringify property';
-                        }
-                    });
-                }
-                
-                window.webkit.messageHandlers.jsError.postMessage(JSON.stringify(errorData));
-            }, true);  // 使用捕获阶段以获取所有事件
+                window.webkit.messageHandlers.jsError.postMessage(JSON.stringify(errorInfo));
+            }, true);  // Use capture phase to get all events
             
-            // 捕获未处理的Promise拒绝
+            // Capture unhandled Promise rejections
             window.addEventListener('unhandledrejection', function(event) {
-                var errorData = {
-                    message: 'Unhandled Promise Rejection: ' + (event.reason ? String(event.reason) : 'Unknown'),
-                    stack: event.reason && event.reason.stack ? event.reason.stack : '',
-                    reason: event.reason ? String(event.reason) : '',
-                    timeStamp: event.timeStamp,
-                    type: 'unhandledrejection'
+                var rejectionInfo = {
+                    type: 'unhandledrejection',
+                    reason: event.reason ? (typeof event.reason === 'object' ? JSON.stringify(event.reason) : String(event.reason)) : 'Unknown reason',
+                    timestamp: Date.now(),
+                    userAgent: navigator.userAgent,
+                    url: window.location.href,
+                    // Get more Rejection details
+                    promise: event.promise ? 'Promise object' : 'No promise'
                 };
                 
-                // 获取更多Rejection详情
-                if (event.reason && typeof event.reason === 'object') {
-                    try {
-                        Object.getOwnPropertyNames(event.reason).forEach(function(key) {
-                            try {
-                                errorData['reason_' + key] = String(event.reason[key]);
-                            } catch(e) {
-                                errorData['reason_' + key] = 'Could not stringify property';
-                            }
-                        });
-                    } catch(e) {
-                        errorData.reasonError = String(e);
-                    }
-                }
-                
-                window.webkit.messageHandlers.jsError.postMessage(JSON.stringify(errorData));
+                window.webkit.messageHandlers.jsError.postMessage(JSON.stringify(rejectionInfo));
             });
             
-            // 监控网络请求错误
+            // Monitor and catch ResourceError
             window.addEventListener('error', function(event) {
-                if (event.target && (event.target.tagName === 'IMG' || event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK' || event.target.tagName === 'IFRAME')) {
-                    var resourceData = {
+                if (event.target !== window) {
+                    var resourceErrorInfo = {
+                        type: 'resourceError',
                         element: event.target.tagName,
-                        url: event.target.src || event.target.href,
-                        timeStamp: event.timeStamp,
-                        error: event.message,
-                        type: 'resourceError'
+                        source: event.target.src || event.target.href || 'Unknown source',
+                        timestamp: Date.now(),
+                        userAgent: navigator.userAgent,
+                        url: window.location.href
                     };
-                    window.webkit.messageHandlers.resourceError.postMessage(JSON.stringify(resourceData));
+                    
+                    window.webkit.messageHandlers.resourceError.postMessage(JSON.stringify(resourceErrorInfo));
                 }
             }, true);
             
-            // 记录"Script error"错误的可能原因
-            if (window.location.protocol === 'file:') {
-                console.warn('Running from file:// protocol - this may cause "Script error" messages due to security restrictions');
+            // Log possible causes of "Script error" errors
+            if (typeof window.onerror === 'undefined') {
+                console.log('window.onerror is not defined, may cause script errors to not be captured properly');
             }
             
-            // 记录页面基本信息，帮助调试
-            console.info('Page URL: ' + location.href);
-            console.info('User Agent: ' + navigator.userAgent);
+            // Log basic page info to help with debugging
+            console.log('Page loaded:', window.location.href);
+            console.log('User agent:', navigator.userAgent);
             
-            // 监听XHR请求错误
+            // Listen for XHR request errors
             (function() {
                 var originalXHROpen = XMLHttpRequest.prototype.open;
                 var originalXHRSend = XMLHttpRequest.prototype.send;
                 
                 XMLHttpRequest.prototype.open = function(method, url) {
-                    this._diminaUrl = url;
-                    this._diminaMethod = method;
+                    this._method = method;
+                    this._url = url;
                     return originalXHROpen.apply(this, arguments);
                 };
                 
                 XMLHttpRequest.prototype.send = function() {
                     var xhr = this;
-                    this.addEventListener('error', function() {
-                        var networkData = {
-                            type: 'xhr_error',
-                            url: xhr._diminaUrl || 'unknown',
-                            method: xhr._diminaMethod || 'unknown',
+                    
+                    xhr.addEventListener('error', function() {
+                        var networkErrorInfo = {
+                            type: 'xhrError',
+                            method: xhr._method,
+                            url: xhr._url,
                             status: xhr.status,
                             statusText: xhr.statusText,
                             readyState: xhr.readyState,
-                            responseType: xhr.responseType,
-                            timeStamp: Date.now()
+                            timestamp: Date.now()
                         };
-                        window.webkit.messageHandlers.networkError.postMessage(JSON.stringify(networkData));
+                        
+                        window.webkit.messageHandlers.networkError.postMessage(JSON.stringify(networkErrorInfo));
                     });
                     
-                    // 记录请求完成但状态码异常的情况
-                    this.addEventListener('load', function() {
+                    xhr.addEventListener('load', function() {
+                        // Log requests completed but with abnormal status codes
                         if (xhr.status >= 400) {
-                            var networkData = {
-                                type: 'xhr_status_error',
-                                url: xhr._diminaUrl || 'unknown',
-                                method: xhr._diminaMethod || 'unknown',
+                            var networkErrorInfo = {
+                                type: 'xhrHttpError',
+                                method: xhr._method,
+                                url: xhr._url,
                                 status: xhr.status,
                                 statusText: xhr.statusText,
                                 readyState: xhr.readyState,
-                                responseText: (xhr.responseType === '' || xhr.responseType === 'text') ? xhr.responseText.substring(0, 500) : '(binary)',
-                                timeStamp: Date.now()
+                                timestamp: Date.now()
                             };
-                            window.webkit.messageHandlers.networkError.postMessage(JSON.stringify(networkData));
+                            
+                            window.webkit.messageHandlers.networkError.postMessage(JSON.stringify(networkErrorInfo));
                         }
                     });
                     
@@ -304,156 +315,128 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
                 };
             })();
             
-            // 监听Fetch请求错误
-            (function() {
+            // Listen for Fetch request errors
+            if (window.fetch) {
                 var originalFetch = window.fetch;
                 window.fetch = function() {
-                    var url = arguments[0];
-                    var options = arguments[1] || {};
-                    
-                    if (typeof url === 'object') {
-                        url = url.url;
-                    }
-                    
-                    return originalFetch.apply(this, arguments)
-                        .catch(function(error) {
-                            var networkData = {
-                                type: 'fetch_error',
-                                url: url,
-                                method: options.method || 'GET',
-                                error: String(error),
-                                stack: error.stack || '',
-                                timeStamp: Date.now()
-                            };
-                            window.webkit.messageHandlers.networkError.postMessage(JSON.stringify(networkData));
-                            throw error;
-                        });
+                    return originalFetch.apply(this, arguments).catch(function(error) {
+                        var fetchErrorInfo = {
+                            type: 'fetchError',
+                            url: arguments[0],
+                            error: error.message,
+                            timestamp: Date.now()
+                        };
+                        
+                        window.webkit.messageHandlers.networkError.postMessage(JSON.stringify(fetchErrorInfo));
+                        
+                        throw error;
+                    });
                 };
-            })();
+            }
         })();
         """
     }
     
-    // 设置delegate
+    // Set delegate
     public func setDelegate(_ delegate: DMPWebViewLoggerDelegate?) {
         self.delegate = delegate
     }
     
-    // WKScriptMessageHandler实现
+    // WKScriptMessageHandler implementation
     public func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
-        // 根据消息类型处理日志
-        if message.name.starts(with: "console") {
-            let levelStr = message.name.replacingOccurrences(of: "console", with: "")
-            var level: DMPLogLevel = .log
-            
-            switch levelStr.lowercased() {
-            case "error":
-                level = .error
-            case "warn":
-                level = .warn
-            case "info":
-                level = .info
-            default:
-                level = .log
-            }
-            
-            if let messageContent = message.body as? String {
-                logMessage(level: level, message: messageContent)
-            }
-        } else if message.name == "jsError" {
-            if let errorJSON = message.body as? String {
-                processJSError(errorJSON: errorJSON)
-            }
-        } else if message.name == "networkError" || message.name == "resourceError" {
-            if let errorJSON = message.body as? String {
-                processNetworkError(errorJSON: errorJSON)
-            }
+        // Handle logs based on message type
+        switch message.name {
+        case "consoleLog":
+            logMessage(level: .log, message: String(describing: message.body))
+        case "consoleError":
+            logMessage(level: .error, message: String(describing: message.body))
+        case "consoleWarn":
+            logMessage(level: .warn, message: String(describing: message.body))
+        case "consoleInfo":
+            logMessage(level: .info, message: String(describing: message.body))
+        case "jsError":
+            handleJSError(message: String(describing: message.body))
+        case "networkError":
+            handleNetworkError(message: String(describing: message.body))
+        case "resourceError":
+            logMessage(level: .resource, message: String(describing: message.body))
+        default:
+            print("🟡 WebViewLogger[\(webViewId)]: Unknown message type: \(message.name)")
         }
     }
     
-    // 处理JS错误
-    private func processJSError(errorJSON: String) {
-        print("🔵 WebView[\(self.webViewId)] [ERROR]: \(errorJSON)")
-        
-        guard let data = errorJSON.data(using: .utf8),
-              let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            logMessage(level: .error, message: "无法解析JS错误: \(errorJSON)")
-            return
+    // Handle JS errors
+    private func handleJSError(message: String) {
+        if let errorData = message.data(using: .utf8) {
+            do {
+                let errorJSON = try JSONSerialization.jsonObject(with: errorData, options: [])
+                logMessage(level: .error, message: "JS Error: \(errorJSON)")
+            } catch {
+                logMessage(level: .error, message: "Unable to parse JS error: \(message)")
+            }
         }
         
-        // 构造更详细的错误信息
-        var detailedMessage = "JS Error:\n"
-        if let message = errorDict["message"] as? String {
-            detailedMessage += "Message: \(message)\n"
-        }
-        if let filename = errorDict["filename"] as? String, !filename.isEmpty {
-            detailedMessage += "File: \(filename)\n"
-        }
-        if let lineno = errorDict["lineno"] as? Int, lineno > 0 {
-            detailedMessage += "Line: \(lineno)\n"
-        }
-        if let colno = errorDict["colno"] as? Int, colno > 0 {
-            detailedMessage += "Column: \(colno)\n"
-        }
-        if let target = errorDict["target"] as? String, !target.isEmpty {
-            detailedMessage += "Target: \(target)\n"
-        }
-        if let type = errorDict["type"] as? String {
-            detailedMessage += "Type: \(type)\n"
-        }
-        if let stack = errorDict["stack"] as? String, !stack.isEmpty {
-            detailedMessage += "Stack:\n\(stack)\n"
-        }
+        // Construct more detailed error information
+        var detailedMessage = "JavaScript Error Details:\n"
+        detailedMessage += "Raw Message: \(message)\n"
+        detailedMessage += "WebView ID: \(webViewId)\n"
+        detailedMessage += "Timestamp: \(Date())\n"
         
-        // 添加其他可能的错误属性
-        for (key, value) in errorDict {
-            if !["message", "filename", "lineno", "colno", "stack", "target", "type"].contains(key) {
-                if let stringValue = value as? String, !stringValue.isEmpty {
-                    detailedMessage += "\(key): \(stringValue)\n"
+        if let errorData = message.data(using: .utf8) {
+            do {
+                if let errorDict = try JSONSerialization.jsonObject(with: errorData, options: []) as? [String: Any] {
+                    detailedMessage += "Error Message: \(errorDict["message"] ?? "Unknown")\n"
+                    detailedMessage += "File: \(errorDict["filename"] ?? "Unknown")\n"
+                    detailedMessage += "Line: \(errorDict["lineno"] ?? "Unknown")\n"
+                    detailedMessage += "Column: \(errorDict["colno"] ?? "Unknown")\n"
+                    
+                    if let errorObj = errorDict["error"] as? [String: Any] {
+                        detailedMessage += "Error Name: \(errorObj["name"] ?? "Unknown")\n"
+                        detailedMessage += "Error Stack: \(errorObj["stack"] ?? "No stack trace")\n"
+                    }
+                    
+                    // Add other possible error properties
+                    if let target = errorDict["target"] as? [String: Any] {
+                        detailedMessage += "Target Element: \(target["tagName"] ?? "Unknown")\n"
+                        detailedMessage += "Target Source: \(target["src"] ?? "No source")\n"
+                    }
                 }
+            } catch {
+                detailedMessage += "Error parsing error data: \(error.localizedDescription)\n"
             }
         }
         
         logMessage(level: .error, message: detailedMessage)
     }
     
-    // 处理网络错误
-    private func processNetworkError(errorJSON: String) {
-        print("🔵 WebView[\(self.webViewId)] [NETWORK_ERROR]: \(errorJSON)")
-        
-        guard let data = errorJSON.data(using: .utf8),
-              let errorDict = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            logMessage(level: .network, message: "无法解析网络错误: \(errorJSON)")
-            return
-        }
-        
-        var detailedMessage = "Network Error:\n"
-        for (key, value) in errorDict {
-            if let stringValue = value as? String {
-                detailedMessage += "\(key): \(stringValue)\n"
-            } else {
-                detailedMessage += "\(key): \(value)\n"
+    // Handle network errors
+    private func handleNetworkError(message: String) {
+        if let errorData = message.data(using: .utf8) {
+            do {
+                let errorJSON = try JSONSerialization.jsonObject(with: errorData, options: [])
+                logMessage(level: .network, message: "Network Error: \(errorJSON)")
+            } catch {
+                logMessage(level: .network, message: "Unable to parse network error: \(message)")
             }
         }
+        
+        var detailedMessage = "Network Error Details:\n"
+        detailedMessage += "Raw Message: \(message)\n"
+        detailedMessage += "WebView ID: \(webViewId)\n"
+        detailedMessage += "Timestamp: \(Date())\n"
         
         logMessage(level: .network, message: detailedMessage)
     }
     
-    // 记录日志消息
+    // Log message
     private func logMessage(level: DMPLogLevel, message: String) {
         delegate?.webViewDidLog(webViewId: webViewId, level: level, message: message)
-        print("🔵 WebView[\(webViewId)] [\(level.rawValue)]: \(message)")
     }
     
-    // 清理
+    // Cleanup
     public func cleanup() {
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleLog")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleError")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleWarn")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "consoleInfo")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "jsError")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "networkError")
-        webView.configuration.userContentController.removeScriptMessageHandler(forName: "resourceError")
+        cleanupHandlers()
+        print("🧹 WebViewLogger[\(webViewId)]: Cleanup completed")
     }
     
     deinit {

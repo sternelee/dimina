@@ -24,51 +24,64 @@ public class DMPRender: DMPWebViewDelegate {
         return app
     }
 
+    @MainActor
     public func createWebView(appName: String) -> DMPWebview {
-        let webview = DMPWebview(delegate: self, appName: appName, appId: app?.getAppId() ?? "")
+        let webview = DMPWebViewPool.shared.acquireWebView(
+            delegate: self, 
+            appName: appName, 
+            appId: app?.getAppId() ?? ""
+        )
         webviewsMap[webview.getWebViewId()] = webview
         return webview
+    }
+    
+    // Release WebView instance
+    @MainActor
+    public func releaseWebView(_ webview: DMPWebview) {
+        let webViewId = webview.getWebViewId()
+        webviewsMap.removeValue(forKey: webViewId)
+        DMPWebViewPool.shared.releaseWebView(webview)
     }
 
     public func getWebView(byId id: Int) -> DMPWebview? {
         return webviewsMap[id]
     }
 
-    // 执行JavaScript代码
+    // Execute JavaScript code
     public func executeJavaScript(webViewId: Int, _ script: String, completionHandler: ((Any?, Error?) -> Void)? = nil) -> Void {
         webviewsMap[webViewId]?.executeJavaScript(script, completionHandler: completionHandler)
     }
 
-    // 注册JavaScript方法，让Native可以监听到JavaScript的调用
+    // Register JavaScript method to allow Native to listen to JavaScript calls
     public func registerJSHandler(webViewId: Int, handlerName: String, callback: @escaping (Any) -> Void) {
         webviewsMap[webViewId]?.registerJSHandler(handlerName: handlerName, callback: callback)
     }
 
-    // 为单个WebView设置JS桥接
+    // Set up JS bridge for single WebView
     public func setupJSBridge(webViewId: Int) {
         guard let webview = webviewsMap[webViewId] else { return }
 
-        // 注册handlers
+        // Register handlers
         invokeHandler.registerInvokeHandler(webview: webview, webViewId: webViewId)
         publishHandler.registerPublishHandler(webview: webview)
 
-        // 注入JavaScript代码
+        // Inject JavaScript code
         invokeHandler.injectInvokeJavaScript(webview: webview)
         publishHandler.injectPublishJavaScript(webview: webview)
     }
 
-    // 为DMPPage提供WebView视图
+    // Provide WebView view for DMPPage
     public func getWebViewRepresentable(webViewId: Int) -> AnyView {
         if let webview = webviewsMap[webViewId] {
-            // 使用 createWebView() 方法来创建完整的视图
+            // Use createWebView() method to create complete view
             return AnyView(webview.createWebView())
         }
-        return AnyView(Text("WebView未初始化").padding())
+        return AnyView(Text("WebView not initialized").padding())
     }
 
-    // DMPWebViewDelegate 协议实现 - 处理WebView加载完成事件
+    // DMPWebViewDelegate protocol implementation - Handle WebView load completion event
     public func webViewDidFinishLoad(webViewId: Int) {
-        print("🔴 DMPRender: 网页加载完成")
+        print("🔴 DMPRender: WebView load completed \(webViewId)")
         let webview = webviewsMap[webViewId]
 
         setupJSBridge(webViewId: webViewId)
@@ -77,9 +90,9 @@ public class DMPRender: DMPWebViewDelegate {
         self.app?.container?.loadResourceRender(webViewId: webViewId, pagePath: webview?.getPagePath() ?? "");
     }
 
-    // DMPWebViewDelegate 协议实现 - 处理WebView加载失败事件
+    // DMPWebViewDelegate protocol implementation - Handle WebView load failure event
     public func webViewDidFailLoad(webViewId: Int, error: Error) {
-        print("🔴 DMPRender: 网页加载失败: \(error.localizedDescription)")
+        print("🔴 DMPRender: WebView load failed: \(error.localizedDescription)")
     }
 
     public func fromContainer(data: DMPMap, webViewId: Int) {

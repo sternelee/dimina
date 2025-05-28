@@ -96,9 +96,13 @@ public class DMPApp {
         containerApi = DMPContainerApi.create(app: self)
     }
 
+    @MainActor
     public func initRender() {
         print("initRender")
         render = DMPRender(app: self)
+        
+        // Pre-warm WebView pool to improve first page opening speed
+        DMPWebViewPool.shared.warmUp()
     }
 
     public func loadBundle() async {
@@ -130,6 +134,12 @@ public class DMPApp {
 
     public func destroy() {
         print("app destroy")
+        
+        // Clear WebView cache pool (execute on main thread)
+        Task { @MainActor in
+            DMPWebViewPool.shared.clearPool()
+        }
+        
         DMPStorage.teardownModule()
         
         DMPAppManager.sharedInstance().removeApp(appId: appId)

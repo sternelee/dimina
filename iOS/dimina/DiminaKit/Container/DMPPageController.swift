@@ -28,6 +28,9 @@ public class DMPPageController: UIViewController {
     private var webview: DMPWebview
     private var hostingController: UIHostingController<DMPWebViewContainer>?
 
+    // State
+    private var isWebViewDestroyed = false
+
     /// Initialization method
     /// - Parameters:
     ///   - pagePath: Page path
@@ -52,7 +55,7 @@ public class DMPPageController: UIViewController {
 
         super.init(nibName: nil, bundle: nil)
 
-        // Configure WebView
+        // Configure WebView - Configure immediately to ensure page path is set correctly
         configWebView()
     }
 
@@ -62,11 +65,18 @@ public class DMPPageController: UIViewController {
 
     // Configure WebView
     private func configWebView() {
+        print("�� DMPPageController: Configure WebView (ID: \(webview.getWebViewId())) page path: \(pagePath)")
+        
+        // Set page path and query parameters
         self.webview.setPagePath(pagePath: pagePath)
         if let query = query {
             self.webview.setQuery(query: query)
         }
-        self.webview.loadPageFrame()
+        
+        print("🔧 DMPPageController: WebView (ID: \(webview.getWebViewId())) configuration completed, current page path: \(webview.getPagePath())")
+        
+        // Load page frame
+        webview.loadPageFrame()
     }
 
     // View loaded
@@ -180,6 +190,55 @@ public class DMPPageController: UIViewController {
     // Called when page is shown
     public func onShow() {
         // Add your logic here
+    }
+    
+    // MARK: - Lifecycle Methods
+    
+    public override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        
+        // Notify lifecycle management when page completely disappears
+        if isMovingFromParent {
+            // Page is removed from navigation stack
+            destroyWebView()
+        }
+    }
+    
+    // Destroy WebView
+    private func destroyWebView() {
+        // Add state check to prevent duplicate destruction
+        guard !isWebViewDestroyed else {
+            print("🟡 DMPPageController: WebView (ID: \(webview.getWebViewId())) has already been destroyed, skipping duplicate operation")
+            return
+        }
+        
+        print("🗑️ DMPPageController: Destroy WebView (ID: \(webview.getWebViewId()))")
+        isWebViewDestroyed = true
+        
+        // Notify page unload
+        if let app = app {
+            let msg = DMPMap([
+                "type": "pageUnload",
+                "body": [
+                    "bridgeId": webview.getWebViewId()
+                ]
+            ])
+            DMPChannelProxy.containerToService(msg: msg, app: app)
+        }
+        
+        // Release WebView back to pool
+        app?.render?.releaseWebView(webview)
+    }
+    
+    // Manual destroy method (for external calls)
+    public func destroy() {
+        destroyWebView()
+    }
+    
+    deinit {
+        print("🗑️ DMPPageController: deinit (WebView ID: \(webview.getWebViewId()))")
+        // Ensure WebView is correctly released
+        destroyWebView()
     }
 }
 
