@@ -23,7 +23,7 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     // Add WebViewLogger member variable
     internal var logger: DMPWebViewLogger?
 
-    private let webViewId: Int
+    private var webViewId: Int
     internal var pagePath: String
     internal var query: [String: Any] = [:]
     
@@ -359,6 +359,15 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
 
     public func setQuery(query: [String: Any]) {
         self.query = query
+    }
+
+    // Add internal method to regenerate webViewId
+    internal func regenerateWebViewId() {
+        self.webViewId = DMPIdProvider.generateWebViewId()
+        // Also update logger's webViewId if it exists
+        if let logger = self.logger {
+            logger.updateWebViewId(self.webViewId)
+        }
     }
 
     // SwiftUI view wrapper

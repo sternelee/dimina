@@ -33,7 +33,7 @@ public extension DMPWebViewLoggerDelegate {
 public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
     private var webView: WKWebView
     private weak var delegate: DMPWebViewLoggerDelegate?
-    private let webViewId: Int
+    private var webViewId: Int
     
     public init(webView: WKWebView, webViewId: Int, delegate: DMPWebViewLoggerDelegate? = nil) {
         self.webView = webView
@@ -441,5 +441,11 @@ public class DMPWebViewLogger: NSObject, WKScriptMessageHandler {
     
     deinit {
         cleanup()
+    }
+    
+    // Update webViewId method
+    internal func updateWebViewId(_ newWebViewId: Int) {
+        self.webViewId = newWebViewId
+        print("🔄 WebViewLogger: Updated webViewId to \(newWebViewId)")
     }
 } 

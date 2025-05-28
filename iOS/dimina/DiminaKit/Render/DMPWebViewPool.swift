@@ -95,6 +95,8 @@ public class DMPWebViewPool {
         if let reusableWebView = availableWebViews.popLast() {
             // Reuse existing WebView
             webview = reusableWebView
+            
+            webview.regenerateWebViewId()
             webview.setDelegate(delegate)
             webview.resetForReuse(appName: appName, appId: appId)
             
@@ -102,6 +104,7 @@ public class DMPWebViewPool {
         } else {
             // Create new WebView
             webview = createNewWebView(delegate: delegate, appName: appName, appId: appId)
+            webview.regenerateWebViewId()
             
             print("🟡 WebViewPool: Create new WebView (ID: \(webview.getWebViewId()))")
         }
