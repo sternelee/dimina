@@ -200,9 +200,11 @@ public class DMPWebViewOptimizer {
     
     private func setupURLSchemeHandlers(to config: WKWebViewConfiguration, appId: String) {
         // Register custom URL scheme handlers
-        // TODO: Implement DMPResourceSchemeHandler when available
-        // let schemeHandler = DMPResourceSchemeHandler()
-        // config.setURLSchemeHandler(schemeHandler, forURLScheme: "dimina")
+         let difileSchemeHandler: DifileURLSchemeHandler = DifileURLSchemeHandler(appId: appId)
+         config.setURLSchemeHandler(difileSchemeHandler, forURLScheme: "difile")
+         
+         let diminaSchemeHandler = DiminaURLSchemeHandler(appId: appId)
+         config.setURLSchemeHandler(diminaSchemeHandler, forURLScheme: "dimina")
         
         print("🔗 WebViewOptimizer: Set up URL scheme handlers")
     }
