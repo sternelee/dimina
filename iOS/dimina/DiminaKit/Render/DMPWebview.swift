@@ -264,8 +264,8 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
         injectResourceFixScript()
 
         // Use loadFileURL to load files and allow access to entire sandbox directory
-        let fileURL = URL(fileURLWithPath: DMPSandboxManager.renderFramePath())
-        let allowingReadAccessTo = URL(fileURLWithPath: DMPSandboxManager.rootDirectory())
+        let fileURL = URL(fileURLWithPath: DMPSandboxManager.sdkPageFramePath())
+        let allowingReadAccessTo = URL(fileURLWithPath: DMPSandboxManager.sandboxPath())
         webView.loadFileURL(fileURL, allowingReadAccessTo: allowingReadAccessTo)
     }
 
