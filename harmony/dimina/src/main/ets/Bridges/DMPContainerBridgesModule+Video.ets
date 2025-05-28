@@ -11,7 +11,72 @@ import { camera } from '@kit.CameraKit';
 
 export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   getExportMethods(): string[] {
-    return ['chooseMedia'];
+    return ['chooseMedia', 'chooseVideo'];
+  }
+
+  chooseVideo(data: DMPMap, callback: DMPBridgeCallback, webViewId: number) {
+    const sourceType: [string] = data.get('sourceType') ?? ["album", "camera"];
+    const count: number = data.get('count') ?? 9;
+    const camera: string = data.get('camera') ?? 'back';
+    const maxDuration: number = data.get('maxDuration') ?? 10;
+
+    if (sourceType.length > 1) {
+      this.showSelectDialog(webViewId,
+        (sourceTypeData) => {
+          this.chooseVideoBySourceType(sourceTypeData, count, camera, maxDuration, callback)
+        }
+      )
+    } else {
+      const sourceTypeData = sourceType[0]
+      this.chooseVideoBySourceType(sourceTypeData, count, camera, maxDuration, callback)
+    }
+  }
+
+  chooseVideoBySourceType(sourceType: string, count: number, cameraType: string, maxDuration: number,
+    callback: DMPBridgeCallback) {
+    if (sourceType === 'album') {
+      let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseVideo';
+      PhotoPicker.selectVideos(DMPContextUtils.getUIAbilityContext(), path, count).then((photoModels) => {
+        if (photoModels != null) {
+          const tempFilePaths = new Array<string>()
+          const tempFiles = new Array<Map<string, object>>()
+          photoModels.forEach((element) => {
+            const vPath = DMPFileUrlConvertor.vPathFromLocalPath(element.localPath)
+            const tempFileDic = new Map<string, object>()
+            tempFileDic['path'] = vPath
+            tempFilePaths.push(vPath)
+            tempFiles.push(tempFileDic)
+          })
+          const data = new DMPMap()
+          data.set('tempFilePaths', tempFilePaths);
+          data.set('tempFiles', tempFiles);
+          this.invokeSuccessCallback(callback, data)
+        } else {
+          this.invokeFailureCallback(callback, null, '选择视频失败')
+        }
+      });
+    } else if (sourceType === 'camera') {
+      let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseVideo';
+      CameraPicker.takeVideo(getContext() as common.UIAbilityContext, path, maxDuration,
+        cameraType == "back" ? camera.CameraPosition.CAMERA_POSITION_BACK : camera.CameraPosition.CAMERA_POSITION_FRONT)
+        .then((result) => {
+          if (result) {
+            const tempFilePaths = new Array<string>()
+            const tempFiles = new Array<Map<string, object>>()
+            const vPath = DMPFileUrlConvertor.vPathFromLocalPath(result.localPath)
+            const tempFileDic = new Map<string, object>()
+            tempFileDic['tempFilePath'] = vPath
+            tempFiles.push(tempFileDic)
+            tempFilePaths.push(vPath)
+            const data = new DMPMap()
+            data.set('tempFilePaths', tempFilePaths);
+            data.set('tempFiles', tempFiles);
+            this.invokeSuccessCallback(callback, data)
+          } else {
+            this.invokeFailureCallback(callback, null, '拍照失败')
+          }
+        })
+    }
   }
 
   chooseMedia(data: DMPMap, callback: DMPBridgeCallback, webViewId: number) {
@@ -45,7 +110,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
       if (mediaType === 'image') {
         this.chooseImageByCamera(camera, callback)
       } else {
-        this.chooseVideoByCamera(camera, callback)
+        this.chooseVideoByCamera(camera, maxDuration, callback)
       }
     }
   }
@@ -92,9 +157,9 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
       })
   }
 
-  chooseVideoByCamera(cameraType: string, callback: DMPBridgeCallback) {
+  chooseVideoByCamera(cameraType: string, maxDuration: number, callback: DMPBridgeCallback) {
     let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseImage';
-    CameraPicker.takeVideo(getContext() as common.UIAbilityContext, path,
+    CameraPicker.takeVideo(getContext() as common.UIAbilityContext, path, maxDuration,
       cameraType == "back" ? camera.CameraPosition.CAMERA_POSITION_BACK : camera.CameraPosition.CAMERA_POSITION_FRONT)
       .then((result) => {
         if (result) {
