@@ -8,7 +8,6 @@ import { DMPContainerBridgesModuleSystem } from './DMPContainerBridgesModule+Sys
 import { DMPContainerBridgesModuleAnalytics } from './DMPContainerBridgesModule+Analytics';
 import { DMPContainerBridgesModuleComponentAPI } from './DMPContainerBridgesModule+ComponentAPI';
 import { DMPContainerBridgesModuleContact } from './DMPContainerBridgesModule+Contact';
-import { DMPContainerBridgesModuleHttp } from './Network/DMPContainerBridgesModule+Http';
 import { DMPContainerBridgesModuleShare } from './Share/DMPContainerBridgesModule+Share';
 import { DMPContainerBridgesModuleCamera } from './DMPContainerBridgesModule+Camera';
 import { DMPContainerBridgesModuleNetwork } from './Network/DMPContainerBridgesModule+Network';
@@ -57,7 +56,7 @@ export class DMPAppModuleManager extends DMPModuleManager {
 
     this.registerModule(new DMPContainerBridgesModuleAnalytics(app))
     this.registerModule(new DMPContainerBridgesModuleContact(app))
-    this.registerModule(new DMPContainerBridgesModuleHttp(app))
+
     this.registerModule(new DMPContainerBridgesModuleShare(app))
     this.registerModule(new DMPContainerBridgesModuleCamera(app))
     this.registerModule(new DMPContainerBridgesModuleNetwork(app))
