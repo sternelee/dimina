@@ -1,4 +1,6 @@
 import { DMPApp } from '../DApp/DMPApp';
+import { DMPLogger } from '../EventTrack/DMPLogger';
+import { Tags } from '../EventTrack/Tags';
 import { DMPChannelProxyNext } from '../Service/DMPChannelProxyNext';
 import { DMPMap } from '../Utils/DMPMap';
 
@@ -10,6 +12,7 @@ export class DMPPageLifecycle {
   }
 
   onShow(webviewId: number) {
+    DMPLogger.i(Tags.ON_PAGE_SHOW, `webviewId:${webviewId}`)
     const msg: DMPMap = new DMPMap({
       type: 'pageShow',
       body: {
@@ -20,6 +23,7 @@ export class DMPPageLifecycle {
   }
 
   onHide(webviewId: number) {
+    DMPLogger.i(Tags.ON_PAGE_HIDE, `webviewId:${webviewId}`)
     if (webviewId <= 0) {
       return;
     }

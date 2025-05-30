@@ -1,5 +1,4 @@
 import { BusinessError } from '@ohos.base';
-import { DiminaPageString, monitorCoreEvent } from '../EventTrack/Monitor';
 import { DMPApp } from '../DApp/DMPApp';
 import { DMPPageRecord as DMPPageRecord } from './DMPPageRecord';
 import { DMPLaunchConfig, DMPOpenType } from '../DAppManager/DMPLaunchConfig';
@@ -49,7 +48,6 @@ export class DMPNavigator {
   async navigateTo(stackId: number, params: DMPMap) {
     this.app.container.isNavigating = true;
     DMPLogger.d(Tags.NAVIGATOR, 'navigateTo')
-    monitorCoreEvent(DiminaPageString.NAVIGATE_PUSH_PAGE, params.toStr())
     const pagePath: string = params.get('pagePath')
 
     const callback: DMPBridgeCallback = (_: DMPMap, cbType: DMPBridgeCallbackType) => {
@@ -117,7 +115,7 @@ export class DMPNavigator {
       launchConfig.query = params.get('query')
     }
     this.app.reLaunch()
-    monitorCoreEvent(DiminaPageString.PAGE_ON_SHOW, 'onPageShow')
+
   }
 
   async redirectTo(stackId: number, params: DMPMap) {
@@ -138,7 +136,7 @@ export class DMPNavigator {
 
 
   private realRedirectTo(stackId: number, pagePath: string, params: DMPMap) {
-    DMPLogger.i(DiminaPageString.NAVIGATE_REDIRECT_TO, params.toStr())
+    DMPLogger.i(Tags.REDIRECT, params.toStr())
     this.pageLifecycle.onUnload(this.app.currentWebViewId)
     this.popPageRecord()
 
@@ -167,7 +165,6 @@ export class DMPNavigator {
     }
 
     this.pageLifecycle.onShow(newWebViewId)
-    DMPLogger.i(DiminaPageString.PAGE_ON_SHOW, 'onPageShow')
   }
 
   async pop(delta: number = 1, animated: boolean = true, canDestroy = true, isReLaunch = false) {
@@ -207,7 +204,6 @@ export class DMPNavigator {
       }
       let currentPageRecord = this.app.navigatorManager.getTopPageRecord();
       this.pageLifecycle.onShow(currentPageRecord?.webViewId ?? -1)
-      monitorCoreEvent(DiminaPageString.PAGE_ON_SHOW, 'onPageShow')
 
     } catch (err) {
       DMPLogger.e(Tags.BRIDGE, `msg: ${(err as BusinessError).message}`)
@@ -227,7 +223,6 @@ export class DMPNavigator {
     DMPLogger.d(Tags.LAUNCH, "notify page.onHide start");
     this.pageLifecycle.onHide(this.app.currentWebViewId)
     DMPLogger.d(Tags.LAUNCH, "notify page.onHide end");
-    monitorCoreEvent(DiminaPageString.PAGE_ON_HIDE, 'onPageHide')
     const pageRecord = this.preLoadPage(pagePath, params)
 
     try {
@@ -247,7 +242,6 @@ export class DMPNavigator {
     }
 
     this.pageLifecycle.onShow(pageRecord.webViewId)
-    monitorCoreEvent(DiminaPageString.PAGE_ON_SHOW, 'onPageShow')
 
   }
 

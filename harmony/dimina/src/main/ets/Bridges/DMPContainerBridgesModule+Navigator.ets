@@ -4,7 +4,6 @@ import { DMPContainerBridgesModule } from './DMPContainerBridgesModule'
 
 import { DMPBridgeCallback } from './DMPTSUtil'
 import { DMPFileManager } from '../Bundle/Util/DMPFileManager'
-import { DiminaPageString, monitorCoreEvent } from '../EventTrack/Monitor'
 import { DataTransformer } from '../Utils/DataTransformer'
 import { DMPLogger } from '../EventTrack/DMPLogger'
 import { DMPMap } from '../Utils/DMPMap'
@@ -24,7 +23,6 @@ export class DMPContainerBridgesModuleNavigator extends DMPContainerBridgesModul
   }
 
   async loadSubPackage(data: DMPMap, callback: DMPBridgeCallback) {
-    monitorCoreEvent(DiminaPageString.PACKAGE_LOAD_SUB_PACKAGE_START, 'loadSubPackage')
     DMPLogger.i(Tags.SUB_PKG_MANAGER, ' loadSubPackage start data:' + data.toStr());
     try {
       let packageName: string = data.get("package")!;

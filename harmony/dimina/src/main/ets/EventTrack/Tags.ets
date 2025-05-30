@@ -31,6 +31,12 @@ export class Tags {
   static BRIDGE = "[d-bridges]"
   //导航器
   static NAVIGATOR = "[navigator]"
+  //重定向
+  static REDIRECT = Tags.NAVIGATOR + "[redirect]"
+  //页面onShow
+  static ON_PAGE_SHOW = Tags.NAVIGATOR +'[onPageShow]'
+  //页面onHide
+  static ON_PAGE_HIDE = Tags.NAVIGATOR +'[onPageHide]'
   //---------地图模块----------
   static MAP = "[map]"
   //同层渲染webview
