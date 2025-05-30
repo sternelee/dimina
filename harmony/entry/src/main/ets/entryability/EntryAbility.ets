@@ -2,7 +2,7 @@ import { AbilityConstant, common, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
 import { WindowManager } from '@kit.SpeechKit';
-import { DMPEntryContext } from '@didi-dimina/dimina/src/main/ets/DApp/DMPConfig';
+import { DMPEntryContext } from '@didi-dimina/dimina/src/main/ets/DApp/config/DMPEntryContext';
 import { DMPApp } from '@didi-dimina/dimina/src/main/ets/DApp/DMPApp';
 
 export default class EntryAbility extends UIAbility {
