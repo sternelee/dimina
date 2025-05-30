@@ -2,7 +2,7 @@ import { DMPApp } from '../DApp/DMPApp';
 import { DMPMap } from '../Utils/DMPMap';
 import { DMPNavigator } from './DMPNavigator';
 import { DMPIdProvider } from './DMPIdProvider';
-import { DMPLaunchConfig, DMPOpenType } from '../DAppManager/DMPLaunchConfig';
+import { DMPLaunchConfig } from '../DAppManager/DMPLaunchConfig';
 
 export class DMPNavigatorDelegate {
   private _id: number;

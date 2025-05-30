@@ -9,8 +9,6 @@ export class DMPNavigationModel {
   titleColor?: string;
   hideNaviBar: boolean = false;
 
-  // isShowCapsuleButton: boolean = false;
-
   valueFromMap(dict: DMPMap) {
     this.titleText = dict.get('navigationBarTitleText') ?? '标题';
     this.backgroundColor = dict.get('navigationBarBackgroundColor');

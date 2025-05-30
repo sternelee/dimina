@@ -4,7 +4,7 @@ import { DMPWebViewNodeController } from '../DPages/DMPWebViewNodeController'
 import { DMPMap } from '../Utils/DMPMap'
 import { DomReadyListener } from './DMPNavigatorManager'
 
-// 用于表示每个栈，能把路由栈相关公参和 DMPPage 的页面参数数据做分离
+
 @Observed
 export class DMPPageRecord {
   webViewId: number
