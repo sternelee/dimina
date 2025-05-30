@@ -26,25 +26,10 @@ export class DMPNetServiceNext {
           body: JSON.stringify(this.params.body),
           headers: this.params.headers
         }).then((res: http.HttpResponse) => {
-          let code = res.responseCode // http状态码
-          let header = new DMPMap(res.header)
-          let data: string = res.result as string // 字符串数据
-          let result: DMPMap = new DMPMap()
-          if (this.params.contentType.includes('json')) {
-            result.set('data', JSON.parse(data));
-          } else {
-            result.set('data', data);
-          }
-          result.set('statusCode', code);
-          result.set('header', header);
-
-          DMPLogger.d('[network]', 'response=' + result.toStr())
-          success(result)
+          this.handleResponse(res, success);
         }).catch((error: Error) => {
           fail(error)
         })
-
-
       } else if (this.params.method.toUpperCase() === 'GET') {
         request({
           url: this.params.url,
@@ -52,23 +37,28 @@ export class DMPNetServiceNext {
           body: JSON.stringify(this.params.body),
           headers: this.params.headers
         }).then((res: http.HttpResponse) => {
-          let code = res.responseCode;
-          let header = new DMPMap(res.header);
-          let data: string = res.result as string;
-          let result: DMPMap = new DMPMap();
-          if (this.params.contentType.includes('json')) {
-            result.set('data', JSON.parse(data));
-          } else {
-            result.set('data', data);
-          }
-          result.set('statusCode', code);
-          result.set('header', header);
-          DMPLogger.d('[network]', 'response=' + result.toStr())
-          success(result);
+          this.handleResponse(res, success)
         }).catch((error: Error) => {
           fail(error)
         })
       }
     })
+  }
+
+  private handleResponse(res: http.HttpResponse, success: (value: DMPMap | PromiseLike<DMPMap>) => void) {
+    let code = res.responseCode; // http状态码
+    let header = new DMPMap(res.header);
+    let data: string = res.result as string; // 字符串数据
+    let result: DMPMap = new DMPMap();
+    if (this.params.contentType.includes('json')) {
+      result.set('data', JSON.parse(data));
+    } else {
+      result.set('data', data);
+    }
+    result.set('statusCode', code);
+    result.set('header', header);
+
+    DMPLogger.d('[network]', 'response=' + result.toStr());
+    success(result);
   }
 }
