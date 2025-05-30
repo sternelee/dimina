@@ -1,9 +1,6 @@
 import { DMPMap } from "../Utils/DMPMap";
 import { Request } from "./DRouterRequest";
 
-
-
-
 export class DRouter {
   private navStack?: NavPathStack;
   private static instance?: DRouter;

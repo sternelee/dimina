@@ -18,7 +18,7 @@ const DMPStoreResourceDirectoryName: string = "store";
 const DMPLocalPkgDir = 'jsapp';
 const DMPLocalJsSdkDir = 'jssdk';
 const DMPLocalJsSdkName = 'main.zip'
-const DMPJsAppFileUri = 'difile://'
+
 
 export class DMPFileManager {
   private static instance: DMPFileManager;
