@@ -3,10 +3,8 @@ import { DMPMap } from './DMPMap'
 export class DataTransformer {
   public static transform(method: string, params: DMPMap): DMPMap {
     let result: DMPMap = new DMPMap()
-
     let payload: DMPMap = new DMPMap()
     payload.set('data', params)
-
     result.set('event', method)
     result.set('payload', payload)
     return result

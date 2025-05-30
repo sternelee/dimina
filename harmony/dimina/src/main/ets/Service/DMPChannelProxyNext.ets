@@ -11,7 +11,6 @@ export class DMPChannelProxyNext {
   public static messageHandlerNext(type: string, body: DMPMap,
     target: string, app: DMPApp): DMPMap | number | string | boolean | object {
     // DMPLogger.d(Tags.LAUNCH, `messageHandlerNext:type=${type} target=${target} methodName=${body.get('name')}`)
-    //TODO 添加个Apollo
     DMPLogger.i(Tags.LAUNCH, `messageHandlerNext:type=${type} target=${target} methodName=${body.get('name')} bridgeId=${body.get('bridgeId')}`)
     let transMsg = new DMPMap({
       'type': type,

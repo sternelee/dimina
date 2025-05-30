@@ -17,7 +17,6 @@ import { DMPApp } from '../../DApp/DMPApp';
 import { DMPMap } from '../../Utils/DMPMap';
 import { DMPTextUtils } from '../../Utils/DMPTextUtils';
 import { DialogManager } from '../../Bridges/Widget/DialogManager';
-import { DMPLoadingManager } from '../../Utils/LoadingManager/DMPLoadingManager';
 import { EngineStatus } from '../../DApp/DMPStatusMonitor';
 
 export class DMPReleaseBundleLoader implements DMPBundleLoader {
@@ -74,11 +73,9 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
       cancelColor: "#000000",
       confirmColor: '#576B95',
       cancel: () => {
-        DMPLoadingManager.hide();
         this.app.engineStatus.setStatus(EngineStatus.STOP)
       },
       confirm: () => {
-        DMPLoadingManager.hide();
         this.app.engineStatus.setStatus(EngineStatus.STOP)
         this.app.startPackageLoader(DMPContextUtils.getUIAbilityContext())
       }
