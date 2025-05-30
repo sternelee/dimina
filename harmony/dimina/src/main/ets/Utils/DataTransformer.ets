@@ -1,17 +1,8 @@
 import { DMPMap } from './DMPMap'
 
 export class DataTransformer {
-  public static transform(method: string, params: DMPMap): DMPMap {
-    let result: DMPMap = new DMPMap()
-    let payload: DMPMap = new DMPMap()
-    payload.set('data', params)
-    result.set('event', method)
-    result.set('payload', payload)
-    return result
-  }
 
-
-  public static decodeLoop(source: string): string {
+  private static decodeLoop(source: string): string {
     if (/%/.test(source)) {
       const newRes = decodeURIComponent(source)
       return DataTransformer.decodeLoop(newRes)
@@ -37,24 +28,11 @@ export class DataTransformer {
     return msg
   }
 
-  public static transformWithWebViewId(method: string, params: DMPMap, webViewId: number): DMPMap {
-    let result: DMPMap = new DMPMap()
-
-    let payload: DMPMap = new DMPMap()
-    payload.set('data', params)
-    payload.set('webViewId', webViewId)
-
-    result.set('event', method)
-    result.set('payload', payload)
-    return result
-  }
-
-  static getPath(url: string): string {
-    const parts = url.split('?');
-    return parts[0];
-  }
-
-
+  /**
+   * 解析url
+   * @param url
+   * @returns
+   */
   static parse(url: string): DMPMap {
     const decodeUrl = url
     const firstIndex = decodeUrl.indexOf('?') > 0 ? decodeUrl.indexOf('?') : decodeUrl.length
