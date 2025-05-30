@@ -1,5 +1,5 @@
 
-import { DMPAppConfig } from '../DAppManager/DMPAppConfig'
+import { DMPAppConfig } from './config/DMPAppConfig'
 
 import { DMPApp } from './DMPApp'
 import { DMPLogger } from '../EventTrack/DMPLogger'

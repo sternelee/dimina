@@ -3,7 +3,7 @@ import { DMPBundleInstallConfig } from './Model/DMPBundleInstallConfig';
 import { DMPBundleLoadInfo } from './Model/DMPBundleLoadInfo';
 import { DMPBundleLoader } from './Loader/DMPBundleLoader';
 import { DMPReleaseBundleLoader } from './Loader/DMPReleaseBundleLoader';
-import { DMPLaunchType } from '../DAppManager/DMPAppConfig';
+import { DMPLaunchType } from '../DApp/config/DMPAppConfig';
 import { DMPBundleAppConfigNext } from './Model/DMPBundleAppConfigNext';
 import { DMPApp } from '../DApp/DMPApp';
 

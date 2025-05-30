@@ -17,7 +17,7 @@ import { PhotoPicker } from './PhotoView/PhotoPicker'
 import { CameraPicker } from './PhotoView/CameraPicker'
 import { DRouter } from '../Navigator/DRouter'
 import { DMPPhotoPreview } from './PhotoView/DMPPhotoPreview'
-import { DMPOpenType } from '../DAppManager/DMPLaunchConfig'
+import { DMPOpenType } from '../DApp/config/DMPLaunchConfig'
 
 export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
   getExportMethods(): string[] {

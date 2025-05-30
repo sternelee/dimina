@@ -1,10 +1,10 @@
 
-import { DMPMapConfig } from '../Bridges/Map/DMPMapConfig';
-import { DMPSafetyConfig } from '../Bridges/SafetyShield/DMPSafetyConfig';
-import { DMPPageRecord } from '../Navigator/DMPPageRecord';
-import { DMPMap } from '../Utils/DMPMap';
+import { DMPMapConfig } from '../../Bridges/Map/DMPMapConfig';
+import { DMPSafetyConfig } from '../../Bridges/SafetyShield/DMPSafetyConfig';
+import { DMPPageRecord } from '../../Navigator/DMPPageRecord';
+import { DMPMap } from '../../Utils/DMPMap';
 import { BusinessError } from '@kit.BasicServicesKit';
-import { DomReadyListener, PopListener } from '../Navigator/DMPNavigatorManager';
+import { DomReadyListener, PopListener } from '../../Navigator/DMPNavigatorManager';
 
 export enum DMPOpenType {
   NavigateTo = 0,

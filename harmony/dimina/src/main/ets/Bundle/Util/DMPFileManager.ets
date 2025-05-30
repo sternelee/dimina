@@ -1,7 +1,7 @@
 
 import fs from '@ohos.file.fs';
 import { BusinessError } from '@ohos.base';
-import { DMPLaunchType } from '../../DAppManager/DMPAppConfig';
+import { DMPLaunchType } from '../../DApp/config/DMPAppConfig';
 import { DMPRawFileUtils } from '../../Utils/DMPRawFileUtils';
 import { DMPUnzipManager } from './DMPUnzipManager';
 import { DMPVersionUtil } from '../../Utils/DMPVersionUtils';

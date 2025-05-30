@@ -17,7 +17,7 @@ import { DMPApp } from '../../DApp/DMPApp';
 import { DMPMap } from '../../Utils/DMPMap';
 import { DMPTextUtils } from '../../Utils/DMPTextUtils';
 import { DialogManager } from '../../Bridges/Widget/DialogManager';
-import { EngineStatus } from '../../DApp/DMPStatusMonitor';
+import { EngineStatus } from '../../DApp/utils/DMPStatusMonitor';
 
 export class DMPReleaseBundleLoader implements DMPBundleLoader {
   //文件管理

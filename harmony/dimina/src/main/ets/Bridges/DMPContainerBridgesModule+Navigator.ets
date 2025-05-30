@@ -1,5 +1,5 @@
 import { DMPApp } from '../DApp/DMPApp'
-import { DMPLaunchType } from '../DAppManager/DMPAppConfig'
+import { DMPLaunchType } from '../DApp/config/DMPAppConfig'
 import { DMPContainerBridgesModule } from './DMPContainerBridgesModule'
 
 import { DMPBridgeCallback } from './DMPTSUtil'

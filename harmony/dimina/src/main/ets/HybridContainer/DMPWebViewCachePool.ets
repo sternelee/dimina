@@ -1,6 +1,6 @@
 import { DMPApp } from '../DApp/DMPApp'
 import { DMPAppManager } from '../DApp/DMPAppManager'
-import { WebViewDefaultId } from '../DAppManager/DMPLaunchConfig'
+import { WebViewDefaultId } from '../DApp/config/DMPLaunchConfig'
 import { DMPLogger } from '../EventTrack/DMPLogger'
 import { Tags } from '../EventTrack/Tags'
 import { DMPWebViewController } from './DMPWebViewController'

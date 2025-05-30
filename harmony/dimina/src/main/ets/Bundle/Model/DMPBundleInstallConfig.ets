@@ -1,5 +1,5 @@
 //包安装配置
-import { DMPLaunchType } from '../../DAppManager/DMPAppConfig';
+import { DMPLaunchType } from '../../DApp/config/DMPAppConfig';
 import { DMPMap } from '../../Utils/DMPMap';
 
 //包管理安装配置信息

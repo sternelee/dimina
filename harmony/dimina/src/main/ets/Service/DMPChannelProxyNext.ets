@@ -1,6 +1,6 @@
 import { DMPAppManager } from '../DApp/DMPAppManager';
 import { DMPApp } from '../DApp/DMPApp';
-import { DMPScene } from '../DAppManager/DMPLaunchConfig';
+import { DMPScene } from '../DApp/config/DMPLaunchConfig';
 import { DMPLogger } from '../EventTrack/DMPLogger';
 import { DMPMap } from '../Utils/DMPMap';
 import { DMPPageRecord } from '../Navigator/DMPPageRecord';

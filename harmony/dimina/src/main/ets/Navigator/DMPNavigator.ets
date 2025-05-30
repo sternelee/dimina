@@ -1,7 +1,7 @@
 import { BusinessError } from '@ohos.base';
 import { DMPApp } from '../DApp/DMPApp';
 import { DMPPageRecord as DMPPageRecord } from './DMPPageRecord';
-import { DMPLaunchConfig, DMPOpenType } from '../DAppManager/DMPLaunchConfig';
+import { DMPLaunchConfig, DMPOpenType } from '../DApp/config/DMPLaunchConfig';
 import { DMPLogger } from '../EventTrack/DMPLogger';
 import { Tags } from '../EventTrack/Tags';
 import { DMPPageStyle } from '../DPages/DMPPageStyle';
