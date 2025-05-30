@@ -9,11 +9,8 @@ export class DMPBundleAppConfigNext {
   style: string;
   sitemapLocation: string;
   subPackages: SubPackageConfig[];
-  // subpackages: SubPackageConfig[];
   _entryPagePath: string;
   moduleMaps: Map<string, ModuleConfig>
-
-  // __cliVersion__: string;
 
   constructor(data: object) {
     this.data = data
@@ -25,12 +22,7 @@ export class DMPBundleAppConfigNext {
     this.style = this.app['style'];
     this.sitemapLocation = this.app['sitemapLocation'];
     this.subPackages = this.app['subPackages'];
-    // this.subpackages = data['subpackages'];
-    // this.global = data['global'];
-    // this.subpackagesDir = data['subpackagesDir'];
     this._entryPagePath = this.app['entryPagePath'];
-    // this.page = data['page'];
-    // this.__cliVersion__ = data['__cliVersion__'];
   }
 
   public getRootPackage(pagePath: string): string {
@@ -87,37 +79,6 @@ export class DMPBundleAppConfigNext {
 }
 
 
-interface WindowConfig {
-  navigationBarBackgroundColor: string;
-  navigationBarTextStyle: string;
-  navigationBarTitleText: string;
-  navigationStyle: string;
-  backgroundColor: string;
-  backgroundTextStyle: string;
-  backgroundColorTop: string;
-  backgroundColorBottom: string;
-  enablePullDownRefresh: boolean;
-  onReachBottomDistance: number;
-  pageOrientation: string;
-  capsuleButton: string;
-}
-
-interface PageConfig {
-  navigationBarBackgroundColor: string;
-  navigationBarTextStyle: string;
-  navigationBarTitleText: string;
-  navigationStyle: string;
-  backgroundColor: string;
-  backgroundTextStyle: string;
-  backgroundColorTop: string;
-  backgroundColorBottom: string;
-  enablePullDownRefresh: boolean;
-  onReachBottomDistance: number;
-  pageOrientation: string;
-  capsuleButton: string;
-  usingComponents: Record<string, object>;
-}
-
 interface SubPackageConfig {
   root: string;
   pages: string[];
@@ -126,6 +87,5 @@ interface SubPackageConfig {
 export interface ModuleConfig {
   root: string;
   navigationBarTitleText: string;
-
 
 }
