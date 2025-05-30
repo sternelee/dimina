@@ -9,7 +9,7 @@ import { DMPRender } from '../Render/DMPRender'
 import { DMPCommonDialog, ModalOption } from '../Bridges/Widget/DMPCommonDialog'
 import { DMPLogger } from '../EventTrack/DMPLogger'
 import { Tags } from '../EventTrack/Tags'
-import { NumberUtils } from '../Utils/NumberUtils'
+import { NumberUtils } from '../Utils/DMPNumberUtils'
 import { DMPMap } from '../Utils/DMPMap'
 import { systemDateTime } from '@kit.BasicServicesKit'
 

@@ -1,5 +1,5 @@
 import { PhotoView } from '@ohos/photoview';
-import { DMPWindowUtil } from '../../Utils/WindowUtils';
+import { DMPWindowUtil } from '../../Utils/DMPWindowUtils';
 import { DMPApp } from '../../DApp/DMPApp';
 import { display } from '@kit.ArkUI';
 import { DRouter } from '../../Navigator/DRouter';

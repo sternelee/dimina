@@ -1,6 +1,6 @@
 import { DMPLogger } from '../EventTrack/DMPLogger'
 import { DMPMap } from '../Utils/DMPMap'
-import { PhoneUtil } from '../Utils/PhoneUtil'
+import { PhoneUtil } from '../Utils/DMPPhoneUtil'
 import { DMPContainerBridgesModule } from './DMPContainerBridgesModule'
 
 import { DMPBridgeCallback } from './DMPTSUtil'

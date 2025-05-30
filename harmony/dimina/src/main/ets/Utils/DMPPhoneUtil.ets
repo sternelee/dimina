@@ -1,4 +1,3 @@
-// import需要的模块
 import call from '@ohos.telephony.call';
 import { BusinessError } from '@ohos.base';
 import { DMPLogger } from '../EventTrack/DMPLogger';
@@ -23,16 +22,6 @@ export class PhoneUtil{
         DMPLogger.i("make call fail, err is:" + JSON.stringify(err));
       }
     });
-    // // 订阅通话业务状态变化（可选）
-    // class SlotId {slotId: number = 0}
-    // class CallStateCallback {
-    //   state: call.CallState = call.CallState.CALL_STATE_UNKNOWN;
-    //   number: string = "";
-    // }
-    // let slotId: SlotId = {slotId: 0}
-    // observer.on("callStateChange", slotId, (data: CallStateCallback) => {
-    //   console.log("call state change, data is:" + JSON.stringify(data));
-    // });
     return false
   }
 

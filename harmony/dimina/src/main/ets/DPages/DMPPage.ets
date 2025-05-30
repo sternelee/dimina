@@ -1,5 +1,5 @@
 import { DMPLogger } from '../EventTrack/DMPLogger'
-import { DMPWindowUtil } from '../Utils/WindowUtils'
+import { DMPWindowUtil } from '../Utils/DMPWindowUtils'
 import { Tags } from '../EventTrack/Tags'
 import { DMPPageStyle } from './DMPPageStyle'
 import { DMPPageRecord } from '../Navigator/DMPPageRecord'

@@ -1,6 +1,6 @@
 import { DMPApp } from '../DApp/DMPApp'
 import { DMPPageStyle } from './DMPPageStyle'
-import { DMPWindowUtil } from '../Utils/WindowUtils'
+import { DMPWindowUtil } from '../Utils/DMPWindowUtils'
 import { DMPPageRecord } from '../Navigator/DMPPageRecord'
 import { DMPAppManager } from '../DApp/DMPAppManager'
 
