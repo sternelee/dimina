@@ -1,7 +1,7 @@
 import web_webview from '@ohos.web.webview'
 import { DMPApp } from '../DApp/DMPApp'
 import { DMPLaunchType } from '../DAppManager/DMPAppConfig'
-import { WebViewLifeCycle } from '../DPages/DMPWebViewLifeCycle'
+import { WebViewLifeCycle } from './DMPWebViewLifeCycle'
 import { DMPWebComponent } from './DMPWebComponent'
 import { DMPWebViewProxy } from './DMPWebViewProxy'
 

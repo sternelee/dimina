@@ -3,11 +3,11 @@ import { DMPAppManager } from '../DApp/DMPAppManager'
 import { WebViewDefaultId } from '../DAppManager/DMPLaunchConfig'
 import { DMPLogger } from '../EventTrack/DMPLogger'
 import { Tags } from '../EventTrack/Tags'
-import { DMPWebViewController } from '../HybridContainer/DMPWebViewController'
+import { DMPWebViewController } from './DMPWebViewController'
 import { DMPPageRecord } from '../Navigator/DMPPageRecord'
 import { DMPIdProvider } from '../Navigator/DMPIdProvider'
 import { DMPMap } from '../Utils/DMPMap'
-import { DMPPageStyle } from './DMPPageStyle'
+import { DMPPageStyle } from '../DPages/DMPPageStyle'
 import { DMPWebViewNodeController, NodeControllerWrapper } from './DMPWebViewNodeController'
 
 

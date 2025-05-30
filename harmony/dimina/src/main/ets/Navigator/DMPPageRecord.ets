@@ -1,6 +1,6 @@
 import { ActionSheetController } from '../Bridges/Widget/DMPActionSheetController'
 import { DMPPageStyle } from '../DPages/DMPPageStyle'
-import { DMPWebViewNodeController } from '../DPages/DMPWebViewNodeController'
+import { DMPWebViewNodeController } from '../HybridContainer/DMPWebViewNodeController'
 import { DMPMap } from '../Utils/DMPMap'
 import { DomReadyListener } from './DMPNavigatorManager'
 

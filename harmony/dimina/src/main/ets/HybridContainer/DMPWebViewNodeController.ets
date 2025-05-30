@@ -1,4 +1,4 @@
-import { DMPWebComponent } from '../HybridContainer/DMPWebComponent';
+import { DMPWebComponent } from './DMPWebComponent';
 import { BuilderNode, FrameNode, NodeController } from '@kit.ArkUI';
 import { DMPMap } from '../Utils/DMPMap';
 import { DMPApp } from '../DApp/DMPApp';
