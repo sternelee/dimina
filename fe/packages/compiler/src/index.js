@@ -123,21 +123,31 @@ function runCompileInWorker(script, ctx, task) {
 		worker.postMessage({ pages: ctx.pages, storeInfo: ctx.storeInfo })
 		// 接收 Worker 完成后的消息
 		worker.on('message', (message) => {
-			if (message.completedTasks) {
-				const progress = message.completedTasks / totalTasks
-				const percentage = progress * 100
-				const barLength = 30
-				const filledLength = Math.ceil(barLength * progress)
-				const bar = '\u2588'.repeat(filledLength) + '\u2591'.repeat(barLength - filledLength)
-				task.output = `[${bar}] ${percentage.toFixed(2)}%`
-			}
+			try {
+				if (message.completedTasks) {
+					const progress = message.completedTasks / totalTasks
+					const percentage = progress * 100
+					const barLength = 30
+					const filledLength = Math.ceil(barLength * progress)
+					const bar = '\u2588'.repeat(filledLength) + '\u2591'.repeat(barLength - filledLength)
+					task.output = `[${bar}] ${percentage.toFixed(2)}%`
+				}
 
-			if (message.success) {
-				resolve()
-				worker.terminate()
+				if (message.success) {
+					resolve()
+					worker.terminate()
+				}
+				else if (message.error) {
+					const error = new Error(message.error.message || message.error)
+					if (message.error.stack) error.stack = message.error.stack
+					if (message.error.file) error.file = message.error.file
+					if (message.error.line) error.line = message.error.line
+					reject(error)
+					worker.terminate()
+				}
 			}
-			else if (message.error) {
-				reject(new Error(message.error))
+			catch (err) {
+				reject(new Error(`Error processing worker message: ${err.message}\n${err.stack}`))
 				worker.terminate()
 			}
 		})
