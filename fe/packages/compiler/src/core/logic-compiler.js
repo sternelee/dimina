@@ -30,29 +30,24 @@ if (!isMainThread) {
 				},
 			}
 
-			try {
-				const mainCompileRes = await compileJS(pages.mainPages, null, null, progress)
-				for (const [root, subPages] of Object.entries(pages.subPages)) {
-					try {
-						// 独立分包: https://developers.weixin.qq.com/miniprogram/dev/framework/subpackages/independent.html
-						const subCompileRes = await compileJS(
-							subPages.info,
-							root,
-							subPages.independent ? [] : mainCompileRes,
-							progress,
-						)
-						await writeCompileRes(subCompileRes, root)
-					}
-					catch (error) {
-						throw new Error(`Error processing subpackage ${root}: ${error.message}\n${error.stack}`)
-					}
+			const mainCompileRes = await compileJS(pages.mainPages, null, null, progress)
+			for (const [root, subPages] of Object.entries(pages.subPages)) {
+				try {
+					// 独立分包: https://developers.weixin.qq.com/miniprogram/dev/framework/subpackages/independent.html
+					const subCompileRes = await compileJS(
+						subPages.info,
+						root,
+						subPages.independent ? [] : mainCompileRes,
+						progress,
+					)
+					await writeCompileRes(subCompileRes, root)
 				}
-				await writeCompileRes(mainCompileRes, null)
-				parentPort.postMessage({ success: true })
+				catch (error) {
+					throw new Error(`Error processing subpackage ${root}: ${error.message}\n${error.stack}`)
+				}
 			}
-			catch (error) {
-				throw error // Re-throw to be caught by the outer try-catch
-			}
+			await writeCompileRes(mainCompileRes, null)
+			parentPort.postMessage({ success: true })
 		}
 		catch (error) {
 			parentPort.postMessage({
@@ -63,8 +58,8 @@ if (!isMainThread) {
 					name: error.name,
 					file: error.file || null,
 					line: error.line || null,
-					code: error.code || null
-				}
+					code: error.code || null,
+				},
 			})
 		}
 	})

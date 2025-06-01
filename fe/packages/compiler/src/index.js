@@ -139,9 +139,12 @@ function runCompileInWorker(script, ctx, task) {
 				}
 				else if (message.error) {
 					const error = new Error(message.error.message || message.error)
-					if (message.error.stack) error.stack = message.error.stack
-					if (message.error.file) error.file = message.error.file
-					if (message.error.line) error.line = message.error.line
+					if (message.error.stack)
+						error.stack = message.error.stack
+					if (message.error.file)
+						error.file = message.error.file
+					if (message.error.line)
+						error.line = message.error.line
 					reject(error)
 					worker.terminate()
 				}
