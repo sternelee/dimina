@@ -36,10 +36,45 @@ Live Demo: <https://didi.github.io/dimina/>
 
 ## Getting Started
 
-- [Mini Program Packaging Guide](./fe/packages/compiler/README.md)
-- [Android Integration Guide](./android/README.md)
-- [iOS Integration Guide](./iOS/README.md)
-- [Harmony Integration Guide](./harmony/dimina/README.md)
+```mermaid
+graph TD
+    A[Create Mini Program Project] --> B[Develop Mini Program Pages]
+    B --> C[Write Logic Using Mini Program Syntax]
+    C --> D[Compile with DMCC]
+    D --> E[Generate Dimina Package]
+    E --> F{Target Platform}
+    F -->|Android| G[Integrate Android SDK]
+    F -->|iOS| H[Integrate iOS SDK]
+    F -->|Harmony| I[Integrate Harmony SDK]
+    G --> J[Run on Android Device]
+    H --> K[Run on iOS Device]
+    I --> L[Run on Harmony Device]
+```
+
+### Step-by-Step Guide
+
+1. **Create Mini Program Project**
+   - Set up a new project using mini program development tools
+   - Configure `app.json` and page routing
+
+2. **Develop Mini Program Pages**
+   - Create WXML templates
+   - Add WXSS styles
+   - Write page logic using JavaScript
+
+3. **Compile and Package**
+   - Use [DMCC Compiler](./fe/packages/compiler/README.md) to transpile mini program code
+   - Package the Dimina application
+   - Place the generated package in the corresponding platform directory
+
+4. **Platform Integration**
+   - [Android Integration Guide](./android/README.md)
+   - [iOS Integration Guide](./iOS/README.md)
+   - [Harmony Integration Guide](./harmony/dimina/README.md)
+
+5. **Debugging and Publishing**
+   - Debug on real devices with integrated app
+   - Publish to respective app stores
 
 ## Contributing
 

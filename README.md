@@ -36,10 +36,45 @@
 
 ## 上手使用
 
-- [小程序打包说明](./fe/packages/compiler/README.md)
-- [Android 接入说明](./android/README.md)
-- [iOS 接入说明](./iOS/README.md)
-- [Harmony 接入说明](./harmony/dimina/README.md)
+```mermaid
+graph TD
+    A[创建小程序项目] --> B[开发小程序页面]
+    B --> C[使用小程序语法编写逻辑]
+    C --> D[使用DMCC编译打包]
+    D --> E[生成星河小程序包]
+    E --> F{目标平台}
+    F -->|Android| G[集成Android SDK]
+    F -->|iOS| H[集成iOS SDK]
+    F -->|Harmony| I[集成Harmony SDK]
+    G --> J[运行到Android设备]
+    H --> K[运行到iOS设备]
+    I --> L[运行到Harmony设备]
+```
+
+### 详细步骤
+
+1. **创建小程序项目**
+   - 使用小程序开发工具创建项目
+   - 配置 `app.json` 和页面路由
+
+2. **开发小程序页面**
+   - 编写 WXML 模板
+   - 添加 WXSS 样式
+   - 使用 JavaScript 编写页面逻辑
+
+3. **编译打包**
+   - 使用 [DMCC 编译器](./fe/packages/compiler/README.md) 将小程序代码编译为跨端代码
+   - 打包星河小程序包
+   - 将星河小程序包放置到各平台对应目录
+
+4. **平台接入**
+   - [Android 接入说明](./android/README.md)
+   - [iOS 接入说明](./iOS/README.md)
+   - [Harmony 接入说明](./harmony/dimina/README.md)
+
+5. **调试与发布**
+   - 集成 App 进行真机调试
+   - 打包发布到各应用商店
 
 ## 参与共建
 
