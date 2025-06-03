@@ -58,7 +58,6 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
   private loadErrorProxy(loadError: ((code: number, errMsg: string) => void) | undefined): ((code: number,
     errMsg: string) => void) | null {
     return (code: number, msg: string) => {
-      //TODO
       loadError?.(code, msg);
     };
   }

@@ -248,7 +248,6 @@ export class DMPApp {
     if (this._engineStatus.currentStatus == EngineStatus.RUN) {
       this.launchInner(launchConfig)
     } else {
-      //TODO showLoading
       const listener = (status: EngineStatus) => {
         if (status == EngineStatus.RUN) {
           this._engineStatus.removeStatusListener(listener)

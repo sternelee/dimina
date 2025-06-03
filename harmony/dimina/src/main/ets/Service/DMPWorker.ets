@@ -154,7 +154,6 @@ workerPort.onmessage = async (e: MessageEvents) => {
         if (!workerModuleManager) {
           workerModuleManager = new DMPWorkerModuleManager(workerAppData);
         } else {
-          // todo: 还需要更新到具体 bridge
           workerModuleManager.app = workerAppData;
         }
       }
@@ -163,13 +162,9 @@ workerPort.onmessage = async (e: MessageEvents) => {
         break;
     }
 
-    // const response: WorkerResponse = { id, result };
-    // workerPort?.postMessage(response);
   } catch (err) {
     const error: string = err.message;
     DMPLogger.e(Tags.JS_ENGINE, `worker error ${error}`);
-    // const response: WorkerResponse = { id, error };
-    // workerPort?.postMessage(response);
   }
 }
 

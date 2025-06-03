@@ -9,7 +9,6 @@ import { promptAction } from '@kit.ArkUI';
 import { DMPContextUtils } from '../Utils/DMPContextUtils';
 import { DMPPermissionUtils } from '../Utils/DMPPermissionUtils';
 
-// TODO 功能实现待联调
 export class DMPContainerBridgesModuleClipBoard extends DMPContainerBridgesModule {
   TAG: string = 'DMPContainerBridgesModuleClipBoard'
   mReadClipboardStartTime: number = 0
