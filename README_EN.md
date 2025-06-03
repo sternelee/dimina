@@ -26,6 +26,20 @@ Dimina is a lightweight cross-platform mini program framework independently deve
 
 Currently, Dimina supports four major platforms: Android, iOS, Harmony, and Web. Developers can use Dimina as a **mobile cross-platform framework**—either integrating existing mini program logic as independent modules into current apps, or developing new features using mini program syntax and packaging them into standalone native apps.
 
+### 🔧 Technical Features
+
+- **Offline Resource Caching**: Resources are cached locally to reduce network requests
+- **Logic-View Separation**: Independent JS engine prevents main thread blocking
+- **Native Capability Encapsulation**: Unified API for native functionality
+- **Page Preloading**: WebView preheating for better performance
+
+### 🚀 Cross-Platform Support
+
+- **Android**: QuickJS + Android WebView
+- **iOS**: JavaScriptCore + WKWebView
+- **Harmony**: QuickJS + Harmony WebView
+- **Web**: Web Worker + Browser
+
 ## Showcase
 
 Live Demo: <https://didi.github.io/dimina/>

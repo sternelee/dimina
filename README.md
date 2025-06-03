@@ -26,6 +26,20 @@
 
 目前，Dimina 已支持 Android、iOS、Harmony 和 Web 四大平台。开发者可以将 Dimina 作为**移动端跨平台开发框架**，将已有小程序逻辑以独立模块方式集成到现有 App，或直接采用小程序语法进行开发，并一键打包生成独立原生 App。
 
+### 🔧 技术特性
+
+- **资源离线化**: 资源本地存储减少网络请求
+- **逻辑视图分离**: 独立 JS 引擎避免主线程阻塞  
+- **原生能力封装**: 统一 API 调用原生功能
+- **页面预加载**: WebView 预热提升性能
+
+### 🚀 跨平台支持
+
+- **Android**: QuickJS + Android WebView
+- **iOS**: JavaScriptCore + WKWebView  
+- **Harmony**: QuickJS + Harmony WebView
+- **Web**: Web Worker + Browser
+
 ## 效果展示
 
 在线演示：<https://didi.github.io/dimina/>

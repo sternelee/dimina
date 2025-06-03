@@ -6,5 +6,6 @@
 
 ## 重要章节索引
 
+* [核心架构图](./Architecture-Diagram.md)
 * [技术细节](./Architecture-Details.md)
 * [API 说明](./API-Reference.md)
