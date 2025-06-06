@@ -58,7 +58,34 @@ class Render {
 				const { type, detail } = msg
 				// eslint-disable-next-line no-console
 				const logMethod = console[type] || console.log
-				if (typeof detail === 'string' && detail.startsWith('[service]')) {
+
+				// Handle when detail is an object or a string representation of an object
+				let parsedDetail = detail
+
+				// Try to parse detail if it's a string that might be a JSON object
+				if (typeof detail === 'string') {
+					try {
+						// Check if the string looks like an object (starts with '{')
+						if (detail.trim().startsWith('{')) {
+							parsedDetail = JSON.parse(detail)
+						}
+					}
+					catch {
+						// If parsing fails, keep the original string
+						parsedDetail = detail
+					}
+				}
+
+				if (typeof parsedDetail === 'object' && parsedDetail !== null) {
+					const { group, value } = parsedDetail
+					if (group === 'network' && window.vConsole) {
+						window.vConsole.network.add(value)
+					}
+					else {
+						logMethod('[system]', parsedDetail)
+					}
+				}
+				else if (typeof detail === 'string' && detail.startsWith('[service]')) {
 					logMethod('[system]', detail)
 				}
 				else {
