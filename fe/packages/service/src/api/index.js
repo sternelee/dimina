@@ -10,17 +10,17 @@ for (const f of Object.values(apiInfo)) {
 const handler = {
 	get(target, prop, receiver) {
 		const origMethod = Reflect.get(target, prop, receiver)
-		
+
 		// API存在则直接调用，API 已具体实现
 		if (typeof origMethod === 'function') {
 			return origMethod
 		}
-		
+
 		// 如果是非函数属性且已存在，或者特殊处理 webpackJsonp 属性来兼容 Taro，直接返回
 		if (origMethod !== undefined || prop === 'webpackJsonp') {
 			return origMethod
 		}
-		
+
 		// API 不存在则返回一个函数，通过消息通道调用
 		return (...args) => {
 			return invokeAPI(prop, ...args)
