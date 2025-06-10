@@ -40,6 +40,7 @@ const props = defineProps({
 
 const selectValue = inject('selectValue', undefined)
 const selected = inject('selected', ref(props.checked ? [props.value] : []))
+const isOn = ref(props.checked)
 
 if (props.checked) {
 	selectValue?.(props.value)
@@ -48,12 +49,8 @@ else {
 	selectValue?.(undefined)
 }
 
-const isOn = computed(() => {
-	return selected.value.includes(props.value)
-})
-
 const computedStyle = computed(() => {
-	if (props.color && isOn.value) {
+	if (props.color) {
 		return {
 			color: props.color,
 		}
@@ -63,8 +60,7 @@ const computedStyle = computed(() => {
 	}
 })
 
-const handleValueChange = inject('handleValueChange', undefined)
-function handleClicked(event) {
+function handleClicked() {
 	if (!props.disabled) {
 		if (typeof selectValue === 'function') {
 			selectValue(props.value)
@@ -77,19 +73,18 @@ function handleClicked(event) {
 				selected.value.push(props.value)
 			}
 		}
-
-		handleValueChange?.(event)
+		isOn.value = !isOn.value
 	}
 }
 </script>
 
 <template>
-	<div v-bind="$attrs" class="dd-checkbox">
+	<div v-bind="$attrs" class="dd-checkbox" @click="handleClicked">
 		<div class="dd-checkbox-wrapper">
 			<div
 				class="dd-checkbox-input"
 				:class="{ 'dd-checkbox-input-checked': isOn, 'dd-checkbox-input-disabled': disabled }"
-				:style="computedStyle" @click="handleClicked"
+				:style="computedStyle"
 			/>
 		</div>
 	</div>

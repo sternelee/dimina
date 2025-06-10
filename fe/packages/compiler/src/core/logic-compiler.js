@@ -119,12 +119,12 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 	// Circular dependency detected
 	if (depthChain.includes(currentPath)) {
 		console.warn('[logic]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		// Continue compilation despite circular dependency
+		return
 	}
 	// Deep dependency chain detected
-	if (depthChain.length > 100) {
+	if (depthChain.length > 20) {
 		console.warn('[logic]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		// Continue compilation despite deep dependency chain
+		return
 	}
 	depthChain = [...depthChain, currentPath]
 	if (!module.path) {
