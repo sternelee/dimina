@@ -421,25 +421,25 @@ function transTag(opts) {
 	}
 
 	let tagRes
-	const propsAry = getProps(attrs, tag)
+	const propsAry = isStart ? getProps(attrs, tag) : []
 	// 多 slot 支持，目前在组件定义时的选项中 multipleSlots 未生效
 	// FIXME: 未处理 slot 值是动态的情况
 	const multipleSlots = attrs?.slot
 	if (attrs?.slot) {
-		// 如果存在 if/else 属性，则需要转移到 template 中
-		const withVIf = []
-		const withoutVIf = []
-
-		for (let i = 0; i < propsAry.length; i++) {
-			const prop = propsAry[i]
-			if (prop.includes('v-if') || prop.includes('v-else-if') || prop.includes('v-else')) {
-				withVIf.push(prop)
-			}
-			else {
-				withoutVIf.push(prop)
-			}
-		}
 		if (isStart) {
+			// 如果存在 if/else 属性，则需要转移到 template 中
+			const withVIf = []
+			const withoutVIf = []
+
+			for (let i = 0; i < propsAry.length; i++) {
+				const prop = propsAry[i]
+				if (prop.includes('v-if') || prop.includes('v-else-if') || prop.includes('v-else')) {
+					withVIf.push(prop)
+				}
+				else {
+					withoutVIf.push(prop)
+				}
+			}
 			tagRes = `<template ${`${withVIf.join(' ')}`} #${multipleSlots}><${res}${` ${withoutVIf.join(' ')}`}>`
 		}
 		else {
