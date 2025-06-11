@@ -41,7 +41,7 @@ export class Component {
 		if (this.__isComponent__) {
 			for (const key in this.__info__.properties) {
 				// 先取逻辑层的属性默认值
-				if (!Object.prototype.hasOwnProperty.call(this.opts.properties, key) || this.opts.properties[key] === undefined) {
+				if (!Object.hasOwn(this.opts.properties, key) || this.opts.properties[key] === undefined) {
 					this.data[key] = this.__info__.properties[key].value
 				}
 				else {
@@ -276,7 +276,7 @@ export class Component {
 	 * 触发组件所在页面的事件逻辑
 	 * https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/events.html
 	 * @param {*} methodName
-	 * @param {*} detail // detail���象，提供给事件监听函数
+	 * @param {*} detail // detail对象，提供给事件监听函数
 	 * @param {*} options // 触发事件的选项
 	 */
 	async triggerEvent(methodName, detail, options = {}) {
@@ -392,7 +392,7 @@ export class Component {
 	}
 
 	/**
-	 * 在组件实例被���动到节点树另一个位置时执行
+	 * 在组件实例被移动到节点树另一个位置时执行
 	 */
 	componentMoved() {
 		this.moved?.()

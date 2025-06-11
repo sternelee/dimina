@@ -205,7 +205,7 @@ const computedPlaceholderStyle = computed(() => {
 			}
 		}
 		else {
-			if (Object.prototype.hasOwnProperty.call(props.placeholderStyle, 'color')) {
+			if (Object.hasOwn(props.placeholderStyle, 'color')) {
 				return props.placeholderStyle.color
 			}
 		}
@@ -221,7 +221,7 @@ const computedPlaceholderStyle = computed(() => {
 			}
 		}
 		else {
-			if (Object.prototype.hasOwnProperty.call(props.placeholderStyle, 'font-size')) {
+			if (Object.hasOwn(props.placeholderStyle, 'font-size')) {
 				size = props.placeholderStyle['font-size']
 			}
 		}
@@ -236,7 +236,7 @@ const computedPlaceholderStyle = computed(() => {
 			}
 		}
 		else {
-			if (Object.prototype.hasOwnProperty.call(props.placeholderStyle, 'font-weight')) {
+			if (Object.hasOwn(props.placeholderStyle, 'font-weight')) {
 				return props.placeholderStyle['font-weight']
 			}
 		}

@@ -31,7 +31,7 @@ function getCGroupMemoryLimit() {
 
 		if (fs.existsSync(memLimitPath)) {
 			const memLimit = Number.parseInt(fs.readFileSync(memLimitPath, 'utf8'))
-			if (memLimit < Infinity && memLimit > 0) {
+			if (memLimit < Number.Infinity && memLimit > 0) {
 				return memLimit
 			}
 		}

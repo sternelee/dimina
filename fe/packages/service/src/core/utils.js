@@ -41,7 +41,7 @@ export function addComputedData(self) {
 			// https://github.com/didi/mpx/blob/master/packages/core/src/platform/builtInMixins/i18nMixin.js
 			if (ck !== '_l' && ck !== '_fl') {
 				// https://github.com/didi/mpx/blob/f1bd7c32ec48c4401ab1bf68247bc68834ca932b/docs-vuepress/articles/mpx2.md?plain=1#L505
-				if (!Object.prototype.hasOwnProperty.call(self.data, ck)) {
+				if (!Object.hasOwn(self.data, ck)) {
 					self.data[ck] = null
 				}
 			}
@@ -94,7 +94,7 @@ export function serializeProps(properties) {
 
 			// 处理 type 字段
 			// 兼容 items: Array 和 item: { type: String, value: '' } 两种形式
-			const transType = Object.prototype.hasOwnProperty.call(item, 'type') ? convertToStringType(item.type) : convertToStringType(item)
+			const transType = Object.hasOwn(item, 'type') ? convertToStringType(item.type) : convertToStringType(item)
 			let array = null
 			if (Array.isArray(transType)) {
 				array = [...transType]

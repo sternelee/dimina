@@ -37,7 +37,7 @@ function renderNode(node) {
 	// 处理属性
 	if (node.attrs) {
 		for (const key in node.attrs) {
-			if (Object.prototype.hasOwnProperty.call(node.attrs, key)) {
+			if (Object.hasOwn(node.attrs, key)) {
 				let value = node.attrs[key]
 				// 如果值是空格，根据 space 属性替换为不同的空格字符
 				if (value === ' ') {

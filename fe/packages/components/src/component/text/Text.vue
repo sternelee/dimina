@@ -37,25 +37,31 @@ const props = defineProps({
 const textRef = ref(null)
 
 function htmlDecode(e) {
-	return (
-		props.space
-		&& (this.space === 'nbsp'
-			? (e = e.replace(/ /g, ' '))
-			: this.space === 'ensp'
-				? (e = e.replace(/ /g, ' '))
-				: this.space === 'emsp' && (e = e.replace(/ /g, ' '))),
-		props.decode
-			? e
-					.replace(/&nbsp;/g, ' ')
-					.replace(/&ensp;/g, ' ')
-					.replace(/&emsp;/g, ' ')
-					.replace(/&lt;/g, '<')
-					.replace(/&gt;/g, '>')
-					.replace(/&quot;/g, '"')
-					.replace(/&apos;/g, '\'')
-					.replace(/&amp;/g, '&')
-			: e
-	)
+	// 处理空格替换
+	if (props.space) {
+		if (props.space === 'nbsp') {
+			e = e.replace(/ /g, ' ')
+		} else if (props.space === 'ensp') {
+			e = e.replace(/ /g, ' ')
+		} else if (props.space === 'emsp') {
+			e = e.replace(/ /g, ' ')
+		}
+	}
+
+	// 处理解码
+	if (props.decode) {
+		e = e
+			.replace(/&nbsp;/g, ' ')
+			.replace(/&ensp;/g, ' ')
+			.replace(/&emsp;/g, ' ')
+			.replace(/&lt;/g, '<')
+			.replace(/&gt;/g, '>')
+			.replace(/&quot;/g, '"')
+			.replace(/&apos;/g, '\'')
+			.replace(/&amp;/g, '&')
+	}
+
+	return e
 }
 
 onMounted(() => {

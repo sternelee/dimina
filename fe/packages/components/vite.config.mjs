@@ -44,7 +44,7 @@ export default defineConfig(({ mode }) => {
 			vue(),
 			ViteAutoImport({
 				eslintrc: {
-					enabled: true,
+					enabled: false,
 				},
 				imports: ['vue'],
 				dts: false,
