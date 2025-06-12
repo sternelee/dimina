@@ -3,16 +3,28 @@ import { generateVModelTemplate, parseBraceExp, parseClassRules, parseKeyExpress
 
 describe('解析 key 表达式的值', () => {
 	it('简单取值', () => {
-		expect(parseKeyExpression('index')).toEqual('\'item.index\'')
+		expect(parseKeyExpression('index')).toEqual('item.index')
 	})
 	it('简单对象取值', () => {
-		expect(parseKeyExpression('item.index')).toEqual('\'item.index\'')
+		expect(parseKeyExpression('item.index')).toEqual('item.index')
 	})
 
-	it('简单表达式对象取值', () => {
-		expect(parseKeyExpression('{{ item.index }}')).toEqual('\'item.index\'')
+	it('简单表达式对象取值1', () => {
+		expect(parseKeyExpression('{{ item.index }}')).toEqual('item.index')
 	})
 
+	it('简单表达式对象取值2', () => {
+		expect(parseKeyExpression('{{ item.text }}')).toEqual('item.text')
+	})
+
+	it('*this对象取值', () => {
+		expect(parseKeyExpression('*this')).toEqual('item.toString()')
+	})
+
+	it('表达式this对象取值', () => {
+		expect(parseKeyExpression('{{ this }}')).toEqual('item.toString()')
+	})
+	
 	it('字符串表达式', () => {
 		expect(parseKeyExpression('1-{{index}}')).toEqual('\'1-\'+item.index')
 	})

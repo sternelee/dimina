@@ -494,18 +494,7 @@ function getProps(attrs, tag) {
 			// do noting
 		}
 		else if (name.endsWith(':key')) {
-			let tranValue
-			if (/\*this/.test(value)) {
-				tranValue = JSON.stringify('item')
-			}
-			else if (/item/.test(value)) {
-				// https://developers.weixin.qq.com/miniprogram/dev/reference/wxml/list.html#wx:key
-				// 保留关键字 *this 代表在 for 循环中的 item 本身，这种表示需要 item 本身是一个唯一的字符串或者数字
-				tranValue = getForItemName(attrs)
-			}
-			else {
-				tranValue = parseKeyExpression(value, getForItemName(attrs))
-			}
+			const tranValue = parseKeyExpression(value, getForItemName(attrs))
 			attrsList.push({
 				name: ':key',
 				value: tranValue,
@@ -668,15 +657,29 @@ function parseKeyExpression(exp, itemName = 'item') {
 	// 去除首尾空格
 	exp = exp.trim()
 
+	// https://developers.weixin.qq.com/miniprogram/dev/reference/wxml/list.html#wx:key
+	// 保留关键字 *this 代表在 for 循环中的 item 本身，这种表示需要 item 本身是一个唯一的字符串或者数字
+	if (/\*this/.test(exp) || /\*item/.test(exp)) {
+		return `${itemName}.toString()`
+	}
+
 	// 处理简单无表达式的情况
 	if (!exp.includes('{{')) {
-		return exp.startsWith(itemName) ? `'${exp}'` : `'${itemName}.${exp}'`
+		// 检查是否为纯数字（包括负数）
+		if (/^-?\d+(\.\d+)?$/.test(exp)) {
+			return exp
+		}
+		return exp.startsWith(itemName) ? `${exp}` : `${itemName}.${exp}`
 	}
 
 	// 处理 '{{xxx}}' 的情况
 	if (exp.startsWith('{{') && exp.endsWith('}}')) {
 		const content = exp.slice(2, -2).trim()
-		return content.startsWith(itemName) ? `'${content}'` : `'${itemName}.${content}'`
+		if (content === 'this') {
+			return `${itemName}.toString()`
+		} else {
+			return content.startsWith(itemName) ? `${content}` : `${itemName}.${content}`
+		}
 	}
 
 	// 处理 '1-{{xxx}}' 的情况
@@ -692,6 +695,7 @@ function parseKeyExpression(exp, itemName = 'item') {
 	// 移除结果末尾的 +''（如果存在）
 	return result.endsWith('+\'\'') ? result.slice(0, -3) : result
 }
+
 /**
  * 根据工作目录获取 ml 文件绝对路径
  * @param {string} workPath
