@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
 			extensions: ['.js', '.scss'],
 			alias: {
 				'@': resolve(__dirname, 'src'),
-				'@images': resolve(__dirname, '/images'),
+				'@images': resolve(__dirname, 'images'),
 			},
 		},
 		css: {

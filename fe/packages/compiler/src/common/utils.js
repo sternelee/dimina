@@ -46,7 +46,7 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 	try {
 		// 复制将文件夹下所有同类型的资源文件并加上前缀
 		const ext = `.${src.split('.').pop()}`
-		const dirPath = absolutePath.split('/').slice(0, -1).join('/')
+		const dirPath = absolutePath.split(path.sep).slice(0, -1).join('/')
 		const prefix = uuid()
 
 		const targetStatic = `${targetPath}/main/static`

@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import { resolve } from 'node:path'
+import { resolve, sep } from 'node:path'
 import { isMainThread, parentPort } from 'node:worker_threads'
 import babel from '@babel/core'
 import _traverse from '@babel/traverse'
@@ -211,7 +211,7 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 				if (requirePath) {
 					const requireFullPath = resolve(modulePath, `../${requirePath}`)
 					// 依赖的模块相对路径转换为绝对路径
-					const id = requireFullPath.split(`${getWorkPath()}/`)[1].split('.js')[0]
+					const id = requireFullPath.split(`${getWorkPath()}${sep}`)[1].split('.js')[0].replace(/\\/g, '/')
 					ap.node.arguments[0] = types.stringLiteral(id)
 					if (!processedModules.has(packageName + id)) {
 						buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false, depthChain)
