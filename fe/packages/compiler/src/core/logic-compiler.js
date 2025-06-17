@@ -247,5 +247,4 @@ function getExtraInfoStatement(type, addedArgs) {
 	return propertyAssignmentStatement
 }
 
-export { buildJSByPath }
-export default compileJS
+export { compileJS, buildJSByPath }

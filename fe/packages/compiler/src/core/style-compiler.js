@@ -223,5 +223,4 @@ function ensureImportSemicolons(css) {
 	})
 }
 
-export { ensureImportSemicolons }
-export default compileSS
+export { compileSS, ensureImportSemicolons }

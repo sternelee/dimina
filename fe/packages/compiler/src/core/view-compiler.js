@@ -113,6 +113,11 @@ function buildCompileView(module, isComponent = false, scriptRes, depthChain = [
 			if (!componentModule) {
 				continue
 			}
+			// 检查自依赖：如果组件依赖自己，则跳过
+			if (componentModule.path === module.path) {
+				console.warn('[view]', `检测到自依赖，跳过处理: ${module.path}`)
+				continue
+			}
 			buildCompileView(componentModule, true, scriptRes, depthChain)
 		}
 	}
@@ -945,10 +950,10 @@ function insertWxsToRenderAst(ast, scriptModule, scriptRes) {
 }
 
 export {
+	compileML,
 	generateVModelTemplate,
 	parseBraceExp,
 	parseClassRules,
 	parseKeyExpression,
 	splitWithBraces,
 }
-export default compileML
