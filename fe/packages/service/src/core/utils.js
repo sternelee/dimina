@@ -256,6 +256,12 @@ export function mergeBehaviors(obj, behaviors) {
 	const processedBehaviors = new WeakMap()
 
 	function merge(target, behavior) {
+		// 检查behavior是否为有效的对象，并且可以用作WeakMap的键
+		// WeakMap只能使用对象作为键，不能使用null、undefined、字符串等基本类型
+		if (!behavior || typeof behavior !== 'object' || typeof behavior === 'string') {
+			return
+		}
+		
 		if (processedBehaviors.has(behavior)) {
 			return
 		}
