@@ -90,7 +90,10 @@ async function buildMiniApp() {
 			return
 		}
 
-		const directories = files.filter(file => fs.statSync(path.join(currentDirectory, file)).isDirectory())
+		const directories = files.filter(file => {
+			const filePath = path.join(currentDirectory, file);
+			return fs.existsSync(filePath) && fs.statSync(filePath).isDirectory();
+		})
 
 		const appList = []
 		for (const fileName of directories) {
