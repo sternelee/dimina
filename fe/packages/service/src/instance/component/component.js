@@ -33,6 +33,10 @@ export class Component {
 		this.__eventAttr__ = opts.eventAttr
 		this.__pageId__ = opts.pageId
 		this.__parentId__ = opts.parentId
+		
+		// 初始化关系相关属性
+		this.__relations__ = new Map() // 存储关系节点
+		this.__relationPaths__ = new Map() // 存储关系路径映射
 
 		this.#init()
 	}
@@ -42,7 +46,7 @@ export class Component {
 			for (const key in this.__info__.properties) {
 				// 先取逻辑层的属性默认值
 				if (!Object.hasOwn(this.opts.properties, key) || this.opts.properties[key] === undefined) {
-					this.data[key] = this.__info__.properties[key].value
+					this.data[key] = this.__info__.properties[key]?.value
 				}
 				else {
 					// 没有默认值则取渲染层的属性实际值
@@ -53,6 +57,7 @@ export class Component {
 
 		this.#initLifecycle()
 		this.#initCustomMethods()
+		this.#initRelations()
 		this.#invokeInitLifecycle().then(() => {
 			addComputedData(this)
 			message.send({
@@ -65,6 +70,203 @@ export class Component {
 				},
 			})
 		})
+	}
+
+	/**
+	 * 初始化组件间关系
+	 */
+	#initRelations() {
+		const relations = this.__info__.relations
+		if (!relations || typeof relations !== 'object') {
+			return
+		}
+
+		// 遍历所有关系配置
+		for (const [relationPath] of Object.entries(relations)) {
+			// 解析关系路径，处理相对路径
+			const resolvedPath = this.#resolveRelationPath(relationPath)
+			this.__relationPaths__.set(relationPath, resolvedPath)
+			
+			// 初始化该关系的节点数组
+			if (!this.__relations__.has(relationPath)) {
+				this.__relations__.set(relationPath, [])
+			}
+		}
+	}
+
+	/**
+	 * 解析关系路径，将相对路径转换为绝对路径
+	 */
+	#resolveRelationPath(relationPath) {
+		if (relationPath.startsWith('./')) {
+			// 相对路径，基于当前组件路径解析
+			const currentDir = this.is.substring(0, this.is.lastIndexOf('/'))
+			return `${currentDir}/${relationPath.substring(2)}`
+		} else if (relationPath.startsWith('../')) {
+			// 上级路径，基于当前组件路径解析
+			const pathParts = this.is.split('/')
+			const relationParts = relationPath.split('/')
+			
+			let currentParts = pathParts.slice(0, -1) // 去掉文件名
+			
+			for (const part of relationParts) {
+				if (part === '..') {
+					currentParts.pop()
+				} else if (part !== '.') {
+					currentParts.push(part)
+				}
+			}
+			
+			return currentParts.join('/')
+		} else {
+			// 绝对路径或其他格式
+			return relationPath
+		}
+	}
+
+	/**
+	 * 检查组件关系并建立连接
+	 */
+	#checkAndLinkRelations() {
+		const relations = this.__info__.relations
+		if (!relations) return
+
+		const allInstances = Object.values(runtime.instances[this.bridgeId] || {})
+		
+		for (const [relationPath, relationConfig] of Object.entries(relations)) {
+			const { type, target } = relationConfig
+			const resolvedPath = this.__relationPaths__.get(relationPath)
+			
+			// 查找匹配的组件
+			const matchingComponents = allInstances.filter(instance => {
+				// 检查路径匹配
+				if (target) {
+					// 如果指定了 target behavior，检查组件是否具有该 behavior
+					return instance.hasBehavior && instance.hasBehavior(target)
+				} else {
+					// 检查路径匹配
+					return instance.is === resolvedPath || instance.is.endsWith(`/${resolvedPath}`)
+				}
+			})
+
+			// 根据关系类型过滤组件
+			const relatedComponents = matchingComponents.filter(instance => {
+				return this.#checkRelationType(instance, type)
+			})
+
+			// 建立关系连接
+			for (const relatedComponent of relatedComponents) {
+				this.#linkRelation(relationPath, relatedComponent, relationConfig)
+			}
+		}
+	}
+
+	/**
+	 * 检查关系类型是否匹配
+	 */
+	#checkRelationType(targetInstance, relationType) {
+		const allInstances = Object.values(runtime.instances[this.bridgeId] || {})
+		
+		switch (relationType) {
+			case 'parent':
+				// 目标组件应该是当前组件的直接父组件
+				return targetInstance.__id__ === this.__parentId__
+				
+			case 'child':
+				// 目标组件应该是当前组件的直接子组件
+				return targetInstance.__parentId__ === this.__id__
+				
+			case 'ancestor':
+				// 目标组件应该是当前组件的祖先组件
+				return this.#isAncestor(targetInstance.__id__, this.__id__, allInstances)
+				
+			case 'descendant':
+				// 目标组件应该是当前组件的后代组件
+				return this.#isAncestor(this.__id__, targetInstance.__id__, allInstances)
+				
+			default:
+				return false
+		}
+	}
+
+	/**
+	 * 检查 ancestorId 是否是 descendantId 的祖先
+	 */
+	#isAncestor(ancestorId, descendantId, allInstances) {
+		let current = allInstances.find(instance => instance.__id__ === descendantId)
+		
+		while (current && current.__parentId__) {
+			if (current.__parentId__ === ancestorId) {
+				return true
+			}
+			current = allInstances.find(instance => instance.__id__ === current.__parentId__)
+		}
+		
+		return false
+	}
+
+	/**
+	 * 建立关系连接
+	 */
+	#linkRelation(relationPath, targetInstance, relationConfig) {
+		const relationNodes = this.__relations__.get(relationPath) || []
+		
+		// 检查是否已经建立了关系
+		if (relationNodes.includes(targetInstance)) {
+			return
+		}
+		
+		// 添加到关系节点列表
+		relationNodes.push(targetInstance)
+		this.__relations__.set(relationPath, relationNodes)
+		
+		// 调用 linked 生命周期函数
+		if (isFunction(relationConfig.linked)) {
+			try {
+				relationConfig.linked.call(this, targetInstance)
+			} catch (error) {
+				console.error('[service] relation linked error:', error)
+			}
+		}
+	}
+
+	/**
+	 * 移除关系连接
+	 */
+	#unlinkRelation(relationPath, targetInstance, relationConfig) {
+		const relationNodes = this.__relations__.get(relationPath) || []
+		const index = relationNodes.indexOf(targetInstance)
+		
+		if (index === -1) {
+			return
+		}
+		
+		// 从关系节点列表中移除
+		relationNodes.splice(index, 1)
+		this.__relations__.set(relationPath, relationNodes)
+		
+		// 调用 unlinked 生命周期函数
+		if (isFunction(relationConfig.unlinked)) {
+			try {
+				relationConfig.unlinked.call(this, targetInstance)
+			} catch (error) {
+				console.error('[service] relation unlinked error:', error)
+			}
+		}
+	}
+
+	/**
+	 * 处理关系变化
+	 */
+	#handleRelationChange(relationPath, targetInstance, relationConfig) {
+		// 调用 linkChanged 生命周期函数
+		if (isFunction(relationConfig.linkChanged)) {
+			try {
+				relationConfig.linkChanged.call(this, targetInstance)
+			} catch (error) {
+				console.error('[service] relation linkChanged error:', error)
+			}
+		}
 	}
 
 	/**
@@ -252,10 +454,20 @@ export class Component {
 	}
 
 	/**
-	 * TODO: 获取这个关系所对应的所有关联节点
+	 * 获取这个关系所对应的所有关联节点
+	 * https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/relations.html
 	 */
-	getRelationNodes() {
-		console.warn('[service] 暂不支持 getRelationNodes')
+	getRelationNodes(relationPath) {
+		if (!relationPath) {
+			console.warn('[service] getRelationNodes 需要传入关系路径参数')
+			return []
+		}
+
+		// 获取关系节点
+		const relationNodes = this.__relations__.get(relationPath) || []
+		
+		// 返回节点数组的副本，避免外部修改
+		return [...relationNodes]
 	}
 
 	/**
@@ -381,6 +593,9 @@ export class Component {
 	async componentAttached() {
 		this.__info__.behaviorLifetimes?.attached?.forEach(method => method.call(this))
 		await this.attached?.()
+		
+		// 建立组件间关系
+		this.#checkAndLinkRelations()
 	}
 
 	/**
@@ -396,12 +611,36 @@ export class Component {
 	 */
 	componentMoved() {
 		this.moved?.()
+		
+		// 组件移动后，需要重新检查关系并触发 linkChanged
+		const relations = this.__info__.relations
+		if (relations) {
+			for (const [relationPath, relationConfig] of Object.entries(relations)) {
+				const relationNodes = this.__relations__.get(relationPath) || []
+				for (const node of relationNodes) {
+					this.#handleRelationChange(relationPath, node, relationConfig)
+				}
+			}
+		}
 	}
 
 	/**
 	 * 在组件实例被从页面节点树移除时执行
 	 */
 	componentDetached() {
+		// 在组件 detached 前移除所有关系
+		const relations = this.__info__.relations
+		if (relations) {
+			for (const [relationPath, relationConfig] of Object.entries(relations)) {
+				const relationNodes = this.__relations__.get(relationPath) || []
+				// 复制数组避免在迭代时修改
+				const nodesToUnlink = [...relationNodes]
+				for (const node of nodesToUnlink) {
+					this.#unlinkRelation(relationPath, node, relationConfig)
+				}
+			}
+		}
+		
 		this.__info__.behaviorLifetimes?.detached?.forEach(method => method.call(this))
 		this.detached?.()
 		this.initd = false
