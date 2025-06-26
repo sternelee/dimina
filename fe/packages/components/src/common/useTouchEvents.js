@@ -13,6 +13,8 @@ export function useTouchEvents(info, elementRef, longPressThreshold = 350, moveT
 	const longPressTimer = ref(null)
 	const touchStartPosition = ref({ x: 0, y: 0 })
 	const isTouchMoved = ref(false)
+	const canMoveStatus = ref('init')
+
 
 	/**
 	 * 触摸开始事件处理
@@ -24,6 +26,7 @@ export function useTouchEvents(info, elementRef, longPressThreshold = 350, moveT
 		const touch = event.touches[0]
 		touchStartPosition.value = { x: touch.clientX, y: touch.clientY }
 		isTouchMoved.value = false
+		canMoveStatus.value = 'init'
 
 		// 清除可能存在的定时器
 		if (longPressTimer.value) {
@@ -63,7 +66,46 @@ export function useTouchEvents(info, elementRef, longPressThreshold = 350, moveT
 			}
 		}
 
+		// 针对 catchtouchmove 场景，防止滚动穿透
+		if (hasCatchEvent(info, 'touchmove')) {
+			if (canMoveStatus.value === 'off') {
+				// 阻止浏览器默认滚动行为
+				event.cancelable && event.preventDefault()
+				return
+			}
+
+			// 遍历事件传递路径元素，找到包含滚动条的元素
+			const path = event?.composedPath() || []
+
+			for (const element of path) {
+				const { scrollHeight, clientHeight, scrollTop } = element
+				if (scrollHeight > clientHeight) {
+					// 向下滑动，查看上方内容
+					if (touch.clientY - touchStartPosition.value.y > 0) {
+						// 到顶后，继续拖动就阻止浏览器默认的滚动事件
+						scrollTop === 0 && preventDefaultMove(event)
+					} else if (scrollHeight - clientHeight - scrollTop < 1) {
+						// 向上滑动，查看下方内容，到容器底部，阻止浏览器默认的滚动事件
+						// 因为scrollTop是一个非整数，而scrollHeight和clientHeight是四舍五入的，因此确定滚动区域是否滚动到底的唯一方法是查看滚动量是否足够接近某个阈值
+						preventDefaultMove(event)
+					} else {
+						canMoveStatus.value = 'on'
+					}
+					break;
+				}
+			}
+		}
+
 		triggerEvent('touchmove', { event, info })
+	}
+
+	/**
+	 * 禁止浏览器默认行为事件处理
+	 * @param {Event} event 原始事件对象
+	 */
+	function preventDefaultMove(event) {
+		event.cancelable && event.preventDefault()
+		canMoveStatus.value === 'init' && (canMoveStatus.value = 'off')
 	}
 
 	/**
