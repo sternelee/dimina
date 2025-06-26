@@ -64,9 +64,7 @@ public class DMPPageController: UIViewController {
     }
 
     // Configure WebView
-    private func configWebView() {
-        print("�� DMPPageController: Configure WebView (ID: \(webview.getWebViewId())) page path: \(pagePath)")
-        
+    private func configWebView() {        
         // Set page path and query parameters
         self.webview.setPagePath(pagePath: pagePath)
         if let query = query {
@@ -75,7 +73,7 @@ public class DMPPageController: UIViewController {
         
         print("🔧 DMPPageController: WebView (ID: \(webview.getWebViewId())) configuration completed, current page path: \(webview.getPagePath())")
         
-        // Load page frame
+        webview.poolState = .loading
         webview.loadPageFrame()
     }
 

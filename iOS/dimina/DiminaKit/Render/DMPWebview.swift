@@ -9,6 +9,45 @@ import Foundation
 import WebKit
 import SwiftUI
 
+/// WebView state enum
+public enum DMPWebViewState {
+    case available          // Available state, can be reused
+    case configuring        // Configuring, setting page path and parameters
+    case loading            // Loading, loading page content
+    case ready              // Ready state, page load completed, can interact
+    case reseting           // Resetting, clearing state, cannot be reused
+    
+    var description: String {
+        switch self {
+        case .available: return "available"
+        case .configuring: return "configuring"
+        case .loading: return "loading"
+        case .ready: return "ready"
+        case .reseting: return "reseting"
+        }
+    }
+    
+    /// Whether it can be reused
+    var canReuse: Bool {
+        return self == .available
+    }
+    
+    /// Whether it is in use
+    var isInUse: Bool {
+        return self == .configuring || self == .loading || self == .ready
+    }
+    
+    /// Whether page interaction is possible
+    var canInteract: Bool {
+        return self == .ready
+    }
+    
+    /// Whether it is loading
+    var isLoading: Bool {
+        return self == .loading
+    }
+}
+
 // Define WebView delegate protocol
 public protocol DMPWebViewDelegate: AnyObject {
     func webViewDidFinishLoad(webViewId: Int)
@@ -27,6 +66,8 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     internal var pagePath: String
     internal var query: [String: Any] = [:]
     
+    public let createdAt: Date = Date()
+    
     // Add default configuration method
     private static func defaultConfiguration(appId: String, processPool: WKProcessPool? = nil) -> WKWebViewConfiguration {
         let config = WKWebViewConfiguration()
@@ -37,9 +78,20 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
         return config
     }
 
-    // Modify isLoading as @Published property and make it public
-    @Published public internal(set) var isLoading: Bool = true
     public var appName: String
+    
+    // Publish notification when state changes
+    @Published public var poolState: DMPWebViewState = .available {
+        didSet {
+            // When the state changes, trigger UI update
+            objectWillChange.send()
+        }
+    }
+    
+    // Calculate property: based on state return whether it is loading
+    public var isLoading: Bool {
+        return poolState.isLoading
+    }
 
     // Modify constructor
     public init(delegate: DMPWebViewDelegate?, appName: String, appId: String, processPool: WKProcessPool? = nil) {
@@ -259,7 +311,7 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
         webView.configuration.userContentController.addUserScript(resourceFixScript)
     }
 
-    // 加载页面框架
+    // Load page framework
     public func loadPageFrame() {
         injectResourceFixScript()
 
@@ -271,7 +323,6 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
 
     // Register a JS message handler to allow JS to call native methods
     public func registerJSHandler(handlerName: String, callback: @escaping (Any) -> Void) {
-        // Critical fix: Add safety check to prevent duplicate registration
         print("🔧 WebView (ID: \(getWebViewId())) trying to register handler: \(handlerName)")
         
         // Check if this handler is already registered
@@ -401,13 +452,17 @@ public class DMPWebview: NSObject, WKNavigationDelegate, WKScriptMessageHandler,
     public func hideLoading() {
         if Thread.isMainThread {
             withAnimation(.easeOut(duration: 0.3)) {
-                self.isLoading = false
+                if self.poolState == .loading {
+                    self.poolState = .ready
+                }
             }
         } else {
             DispatchQueue.main.async { [weak self] in
                 guard let self = self else { return }
                 withAnimation(.easeOut(duration: 0.3)) {
-                    self.isLoading = false
+                    if self.poolState == .loading {
+                        self.poolState = .ready
+                    }
                 }
             }
         }

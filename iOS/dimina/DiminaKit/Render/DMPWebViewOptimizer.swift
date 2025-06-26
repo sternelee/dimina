@@ -24,7 +24,7 @@ public class DMPWebViewOptimizer {
     ///   - config: WKWebViewConfiguration instance
     ///   - appId: Application ID
     ///   - processPool: Optional process pool
-    public func applyOptimizations(to config: WKWebViewConfiguration, appId: String, processPool: WKProcessPool? = nil) {
+    @MainActor public func applyOptimizations(to config: WKWebViewConfiguration, appId: String, processPool: WKProcessPool? = nil) {
         // 1. Process pool optimization
         applyProcessPoolOptimizations(to: config, processPool: processPool)
         
@@ -49,7 +49,7 @@ public class DMPWebViewOptimizer {
     
     // MARK: - Process pool optimization
     
-    private func applyProcessPoolOptimizations(to config: WKWebViewConfiguration, processPool: WKProcessPool?) {
+    @MainActor private func applyProcessPoolOptimizations(to config: WKWebViewConfiguration, processPool: WKProcessPool?) {
         // Use shared process pool to reduce memory usage and improve startup speed
         if let processPool = processPool {
             config.processPool = processPool

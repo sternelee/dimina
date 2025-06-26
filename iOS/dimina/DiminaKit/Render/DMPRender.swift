@@ -58,7 +58,7 @@ public class DMPRender: DMPWebViewDelegate {
     }
 
     // Set up JS bridge for single WebView
-    public func setupJSBridge(webViewId: Int) {
+    private func setupJSBridge(webViewId: Int) {
         guard let webview = webviewsMap[webViewId] else { return }
 
         // Register handlers
@@ -86,8 +86,28 @@ public class DMPRender: DMPWebViewDelegate {
 
         setupJSBridge(webViewId: webViewId)
 
-        self.app?.container?.loadResourceService(webViewId: webViewId, pagePath: webview?.getPagePath() ?? "");
-        self.app?.container?.loadResourceRender(webViewId: webViewId, pagePath: webview?.getPagePath() ?? "");
+        guard let webview = webview else {
+            print("🟡DMPRender: WebView (ID: \(webViewId)) not found in map")
+            return
+        }
+        
+        if webview.poolState != .loading {
+            print("🟡 DMPRender: WebView (ID: \(webViewId)) is not in loading state (\(webview.poolState.description)), skip resource loading")
+            return
+        }
+        
+        let currentPagePath = webview.getPagePath()
+        if currentPagePath.isEmpty || currentPagePath == "resetting" {
+            print("🟡 DMPRender: WebView (ID: \(webViewId)) has invalid page path '\(currentPagePath)', skip resource loading")
+            return
+        }
+        
+        print("✅ DMPRender: WebView (ID: \(webViewId)) ready for resource loading with path: \(currentPagePath)")
+        self.app?.container?.loadResourceService(webViewId: webViewId, pagePath: currentPagePath);
+        self.app?.container?.loadResourceRender(webViewId: webViewId, pagePath: currentPagePath);
+        
+        webview.poolState = .ready
+        print("✅ DMPRender: WebView (ID: \(webViewId)) marked as ready")
     }
 
     // DMPWebViewDelegate protocol implementation - Handle WebView load failure event
