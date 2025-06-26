@@ -149,14 +149,12 @@ public class DMPEngine: NSObject {
     public func destroy() {
         isThreadRunning = false
         
-        // 清空完成回调
         jsQueue.async { [weak self] in
             self?.initCompletionHandlers.removeAll()
         }
         
         performOnJSThread { [weak self] in
-            // 清理所有定时器
-            DMPEngineTimer.clearAllTimers()
+            DMPEngineTimer.shared.clearAllTimers()
             
             self?.jsContext?.exception = nil
             self?.jsContext = nil
