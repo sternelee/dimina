@@ -174,10 +174,6 @@ describe('全局组件 wxs 问题修复', () => {
 		expect(indexContent).toContain('/components/global-component/index')
 		expect(aboutContent).toContain('/components/global-component/index')
 
-		console.log('✅ 全局组件 wxs 问题修复验证通过')
-		console.log('首页文件大小:', indexContent.length, '字节')
-		console.log('关于页面文件大小:', aboutContent.length, '字节')
-		
 		// 验证两个页面的内容长度相似（都包含了相同的 wxs 代码）
 		const sizeDifference = Math.abs(indexContent.length - aboutContent.length)
 		expect(sizeDifference).toBeLessThan(100) // 允许一些小的差异

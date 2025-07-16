@@ -179,9 +179,6 @@ Component<ComponentData, {}, ComponentMethods>({
 		expect(compileRes).toBeDefined()
 		expect(compileRes.length).toBeGreaterThan(0)
 		
-		// 打印所有编译结果的路径以便调试
-		console.log('编译结果路径:', compileRes.map(item => item.path))
-		
 		const componentModule = compileRes.find(item => 
 			item.path === 'components/my-component/index' || 
 			item.path === '/components/my-component/index' ||

@@ -76,6 +76,10 @@ describe('组件间关系测试', () => {
 		runtime.instances[bridgeId]['parent-1'] = parentComponent
 		runtime.instances[bridgeId]['child-1'] = childComponent
 
+		// 初始化组件以建立关系
+		parentComponent.init()
+		childComponent.init()
+
 		// 等待关系建立
 		setTimeout(() => {
 			// 验证父组件获取子组件
@@ -180,6 +184,11 @@ describe('组件间关系测试', () => {
 		runtime.instances[bridgeId]['middle-1'] = middleComponent
 		runtime.instances[bridgeId]['descendant-1'] = descendantComponent
 
+		// 初始化组件以建立关系
+		ancestorComponent.init()
+		middleComponent.init()
+		descendantComponent.init()
+
 		// 等待关系建立
 		setTimeout(() => {
 			// 验证祖先组件获取后代组件
@@ -263,6 +272,10 @@ describe('组件间关系测试', () => {
 
 		runtime.instances[bridgeId]['parent-1'] = parentComponent
 		runtime.instances[bridgeId]['child-1'] = childComponent
+
+		// 初始化组件以建立关系
+		parentComponent.init()
+		childComponent.init()
 
 		// 等待关系建立
 		setTimeout(() => {
@@ -370,6 +383,9 @@ describe('组件间关系测试', () => {
 
 		runtime.instances[bridgeId]['parent-1'] = parentComponent
 
+		// 初始化父组件
+		parentComponent.init()
+
 		// 延迟创建子组件
 		setTimeout(() => {
 			const childComponent = new Component(childModule, {
@@ -384,6 +400,9 @@ describe('组件间关系测试', () => {
 			})
 
 			runtime.instances[bridgeId]['child-1'] = childComponent
+
+			// 初始化子组件
+			childComponent.init()
 
 			// 等待关系建立
 			setTimeout(() => {
