@@ -11,3 +11,4 @@ coverage
 example/*
 !example/subpackages
 !example/weui
+!example/vant
