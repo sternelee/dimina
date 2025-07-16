@@ -120,7 +120,7 @@ describe('全局组件 wxs 问题修复', () => {
 		delete require.cache[envModulePath]
 		
 		// 重新导入并初始化环境
-		const { storeInfo, getPages, getTargetPath } = await import('../src/env.js')
+		const { storeInfo, getPages } = await import('../src/env.js')
 		
 		// 执行配置收集
 		storeInfo(tempDir)

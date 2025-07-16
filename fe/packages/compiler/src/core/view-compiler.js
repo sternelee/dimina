@@ -160,7 +160,7 @@ function registerWxsModule(modulePath) {
 /**
  * 检查是否为已注册的 wxs 模块
  * @param {string} modulePath - 模块路径
- * @returns {boolean}
+ * @returns {boolean} wxs 模块是否已注册
  */
 function isRegisteredWxsModule(modulePath) {
 	return wxsModuleRegistry.has(modulePath)
@@ -1636,6 +1636,7 @@ function extractWxsDependencies(moduleCode) {
 	const requirePattern = /(?:require|_)\s*\(\s*["']([^"']+)["']\s*\)/g
 	let match
 	
+	// eslint-disable-next-line no-cond-assign
 	while ((match = requirePattern.exec(moduleCode)) !== null) {
 		const depPath = match[1]
 		if (depPath && !dependencies.includes(depPath)) {
