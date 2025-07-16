@@ -6,6 +6,7 @@ import _traverse from '@babel/traverse'
 import types from '@babel/types'
 import { transform } from 'esbuild'
 import ts from 'typescript'
+import transformModulesCommonjs from '@babel/plugin-transform-modules-commonjs'
 import { hasCompileInfo } from '../common/utils.js'
 import { getAppConfigInfo, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 
@@ -306,7 +307,7 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 		comments: false,
 		plugins: [
 			// 将 ES6 import/export 转换为 CommonJS
-			'@babel/plugin-transform-modules-commonjs'
+			transformModulesCommonjs
 		],
 	})
 	compileInfo.code = code

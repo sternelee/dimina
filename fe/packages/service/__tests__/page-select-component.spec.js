@@ -225,6 +225,10 @@ describe('Page selectComponent 测试', () => {
 		runtime.instances[bridgeId]['page-1'] = page
 		runtime.instances[bridgeId]['component-1'] = component
 
+		// 初始化组件以启用导出功能
+		page.init()
+		component.init()
+
 		// 测试页面选择组件并返回自定义导出
 		const result = page.selectComponent('#export-component')
 		expect(result).toEqual({ myField: 'myValue' })

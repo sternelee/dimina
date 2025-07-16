@@ -308,6 +308,9 @@ describe('组件间关系测试', () => {
 			properties: {},
 			targetInfo: {}
 		})
+		
+		// 初始化组件以触发关系路径解析
+		parentComponent.init()
 
 		// 验证路径解析 - 通过公共方法间接验证
 		// 由于 __relationPaths__ 是私有属性，我们通过其他方式验证路径解析是否正确

@@ -221,6 +221,10 @@ describe('selectComponent 测试', () => {
 		runtime.instances[bridgeId]['parent-1'] = parentComponent
 		runtime.instances[bridgeId]['child-1'] = childComponent
 
+		// 初始化组件以启用导出功能
+		parentComponent.init()
+		childComponent.init()
+
 		// 测试自定义导出
 		const result = parentComponent.selectComponent('#the-id')
 		expect(result).toEqual({ myField: 'myValue' })
