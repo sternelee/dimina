@@ -185,6 +185,16 @@ class Runtime {
 							}
 
 							onMounted(() => {
+								// 先发送页面挂载消息 (componentAttached)
+								message.send({
+									type: 'mA', // moduleAttached
+									target: 'service',
+									body: {
+										bridgeId,
+										moduleId: self.pageId,
+									},
+								})
+								
 								window.addEventListener('scroll', handleScroll, { passive: true })
 								nextTick(() => {
 									message.send({
@@ -308,6 +318,16 @@ class Runtime {
 					})
 
 					onMounted(() => {
+						// 先发送组件挂载消息 (componentAttached)
+						message.send({
+							type: 'mA', // moduleAttached
+							target: 'service',
+							body: {
+								bridgeId,
+								moduleId,
+							},
+						})
+						
 						nextTick(() => {
 							message.send({
 								type: 'mR',

@@ -411,13 +411,12 @@ export class Component {
 
 	async #invokeInitLifecycle() {
 		if (this.__isComponent__) {
+			// 组件实例创建时调用 componentCreated
 			await this.componentCreated()
-			await this.componentAttached()
 		}
 		else {
 			// 使用 Component 构造器创建的页面生命周期
 			await this.componentCreated()
-			await this.componentAttached()
 
 			await this.onLoad?.(this.opts.query || {})
 		}
