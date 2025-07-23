@@ -12,7 +12,7 @@
 [![Platform](https://img.shields.io/badge/Platform-%20Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-4CAF50)](#效果展示)
 [![PRs welcome!](https://img.shields.io/badge/PRs-Welcome-FF6F61)](https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md)
 
-# 星河小程序（Dimina）——滴滴开源跨端小程序框架
+# 星河小程序（Dimina）——滴滴开源跨端小程序
 
 > Dimina 发音为 /diːminə/，是 didi miniprogram 的缩写，旨在打造灵活、轻量的小程序跨端开发框架。
 
@@ -22,7 +22,7 @@
 
 ## 简介
 
-星河小程序（以下简称 `Dimina`）是滴滴自研的一套轻量级跨端小程序框架，致力于为开发者提供高性能、跨平台、低门槛的开发体验。
+星河小程序（以下简称 `Dimina`）是滴滴自研的一套轻量级跨端小程序框架，可以理解为开源版的小程序方案，致力于为开发者提供高性能、跨平台、低门槛的开发体验。
 
 目前，Dimina 已支持 Android、iOS、Harmony 和 Web 四大平台。开发者可以将 Dimina 作为**移动端跨平台开发框架**，将已有小程序逻辑以独立模块方式集成到现有 App，或直接采用小程序语法进行开发，并一键打包生成独立原生 App。
 
