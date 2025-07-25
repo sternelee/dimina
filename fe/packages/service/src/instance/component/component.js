@@ -61,6 +61,13 @@ export class Component {
 					this.data[key] = this.opts.properties[key]
 				}
 			}
+			Object.defineProperty(this, 'properties', {
+				get() {
+					return this.data
+				},
+				enumerable: true,
+				configurable: false
+			})
 		}
 
 		this.#initLifecycle()
