@@ -700,8 +700,17 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
  * @param {*} includePath 被引入文件的路径
  * @param {*} scriptModule 用于收集 wxs 模块的数组
  * @param {*} components 当前可用的组件映射
+ * @param {Set} processedPaths 已处理的路径集合，防止循环引用和栈溢出
  */
-function processIncludedFileWxsDependencies(content, includePath, scriptModule, components) {
+function processIncludedFileWxsDependencies(content, includePath, scriptModule, components, processedPaths = new Set()) {
+	// 如果当前路径已经处理过，直接返回避免循环引用
+	if (processedPaths.has(includePath)) {
+		return
+	}
+	
+	// 将当前路径添加到已处理集合中
+	processedPaths.add(includePath)
+	
 	const $ = cheerio.load(content, {
 		xmlMode: true,
 		decodeEntities: false,
@@ -723,8 +732,13 @@ function processIncludedFileWxsDependencies(content, includePath, scriptModule, 
 		const componentPath = components[tagName]
 		const componentModule = getComponent(componentPath)
 		if (componentModule) {
+			// 检查组件路径是否已经处理过，避免循环引用
+			if (processedPaths.has(componentModule.path)) {
+				continue
+			}
+			
 			// 直接获取组件的模板和 wxs 依赖，避免递归调用
-			const componentTemplate = toCompileTemplate(true, componentModule.path, componentModule.usingComponents, componentModule.componentPlaceholder)
+			const componentTemplate = toCompileTemplate(true, componentModule.path, componentModule.usingComponents, componentModule.componentPlaceholder, processedPaths)
 			
 			if (componentTemplate && componentTemplate.instruction && componentTemplate.instruction.scriptModule) {
 				// 将组件的 wxs 模块添加到当前的 scriptModule 中
@@ -745,8 +759,9 @@ function processIncludedFileWxsDependencies(content, includePath, scriptModule, 
  * @param {*} path
  * @param {*} components
  * @param {*} componentPlaceholder
+ * @param {Set} processedPaths 已处理的路径集合，防止循环引用和栈溢出
  */
-function toCompileTemplate(isComponent, path, components, componentPlaceholder) {
+function toCompileTemplate(isComponent, path, components, componentPlaceholder, processedPaths = new Set()) {
 	const workPath = getWorkPath()
 	const fullPath = getViewPath(workPath, path)
 	if (!fullPath) {
@@ -826,7 +841,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder) 
 				)
 				
 				// 处理被引入文件中的组件 wxs 依赖
-				processIncludedFileWxsDependencies(includeContent, includePath, scriptModule, components)
+				processIncludedFileWxsDependencies(includeContent, includePath, scriptModule, components, processedPaths)
 				
 				$includeContent('template').remove()
 				$includeContent('wxs').remove()
@@ -887,7 +902,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder) 
 				)
 				
 				// 处理被导入文件中的组件 wxs 依赖
-				processIncludedFileWxsDependencies(importContent, importPath, scriptModule, components)
+				processIncludedFileWxsDependencies(importContent, importPath, scriptModule, components, processedPaths)
 			}
 		}
 	})
