@@ -107,21 +107,6 @@ class Runtime {
 		}
 	}
 
-	moduleAttached(opts) {
-		const { bridgeId, moduleId } = opts
-		const instance = this.instances[bridgeId][moduleId]
-
-		if (!instance) {
-			return
-		}
-
-		if (instance.__type__ === ComponentModule.type) {
-			// 调用组件或页面的 componentAttached 生命周期
-			instance.componentAttached()
-		} 
-		// 使用 Page() 构造器创建的页面，不需要调用 componentAttached
-	}
-
 	moduleReady(opts) {
 		const { bridgeId, moduleId } = opts
 		const instance = this.instances[bridgeId][moduleId]

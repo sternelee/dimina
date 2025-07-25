@@ -113,11 +113,6 @@ class Service {
 			runtime.createInstance(msg)
 		})
 
-		this.message.on('mA', (msg) => {
-			// 组件已挂载到DOM (componentAttached)
-			runtime.moduleAttached(msg)
-		})
-
 		this.message.on('mR', (msg) => {
 			// 在组件在视图层布局完成后执行
 			runtime.moduleReady(msg)

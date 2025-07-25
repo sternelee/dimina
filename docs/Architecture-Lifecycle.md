@@ -8,8 +8,8 @@
 graph TD
     subgraph "星河小程序生命周期顺序"
         B1["page onLoad"] --> B2["parent component created"]
-        B2 --> B3["child component created"]
-        B3 --> B4["parent component attached"]
+        B2 --> B3["parent component attached"]
+        B3 --> B4["child component created"]
         B4 --> B5["child component attached"]
         B5 --> B6["parent component show (pageLifetimes.show)"]
         B6 --> B7["child component show (pageLifetimes.show)"]

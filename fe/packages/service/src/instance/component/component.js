@@ -410,7 +410,21 @@ export class Component {
 	}
 
 	async #invokeInitLifecycle() {
-		await this.componentCreated()
+		if (this.__isComponent__) {
+			// 组件实例创建时调用 componentCreated
+			await this.componentCreated()
+			// Fixme: 组件已挂载到DOM (componentAttached)
+			await this.componentAttached()
+		}
+		else {
+			// 使用 Component 构造器创建的页面生命周期
+			await this.componentCreated()
+			// Fixme: 组件已挂载到DOM (componentAttached)
+			await this.componentAttached()
+
+			await this.onLoad?.(this.opts.query || {})
+		}
+		this.initd = true
 	}
 
 	/**
@@ -733,12 +747,6 @@ export class Component {
 		
 		// 建立组件间关系
 		this.#checkAndLinkRelations()
-
-		if (!this.__isComponent__) {
-			// 使用 Component 构造器创建的页面生命周期
-			await this.onLoad?.(this.opts.query || {})
-		}
-		this.initd = true
 	}
 
 	/**
