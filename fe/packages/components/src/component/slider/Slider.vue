@@ -283,7 +283,7 @@ function handleClick(event) {
 	position: absolute;
 	left: 0%;
 	top: 50%;
-	cursor: pointer;
+	cursor: grab;
 	border-radius: 50%;
 	transition: border-color 0.3s ease;
 }
