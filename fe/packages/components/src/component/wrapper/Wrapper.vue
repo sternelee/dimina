@@ -52,7 +52,7 @@ onMounted(() => {
 </script>
 
 <template>
-	<component :is="componentName" v-bind="$attrs" ref="wrapperRef">
+	<component :is="componentName" v-bind="{ ...$attrs, class: undefined }" ref="wrapperRef">
 		<slot />
 	</component>
 </template>
