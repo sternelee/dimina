@@ -442,22 +442,26 @@ export class Component {
 		// 收集需要执行的观察者函数
 		const observersToExecute = []
 		
-		// 更新数据并收集观察者
+		// 保存旧值并更新数据，收集观察者
 		for (const [prop, val] of Object.entries(data)) {
+			// 保存旧值
+			const oldVal = this.data[prop]
+			
+			// 更新数据
 			this.data[prop] = val
 			
 			// 收集 observers
 			if (this.__info__.observers) {
-				observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, data, this))
+				observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, data, this, oldVal))
 			}
 			
 			// 收集属性观察器
-			const observer = this.__info__.properties[prop]?.observer
+			const observer = this.__info__.properties?.[prop]?.observer
 			if (isString(observer)) {
-				observersToExecute.push(() => this[observer]?.(val))
+				observersToExecute.push(() => this[observer]?.(val, oldVal))
 			}
 			else if (isFunction(observer)) {
-				observersToExecute.push(() => observer.call(this, val))
+				observersToExecute.push(() => observer.call(this, val, oldVal))
 			}
 		}
 		

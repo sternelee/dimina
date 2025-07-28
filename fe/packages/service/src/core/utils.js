@@ -190,8 +190,9 @@ function convertToStringType(type) {
  * @param {*} observers
  * @param {*} data
  * @param {*} ctx
+ * @param {*} oldVal
  */
-export function filterInvokeObserver(changedKey, observers, data, ctx) {
+export function filterInvokeObserver(changedKey, observers, data, ctx, oldVal) {
 	for (const observerKey in observers) {
 		const observerFn = observers[observerKey]
 
@@ -200,7 +201,12 @@ export function filterInvokeObserver(changedKey, observers, data, ctx) {
 
 		if (keys.includes(changedKey)) {
 			const args = keys.map(key => get(data, key))
-			observerFn.call(ctx, ...args)
+			// 对于单个字段的观察器，如果正好是变化的字段，添加 oldVal 参数
+			if (keys.length === 1 && keys[0] === changedKey) {
+				observerFn.call(ctx, ...args, oldVal)
+			} else {
+				observerFn.call(ctx, ...args)
+			}
 			continue
 		}
 
@@ -230,7 +236,12 @@ export function filterInvokeObserver(changedKey, observers, data, ctx) {
 					targetData = targetData[part]
 				}
 			}
-			observerFn.call(ctx, targetData)
+			// 对于完全匹配的字段，添加 oldVal 参数
+			if (observerKey === changedKey) {
+				observerFn.call(ctx, targetData, oldVal)
+			} else {
+				observerFn.call(ctx, targetData)
+			}
 			continue
 		}
 
