@@ -6,7 +6,7 @@
 
 <div align="center">
 
-![Dimina](./static/logo.png)
+<img src="https://socialify.git.ci/didi/dimina/image?description=1&font=JetBrains+Mono&forks=1&logo=https%3A%2F%2Fgithub.com%2Fdidi%2Fdimina%2Fraw%2Fmain%2Fstatic%2Flogo.png&name=1&owner=1&pattern=Plus&stargazers=1&theme=Light" alt="dimina" width="640" height="320" />
 
 [![Dimina is released under the Apache 2.0 license.](https://img.shields.io/badge/License-Apache%202.0-blue)](https://github.com/didi/dimina/blob/HEAD/LICENSE)
 [![Platform](https://img.shields.io/badge/Platform-%20Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-4CAF50)](#效果展示)
