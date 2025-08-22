@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name             = 'Dimina'
-  s.version          = '0.1.0'
+  s.version          = '1.1.3'
   s.summary          = 'DiDi Mini Program Framework'
   
   s.description      = <<-DESC
