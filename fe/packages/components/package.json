@@ -22,10 +22,10 @@
 	},
 	"dependencies": {
 		"@dimina/common": "workspace:^",
-		"vue": "^3.5.17"
+		"vue": "^3.5.19"
 	},
 	"devDependencies": {
-		"@vitejs/plugin-vue": "^6.0.0",
+		"@vitejs/plugin-vue": "^6.0.1",
 		"terser": "^5.43.1",
 		"unplugin-auto-import": "^19.3.0"
 	}
