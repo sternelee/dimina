@@ -1021,11 +1021,13 @@ function transTag(opts) {
 				if (prop.includes('v-if') || prop.includes('v-else-if') || prop.includes('v-else')) {
 					withVIf.push(prop)
 				}
-				else {
+				else if(!prop.includes('slot')){
 					withoutVIf.push(prop)
 				}
 			}
-			tagRes = `<template ${`${withVIf.join(' ')}`} ${generateSlotDirective(multipleSlots)}><${res}${` ${withoutVIf.join(' ')}`}>`
+			const vIfProps = withVIf.length > 0 ? `${withVIf.join(' ')} ` : ''
+			const vOtherProps = withoutVIf.length > 0 ? ` ${withoutVIf.join(' ')}` : ''
+			tagRes = `<template ${vIfProps}${generateSlotDirective(multipleSlots)}><${res}${vOtherProps}>`
 		}
 		else {
 			tagRes = `</${res}></template>`
