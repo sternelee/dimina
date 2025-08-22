@@ -1009,7 +1009,6 @@ function transTag(opts) {
 	let tagRes
 	const propsAry = isStart ? getProps(attrs, tag) : []
 	// 多 slot 支持，目前在组件定义时的选项中 multipleSlots 未生效
-	// FIXME: 未处理 slot 值是动态的情况
 	const multipleSlots = attrs?.slot
 	if (attrs?.slot) {
 		if (isStart) {
@@ -1026,7 +1025,7 @@ function transTag(opts) {
 					withoutVIf.push(prop)
 				}
 			}
-			tagRes = `<template ${`${withVIf.join(' ')}`} #${multipleSlots}><${res}${` ${withoutVIf.join(' ')}`}>`
+			tagRes = `<template ${`${withVIf.join(' ')}`} ${generateSlotDirective(multipleSlots)}><${res}${` ${withoutVIf.join(' ')}`}>`
 		}
 		else {
 			tagRes = `</${res}></template>`
@@ -1043,6 +1042,23 @@ function transTag(opts) {
 	}
 
 	return tagRes
+}
+
+/**
+ * 处理动态slot指令生成，比如 slot="{{xxx}}"
+ * 
+ * @param {string} slotValue - slot属性值
+ * @returns {string} 生成的slot指令
+ */
+function generateSlotDirective(slotValue) {
+	if (isWrappedByBraces(slotValue)) {
+		// 动态 slot 值，使用 v-slot 指令
+		const slotExpression = parseBraceExp(slotValue)
+		return `#[${slotExpression}]`
+	} else {
+		// 静态 slot 值，使用命名插槽语法
+		return `#${slotValue}`
+	}
 }
 
 /**
@@ -1698,6 +1714,7 @@ function insertWxsToRenderAst(ast, scriptModule, scriptRes) {
 export {
 	compileML,
 	generateVModelTemplate,
+	generateSlotDirective,
 	parseBraceExp,
 	parseClassRules,
 	parseKeyExpression,

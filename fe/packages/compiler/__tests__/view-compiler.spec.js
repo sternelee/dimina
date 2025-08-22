@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { generateVModelTemplate, parseBraceExp, parseClassRules, parseKeyExpression, processWxsContent, splitWithBraces } from '../src/core/view-compiler'
+import { generateVModelTemplate, generateSlotDirective, parseBraceExp, parseClassRules, parseKeyExpression, processWxsContent, splitWithBraces } from '../src/core/view-compiler'
 
 describe('parseKeyExpression - 解析 key 表达式', () => {
 	it('默认索引名 index - 应该直接返回 index', () => {
@@ -440,5 +440,65 @@ describe('processWxsContent - 处理 wxs 内容中的 getRegExp 转换', () => {
 		
 		// 验证 genRegExp 函数定义完整存在
 		expect(result).toContain('function genRegExp(str, flags)')
+	})
+})
+
+describe('generateSlotDirective - 动态slot指令生成', () => {
+	it('静态 slot 值 - 应该使用命名插槽语法', () => {
+		expect(generateSlotDirective('header')).toEqual('#header')
+		expect(generateSlotDirective('footer')).toEqual('#footer')
+		expect(generateSlotDirective('content')).toEqual('#content')
+	})
+
+	it('简单动态 slot 值 - 应该使用动态插槽语法', () => {
+		expect(generateSlotDirective('{{slotName}}')).toEqual('#[slotName]')
+		expect(generateSlotDirective('{{i.p0}}')).toEqual('#[i.p0]')
+		expect(generateSlotDirective('{{item.name}}')).toEqual('#[item.name]')
+	})
+
+	it('索引属性的动态 slot 值 - 应该正确处理 i.p0 类型', () => {
+		expect(generateSlotDirective('{{i.p0}}')).toEqual('#[i.p0]')
+		expect(generateSlotDirective('{{i.p1}}')).toEqual('#[i.p1]')
+		expect(generateSlotDirective('{{i.name}}')).toEqual('#[i.name]')
+		expect(generateSlotDirective('{{j.p0}}')).toEqual('#[j.p0]')
+		expect(generateSlotDirective('{{index.slot}}')).toEqual('#[index.slot]')
+	})
+
+	it('复杂动态 slot 值 - 应该正确解析表达式', () => {
+		expect(generateSlotDirective('{{item.name + "_" + index}}')).toEqual('#[item.name + "_" + index]')
+		expect(generateSlotDirective('{{prefix + slotType}}')).toEqual('#[prefix + slotType]')
+		expect(generateSlotDirective('{{condition ? "slot1" : "slot2"}}')).toEqual('#[(condition ? "slot1" : "slot2")]')
+	})
+
+	it('包含数组索引的动态 slot 值 - 应该正确处理', () => {
+		expect(generateSlotDirective('{{slots[index]}}')).toEqual('#[slots[index]]')
+		expect(generateSlotDirective('{{list[i].name}}')).toEqual('#[list[i].name]')
+	})
+
+	it('混合文本和动态值的 slot - 应该正确处理字符串拼接', () => {
+		expect(generateSlotDirective('slot_{{index}}')).toEqual('#[\'slot_\'+index]')
+		expect(generateSlotDirective('{{prefix}}_suffix')).toEqual('#[prefix+\'_suffix\']')
+		expect(generateSlotDirective('tab_{{type}}_{{index}}')).toEqual('#[\'tab_\'+type+\'_\'+index]')
+	})
+
+	it('空值处理 - 应该正确处理边界情况', () => {
+		expect(generateSlotDirective('')).toEqual('#')
+		expect(generateSlotDirective('{{}}')).toEqual('#[]')
+	})
+
+	it('特殊字符的 slot 名称 - 应该正确处理', () => {
+		expect(generateSlotDirective('slot-header')).toEqual('#slot-header')
+		expect(generateSlotDirective('slot_footer')).toEqual('#slot_footer')
+		expect(generateSlotDirective('{{item["slot-name"]}}')).toEqual('#[item["slot-name"]]')
+	})
+
+	it('带空格的动态表达式 - 应该正确处理', () => {
+		expect(generateSlotDirective('{{ item.name }}')).toEqual('#[item.name]')
+		expect(generateSlotDirective('{{ prefix + "_" + suffix }}')).toEqual('#[prefix + "_" + suffix]')
+	})
+
+	it('嵌套对象属性访问 - 应该正确处理', () => {
+		expect(generateSlotDirective('{{config.slots.header}}')).toEqual('#[config.slots.header]')
+		expect(generateSlotDirective('{{data.list[index].slotName}}')).toEqual('#[data.list[index].slotName]')
 	})
 })
