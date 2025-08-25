@@ -4,13 +4,14 @@
 
 本项目由多个包组成：
 
+- **common**：各分包通用公共工具函数。
 - **compiler**：小程序源码编译工具。
+- **components**：内置小程序标准组件。
 - **container**：原生容器层，为小程序提供 API。
-- **service**：逻辑层（JavaScript 运行时、worker 线程、消息通道）。
+- **jdimina**：webview sdk，为 webview 组件提供调用协议。
 - **render**：渲染层，负责 UI 展示与消息处理。
-- **components**：内置标准组件。
-- **common**：通用工具函数。
-- **server**：网络请求代理服务器。
+- **server**：网络请求代理服务器, 提供给 web 端网络请求代理，用以解决跨域问题。
+- **service**：逻辑层（JavaScript 运行时、worker 线程、消息通道）。
 
 ## 环境要求
 
