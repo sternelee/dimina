@@ -337,10 +337,11 @@ function compileModule(module, isComponent, scriptRes) {
 		insertWxsToRenderAst(ast, instruction.scriptModule, scriptRes)
 		code = babel.transformFromAstSync(ast, '', {
 			comments: false,
+			sourceType: 'script'
 		}).code
 
 		tplComponents
-			+= `'${tm.path}':${code.replace(/;$/, '').replace(/^"use strict";\s*/, '')},`
+			+= `'${tm.path}':${code.replace(/;$/, '')},`
 	}
 	tplComponents += '}'
 
@@ -348,6 +349,7 @@ function compileModule(module, isComponent, scriptRes) {
 	insertWxsToRenderAst(tplAst, instruction.scriptModule, scriptRes)
 	const { code: transCode } = babel.transformFromAstSync(tplAst, '', {
 		comments: false,
+		sourceType: 'script'
 	})
 
 	// 通过 component 字段标记该页面 以 Component 形式进行渲染或着以 Page 形式进行渲染
@@ -356,7 +358,7 @@ function compileModule(module, isComponent, scriptRes) {
 	const code = `Module({
 		path: '${module.path}',
 		id: '${module.id}',
-		render: ${transCode.replace(/;$/, '').replace(/^"use strict";\s*/, '')},
+		render: ${transCode.replace(/;$/, '')},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
 		tplComponents: ${tplComponents},
 		});`
@@ -559,6 +561,7 @@ function processWxsContent(wxsContent, wxsFilePath, scriptModule, workPath, file
 	// 生成代码
 	return babel.transformFromAstSync(wxsAst, '', {
 		comments: false,
+		sourceType: 'script'
 	}).code
 }
 
@@ -664,6 +667,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 		insertWxsToRenderAst(ast, allScriptModules, scriptRes)
 		code = babel.transformFromAstSync(ast, '', {
 			comments: false,
+			sourceType: 'script'
 		}).code
 
 		tplComponents
@@ -675,6 +679,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 	insertWxsToRenderAst(tplAst, allScriptModules, scriptRes)
 	const { code: transCode } = babel.transformFromAstSync(tplAst, '', {
 		comments: false,
+		sourceType: 'script'
 	})
 
 	const code = `Module({
