@@ -198,7 +198,7 @@ function buildCompileView(module, isComponent = false, scriptRes, depthChain = [
 			}
 			// 检查自依赖：如果组件依赖自己，则跳过
 			if (componentModule.path === module.path) {
-				console.warn('[view]', `检测到自依赖，跳过处理: ${module.path}`)
+				console.warn('[view]', `检测到循环依赖，跳过处理: ${module.path}`)
 				continue
 			}
 			
@@ -1027,10 +1027,12 @@ function transTag(opts) {
 			}
 			const vIfProps = withVIf.length > 0 ? `${withVIf.join(' ')} ` : ''
 			const vOtherProps = withoutVIf.length > 0 ? ` ${withoutVIf.join(' ')}` : ''
-			tagRes = `<template ${vIfProps}${generateSlotDirective(multipleSlots)}><${res}${vOtherProps}>`
+			// 动态插槽无法正常编译，添加根节点。
+			// Error: Codegen node is missing for element/if/for node. Apply appropriate transforms first.
+			tagRes = `<dd-block><template ${vIfProps}${generateSlotDirective(multipleSlots)}><${res}${vOtherProps}>`
 		}
 		else {
-			tagRes = `</${res}></template>`
+			tagRes = `</${res}></template></dd-block>`
 		}
 	}
 	else {
