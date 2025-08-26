@@ -13,13 +13,25 @@ export function env() {
 	}
 }
 
+// JS 层内置支持的API列表
+const builtInAPIs = new Set([
+	'nextTick',
+	'getUpdateManager',
+	'getPerformance'
+])
+	
 /**
  * 判断小程序的API，回调，参数，组件等是否在当前版本可用。
  * https://developers.weixin.qq.com/miniprogram/dev/api/base/wx.canIUse.html
  */
-export function canIUse(opts) {
-	if (opts === 'getUpdateManager' || opts === 'getPerformance') {
+export function canIUse(schema) {
+	if (builtInAPIs.has(schema)) {
 		return true
 	}
-	return invokeAPI('canIUse', opts)
+	try {
+		return invokeAPI('canIUse', schema)
+	} catch (error) {
+		console.warn(`[canIUse] check ${schema} error:`, error)
+		return false
+	}
 }
