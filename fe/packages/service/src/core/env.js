@@ -14,7 +14,7 @@ class Env {
 		globalThis.dd = globalThis.wx = globalApi
 		globalThis.modRequire = modRequire
 		globalThis.modDefine = modDefine
-		globalThis.global = undefined
+		globalThis.global = {}
 
 		/**
 		 * https://developers.weixin.qq.com/miniprogram/dev/framework/app-service/app.html
