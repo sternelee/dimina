@@ -32,6 +32,15 @@ export class Component {
 		}
 		this.behaviors = module.behaviors
 		this.data = cloneDeep(module.noReferenceData)
+
+		Object.defineProperty(this, 'properties', {
+			get() {
+				return this.data
+			},
+			enumerable: true,
+			configurable: false
+		})
+
 		this.__isComponent__ = module.isComponent
 		this.__type__ = module.type
 		this.__id__ = this.opts.moduleId
@@ -61,13 +70,6 @@ export class Component {
 					this.data[key] = this.opts.properties[key]
 				}
 			}
-			Object.defineProperty(this, 'properties', {
-				get() {
-					return this.data
-				},
-				enumerable: true,
-				configurable: false
-			})
 		}
 
 		this.#initLifecycle()
