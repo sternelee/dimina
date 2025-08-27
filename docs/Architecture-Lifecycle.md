@@ -7,6 +7,7 @@
 ```mermaid
 graph TD
     subgraph "星河小程序生命周期顺序"
+        direction TB
         B1["page onLoad"] --> B2["parent component created"]
         B2 --> B3["parent component attached"]
         B3 --> B4["child component created"]
@@ -20,6 +21,7 @@ graph TD
     end
     
     subgraph "微信小程序生命周期顺序"
+        direction TB
         A1["child component created"] --> A2["parent component created"]
         A2 --> A3["parent component attached"]
         A3 --> A4["child component attached"]
