@@ -1016,6 +1016,9 @@ function transTag(opts) {
 	// 多 slot 支持，目前在组件定义时的选项中 multipleSlots 未生效
 	const multipleSlots = attrs?.slot
 	if (attrs?.slot) {
+		// 检查是否为动态插槽（slot 属性值被 {{}} 包裹）
+		const isDynamicSlot = isWrappedByBraces(multipleSlots)
+		
 		if (isStart) {
 			// 如果存在 if/else 属性，则需要转移到 template 中
 			const withVIf = []
@@ -1032,12 +1035,24 @@ function transTag(opts) {
 			}
 			const vIfProps = withVIf.length > 0 ? `${withVIf.join(' ')} ` : ''
 			const vOtherProps = withoutVIf.length > 0 ? ` ${withoutVIf.join(' ')}` : ''
-			// 动态插槽无法正常编译，添加根节点。
-			// Error: Codegen node is missing for element/if/for node. Apply appropriate transforms first.
-			tagRes = `<dd-block><template ${vIfProps}${generateSlotDirective(multipleSlots)}><${res}${vOtherProps}>`
+			
+			// 构建共同的 template 内容
+			const templateContent = `<template ${vIfProps}${generateSlotDirective(multipleSlots)}><${res}${vOtherProps}>`
+			
+			if (isDynamicSlot) {
+				// 动态插槽无法正常编译，添加 dd-block 包装器。
+				// Error: Codegen node is missing for element/if/for node. Apply appropriate transforms first.
+				tagRes = `<dd-block>${templateContent}`
+			} else {
+				tagRes = templateContent
+			}
 		}
 		else {
-			tagRes = `</${res}></template></dd-block>`
+			if (isDynamicSlot) {
+				tagRes = `</${res}></template></dd-block>`
+			} else {
+				tagRes = `</${res}></template>`
+			}
 		}
 	}
 	else {
