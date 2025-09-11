@@ -80,10 +80,11 @@ class MiniApp private constructor() {
      * Get the JsCore instance for a specific MiniProgram
      *
      * @param appId The ID of the MiniProgram
+     * @param context The context to use for initializing JsCore if needed
      * @return The JsCore instance for the MiniProgram
      */
-    fun getJsCore(appId: String): JsCore {
-        return getOrCreateJsCore(appId)
+    fun getJsCore(appId: String, context: Context? = null): JsCore {
+        return getOrCreateJsCore(appId, context)
     }
 
     /**

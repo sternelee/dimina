@@ -384,7 +384,7 @@ class DiminaActivity : ComponentActivity() {
                         BridgeOptions(
                             pathInfo = pathInfo,
                             scene = 1001,
-                            jscore = miniApp.getJsCore(appId),
+                            jscore = miniApp.getJsCore(appId, this@DiminaActivity),
                             webview = webView,
                             isRoot = true,
                             root = pageConfig?.root ?: "main",
