@@ -13,7 +13,10 @@ import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.PathUtils.FILE_PROTOCOL
@@ -31,19 +34,50 @@ private const val TAG = "DiminaWebView"
 fun DiminaWebView(
     onInitReady: (webView: WebView) -> Unit,
     onPageCompleted: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    identifier: String? = null,
+    enableCache: Boolean = true
 ) {
+    val context = LocalContext.current
+    val webViewIdentifier = remember { identifier ?: "webview_${System.currentTimeMillis()}" }
+
+    // 初始化缓存管理器
+    remember {
+        if (enableCache) {
+            WebViewCacheManager.initialize(context)
+        }
+        true
+    }
+
+    // 生命周期管理
+    DisposableEffect(webViewIdentifier) {
+        onDispose {
+            if (enableCache) {
+                releaseWebViewToCache(webViewIdentifier)
+                LogUtils.d(TAG, "WebView released on dispose: $webViewIdentifier")
+            }
+        }
+    }
+
     Box(modifier = modifier.fillMaxSize()) {
-        // WebView
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { context ->
-                createWebView(context, onPageCompleted).apply {
+                val webView = if (enableCache) {
+                    // 使用缓存管理器获取WebView实例
+                    WebViewCacheManager.getWebView(context, onPageCompleted, webViewIdentifier)
+                } else {
+                    // 传统方式创建WebView
+                    createWebView(context, onPageCompleted)
+                }
+
+                webView.apply {
                     onInitReady(this)
+                    LogUtils.d(TAG, "WebView initialized with identifier: $webViewIdentifier")
+                    LogUtils.d(TAG, "Cache info: ${getWebViewCacheInfo()}")
                 }
             }
         )
-
     }
 }
 
@@ -193,4 +227,5 @@ class DiminaRenderBridge(
         const val TAG = "DiminaRenderBridge"
     }
 }
+
 
