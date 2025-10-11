@@ -40,7 +40,14 @@ if (!isMainThread) {
 			parentPort.postMessage({ success: true })
 		}
 		catch (error) {
-			parentPort.postMessage({ success: false, error: error.message })
+			parentPort.postMessage({ 
+				success: false, 
+				error: {
+					message: error.message,
+					stack: error.stack,
+					name: error.name
+				}
+			})
 		}
 	})
 }

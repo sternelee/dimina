@@ -52,16 +52,13 @@ if (!isMainThread) {
 			parentPort.postMessage({ success: true })
 		}
 		catch (error) {
-			parentPort.postMessage({
-				success: false,
+			parentPort.postMessage({ 
+				success: false, 
 				error: {
 					message: error.message,
 					stack: error.stack,
-					name: error.name,
-					file: error.file || null,
-					line: error.line || null,
-					code: error.code || null,
-				},
+					name: error.name
+				}
 			})
 		}
 	})
