@@ -10,6 +10,7 @@ import { transform } from 'esbuild'
 import * as htmlparser2 from 'htmlparser2'
 import { collectAssets, getAbsolutePath, tagWhiteList, transformRpx } from '../common/utils.js'
 import { getAppId, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
+import { parseBindings } from '../common/expression-parser.js'
 
 // https://github.com/babel/babel/issues/13855
 const traverse = _traverse.default ? _traverse.default : _traverse
@@ -1019,7 +1020,7 @@ function transTag(opts) {
 	}
 
 	let tagRes
-	const propsAry = isStart ? getProps(attrs, tag) : []
+	const propsAry = isStart ? getProps(attrs, tag, components) : []
 	// 多 slot 支持，目前在组件定义时的选项中 multipleSlots 未生效
 	const multipleSlots = attrs?.slot
 	if (attrs?.slot) {
@@ -1095,9 +1096,14 @@ function generateSlotDirective(slotValue) {
 /**
  * 转换语法
  * @param {*} attrs
+ * @param {*} tag
+ * @param {*} components - 组件映射，用于判断是否为自定义组件
  */
-function getProps(attrs, tag) {
+function getProps(attrs, tag, components) {
 	const attrsList = []
+	// 用于记录属性绑定关系：{ 子组件属性名: 父组件数据路径 }
+	const propBindings = {}
+	
 	Object.entries(attrs).forEach(([name, value]) => {
 		if (name.endsWith(':if')) {
 			attrsList.push({
@@ -1221,6 +1227,19 @@ function getProps(attrs, tag) {
 			if (tag === 'template' && name === 'data') {
 				pVal = `{${pVal}}`
 			}
+			
+			// 如果是自定义组件的属性绑定，记录绑定关系
+			if (components && components[tag]) {
+				// 记录：子组件属性名 -> 父组件数据表达式
+				// 例如：count2="{{count}}" => propBindings['count2'] = 'count'
+				//       value="{{item.name}}" => propBindings['value'] = 'item.name'
+				//       total="{{count + defaultValue}}" => propBindings['total'] = 'count + defaultValue'
+				// 确保 pVal 是有效的字符串值
+				if (pVal && typeof pVal === 'string') {
+					propBindings[name] = pVal
+				}
+			}
+			
 			// 转换 {{}}，绑定属性
 			attrsList.push({
 				name: `:${name}`,
@@ -1250,6 +1269,31 @@ function getProps(attrs, tag) {
 			propsRes.push(`${name}="${escapeQuotes(value)}"`)
 		}
 	})
+
+	// 如果是自定义组件且有属性绑定，添加绑定信息
+	if (components && components[tag] && Object.keys(propBindings).length > 0) {
+		// 解析绑定表达式，提取依赖信息
+		try {
+			// 过滤掉无效值，确保所有值都是可序列化的字符串
+			const validBindings = {}
+			for (const [key, value] of Object.entries(propBindings)) {
+				if (value !== undefined && value !== null && typeof value === 'string') {
+					validBindings[key] = value
+				}
+			}
+			
+		if (Object.keys(validBindings).length > 0) {
+			// 解析表达式，生成包含依赖信息的绑定对象
+			const parsedBindings = parseBindings(validBindings)
+			// 使用动态绑定 + HTML 实体转义，Vue 会自动解码并解析为对象
+			const bindingsJson = JSON.stringify(parsedBindings)
+			const escapedJson = bindingsJson.replace(/"/g, '&quot;')
+			propsRes.push(`v-c-prop-bindings="${escapedJson}"`)
+		}
+		} catch (error) {
+			console.warn('[compiler] 序列化 propBindings 失败:', error.message, '标签:', tag, '绑定数据:', propBindings)
+		}
+	}
 
 	return propsRes
 }

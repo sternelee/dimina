@@ -184,10 +184,10 @@ class SocketTask {
  * @param {string} opts.url 开发者服务器 wss 接口地址
  * @param {Object} [opts.header] HTTP Header，Header 中不能设置 Referer
  * @param {Array<string>} [opts.protocols] 子协议数组
- * @param {boolean} [opts.tcpNoDelay=false] 建立 TCP 连接的时候的 TCP_NODELAY 设置
- * @param {boolean} [opts.perMessageDeflate=false] 是否开启压缩扩展
+ * @param {boolean} [opts.tcpNoDelay] 建立 TCP 连接的时候的 TCP_NODELAY 设置
+ * @param {boolean} [opts.perMessageDeflate] 是否开启压缩扩展
  * @param {number} [opts.timeout] 超时时间，单位为毫秒
- * @param {boolean} [opts.forceCellularNetwork=false] 强制使用蜂窝网络发送请求
+ * @param {boolean} [opts.forceCellularNetwork] 强制使用蜂窝网络发送请求
  * @param {Function} [opts.success] 接口调用成功的回调函数
  * @param {Function} [opts.fail] 接口调用失败的回调函数
  * @param {Function} [opts.complete] 接口调用结束的回调函数（调用成功、失败都会执行）

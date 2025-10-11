@@ -2,7 +2,7 @@ import { cloneDeep, isFunction, set } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
-import { addComputedData, filterData, isChildComponent, matchComponent } from '../../core/utils'
+import { addComputedData, filterData, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
 
 // https://developers.weixin.qq.com/miniprogram/dev/reference/api/Page.html
 // const lifecycleMethods = ['onLoad', 'onShow', 'onReady', 'onHide', 'onUnload',
@@ -23,6 +23,10 @@ export class Page {
 		this.__type__ = module.type
 		this.__id__ = opts.moduleId
 		this.__info__ = module.moduleInfo
+		
+		// 保存子组件 properties 绑定关系（用于同步更新）
+		// 格式：{ childModuleId: { childPropName: parentDataKey } }
+		this.__childPropsBindings__ = {}
 	}
 
 	init() {
@@ -43,6 +47,8 @@ export class Page {
 
 	setData(data) {
 		const fData = filterData(data)
+		
+		// 更新数据
 		for (const key in fData) {
 			set(this.data, key, fData[key])
 		}
@@ -50,6 +56,9 @@ export class Page {
 		if (!this.initd) {
 			return
 		}
+
+		// 同步更新子组件的 properties，确保与微信小程序时序一致
+		syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
 
 		message.send({
 			type: 'u',

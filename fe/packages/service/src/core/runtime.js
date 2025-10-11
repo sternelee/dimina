@@ -88,6 +88,7 @@ class Runtime {
 				router.push(component, stackId)
 			}
 			component.init()
+			
 			return component
 		}
 		else if (module.type === PageModule.type) {
@@ -108,11 +109,23 @@ class Runtime {
 	}
 
 	moduleReady(opts) {
-		const { bridgeId, moduleId } = opts
+		const { bridgeId, moduleId, propBindings } = opts
 		const instance = this.instances[bridgeId][moduleId]
 
 		if (!instance) {
 			return
+		}
+		
+		// 如果有属性绑定信息，注册到父组件
+		if (propBindings && instance.__parentId__) {
+			const parent = this.instances[bridgeId]?.[instance.__parentId__]
+			if (parent) {
+				if (!parent.__childPropsBindings__) {
+					parent.__childPropsBindings__ = {}
+				}
+				// 将编译器提供的绑定关系存储到父组件
+				parent.__childPropsBindings__[moduleId] = propBindings
+			}
 		}
 
 		if (instance.__type__ === ComponentModule.type) {

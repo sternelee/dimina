@@ -102,6 +102,14 @@ function Components(app) {
 		},
 	})
 
+	app.directive('c-prop-bindings', {
+		mounted(el, binding) {
+			// 将属性绑定信息存储在 DOM 元素上，供 render 层使用
+			// 使用动态绑定，Vue 会自动将 HTML 实体解码后的 JSON 解析为对象
+			el._propBindings = binding.value || {}
+		},
+	})
+
 	return components.forEach((component) => {
 		component.mixins = [{
 			inheritAttrs: false,

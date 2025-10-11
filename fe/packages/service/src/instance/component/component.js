@@ -3,7 +3,7 @@ import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import { createIntersectionObserver } from '../../api/core/wxml/intersection-observer'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
-import { addComputedData, filterData, filterInvokeObserver, isChildComponent, matchComponent } from '../../core/utils'
+import { addComputedData, filterData, filterInvokeObserver, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
 
 // 组件生命周期
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
@@ -56,6 +56,10 @@ export class Component {
 		// 初始化 groupSetData 相关属性
 		this.__groupSetDataMode__ = false // 是否处于批量更新模式
 		this.__groupSetDataBuffer__ = {} // 批量更新数据缓存
+	
+		// 保存子组件 properties 绑定关系（用于同步更新）
+		// 格式：{ childModuleId: { childPropName: parentDataKey } }
+		this.__childPropsBindings__ = {}
 	}
 
 	init() {
@@ -349,6 +353,8 @@ export class Component {
 	 */
 	setData(data) {
 		const fData = filterData(data)
+		
+		// 更新数据
 		for (const key in fData) {
 			set(this.data, key, fData[key])
 		}
@@ -365,6 +371,9 @@ export class Component {
 			}
 			return
 		}
+
+		// 同步更新子组件的 properties，确保与微信小程序时序一致
+		syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
 
 		message.send({
 			type: 'u',
@@ -448,6 +457,12 @@ export class Component {
 		for (const [prop, val] of Object.entries(data)) {
 			// 保存旧值
 			const oldVal = this.data[prop]
+			
+			// 只有值真正变化时才更新和触发 observer
+			// 避免重复触发（例如 render 层和 service 层都触发 tO 的情况）
+			if (oldVal === val) {
+				continue
+			}
 			
 			// 更新数据
 			this.data[prop] = val

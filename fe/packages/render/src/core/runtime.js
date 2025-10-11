@@ -280,41 +280,45 @@ class Runtime {
 					}
 					provide('externalClasses', externalClasses)
 
-					const eventAttr = {}
-					for (const attrName in attrs) {
-						if (attrName.startsWith('bind') || attrName.startsWith('catch')) {
-							eventAttr[attrName.replace(/^(?:bind:|bind|catch:|catch)/, '')] = attrs[attrName]
-						}
+				const eventAttr = {}
+				for (const attrName in attrs) {
+					if (attrName.startsWith('bind') || attrName.startsWith('catch')) {
+						eventAttr[attrName.replace(/^(?:bind:|bind|catch:|catch)/, '')] = attrs[attrName]
 					}
-					
+				}
 
-					message.send({
-						type: 'mC', // createInstance + componentAttached
-						target: 'service',
-						body: {
-							bridgeId,
-							moduleId,
-							path: componentPath,
-							pageId,
-							parentId,
-							eventAttr,
-							targetInfo: {
-								dataset: getDataAttributes(attrs, deepToRaw),
-								id: attrs.id,
-								class: attrs.class,
-							},
-							properties: deepToRaw(props),
+				message.send({
+					type: 'mC', // createInstance + componentAttached
+					target: 'service',
+					body: {
+						bridgeId,
+						moduleId,
+						path: componentPath,
+						pageId,
+						parentId,
+						eventAttr,
+						targetInfo: {
+							dataset: getDataAttributes(attrs, deepToRaw),
+							id: attrs.id,
+							class: attrs.class,
 						},
-					})
+						properties: deepToRaw(props),
+						propBindings: null, // 初始化时为 null，稍后从 DOM 元素读取
+					},
+				})
 
 					onMounted(() => {
 						nextTick(() => {
+							// 从 DOM 元素读取属性绑定信息
+							const propBindings = instance.$el?._propBindings
+							
 							message.send({
 								type: 'mR',
 								target: 'service',
 								body: {
 									bridgeId,
 									moduleId,
+									propBindings, // 传递从指令中读取的绑定信息
 								},
 							})
 						})
@@ -345,27 +349,27 @@ class Runtime {
 						self.instance.delete(moduleId)
 					})
 
-					const data = reactive({})
-					
-					watch(
-						props,
-						(newProps) => {
-							Object.assign(data, newProps)
-							message.send({
-								type: 't',
-								target: 'service',
-								body: {
-									bridgeId,
-									moduleId,
-									methodName: 'tO', // triggerObserver
-									event: deepToRaw(newProps),
-								},
-							})
+				const data = reactive({})
+				
+			watch(
+				props,
+				(newProps) => {
+					Object.assign(data, newProps)
+					message.send({
+						type: 't',
+						target: 'service',
+						body: {
+							bridgeId,
+							moduleId,
+							methodName: 'tO', // triggerObserver
+							event: deepToRaw(newProps),
 						},
-						{
-							immediate: true,
-						}
-					)
+					})
+				},
+				{
+					immediate: true,
+				}
+			)
 					
 					const initData = await message.wait(moduleId)
 					const entries = Object.entries(initData)

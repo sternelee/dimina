@@ -437,3 +437,111 @@ export function matchComponent(selector, item) {
 	
 	return false
 }
+
+/**
+ * 检查表达式的依赖是否发生变化
+ * @param {object} bindingInfo 绑定信息对象（包含 expression, dependencies, isSimple）
+ * @param {object} changedData 变化的数据
+ * @returns {boolean} 是否有依赖变化
+ */
+function hasDependencyChanged(bindingInfo, changedData) {
+	if (!bindingInfo || !Array.isArray(bindingInfo.dependencies)) {
+		return false
+	}
+	
+	// 检查任一依赖是否在 changedData 中
+	for (const dep of bindingInfo.dependencies) {
+		if (dep in changedData) {
+			return true
+		}
+		
+		// 检查嵌套路径，如 changedData 有 'item' 变化，则 'item.name' 也应更新
+		// 或者 changedData 有 'item.name' 变化，则依赖 'item' 的表达式也应更新
+		for (const changedKey of Object.keys(changedData)) {
+			// changedKey 是 dep 的子路径
+			if (changedKey.startsWith(dep + '.') || changedKey.startsWith(dep + '[')) {
+				return true
+			}
+			// dep 是 changedKey 的子路径
+			if (dep.startsWith(changedKey + '.') || dep.startsWith(changedKey + '[')) {
+				return true
+			}
+		}
+	}
+	
+	return false
+}
+
+/**
+ * 计算表达式的新值
+ * @param {object} bindingInfo 绑定信息对象（包含 expression, dependencies, isSimple）
+ * @param {object} parentData 父组件的完整数据
+ * @returns {*} 计算后的值
+ */
+function evaluateExpression(bindingInfo, parentData) {
+	if (!bindingInfo || !bindingInfo.expression) {
+		return undefined
+	}
+	
+	if (bindingInfo.isSimple) {
+		// 简单绑定：直接获取值
+		return get(parentData, bindingInfo.expression)
+	}
+	
+	// 复杂表达式：创建一个安全的求值环境
+	try {
+		// 创建一个函数来安全地计算表达式
+		// 将父组件数据作为作用域
+		// eslint-disable-next-line no-new-func
+		const func = new Function('data', `with(data) { return ${bindingInfo.expression} }`)
+		return func(parentData)
+	} catch (error) {
+		console.warn('[service] 计算表达式失败:', bindingInfo.expression, error)
+		return undefined
+	}
+}
+
+/**
+ * 同步更新子组件的 properties
+ * 在父组件/页面 setData 时，同步更新所有受影响的子组件，确保 selectComponent 能立即获取到最新值
+ * 完全依赖编译器提供的绑定关系，支持复杂表达式
+ * @param {object} parent 父组件或页面实例
+ * @param {object} allInstances 所有组件实例对象（来自 runtime.instances[bridgeId]）
+ * @param {object} changedData 父组件变化的数据（新值）
+ */
+export function syncUpdateChildrenProps(parent, allInstances, changedData) {
+	const children = Object.values(allInstances || {})
+	
+	// 遍历所有子组件
+	for (const child of children) {
+		// 只处理当前组件/页面的直接子组件
+		if (!isChildComponent(child, parent.__id__, children) || child.__parentId__ !== parent.__id__) {
+			continue
+		}
+
+		// 检查子组件的每个 property 是否需要更新
+		const childProperties = child.__info__?.properties || {}
+		const updateData = {}
+		
+		// 使用编译器提供的绑定关系
+		for (const propName in childProperties) {
+			const bindingInfo = parent.__childPropsBindings__?.[child.__id__]?.[propName]
+			
+			if (!bindingInfo) {
+				continue
+			}
+			
+			// 检查依赖是否变化
+			if (hasDependencyChanged(bindingInfo, changedData)) {
+				// 重新计算表达式的值
+				const newValue = evaluateExpression(bindingInfo, parent.data)
+				updateData[propName] = newValue
+			}
+		}
+
+		// 如果有数据需要更新，触发子组件的 tO 方法
+		if (Object.keys(updateData).length > 0) {
+			child.tO?.(updateData)
+		}
+	}
+}
