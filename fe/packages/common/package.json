@@ -21,6 +21,6 @@
 		"coverage": "vitest run --coverage"
 	},
 	"dependencies": {
-		"es-toolkit": "^1.39.10"
+		"es-toolkit": "^1.40.0"
 	}
 }

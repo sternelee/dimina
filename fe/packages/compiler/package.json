@@ -49,20 +49,20 @@
 		"@babel/plugin-transform-modules-commonjs": "^7.27.1",
 		"@babel/traverse": "^7.28.4",
 		"@babel/types": "^7.28.4",
-		"@vue/compiler-sfc": "^3.5.21",
+		"@vue/compiler-sfc": "^3.5.22",
 		"autoprefixer": "^10.4.21",
 		"cheerio": "^1.1.2",
 		"chokidar": "^4.0.3",
-		"commander": "^14.0.0",
+		"commander": "^14.0.1",
 		"cssnano": "^7.1.1",
-		"esbuild": "^0.25.9",
+		"esbuild": "^0.25.10",
 		"htmlparser2": "^10.0.0",
-		"less": "^4.4.1",
-		"listr2": "^9.0.3",
+		"less": "^4.4.2",
+		"listr2": "^9.0.4",
 		"postcss": "^8.5.6",
 		"postcss-selector-parser": "^7.1.0",
-		"sass": "^1.92.1",
-		"typescript": "^5.9.2"
+		"sass": "^1.93.2",
+		"typescript": "^5.9.3"
 	},
 	"publishConfig": {
 		"registry": "https://registry.npmjs.org/"
