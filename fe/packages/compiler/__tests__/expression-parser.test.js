@@ -9,7 +9,7 @@ import {
 	parseMemberExpression,
 	hasDependency,
 	parseBindings
-} from '../src/core/expression-parser.js'
+} from '../src/common/expression-parser.js'
 
 describe('expression-parser', () => {
 	describe('extractDependencies', () => {
