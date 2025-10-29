@@ -819,9 +819,43 @@ export class Component {
 			}
 		}
 		
+		// 通知其他组件移除对当前组件的引用
+		this.#notifyOthersToUnlinkThis()
+		
 		this.__info__.behaviorLifetimes?.detached?.forEach(method => method.call(this))
 		this.detached?.()
 		this.initd = false
+	}
+	
+	/**
+	 * 通知其他组件移除对当前组件的引用
+	 */
+	#notifyOthersToUnlinkThis() {
+		const allInstances = Object.values(runtime.instances[this.bridgeId] || {})
+		
+		for (const instance of allInstances) {
+			if (instance === this || !instance.__relations__) continue
+			
+			// 遍历其他组件的所有关系
+			for (const [relationPath, relationNodes] of instance.__relations__.entries()) {
+				const index = relationNodes.indexOf(this)
+				if (index !== -1) {
+					// 从关系节点列表中移除当前组件
+					relationNodes.splice(index, 1)
+					instance.__relations__.set(relationPath, relationNodes)
+					
+					// 调用 unlinked 生命周期函数
+					const relationConfig = instance.__info__.relations?.[relationPath]
+					if (relationConfig && isFunction(relationConfig.unlinked)) {
+						try {
+							relationConfig.unlinked.call(instance, this)
+						} catch (error) {
+							console.error('[service] relation unlinked error:', error)
+						}
+					}
+				}
+			}
+		}
 	}
 
 	/**
