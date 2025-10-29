@@ -859,7 +859,39 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 				$includeContent('template').remove()
 				$includeContent('wxs').remove()
 				$includeContent('dds').remove()
-				$(elem).replaceWith($includeContent.html())
+				
+				// 检查 include 元素是否有条件属性（:if, :elif, :else）
+				const allAttrs = $(elem).attr()
+				const conditionAttrs = {}
+				let hasCondition = false
+				
+				// 遍历所有属性，查找以 :if, :elif, :else 结尾的属性
+				for (const attrName in allAttrs) {
+					if (attrName.endsWith(':if') || attrName.endsWith(':elif') || attrName.endsWith(':else')) {
+						conditionAttrs[attrName] = allAttrs[attrName]
+						hasCondition = true
+					}
+				}
+				
+				if (hasCondition) {
+					// 如果有条件属性，用 block 包裹内容并保留条件属性
+					let blockAttrs = ''
+					for (const attrName in conditionAttrs) {
+						const attrValue = conditionAttrs[attrName]
+						if (attrValue !== undefined && attrValue !== '') {
+							blockAttrs += ` ${attrName}="${attrValue}"`
+						} else {
+							// 处理 :else 这种没有值的属性
+							blockAttrs += ` ${attrName}`
+						}
+					}
+					
+					const wrappedContent = `<block${blockAttrs}>${$includeContent.html()}</block>`
+					$(elem).replaceWith(wrappedContent)
+				} else {
+					// 如果没有条件属性，直接替换（保持原有行为）
+					$(elem).replaceWith($includeContent.html())
+				}
 			} else {
 				// 如果没有内容，直接移除节点
 				$(elem).remove()
