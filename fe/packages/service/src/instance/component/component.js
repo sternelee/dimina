@@ -463,12 +463,6 @@ export class Component {
 			// 保存旧值
 			const oldVal = this.data[prop]
 			
-			// 只有值真正变化时才更新和触发 observer
-			// 避免重复触发（例如 render 层和 service 层都触发 tO 的情况）
-			if (oldVal === val) {
-				continue
-			}
-			
 			// 更新数据
 			this.data[prop] = val
 			
