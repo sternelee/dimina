@@ -13,7 +13,25 @@ export class Device {
 
 		this.appContainer = this.root.querySelector('.iphone__apps')
 		this.updateDeviceBarColor('black')
+		this.updateStatusBarTime()
 		this.outerGlow()
+	}
+
+	updateStatusBarTime() {
+		const timeElement = this.root.querySelector('.status-bar__time')
+		
+		const updateTime = () => {
+			const now = new Date()
+			const hours = now.getHours().toString().padStart(2, '0')
+			const minutes = now.getMinutes().toString().padStart(2, '0')
+			timeElement.textContent = `${hours}:${minutes}`
+		}
+		
+		// 立即更新一次
+		updateTime()
+		
+		// 每分钟更新一次（60000毫秒 = 1分钟）
+		setInterval(updateTime, 60000)
 	}
 
 	outerGlow() {

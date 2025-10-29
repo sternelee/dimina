@@ -69,15 +69,93 @@
 			right: 0;
 			z-index: 100;
 			pointer-events: none;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 0 30px 0 40px;
+			font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui, sans-serif;
+			font-size: 17px;
+			font-weight: 590;
+			letter-spacing: -0.3px;
+
+			.status-bar__left {
+				display: flex;
+				align-items: center;
+			}
+
+			.status-bar__right {
+				display: flex;
+				align-items: center;
+				gap: 5px;
+				font-size: 17px;
+			}
+
+			.status-bar__signal {
+				width: 18px;
+				height: 12px;
+				opacity: 1;
+			}
+
+			.status-bar__wifi {
+				width: 15px;
+				height: 11px;
+				opacity: 1;
+			}
+
+			.status-bar__battery {
+				width: 27px;
+				height: 13px;
+				opacity: 1;
+			}
 
 			&.iphone__status-bar--white {
-				background: url('@images/status-bar-white.png') no-repeat;
-				background-size: 100% 100%;
+				color: #fff;
+				
+				.status-bar__signal {
+					fill: #fff;
+				}
+				
+				.status-bar__wifi {
+					fill: #fff;
+					stroke: #fff;
+				}
+				
+				.status-bar__battery {
+					rect:last-child {
+						fill: #fff;
+					}
+					path {
+						fill: #fff;
+					}
+					rect:first-child {
+						stroke: #fff;
+					}
+				}
 			}
 
 			&.iphone__status-bar--black {
-				background: url('@images/status-bar.png') no-repeat;
-				background-size: 100% 100%;
+				color: #000;
+				
+				.status-bar__signal {
+					fill: #000;
+				}
+				
+				.status-bar__wifi {
+					fill: #000;
+					stroke: #000;
+				}
+				
+				.status-bar__battery {
+					rect:last-child {
+						fill: #000;
+					}
+					path {
+						fill: #000;
+					}
+					rect:first-child {
+						stroke: #000;
+					}
+				}
 			}
 		}
 
@@ -163,29 +241,29 @@
 			}
 		}
 
-		.iphone__home-touch-bar {
-			position: absolute;
-			z-index: 100;
-			height: 6px;
-			left: 0;
-			right: 0;
-			bottom: 9px;
+	.iphone__home-touch-bar {
+		position: absolute;
+		z-index: 100;
+		height: 5px;
+		width: 135px;
+		left: 50%;
+		transform: translateX(-50%);
+		bottom: 9px;
+		border-radius: 100px;
 
-			&.iphone__home-touch-bar--white {
-				background: url('@images/home-touh-bar-white.png') no-repeat;
-				background-size: 100% 100%;
-			}
-
-			&.iphone__home-touch-bar--black {
-				background: url('@images/home-touh-bar.png') no-repeat;
-				background-size: 100% 100%;
-			}
-
-			/* 移动设备隐藏Home触控条 */
-			@media (hover: none) and (pointer: coarse), (max-width: 768px) {
-				display: none;
-			}
+		&.iphone__home-touch-bar--white {
+			background: rgba(255, 255, 255, 0.9);
 		}
+
+		&.iphone__home-touch-bar--black {
+			background: rgba(0, 0, 0, 0.9);
+		}
+
+		/* 移动设备隐藏Home触控条 */
+		@media (hover: none) and (pointer: coarse), (max-width: 768px) {
+			display: none;
+		}
+	}
 
 		.iphone__apps {
 			width: 100%;
