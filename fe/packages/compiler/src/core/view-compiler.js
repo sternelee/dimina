@@ -708,6 +708,47 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 }
 
 /**
+ * 处理 include 节点的条件属性，并返回处理后的内容
+ * @param {Object} $ - cheerio 实例
+ * @param {Object} elem - include 元素
+ * @param {string} includeContent - 要包含的内容
+ * @returns {string} 处理后的 HTML 字符串
+ */
+function processIncludeConditionalAttrs($, elem, includeContent) {
+	// 检查 include 元素是否有条件属性（:if, :elif, :else）
+	const allAttrs = $(elem).attr()
+	const conditionAttrs = {}
+	let hasCondition = false
+	
+	// 遍历所有属性，查找以 :if, :elif, :else 结尾的属性
+	for (const attrName in allAttrs) {
+		if (attrName.endsWith(':if') || attrName.endsWith(':elif') || attrName.endsWith(':else')) {
+			conditionAttrs[attrName] = allAttrs[attrName]
+			hasCondition = true
+		}
+	}
+	
+	if (hasCondition) {
+		// 如果有条件属性，用 block 包裹内容并保留条件属性
+		let blockAttrs = ''
+		for (const attrName in conditionAttrs) {
+			const attrValue = conditionAttrs[attrName]
+			if (attrValue !== undefined && attrValue !== '') {
+				blockAttrs += ` ${attrName}="${attrValue}"`
+			} else {
+				// 处理 :else 这种没有值的属性
+				blockAttrs += ` ${attrName}`
+			}
+		}
+		
+		return `<block${blockAttrs}>${includeContent}</block>`
+	} else {
+		// 如果没有条件属性，直接返回内容（保持原有行为）
+		return includeContent
+	}
+}
+
+/**
  * 递归处理被引入文件中的组件 wxs 依赖
  * @param {*} content 被引入文件的内容
  * @param {*} includePath 被引入文件的路径
@@ -860,38 +901,9 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 				$includeContent('wxs').remove()
 				$includeContent('dds').remove()
 				
-				// 检查 include 元素是否有条件属性（:if, :elif, :else）
-				const allAttrs = $(elem).attr()
-				const conditionAttrs = {}
-				let hasCondition = false
-				
-				// 遍历所有属性，查找以 :if, :elif, :else 结尾的属性
-				for (const attrName in allAttrs) {
-					if (attrName.endsWith(':if') || attrName.endsWith(':elif') || attrName.endsWith(':else')) {
-						conditionAttrs[attrName] = allAttrs[attrName]
-						hasCondition = true
-					}
-				}
-				
-				if (hasCondition) {
-					// 如果有条件属性，用 block 包裹内容并保留条件属性
-					let blockAttrs = ''
-					for (const attrName in conditionAttrs) {
-						const attrValue = conditionAttrs[attrName]
-						if (attrValue !== undefined && attrValue !== '') {
-							blockAttrs += ` ${attrName}="${attrValue}"`
-						} else {
-							// 处理 :else 这种没有值的属性
-							blockAttrs += ` ${attrName}`
-						}
-					}
-					
-					const wrappedContent = `<block${blockAttrs}>${$includeContent.html()}</block>`
-					$(elem).replaceWith(wrappedContent)
-				} else {
-					// 如果没有条件属性，直接替换（保持原有行为）
-					$(elem).replaceWith($includeContent.html())
-				}
+				// 处理条件属性并替换
+				const processedContent = processIncludeConditionalAttrs($, elem, $includeContent.html())
+				$(elem).replaceWith(processedContent)
 			} else {
 				// 如果没有内容，直接移除节点
 				$(elem).remove()
@@ -1825,6 +1837,7 @@ export {
 	parseBraceExp,
 	parseClassRules,
 	parseKeyExpression,
+	processIncludeConditionalAttrs,
 	processWxsContent,
 	splitWithBraces,
 }
