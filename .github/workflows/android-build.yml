@@ -55,8 +55,8 @@ jobs:
           echo "VERSION_NAME=$VERSION_NAME" >> $GITHUB_ENV
           echo "Extracted versionName: $VERSION_NAME"
 
-      # 7. 检查目标 Release 是否存在
-      - name: Check if Release exists
+      # 7. 检查目标 Release 是否存在以及是否已有 APK
+      - name: Check if Release exists and has APK
         id: check_release
         run: |
           TAG_NAME="v${{ env.VERSION_NAME }}"
@@ -65,16 +65,33 @@ jobs:
           if echo "$RESPONSE" | grep -q '"id":'; then
             echo "Release $TAG_NAME exists"
             echo "release_exists=true" >> $GITHUB_ENV
+            
+            # 检查是否已有 APK 文件
+            ASSETS_URL=$(echo "$RESPONSE" | jq -r '.assets_url')
+            if [ "$ASSETS_URL" != "null" ]; then
+              ASSETS_RESPONSE=$(curl -s -H "Authorization: token ${{ secrets.GITHUB_TOKEN }}" "$ASSETS_URL")
+              APK_COUNT=$(echo "$ASSETS_RESPONSE" | jq '[.[] | select(.name | endswith(".apk"))] | length')
+              if [ "$APK_COUNT" -gt 0 ]; then
+                echo "Release already has $APK_COUNT APK file(s), skipping upload"
+                echo "has_apk=true" >> $GITHUB_ENV
+              else
+                echo "Release has no APK files"
+                echo "has_apk=false" >> $GITHUB_ENV
+              fi
+            else
+              echo "has_apk=false" >> $GITHUB_ENV
+            fi
           else
             echo "Release $TAG_NAME does not exist"
             echo "release_exists=false" >> $GITHUB_ENV
+            echo "has_apk=false" >> $GITHUB_ENV
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 8. 上传 APK 到现有 Release（如果存在）
+      # 8. 上传 APK 到现有 Release（仅当 Release 存在且没有 APK 时）
       - name: Upload APK to Existing Release
-        if: env.release_exists == 'true'
+        if: env.release_exists == 'true' && env.has_apk == 'false'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ env.VERSION_NAME }}
@@ -84,7 +101,7 @@ jobs:
 
       # 9. 删除 Release 中的旧 APK（保留最新上传的）
       - name: Clean up old APKs from Release
-        if: env.release_exists == 'true'
+        if: env.release_exists == 'true' && env.has_apk == 'false'
         run: |
           TAG_NAME="v${{ env.VERSION_NAME }}"
           # 获取 release 中的 assets
