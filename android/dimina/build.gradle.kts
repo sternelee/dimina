@@ -7,6 +7,12 @@ plugins {
     alias(libs.plugins.maven.publish)
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_17)
+    }
+}
+
 android {
     namespace = "com.didi.dimina"
     compileSdk = 35
@@ -36,9 +42,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions {
-        jvmTarget = "17"
-    }
     buildFeatures {
         compose = true
     }
@@ -59,6 +62,7 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.compose.material.icons.core)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mmkv)
     implementation (libs.okhttp)

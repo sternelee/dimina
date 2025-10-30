@@ -1,8 +1,8 @@
 [versions]
-agp = "8.10.1"
-kotlin = "2.2.0"
-compose = "1.8.2"
-coreKtx = "1.16.0"
+agp = "8.13.0"
+kotlin = "2.2.21"
+compose = "1.9.2"
+coreKtx = "1.17.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
 espressoCore = "3.6.1"
@@ -10,11 +10,12 @@ kotlinxSerializationJson = "1.9.0"
 landscapistCoil = "2.5.0"
 lifecycleRuntimeKtx = "2.9.1"
 activityCompose = "1.10.1"
-composeBom = "2025.06.00"
+composeBom = "2025.09.01"
 appcompat = "1.7.1"
 material = "1.12.0"
-mmkv = "2.2.2"
-okhttp = "4.12.0"
+materialIconsCore = "1.7.8"
+mmkv = "2.2.4"
+okhttp = "5.2.1"
 uiTooling = "1.8.2"
 
 [libraries]
@@ -32,6 +33,7 @@ androidx-ui-tooling-preview = { group = "androidx.compose.ui", name = "ui-toolin
 androidx-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-test-manifest" }
 androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material-icons-core = { module = "androidx.compose.material:material-icons-core", version.ref = "materialIconsCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 landscapist-coil = { module = "com.github.skydoves:landscapist-coil", version.ref = "landscapistCoil" }
