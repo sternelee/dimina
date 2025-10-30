@@ -246,8 +246,8 @@ const getDateOptions = () => {
 	const days = []
 	
 	const currentYear = new Date().getFullYear()
-	const startYear = props.start ? parseInt(props.start.split('-')[0]) : currentYear - 10
-	const endYear = props.end ? parseInt(props.end.split('-')[0]) : currentYear + 10
+	const startYear = props.start ? Number.parseInt(props.start.split('-')[0]) : currentYear - 10
+	const endYear = props.end ? Number.parseInt(props.end.split('-')[0]) : currentYear + 10
 	
 	for (let i = startYear; i <= endYear; i++) {
 		years.push(String(i))
@@ -307,8 +307,8 @@ const handleSingleChange = (_event, value) => {
 const getTimeValue = (index) => {
 	if (typeof tempValue.value === 'string' && tempValue.value.includes(':')) {
 		const parts = tempValue.value.split(':')
-		if (index === 0) return parseInt(parts[0]) || 0
-		if (index === 1) return parseInt(parts[1]) || 0
+		if (index === 0) return Number.parseInt(parts[0]) || 0
+		if (index === 1) return Number.parseInt(parts[1]) || 0
 	}
 	return 0
 }
