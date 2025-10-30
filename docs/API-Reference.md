@@ -60,7 +60,6 @@ Vue 作为底层的渲染框架，自然会与小程序的语法存在一定的�
 说明：
 
 - 同层渲染组件暂未支持(Android/iOS)。
-- Webview 缓存池暂未支持(Android/iOS)。
 - tabBar 暂未支持(Android/iOS/Harmony)。
 
 ## API 列表
