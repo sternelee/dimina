@@ -26,6 +26,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(quickjs)
 
+# Download libuv from GitHub
+FetchContent_Declare(
+    libuv
+    GIT_REPOSITORY https://github.com/libuv/libuv.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+)
+FetchContent_MakeAvailable(libuv)
+
 # Handle the version file to prevent compilation errors
 set(VERSION_FILE "${quickjs_SOURCE_DIR}/version")
 if(EXISTS "${VERSION_FILE}")
@@ -59,6 +68,7 @@ include_directories(
         ${NATIVERENDER_ROOT_PATH}
         ${NATIVERENDER_ROOT_PATH}/include
         ${quickjs_SOURCE_DIR}  # Include the downloaded QuickJS source directory
+        ${libuv_SOURCE_DIR}/include  # Include libuv headers
 )
 
 # Explicitly list source files for better control
@@ -102,7 +112,8 @@ target_link_libraries(dimina
         # List libraries link to the target library
         android
         log
-        m)
+        m
+        uv_a)  # Link libuv static library
 
 # Additional target properties for Release mode
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

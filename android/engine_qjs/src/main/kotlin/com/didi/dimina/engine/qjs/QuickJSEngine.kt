@@ -44,15 +44,8 @@ class QuickJSEngine {
      */
     private val mainHandler = Handler(Looper.getMainLooper())
 
-    /**
-     * Map to store active timer handlers
-     */
-    private val timerHandlers = ConcurrentHashMap<Int, Handler.Callback>()
-
-    /**
-     * Map to store active interval handlers
-     */
-    private val intervalHandlers = ConcurrentHashMap<Int, Runnable>()
+    // Note: Timer and interval management is now handled by libuv in native code
+    // No need for Kotlin-side timer handlers anymore
 
     /**
      * Native pointer to the QuickJS runtime
@@ -63,6 +56,11 @@ class QuickJSEngine {
      * Native pointer to the QuickJS context
      */
     private var nativeContextPtr: Long = 0
+
+    /**
+     * Native pointer to the libuv event loop
+     */
+    private var nativeLoopPtr: Long = 0
 
     companion object {
         // Used to load the 'dimina' library on application startup.
@@ -123,7 +121,7 @@ class QuickJSEngine {
 
         // Create and start the JavaScript thread
         jsThread = Thread({
-            Log.d(tag, "Starting JavaScript thread for instance ID: $instanceId")
+            Log.d(tag, "Starting JavaScript thread with libuv event loop for instance ID: $instanceId")
 
             // Initialize the QuickJS engine on this thread
             val initResult = nativeInitialize(instanceId)
@@ -134,12 +132,13 @@ class QuickJSEngine {
             }
 
             isRunning = true
-            Log.d(tag, "QuickJS engine initialized on dedicated thread (instance ID: $instanceId)")
+            Log.d(tag, "QuickJS engine with libuv initialized on dedicated thread (instance ID: $instanceId)")
 
-            // Process tasks from the queue
+            // Process tasks and run event loop
             while (isRunning) {
                 try {
-                    val task = taskQueue.poll(100, TimeUnit.MILLISECONDS)
+                    // Process JavaScript tasks from the queue
+                    val task = taskQueue.poll(10, TimeUnit.MILLISECONDS)
                     if (task != null) {
                         try {
                             task.execute(this)
@@ -148,16 +147,25 @@ class QuickJSEngine {
                             task.completeWithError("Error: ${e.message}")
                         }
                     }
+                    
+                    // Run the libuv event loop to process timers and I/O
+                    // This is non-blocking and will return immediately if no events
+                    nativeRunEventLoop(instanceId)
+                    
                 } catch (e: InterruptedException) {
                     Log.d(tag, "JavaScript thread interrupted (instance ID: $instanceId)")
                     break
+                } catch (e: Exception) {
+                    Log.e(tag, "Error in event loop (instance ID: $instanceId)", e)
                 }
             }
 
             // Clean up when the thread is stopping
+            nativeStopEventLoop(instanceId)
             nativeDestroy(instanceId)
             nativeRuntimePtr = 0
             nativeContextPtr = 0
+            nativeLoopPtr = 0
             engineInstances.remove(instanceId)
             Log.d(tag, "JavaScript thread stopped (instance ID: $instanceId)")
         }, "JSThread-$instanceId")
@@ -290,10 +298,6 @@ class QuickJSEngine {
     fun destroy() {
         Log.d(tag, "Destroying QuickJS engine (instance ID: $instanceId)")
 
-        // Cancel all pending timers and intervals
-        cancelAllTimers()
-        cancelAllIntervals()
-
         // Signal the thread to stop
         isRunning = false
 
@@ -332,11 +336,9 @@ class QuickJSEngine {
     private external fun nativeInitialize(instanceId: Int): Boolean
     private external fun nativeEvaluate(script: String, instanceId: Int = this.instanceId): JSValue
     private external fun nativeEvaluateFromFile(filePath: String, instanceId: Int = this.instanceId): JSValue
+    private external fun nativeRunEventLoop(instanceId: Int = this.instanceId)
+    private external fun nativeStopEventLoop(instanceId: Int = this.instanceId)
     private external fun nativeDestroy(instanceId: Int)
-    private external fun nativeExecuteTimer(timerId: Int, instanceId: Int = this.instanceId)
-    private external fun nativeClearTimer(timerId: Int, instanceId: Int = this.instanceId): Boolean
-    private external fun nativeExecuteInterval(timerId: Int, instanceId: Int = this.instanceId)
-    private external fun nativeClearInterval(timerId: Int, instanceId: Int = this.instanceId): Boolean
 
     /**
      * Callbacks for invoke and publish methods
@@ -384,145 +386,9 @@ class QuickJSEngine {
         }
     }
 
-    /**
-     * Schedule a timer with the given ID and delay
-     */
-    @Suppress("unused")
-    fun scheduleTimer(timerId: Int, delayMs: Int) {
-        Log.d(tag, "Scheduling timer $timerId with delay $delayMs ms")
-
-        val callback = Handler.Callback { msg ->
-            if (msg.what == timerId) {
-                val task = object : JSTask<Unit>() {
-                    override fun execute(engine: QuickJSEngine) {
-                        try {
-                            Log.d(tag, "Executing timer $timerId for instance $instanceId")
-                            engine.nativeExecuteTimer(timerId, instanceId)
-                            complete(Unit)
-                        } catch (e: Exception) {
-                            Log.e(tag, "Error executing timer $timerId for instance $instanceId", e)
-                            completeWithError("Error executing timer: ${e.message}")
-                        }
-                    }
-                }
-                taskQueue.offer(task)
-                timerHandlers.remove(timerId)
-                true
-            } else {
-                false
-            }
-        }
-
-        timerHandlers[timerId] = callback
-        val handler = Handler(Looper.getMainLooper())
-        handler.postDelayed({ callback.handleMessage(android.os.Message.obtain(handler, timerId)) }, delayMs.toLong())
-    }
-
-    /**
-     * Clear a specific timer by ID
-     */
-    @Suppress("unused")
-    fun clearTimer(timerId: Int): Boolean {
-        Log.d(tag, "Clearing timer $timerId")
-        val removed = timerHandlers.remove(timerId) != null
-
-        if (removed && isRunning) {
-            val task = object : JSTask<Boolean>() {
-                override fun execute(engine: QuickJSEngine) {
-                    try {
-                        val result = engine.nativeClearTimer(timerId, instanceId)
-                        complete(result)
-                    } catch (e: Exception) {
-                        Log.e(tag, "Error clearing timer $timerId", e)
-                        completeWithError("Error clearing timer: ${e.message}")
-                    }
-                }
-            }
-            taskQueue.offer(task)
-            return task.await() ?: false
-        }
-        return removed
-    }
-
-    /**
-     * Cancel all pending timers
-     */
-    private fun cancelAllTimers() {
-        Log.d(tag, "Cancelling all timers (${timerHandlers.size} active timers)")
-        timerHandlers.clear()
-    }
-
-    /**
-     * Schedule an interval with the given ID and interval
-     */
-    @Suppress("unused")
-    fun scheduleInterval(timerId: Int, intervalMs: Int) {
-        Log.d(tag, "Scheduling interval $timerId with interval $intervalMs ms")
-
-        val handler = Handler(Looper.getMainLooper())
-        val runnable = object : Runnable {
-            override fun run() {
-                val task = object : JSTask<Unit>() {
-                    override fun execute(engine: QuickJSEngine) {
-                        try {
-                            Log.d(tag, "Executing interval $timerId for instance $instanceId")
-                            engine.nativeExecuteInterval(timerId, instanceId)
-                            complete(Unit)
-                        } catch (e: Exception) {
-                            Log.e(tag, "Error executing interval $timerId for instance $instanceId", e)
-                            completeWithError("Error executing interval: ${e.message}")
-                        }
-                    }
-                }
-                taskQueue.offer(task)
-
-                // Reschedule if the interval hasn't been cleared
-                if (intervalHandlers.containsKey(timerId)) {
-                    handler.postDelayed(this, intervalMs.toLong())
-                }
-            }
-        }
-
-        intervalHandlers[timerId] = runnable
-        handler.postDelayed(runnable, intervalMs.toLong())
-    }
-
-    /**
-     * Clear a specific interval by ID
-     */
-    @Suppress("unused")
-    fun clearInterval(timerId: Int): Boolean {
-        Log.d(tag, "Clearing interval $timerId")
-        val removed = intervalHandlers.remove(timerId) != null
-
-        if (removed && isRunning) {
-            val task = object : JSTask<Boolean>() {
-                override fun execute(engine: QuickJSEngine) {
-                    try {
-                        val result = engine.nativeClearInterval(timerId, instanceId)
-                        complete(result)
-                    } catch (e: Exception) {
-                        Log.e(tag, "Error clearing interval $timerId", e)
-                        completeWithError("Error clearing interval: ${e.message}")
-                    }
-                }
-            }
-            taskQueue.offer(task)
-            return task.await() ?: false
-        }
-        return removed
-    }
-
-    /**
-     * Cancel all pending intervals
-     */
-    private fun cancelAllIntervals() {
-        Log.d(tag, "Cancelling all intervals (${intervalHandlers.size} active intervals)")
-        intervalHandlers.forEach { (_, runnable) ->
-            mainHandler.removeCallbacks(runnable)
-        }
-        intervalHandlers.clear()
-    }
+    // Note: Timer and interval scheduling is now handled entirely by libuv in native code
+    // The scheduleTimer, clearTimer, scheduleInterval, and clearInterval methods are no longer needed
+    // as setTimeout/setInterval in JavaScript directly use libuv timers
 
     /**
      * Get the instance ID for this engine

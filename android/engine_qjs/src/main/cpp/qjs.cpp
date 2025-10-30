@@ -8,6 +8,8 @@
 #include <unordered_map>
 #include <chrono>
 #include <mutex>
+#include <memory>
+#include <uv.h>
 #include "quickjs.h"
 #include "cutils.h"
 #include "libregexp.h"
@@ -22,6 +24,75 @@ static const int EVENT_LOOP_LOG_INTERVAL = 100;
 // Global JavaVM pointer for JNI calls from any thread
 static JavaVM* gJavaVM = nullptr;
 
+// ============================================================================
+// RAII Helper Classes
+// ============================================================================
+
+// RAII wrapper for JNI environment with automatic thread attach/detach
+class JNIEnvGuard {
+private:
+    JNIEnv* env;
+    bool needsDetach;
+    
+public:
+    JNIEnvGuard() : env(nullptr), needsDetach(false) {
+        if (!gJavaVM) return;
+        
+        jint result = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
+        if (result == JNI_EDETACHED) {
+            if (gJavaVM->AttachCurrentThread(&env, nullptr) == JNI_OK) {
+                needsDetach = true;
+            }
+        }
+    }
+    
+    ~JNIEnvGuard() {
+        if (needsDetach && gJavaVM) {
+            gJavaVM->DetachCurrentThread();
+        }
+    }
+    
+    JNIEnv* get() const { return env; }
+    operator JNIEnv*() const { return env; }
+    bool isValid() const { return env != nullptr; }
+    
+    // 禁止拷贝
+    JNIEnvGuard(const JNIEnvGuard&) = delete;
+    JNIEnvGuard& operator=(const JNIEnvGuard&) = delete;
+};
+
+// RAII wrapper for JSValue with automatic memory management
+class JSValueGuard {
+private:
+    JSContext* ctx;
+    JSValue value;
+    bool released;
+    
+public:
+    JSValueGuard(JSContext* c, JSValue v) : ctx(c), value(v), released(false) {}
+    
+    ~JSValueGuard() {
+        if (!released && ctx) {
+            JS_FreeValue(ctx, value);
+        }
+    }
+    
+    JSValue get() const { return value; }
+    
+    JSValue release() {
+        released = true;
+        return value;
+    }
+    
+    bool isException() const { return JS_IsException(value); }
+    bool isUndefined() const { return JS_IsUndefined(value); }
+    bool isNull() const { return JS_IsNull(value); }
+    
+    // 禁止拷贝
+    JSValueGuard(const JSValueGuard&) = delete;
+    JSValueGuard& operator=(const JSValueGuard&) = delete;
+};
+
 // JNI_OnLoad is called when the native library is loaded
 extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     // Store the JavaVM pointer for later use
@@ -31,18 +102,38 @@ extern "C" JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
     return JNI_VERSION_1_6;
 }
 
+// Forward declaration
+struct EngineInstance;
+
+// Timer data structure for libuv
+struct TimerData {
+    JSContext* ctx;
+    int timerId;
+    JSValue callback;
+    int instanceId;
+    bool isInterval;
+    EngineInstance* instance;
+};
+
 // Structure to hold instance-specific data
 struct EngineInstance {
     JSRuntime* runtime = nullptr;
     JSContext* ctx = nullptr;
     jobject engineObj = nullptr;
-    std::unordered_map<int, JSValue> timerCallbacks;
+    uv_loop_t* loop = nullptr;
+    std::unordered_map<int, TimerData*> timerCallbacks;
+    std::unordered_map<int, uv_timer_t*> uvTimers;
     std::atomic<int> nextTimerId{1};
+    std::atomic<bool> shouldStop{false};
 };
 
 // Map to store engine instances by ID
 static std::unordered_map<int, EngineInstance*> gEngineInstances;
 static std::mutex gEngineInstancesMutex;
+
+// ============================================================================
+// Helper Functions
+// ============================================================================
 
 // Helper function to get an engine instance by ID
 static EngineInstance* getEngineInstance(int instanceId) {
@@ -52,6 +143,39 @@ static EngineInstance* getEngineInstance(int instanceId) {
         return it->second;
     }
     return nullptr;
+}
+
+// Helper function to find engine instance by context
+static EngineInstance* findInstanceByContext(JSContext* ctx) {
+    std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
+    for (const auto& pair : gEngineInstances) {
+        if (pair.second->ctx == ctx) {
+            return pair.second;
+        }
+    }
+    return nullptr;
+}
+
+// Helper function to perform JSON.stringify on a JSValue
+static JSValue jsonStringify(JSContext* ctx, JSValue value) {
+    JSValueGuard global(ctx, JS_GetGlobalObject(ctx));
+    JSValueGuard jsonObj(ctx, JS_GetPropertyStr(ctx, global.get(), "JSON"));
+    JSValueGuard stringifyFunc(ctx, JS_GetPropertyStr(ctx, jsonObj.get(), "stringify"));
+    
+    JSValueConst args[1] = { value };
+    return JS_Call(ctx, stringifyFunc.get(), global.get(), 1, args);
+}
+
+// Helper function to create a JSValue error object for JNI
+static jobject createJSError(JNIEnv* env, const char* errorMsg) {
+    jclass jsValueClass = env->FindClass("com/didi/dimina/engine/qjs/JSValue");
+    jmethodID createErrorMethod = env->GetStaticMethodID(
+        jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
+    jstring jErrorMsg = env->NewStringUTF(errorMsg ? errorMsg : "Unknown error");
+    jobject result = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, jErrorMsg);
+    env->DeleteLocalRef(jErrorMsg);
+    env->DeleteLocalRef(jsValueClass);
+    return result;
 }
 
 // Helper function to extract detailed error information from a JS exception
@@ -147,6 +271,74 @@ static jstring handleJSError(JNIEnv* env, JSContext* ctx) {
     return result;
 }
 
+// libuv timer callback
+static void uv_timer_callback(uv_timer_t* handle) {
+    TimerData* data = (TimerData*)handle->data;
+    if (!data || !data->ctx) {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Invalid timer data in callback");
+        return;
+    }
+    
+    JSContext* ctx = data->ctx;
+    JSValue callback = data->callback;
+    int timerId = data->timerId;
+    bool isInterval = data->isInterval;
+    EngineInstance* instance = data->instance;
+    
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+        "Executing %s %d", isInterval ? "interval" : "timer", timerId);
+    
+    // Execute the callback
+    JSValue result;
+    if (JS_IsFunction(ctx, callback)) {
+        JSValue global = JS_GetGlobalObject(ctx);
+        result = JS_Call(ctx, callback, global, 0, nullptr);
+        JS_FreeValue(ctx, global);
+    } else if (JS_IsString(callback)) {
+        const char* code = JS_ToCString(ctx, callback);
+        if (code) {
+            result = JS_Eval(ctx, code, strlen(code), 
+                isInterval ? "<setInterval>" : "<setTimeout>", JS_EVAL_TYPE_GLOBAL);
+            JS_FreeCString(ctx, code);
+        } else {
+            result = JS_EXCEPTION;
+        }
+    } else {
+        result = JS_UNDEFINED;
+    }
+    
+    // Handle any exceptions
+    if (JS_IsException(result)) {
+        JSValue exception = JS_GetException(ctx);
+        std::string errorMsg = getDetailedJSError(ctx, exception);
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
+            "Error in %s callback: %s", isInterval ? "interval" : "timer", errorMsg.c_str());
+        JS_FreeValue(ctx, exception);
+    }
+    
+    JS_FreeValue(ctx, result);
+    
+    // Process any pending Promise jobs after timer execution
+    JSContext *ctx1;
+    while (JS_ExecutePendingJob(JS_GetRuntime(ctx), &ctx1) > 0) {
+        // Continue processing jobs
+    }
+    
+    // For setTimeout (not interval), clean up
+    if (!isInterval && instance) {
+        JS_FreeValue(ctx, callback);
+        instance->timerCallbacks.erase(timerId);
+        instance->uvTimers.erase(timerId);
+        delete data;
+        // Note: uv_timer_t will be cleaned up in uv_close callback
+    }
+}
+
+// Callback for uv_close
+static void uv_close_callback(uv_handle_t* handle) {
+    delete (uv_timer_t*)handle;
+}
+
 // Function to run the JavaScript event loop and process pending Promise jobs
 static bool runJavaScriptEventLoop(JSContext *ctx) {
     int count = 0;
@@ -195,101 +387,73 @@ static jobject createJSValueObject(JNIEnv* env, JSContext* ctx, JSValue value) {
     
     if (JS_IsString(value)) {
         const char* str = JS_ToCString(ctx, value);
-        jmethodID createStringMethod = env->GetStaticMethodID(
+        jmethodID method = env->GetStaticMethodID(
             jsValueClass, "createString", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
         jstring jstr = env->NewStringUTF(str ? str : "");
-        jobject result = env->CallStaticObjectMethod(jsValueClass, createStringMethod, jstr);
+        jobject result = env->CallStaticObjectMethod(jsValueClass, method, jstr);
+        env->DeleteLocalRef(jstr);
         JS_FreeCString(ctx, str);
         return result;
     } 
-    else if (JS_IsNumber(value)) {
+    
+    if (JS_IsNumber(value)) {
         double num;
         JS_ToFloat64(ctx, &num, value);
-        jmethodID createNumberMethod = env->GetStaticMethodID(
+        jmethodID method = env->GetStaticMethodID(
             jsValueClass, "createNumber", "(D)Lcom/didi/dimina/engine/qjs/JSValue;");
-        return env->CallStaticObjectMethod(jsValueClass, createNumberMethod, num);
+        return env->CallStaticObjectMethod(jsValueClass, method, num);
     } 
-    else if (JS_IsBool(value)) {
+    
+    if (JS_IsBool(value)) {
         jboolean boolValue = JS_ToBool(ctx, value);
-        jmethodID createBooleanMethod = env->GetStaticMethodID(
+        jmethodID method = env->GetStaticMethodID(
             jsValueClass, "createBoolean", "(Z)Lcom/didi/dimina/engine/qjs/JSValue;");
-        return env->CallStaticObjectMethod(jsValueClass, createBooleanMethod, boolValue);
+        return env->CallStaticObjectMethod(jsValueClass, method, boolValue);
     } 
-    else if (JS_IsNull(value)) {
-        jmethodID createNullMethod = env->GetStaticMethodID(
+    
+    if (JS_IsNull(value)) {
+        jmethodID method = env->GetStaticMethodID(
             jsValueClass, "createNull", "()Lcom/didi/dimina/engine/qjs/JSValue;");
-        return env->CallStaticObjectMethod(jsValueClass, createNullMethod);
+        return env->CallStaticObjectMethod(jsValueClass, method);
     } 
-    else if (JS_IsUndefined(value)) {
-        jmethodID createUndefinedMethod = env->GetStaticMethodID(
+    
+    if (JS_IsUndefined(value)) {
+        jmethodID method = env->GetStaticMethodID(
             jsValueClass, "createUndefined", "()Lcom/didi/dimina/engine/qjs/JSValue;");
-        return env->CallStaticObjectMethod(jsValueClass, createUndefinedMethod);
+        return env->CallStaticObjectMethod(jsValueClass, method);
     } 
-    else if (JS_IsObject(value)) {
-        // Get global object
-        JSValue global = JS_GetGlobalObject(ctx);
+    
+    if (JS_IsObject(value)) {
+        // Use helper function to stringify
+        JSValueGuard jsonStr(ctx, jsonStringify(ctx, value));
         
-        // Get JSON object
-        JSValue jsonObj = JS_GetPropertyStr(ctx, global, "JSON");
-        
-        // Get JSON.stringify function
-        JSValue jsonStringify = JS_GetPropertyStr(ctx, jsonObj, "stringify");
-        
-        // Free JSON object as we don't need it anymore
-        JS_FreeValue(ctx, jsonObj);
-        
-        // Call JSON.stringify(value) to get a proper string representation
-        JSValue jsonStr;
-        if (JS_IsFunction(ctx, jsonStringify)) {
-            // Create an array of arguments for the function call
-            JSValueConst args[1];
-            args[0] = value; // We don't duplicate the value here, just reference it
-            
-            jsonStr = JS_Call(ctx, jsonStringify, global, 1, args);
-        } else {
-            // Fallback if JSON.stringify is not available
-            jsonStr = JS_ToString(ctx, value);
-        }
-        
-        // Free the stringify function
-        JS_FreeValue(ctx, jsonStringify);
-        
-        // Free the global object
-        JS_FreeValue(ctx, global);
-        
-        // Convert to C string
-        const char* str = JS_ToCString(ctx, jsonStr);
-        jmethodID createObjectMethod = env->GetStaticMethodID(
+        const char* str = JS_ToCString(ctx, jsonStr.get());
+        jmethodID method = env->GetStaticMethodID(
             jsValueClass, "createObject", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
         jstring jstr = env->NewStringUTF(str ? str : "[object Object]");
-        jobject result = env->CallStaticObjectMethod(jsValueClass, createObjectMethod, jstr);
-        
-        // Free resources
+        jobject result = env->CallStaticObjectMethod(jsValueClass, method, jstr);
+        env->DeleteLocalRef(jstr);
         JS_FreeCString(ctx, str);
-        JS_FreeValue(ctx, jsonStr);
         
         return result;
     } 
-    else if (JS_IsException(value)) {
-        // For exception values, we need to get the actual exception object
-        JSValue exception = JS_GetException(ctx);
-        std::string errorMsg = getDetailedJSError(ctx, exception);
-        JS_FreeValue(ctx, exception);
+    
+    if (JS_IsException(value)) {
+        JSValueGuard exception(ctx, JS_GetException(ctx));
+        std::string errorMsg = getDetailedJSError(ctx, exception.get());
         
-        // Create the error JSValue object
-        jmethodID createErrorMethod = env->GetStaticMethodID(
+        jmethodID method = env->GetStaticMethodID(
             jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
         jstring jstr = env->NewStringUTF(errorMsg.c_str());
-        jobject result = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, jstr);
+        jobject result = env->CallStaticObjectMethod(jsValueClass, method, jstr);
         env->DeleteLocalRef(jstr);
         return result;
-    } 
-    else {
-        // Default case
-        jmethodID createUndefinedMethod = env->GetStaticMethodID(
-            jsValueClass, "createUndefined", "()Lcom/didi/dimina/engine/qjs/JSValue;");
-        return env->CallStaticObjectMethod(jsValueClass, createUndefinedMethod);
     }
+    
+    // Default case: undefined
+    jmethodID method = env->GetStaticMethodID(
+        jsValueClass, "createUndefined", "()Lcom/didi/dimina/engine/qjs/JSValue;");
+    return env->CallStaticObjectMethod(jsValueClass, method);
 }
 
 // QuickJSEngine methods
@@ -301,63 +465,27 @@ static JSValue js_dimina_invoke(JSContext *ctx, JSValueConst this_val, int argc,
     }
 
     // Find the engine instance for this context
-    EngineInstance* instance = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
-        for (const auto& pair : gEngineInstances) {
-            if (pair.second->ctx == ctx) {
-                instance = pair.second;
-                break;
-            }
-        }
-    }
-
+    EngineInstance* instance = findInstanceByContext(ctx);
     if (!instance || !instance->engineObj) {
         return JS_ThrowInternalError(ctx, "Engine instance not found or not initialized");
     }
 
-    // Get JNI environment
-    JNIEnv* env;
-    bool needsDetach = false;
-    jint jniResult = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (jniResult == JNI_EDETACHED) {
-        jniResult = gJavaVM->AttachCurrentThread(&env, nullptr);
-        if (jniResult != JNI_OK) {
-            return JS_ThrowInternalError(ctx, "Failed to attach to Java thread");
-        }
-        needsDetach = true;
-    } else if (jniResult != JNI_OK) {
+    // Get JNI environment with RAII guard
+    JNIEnvGuard envGuard;
+    if (!envGuard.isValid()) {
         return JS_ThrowInternalError(ctx, "Failed to get JNI environment");
     }
+    JNIEnv* env = envGuard.get();
 
-    // Get the global JSON object
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue jsonObj = JS_GetPropertyStr(ctx, global, "JSON");
-    JSValue jsonStringify = JS_GetPropertyStr(ctx, jsonObj, "stringify");
-
-    // Call JSON.stringify on the input object
-    JSValueConst args[1] = { argv[0] };
-    JSValue jsonStr = JS_Call(ctx, jsonStringify, global, 1, args);
-
-    // Free resources
-    JS_FreeValue(ctx, jsonStringify);
-    JS_FreeValue(ctx, jsonObj);
-    JS_FreeValue(ctx, global);
-
-    if (JS_IsException(jsonStr)) {
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
+    // Stringify the input object
+    JSValueGuard jsonStr(ctx, jsonStringify(ctx, argv[0]));
+    if (jsonStr.isException()) {
         return JS_EXCEPTION;
     }
 
     // Get the JSON string
-    const char* jsonData = JS_ToCString(ctx, jsonStr);
+    const char* jsonData = JS_ToCString(ctx, jsonStr.get());
     if (!jsonData) {
-        JS_FreeValue(ctx, jsonStr);
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
         return JS_EXCEPTION;
     }
 
@@ -378,7 +506,6 @@ static JSValue js_dimina_invoke(JSContext *ctx, JSValueConst this_val, int argc,
     }
 
     JS_FreeCString(ctx, jsonData);
-    JS_FreeValue(ctx, jsonStr);
 
     // Convert the returned JSValue? to a QuickJS JSValue
     JSValue result;
@@ -447,11 +574,6 @@ static JSValue js_dimina_invoke(JSContext *ctx, JSValueConst this_val, int argc,
         env->DeleteLocalRef(jsValueClass);
     }
 
-    // Detach from thread if needed
-    if (needsDetach) {
-        gJavaVM->DetachCurrentThread();
-    }
-
     return result;
 }
 
@@ -462,74 +584,31 @@ static JSValue js_dimina_publish(JSContext *ctx, JSValueConst this_val, int argc
     }
     
     // Find the engine instance for this context
-    EngineInstance* instance = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
-        for (const auto& pair : gEngineInstances) {
-            if (pair.second->ctx == ctx) {
-                instance = pair.second;
-                break;
-            }
-        }
-    }
-    
+    EngineInstance* instance = findInstanceByContext(ctx);
     if (!instance || !instance->engineObj) {
         return JS_ThrowInternalError(ctx, "Engine instance not found or not initialized");
     }
     
-    // Get JNI environment
-    JNIEnv* env;
-    bool needsDetach = false;
-    jint jniResult = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (jniResult == JNI_EDETACHED) {
-        jniResult = gJavaVM->AttachCurrentThread(&env, nullptr);
-        if (jniResult != JNI_OK) {
-            return JS_ThrowInternalError(ctx, "Failed to attach to Java thread");
-        }
-        needsDetach = true;
-    } else if (jniResult != JNI_OK) {
+    // Get JNI environment with RAII guard
+    JNIEnvGuard envGuard;
+    if (!envGuard.isValid()) {
         return JS_ThrowInternalError(ctx, "Failed to get JNI environment");
     }
+    JNIEnv* env = envGuard.get();
     
-    // Get the global JSON object
-    JSValue global = JS_GetGlobalObject(ctx);
-    JSValue jsonObj = JS_GetPropertyStr(ctx, global, "JSON");
-    JSValue jsonStringify = JS_GetPropertyStr(ctx, jsonObj, "stringify");
-    
-    // Call JSON.stringify on the object
-    JSValueConst args[1] = { argv[1] };
-    JSValue jsonStr = JS_Call(ctx, jsonStringify, global, 1, args);
-    
-    // Free resources
-    JS_FreeValue(ctx, jsonStringify);
-    JS_FreeValue(ctx, jsonObj);
-    JS_FreeValue(ctx, global);
-    
-    if (JS_IsException(jsonStr)) {
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
+    // Stringify the object
+    JSValueGuard jsonStr(ctx, jsonStringify(ctx, argv[1]));
+    if (jsonStr.isException()) {
         return JS_EXCEPTION;
     }
     
-    // Get the JSON string
-    const char* jsonData = JS_ToCString(ctx, jsonStr);
-    if (!jsonData) {
-        JS_FreeValue(ctx, jsonStr);
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
-        return JS_EXCEPTION;
-    }
-    
-    // Get the id string
+    // Get the JSON string and id
+    const char* jsonData = JS_ToCString(ctx, jsonStr.get());
     const char* id = JS_ToCString(ctx, argv[0]);
-    if (!id) {
-        JS_FreeCString(ctx, jsonData);
-        JS_FreeValue(ctx, jsonStr);
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
+    
+    if (!jsonData || !id) {
+        if (jsonData) JS_FreeCString(ctx, jsonData);
+        if (id) JS_FreeCString(ctx, id);
         return JS_EXCEPTION;
     }
     
@@ -551,20 +630,14 @@ static JSValue js_dimina_publish(JSContext *ctx, JSValueConst this_val, int argc
     
     JS_FreeCString(ctx, id);
     JS_FreeCString(ctx, jsonData);
-    JS_FreeValue(ctx, jsonStr);
-    
-    // Detach from thread if needed
-    if (needsDetach) {
-        gJavaVM->DetachCurrentThread();
-    }
     
     return JS_UNDEFINED;
 }
 
-// clearTimeout implementation
-static JSValue js_clear_timeout(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+// Unified timer clearing implementation (for both setTimeout and setInterval)
+static JSValue js_clear_timer(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
     if (argc < 1 || !JS_IsNumber(argv[0])) {
-        return JS_ThrowTypeError(ctx, "clearTimeout expects a timer ID as first argument");
+        return JS_ThrowTypeError(ctx, "clearTimeout/clearInterval expects a timer ID as first argument");
     }
     
     // Get the timer ID
@@ -572,70 +645,43 @@ static JSValue js_clear_timeout(JSContext *ctx, JSValueConst this_val, int argc,
     JS_ToInt32(ctx, &timerId, argv[0]);
     
     // Find the engine instance for this context
-    EngineInstance* instance = nullptr;
-    int instanceId = -1;
-    {
-        std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
-        for (const auto& pair : gEngineInstances) {
-            if (pair.second->ctx == ctx) {
-                instance = pair.second;
-                instanceId = pair.first;
-                break;
-            }
-        }
-    }
-    
+    EngineInstance* instance = findInstanceByContext(ctx);
     if (!instance) {
         return JS_ThrowInternalError(ctx, "Could not find engine instance for this context");
     }
     
-    // Check if we have a valid engine object
-    if (!instance->engineObj) {
-        return JS_ThrowInternalError(ctx, "Engine object not initialized");
-    }
-    
-    // Get JNI environment
-    JNIEnv* env;
-    bool needsDetach = false;
-    jint jniResult = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (jniResult == JNI_EDETACHED) {
-        jniResult = gJavaVM->AttachCurrentThread(&env, nullptr);
-        if (jniResult != JNI_OK) {
-            return JS_ThrowInternalError(ctx, "Failed to attach to Java thread");
-        }
-        needsDetach = true;
-    } else if (jniResult != JNI_OK) {
-        return JS_ThrowInternalError(ctx, "Failed to get JNI environment");
-    }
-    
-    // Call the Java method to clear the timer
-    jclass cls = env->GetObjectClass(instance->engineObj);
-    jmethodID clearTimerMethod = env->GetMethodID(cls, "clearTimer", "(I)Z");
-    
-    jboolean result = JNI_FALSE;
-    if (clearTimerMethod) {
-        result = env->CallBooleanMethod(instance->engineObj, clearTimerMethod, timerId);
+    // Find and stop the timer
+    auto timerIt = instance->uvTimers.find(timerId);
+    if (timerIt != instance->uvTimers.end()) {
+        uv_timer_t* timer = timerIt->second;
+        uv_timer_stop(timer);
+        uv_close((uv_handle_t*)timer, uv_close_callback);
+        instance->uvTimers.erase(timerIt);
         
-        // Log that we cleared a timer
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Cleared timer %d for instance %d: %s", 
-                           timerId, instanceId, result == JNI_TRUE ? "success" : "not found");
-    }
-    
-    // Clean up JNI if needed
-    if (needsDetach) {
-        gJavaVM->DetachCurrentThread();
+        // Clean up timer data
+        auto dataIt = instance->timerCallbacks.find(timerId);
+        if (dataIt != instance->timerCallbacks.end()) {
+            TimerData* data = dataIt->second;
+            JS_FreeValue(ctx, data->callback);
+            delete data;
+            instance->timerCallbacks.erase(dataIt);
+        }
+        
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Cleared timer %d", timerId);
     }
     
     return JS_UNDEFINED;
 }
 
-// setTimeout implementation
-static JSValue js_set_timeout(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+// Unified timer creation implementation (for both setTimeout and setInterval)
+static JSValue js_create_timer(JSContext *ctx, JSValueConst *argv, int argc, bool isInterval) {
     if (argc < 1 || (!JS_IsFunction(ctx, argv[0]) && !JS_IsString(argv[0]))) {
-        return JS_ThrowTypeError(ctx, "setTimeout expects at least a function or string as first argument");
+        return JS_ThrowTypeError(ctx, isInterval ? 
+            "setInterval expects at least a function or string as first argument" :
+            "setTimeout expects at least a function or string as first argument");
     }
     
-    // Get the delay time in milliseconds (default to 0 if not provided)
+    // Get the delay/interval time in milliseconds (default to 0 if not provided)
     int32_t delay = 0;
     if (argc >= 2 && JS_IsNumber(argv[1])) {
         JS_ToInt32(ctx, &delay, argv[1]);
@@ -643,455 +689,73 @@ static JSValue js_set_timeout(JSContext *ctx, JSValueConst this_val, int argc, J
     }
     
     // Find the engine instance for this context
-    EngineInstance* instance = nullptr;
-    int instanceId = -1;
-    {
-        std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
-        for (const auto& pair : gEngineInstances) {
-            if (pair.second->ctx == ctx) {
-                instance = pair.second;
-                instanceId = pair.first;
-                break;
-            }
-        }
-    }
-    
-    if (!instance) {
-        return JS_ThrowInternalError(ctx, "Could not find engine instance for this context");
+    EngineInstance* instance = findInstanceByContext(ctx);
+    if (!instance || !instance->loop) {
+        return JS_ThrowInternalError(ctx, "Could not find engine instance or event loop");
     }
     
     // Generate a unique timer ID
     int timerId = instance->nextTimerId++;
     
-    // Store the callback function with a duplicate to prevent garbage collection
-    instance->timerCallbacks[timerId] = JS_DupValue(ctx, argv[0]);
+    // Create timer data
+    TimerData* data = new TimerData{
+        .ctx = ctx,
+        .timerId = timerId,
+        .callback = JS_DupValue(ctx, argv[0]),
+        .instanceId = 0,
+        .isInterval = isInterval,
+        .instance = instance
+    };
     
-    // Check if we have a valid engine object
-    if (!instance->engineObj) {
-        JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-        instance->timerCallbacks.erase(timerId);
-        return JS_ThrowInternalError(ctx, "Engine object not initialized");
-    }
+    // Create and initialize uv timer
+    uv_timer_t* timer = new uv_timer_t();
+    timer->data = data;
     
-    // Get JNI environment
-    JNIEnv* env;
-    bool needsDetach = false;
-    jint jniResult = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (jniResult == JNI_EDETACHED) {
-        jniResult = gJavaVM->AttachCurrentThread(&env, nullptr);
-        if (jniResult != JNI_OK) {
-            JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-            instance->timerCallbacks.erase(timerId);
-            return JS_ThrowInternalError(ctx, "Failed to attach to Java thread");
-        }
-        needsDetach = true;
-    } else if (jniResult != JNI_OK) {
-        JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-        instance->timerCallbacks.erase(timerId);
-        return JS_ThrowInternalError(ctx, "Failed to get JNI environment");
-    }
-    
-    // Call the Java method to schedule the timer
-    jclass cls = env->GetObjectClass(instance->engineObj);
-    jmethodID scheduleTimerMethod = env->GetMethodID(cls, "scheduleTimer", "(II)V");
-    
-    if (scheduleTimerMethod) {
-        env->CallVoidMethod(instance->engineObj, scheduleTimerMethod, timerId, delay, instanceId);
-        
-        // Log that we scheduled a timer
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Scheduled timer %d with delay %d ms for instance %d", 
-                           timerId, delay, instanceId);
-        
-        // Clean up JNI if needed
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
-        
-        // Return the timer ID to JavaScript
-        return JS_NewInt32(ctx, timerId);
-    } else {
-        // If the method is not found, clean up and throw an error
-        JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-        instance->timerCallbacks.erase(timerId);
-        
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
-        
-        return JS_ThrowInternalError(ctx, "Failed to schedule timer: Java method not found");
-    }
-}
-
-// setIntervalNative implementation
-static JSValue js_set_interval(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    if (argc < 1 || (!JS_IsFunction(ctx, argv[0]) && !JS_IsString(argv[0]))) {
-        return JS_ThrowTypeError(ctx, "setIntervalNative expects at least a function or string as first argument");
-    }
-
-    // Get the interval time in milliseconds (default to 0 if not provided)
-    int32_t interval = 0;
-    if (argc >= 2 && JS_IsNumber(argv[1])) {
-        JS_ToInt32(ctx, &interval, argv[1]);
-        if (interval < 0) interval = 0;
-    }
-
-    // Find the engine instance for this context
-    EngineInstance* instance = nullptr;
-    int instanceId = -1;
-    {
-        std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
-        for (const auto& pair : gEngineInstances) {
-            if (pair.second->ctx == ctx) {
-                instance = pair.second;
-                instanceId = pair.first;
-                break;
-            }
-        }
-    }
-
-    if (!instance) {
-        return JS_ThrowInternalError(ctx, "Could not find engine instance for this context");
-    }
-
-    // Generate a unique timer ID
-    int timerId = instance->nextTimerId++;
-
-    // Store the callback function with a duplicate to prevent garbage collection
-    instance->timerCallbacks[timerId] = JS_DupValue(ctx, argv[0]);
-
-    // Check if we have a valid engine object
-    if (!instance->engineObj) {
-        JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-        instance->timerCallbacks.erase(timerId);
-        return JS_ThrowInternalError(ctx, "Engine object not initialized");
-    }
-
-    // Get JNI environment
-    JNIEnv* env;
-    bool needsDetach = false;
-    jint jniResult = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (jniResult == JNI_EDETACHED) {
-        jniResult = gJavaVM->AttachCurrentThread(&env, nullptr);
-        if (jniResult != JNI_OK) {
-            JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-            instance->timerCallbacks.erase(timerId);
-            return JS_ThrowInternalError(ctx, "Failed to attach to Java thread");
-        }
-        needsDetach = true;
-    } else if (jniResult != JNI_OK) {
-        JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-        instance->timerCallbacks.erase(timerId);
-        return JS_ThrowInternalError(ctx, "Failed to get JNI environment");
-    }
-
-    // Call the Java method to schedule the interval
-    jclass cls = env->GetObjectClass(instance->engineObj);
-    jmethodID scheduleIntervalMethod = env->GetMethodID(cls, "scheduleInterval", "(II)V");
-
-    if (scheduleIntervalMethod) {
-        env->CallVoidMethod(instance->engineObj, scheduleIntervalMethod, timerId, interval, instanceId);
-
-        // Log that we scheduled an interval
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Scheduled interval %d with delay %d ms for instance %d",
-                            timerId, interval, instanceId);
-
-        // Clean up JNI if needed
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
-
-        // Return the timer ID to JavaScript
-        return JS_NewInt32(ctx, timerId);
-    } else {
-        // If the method is not found, clean up and throw an error
-        JS_FreeValue(ctx, instance->timerCallbacks[timerId]);
-        instance->timerCallbacks.erase(timerId);
-
-        if (needsDetach) {
-            gJavaVM->DetachCurrentThread();
-        }
-
-        return JS_ThrowInternalError(ctx, "Failed to schedule interval: Java method not found");
-    }
-}
-
-// clearIntervalNative implementation
-static JSValue js_clear_interval(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
-    if (argc < 1 || !JS_IsNumber(argv[0])) {
-        return JS_ThrowTypeError(ctx, "clearIntervalNative expects a timer ID as first argument");
-    }
-
-    // Get the timer ID
-    int32_t timerId = 0;
-    JS_ToInt32(ctx, &timerId, argv[0]);
-
-    // Find the engine instance for this context
-    EngineInstance* instance = nullptr;
-    int instanceId = -1;
-    {
-        std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
-        for (const auto& pair : gEngineInstances) {
-            if (pair.second->ctx == ctx) {
-                instance = pair.second;
-                instanceId = pair.first;
-                break;
-            }
-        }
-    }
-
-    if (!instance) {
-        return JS_ThrowInternalError(ctx, "Could not find engine instance for this context");
-    }
-
-    // Check if we have a valid engine object
-    if (!instance->engineObj) {
-        return JS_ThrowInternalError(ctx, "Engine object not initialized");
-    }
-
-    // Get JNI environment
-    JNIEnv* env;
-    bool needsDetach = false;
-    jint jniResult = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (jniResult == JNI_EDETACHED) {
-        jniResult = gJavaVM->AttachCurrentThread(&env, nullptr);
-        if (jniResult != JNI_OK) {
-            return JS_ThrowInternalError(ctx, "Failed to attach to Java thread");
-        }
-        needsDetach = true;
-    } else if (jniResult != JNI_OK) {
-        return JS_ThrowInternalError(ctx, "Failed to get JNI environment");
-    }
-
-    // Call the Java method to clear the interval
-    jclass cls = env->GetObjectClass(instance->engineObj);
-    jmethodID clearIntervalMethod = env->GetMethodID(cls, "clearInterval", "(I)Z");
-
-    jboolean result = JNI_FALSE;
-    if (clearIntervalMethod) {
-        result = env->CallBooleanMethod(instance->engineObj, clearIntervalMethod, timerId);
-
-        // Log that we cleared an interval
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Cleared interval %d for instance %d: %s",
-                            timerId, instanceId, result == JNI_TRUE ? "success" : "not found");
-    }
-
-    // Clean up JNI if needed
-    if (needsDetach) {
-        gJavaVM->DetachCurrentThread();
-    }
-
-    return JS_UNDEFINED;
-}
-
-// Function to clear a timer
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeClearTimer(
-        JNIEnv* env,
-        jobject thiz,
-        jint timerId,
-        jint instanceId) {
-    // Get the engine instance
-    EngineInstance* instance = getEngineInstance(instanceId);
-    if (!instance || !instance->ctx) {
+    int result = uv_timer_init(instance->loop, timer);
+    if (result != 0) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
-            "Failed to clear timer %d for instance %d: Instance not found or context is null", 
-            timerId, instanceId);
-        return JNI_FALSE;
+            "Failed to init uv_timer: %s", uv_strerror(result));
+        JS_FreeValue(ctx, data->callback);
+        delete data;
+        delete timer;
+        return JS_ThrowInternalError(ctx, "Failed to initialize timer");
     }
     
-    // Check if the timer exists in the map
-    auto it = instance->timerCallbacks.find(timerId);
-    if (it != instance->timerCallbacks.end()) {
-        // Free the callback value
-        JS_FreeValue(instance->ctx, it->second);
-        
-        // Remove the timer from the map
-        instance->timerCallbacks.erase(it);
-        
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
-            "Cleared timer %d for instance %d from native side", timerId, instanceId);
-        return JNI_TRUE;
+    // For intervals, set repeat parameter; for timeouts, set repeat to 0
+    result = uv_timer_start(timer, uv_timer_callback, delay, isInterval ? delay : 0);
+    if (result != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
+            "Failed to start uv_timer: %s", uv_strerror(result));
+        JS_FreeValue(ctx, data->callback);
+        delete data;
+        uv_close((uv_handle_t*)timer, uv_close_callback);
+        return JS_ThrowInternalError(ctx, "Failed to start timer");
     }
+    
+    // Store timer references
+    instance->timerCallbacks[timerId] = data;
+    instance->uvTimers[timerId] = timer;
     
     __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
-        "Timer %d for instance %d not found on native side", timerId, instanceId);
-    return JNI_FALSE;
+        "Scheduled %s %d with delay %d ms using libuv", 
+        isInterval ? "interval" : "timer", timerId, delay);
+    
+    return JS_NewInt32(ctx, timerId);
 }
 
-// Function to execute a stored timer callback
-extern "C" JNIEXPORT void JNICALL
-Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeExecuteTimer(
-        JNIEnv* env,
-        jobject thiz,
-        jint timerId,
-        jint instanceId) {
-    
-    // Get the engine instance
-    EngineInstance* instance = getEngineInstance(instanceId);
-    if (!instance || !instance->ctx) {
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
-            "Failed to execute timer %d for instance %d: Instance not found or context is null", 
-            timerId, instanceId);
-        return;
-    }
-    
-    JSContext* ctx = instance->ctx;
-    
-    // Find the callback function for this timer ID
-    auto it = instance->timerCallbacks.find(timerId);
-    if (it == instance->timerCallbacks.end()) {
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
-            "Failed to execute timer %d for instance %d: Callback not found", 
-            timerId, instanceId);
-        return;
-    }
-    
-    JSValue callback = it->second;
-    
-    // Execute the callback
-    JSValue result;
-    if (JS_IsFunction(ctx, callback)) {
-        // If it's a function, call it
-        JSValue global = JS_GetGlobalObject(ctx);
-        result = JS_Call(ctx, callback, global, 0, nullptr);
-        JS_FreeValue(ctx, global);
-    } else if (JS_IsString(callback)) {
-        // If it's a string, evaluate it as code
-        const char* code = JS_ToCString(ctx, callback);
-        if (code) {
-            result = JS_Eval(ctx, code, strlen(code), "<setTimeout>", JS_EVAL_TYPE_GLOBAL);
-            JS_FreeCString(ctx, code);
-        } else {
-            result = JS_EXCEPTION;
-        }
-    } else {
-        result = JS_UNDEFINED;
-    }
-    
-    // Handle any exceptions
-    if (JS_IsException(result)) {
-        JSValue exception = JS_GetException(ctx);
-        std::string errorMsg = getDetailedJSError(ctx, exception);
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
-            "Error in setTimeout callback for instance %d: %s", 
-            instanceId, errorMsg.c_str());
-        JS_FreeValue(ctx, exception);
-    }
-    
-    // Free the result
-    JS_FreeValue(ctx, result);
-    
-    // Free the callback and remove it from the map
-    JS_FreeValue(ctx, callback);
-    instance->timerCallbacks.erase(timerId);
-    
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Executed timer %d for instance %d", timerId, instanceId);
+// setTimeout wrapper
+static JSValue js_set_timeout(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    return js_create_timer(ctx, argv, argc, false);
 }
 
-// Function to execute a stored interval callback
-extern "C" JNIEXPORT void JNICALL
-Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeExecuteInterval(
-        JNIEnv* env,
-        jobject thiz,
-        jint timerId,
-        jint instanceId) {
-
-    // Get the engine instance
-    EngineInstance* instance = getEngineInstance(instanceId);
-    if (!instance || !instance->ctx) {
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
-                            "Failed to execute interval %d for instance %d: Instance not found or context is null",
-                            timerId, instanceId);
-        return;
-    }
-
-    JSContext* ctx = instance->ctx;
-
-    // Find the callback function for this timer ID
-    auto it = instance->timerCallbacks.find(timerId);
-    if (it == instance->timerCallbacks.end()) {
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
-                            "Failed to execute interval %d for instance %d: Callback not found",
-                            timerId, instanceId);
-        return;
-    }
-
-    JSValue callback = it->second;
-
-    // Execute the callback
-    JSValue result;
-    if (JS_IsFunction(ctx, callback)) {
-        // If it's a function, call it
-        JSValue global = JS_GetGlobalObject(ctx);
-        result = JS_Call(ctx, callback, global, 0, nullptr);
-        JS_FreeValue(ctx, global);
-    } else if (JS_IsString(callback)) {
-        // If it's a string, evaluate it as code
-        const char* code = JS_ToCString(ctx, callback);
-        if (code) {
-            result = JS_Eval(ctx, code, strlen(code), "<setIntervalNative>", JS_EVAL_TYPE_GLOBAL);
-            JS_FreeCString(ctx, code);
-        } else {
-            result = JS_EXCEPTION;
-        }
-    } else {
-        result = JS_UNDEFINED;
-    }
-
-    // Handle any exceptions
-    if (JS_IsException(result)) {
-        JSValue exception = JS_GetException(ctx);
-        std::string errorMsg = getDetailedJSError(ctx, exception);
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
-                            "Error in setIntervalNative callback for instance %d: %s",
-                            instanceId, errorMsg.c_str());
-        JS_FreeValue(ctx, exception);
-    }
-
-    // Free the result
-    JS_FreeValue(ctx, result);
-
-    // Note: Unlike setTimeoutNative, we do NOT free the callback or remove it from the map
-    // because setIntervalNative needs to keep the callback for repeated execution
-
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Executed interval %d for instance %d", timerId, instanceId);
+// setInterval wrapper
+static JSValue js_set_interval(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv) {
+    return js_create_timer(ctx, argv, argc, true);
 }
 
-// Function to clear an interval
-extern "C" JNIEXPORT jboolean JNICALL
-Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeClearInterval(
-        JNIEnv* env,
-        jobject thiz,
-        jint timerId,
-        jint instanceId) {
-
-    // Get the engine instance
-    EngineInstance* instance = getEngineInstance(instanceId);
-    if (!instance || !instance->ctx) {
-        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG,
-                            "Failed to clear interval %d for instance %d: Instance not found or context is null",
-                            timerId, instanceId);
-        return JNI_FALSE;
-    }
-
-    // Check if the interval exists in the map
-    auto it = instance->timerCallbacks.find(timerId);
-    if (it != instance->timerCallbacks.end()) {
-        // Free the callback value
-        JS_FreeValue(instance->ctx, it->second);
-
-        // Remove the interval from the map
-        instance->timerCallbacks.erase(it);
-
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG,
-                            "Cleared interval %d for instance %d from native side", timerId, instanceId);
-        return JNI_TRUE;
-    }
-
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG,
-                        "Interval %d for instance %d not found on native side", timerId, instanceId);
-    return JNI_FALSE;
-}
+// Note: Timer execution is now handled directly by libuv callbacks
+// The old nativeExecuteTimer, nativeClearTimer, nativeExecuteInterval, and nativeClearInterval
+// methods are no longer needed as libuv manages the event loop
 
 // Native log function to call into Java/Kotlin with integer log level
 static JSValue js_native_log(JSContext *ctx, JSValueConst this_val, int argc, JSValueConst *argv, int level) {
@@ -1099,37 +763,7 @@ static JSValue js_native_log(JSContext *ctx, JSValueConst this_val, int argc, JS
         return JS_UNDEFINED;
     }
 
-    // Find the engine instance for this context
-    EngineInstance* instance = nullptr;
-    {
-        std::lock_guard<std::mutex> lock(gEngineInstancesMutex);
-        for (const auto& pair : gEngineInstances) {
-            if (pair.second->ctx == ctx) {
-                instance = pair.second;
-                break;
-            }
-        }
-    }
-
-    if (!instance || !instance->engineObj) {
-        return JS_ThrowInternalError(ctx, "Engine instance not found or not initialized");
-    }
-
-    // Get JNI environment
-    JNIEnv* env;
-    bool needsDetach = false;
-    jint jniResult = gJavaVM->GetEnv((void**)&env, JNI_VERSION_1_6);
-    if (jniResult == JNI_EDETACHED) {
-        jniResult = gJavaVM->AttachCurrentThread(&env, nullptr);
-        if (jniResult != JNI_OK) {
-            return JS_ThrowInternalError(ctx, "Failed to attach to Java thread");
-        }
-        needsDetach = true;
-    } else if (jniResult != JNI_OK) {
-        return JS_ThrowInternalError(ctx, "Failed to get JNI environment");
-    }
-
-    // Convert all remaining arguments to strings and concatenate them
+    // Convert all arguments to strings and concatenate them
     std::string logMessage;
     for (int i = 0; i < argc; i++) {
         if (i > 0) {
@@ -1138,25 +772,14 @@ static JSValue js_native_log(JSContext *ctx, JSValueConst this_val, int argc, JS
 
         if (JS_IsObject(argv[i])) {
             // For objects, use JSON.stringify
-            JSValue global = JS_GetGlobalObject(ctx);
-            JSValue jsonObj = JS_GetPropertyStr(ctx, global, "JSON");
-            JSValue jsonStringify = JS_GetPropertyStr(ctx, jsonObj, "stringify");
-
-            JSValueConst args[1];
-            args[0] = argv[i];
-            JSValue jsonStr = JS_Call(ctx, jsonStringify, global, 1, args);
-            const char* str = JS_ToCString(ctx, jsonStr);
+            JSValueGuard jsonStr(ctx, jsonStringify(ctx, argv[i]));
+            const char* str = JS_ToCString(ctx, jsonStr.get());
             if (str) {
                 logMessage += str;
                 JS_FreeCString(ctx, str);
             } else {
                 logMessage += "[object Object]";
             }
-
-            JS_FreeValue(ctx, jsonStr);
-            JS_FreeValue(ctx, jsonStringify);
-            JS_FreeValue(ctx, jsonObj);
-            JS_FreeValue(ctx, global);
         } else {
             const char* str = JS_ToCString(ctx, argv[i]);
             if (str) {
@@ -1183,11 +806,6 @@ static JSValue js_native_log(JSContext *ctx, JSValueConst this_val, int argc, JS
         default:
             __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "[JS] [Unknown Level %d] %s", level, logMessage.c_str());
             break;
-    }
-
-    // Detach from thread if needed
-    if (needsDetach) {
-        gJavaVM->DetachCurrentThread();
     }
 
     return JS_UNDEFINED;
@@ -1219,23 +837,17 @@ static void register_console_api(JSContext *ctx) {
 static void register_timer_functions(JSContext *ctx) {
     JSValue global = JS_GetGlobalObject(ctx);
     
-    // Register setTimeout function
+    // Register setTimeout and setInterval functions
     JS_SetPropertyStr(ctx, global, "setTimeout",
                       JS_NewCFunction(ctx, js_set_timeout, "setTimeout", 2));
-    
-    // Register clearTimeout function
-    JS_SetPropertyStr(ctx, global, "clearTimeout",
-                      JS_NewCFunction(ctx, js_clear_timeout, "clearTimeout", 1));
-
-    // Register setInterval function
     JS_SetPropertyStr(ctx, global, "setInterval",
                       JS_NewCFunction(ctx, js_set_interval, "setInterval", 2));
 
-    // Register clearInterval function
-    JS_SetPropertyStr(ctx, global, "clearInterval",
-                      JS_NewCFunction(ctx, js_clear_interval, "clearInterval", 1));
+    // Register unified clear function for both timeout and interval
+    JSValue clearFunc = JS_NewCFunction(ctx, js_clear_timer, "clearTimer", 1);
+    JS_SetPropertyStr(ctx, global, "clearTimeout", JS_DupValue(ctx, clearFunc));
+    JS_SetPropertyStr(ctx, global, "clearInterval", clearFunc);
 
-    // Free the global object reference
     JS_FreeValue(ctx, global);
 }
 
@@ -1258,7 +870,7 @@ static void register_dimina_service_bridge(JSContext *ctx) {
     JS_FreeValue(ctx, global);
 }
 
-// Initialize QuickJS runtime and context
+// Initialize QuickJS runtime, context, and libuv event loop
 extern "C" JNIEXPORT jboolean JNICALL
 Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeInitialize(
         JNIEnv* env,
@@ -1278,10 +890,24 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeInitialize(
     // Store global reference to Java object
     instance->engineObj = env->NewGlobalRef(thiz);
     
+    // Create libuv event loop
+    instance->loop = new uv_loop_t();
+    int result = uv_loop_init(instance->loop);
+    if (result != 0) {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
+            "Failed to initialize libuv loop for instance %d: %s", instanceId, uv_strerror(result));
+        env->DeleteGlobalRef(instance->engineObj);
+        delete instance->loop;
+        delete instance;
+        return JNI_FALSE;
+    }
+    
     // Create QuickJS runtime
     instance->runtime = JS_NewRuntime();
     if (!instance->runtime) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Failed to create QuickJS runtime for instance %d", instanceId);
+        uv_loop_close(instance->loop);
+        delete instance->loop;
         env->DeleteGlobalRef(instance->engineObj);
         delete instance;
         return JNI_FALSE;
@@ -1292,6 +918,8 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeInitialize(
     if (!instance->ctx) {
         __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, "Failed to create QuickJS context for instance %d", instanceId);
         JS_FreeRuntime(instance->runtime);
+        uv_loop_close(instance->loop);
+        delete instance->loop;
         env->DeleteGlobalRef(instance->engineObj);
         delete instance;
         return JNI_FALSE;
@@ -1310,14 +938,17 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeInitialize(
     jclass cls = env->GetObjectClass(thiz);
     jfieldID runtimeField = env->GetFieldID(cls, "nativeRuntimePtr", "J");
     jfieldID contextField = env->GetFieldID(cls, "nativeContextPtr", "J");
+    jfieldID loopField = env->GetFieldID(cls, "nativeLoopPtr", "J");
     
     env->SetLongField(thiz, runtimeField, (jlong)instance->runtime);
     env->SetLongField(thiz, contextField, (jlong)instance->ctx);
+    env->SetLongField(thiz, loopField, (jlong)instance->loop);
     
     // Store instance in global map
     gEngineInstances[instanceId] = instance;
     
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "QuickJS instance %d initialized successfully", instanceId);
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+        "QuickJS instance %d initialized successfully with libuv event loop", instanceId);
     return JNI_TRUE;
 }
 
@@ -1332,13 +963,7 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeEvaluateFromFile(
     // Get the engine instance
     EngineInstance* instance = getEngineInstance(instanceId);
     if (!instance || !instance->ctx) {
-        jclass jsValueClass = env->FindClass("com/didi/dimina/engine/qjs/JSValue");
-        jmethodID createErrorMethod = env->GetStaticMethodID(
-            jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
-        jstring errorMsg = env->NewStringUTF("QuickJS context is null or instance not found");
-        jobject result = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, errorMsg);
-        env->DeleteLocalRef(errorMsg);
-        return result;
+        return createJSError(env, "QuickJS context is null or instance not found");
     }
     
     JSContext* ctx = instance->ctx;
@@ -1346,26 +971,16 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeEvaluateFromFile(
     // Convert Java string to C string
     const char* filePathStr = env->GetStringUTFChars(filePath, nullptr);
     if (!filePathStr) {
-        jclass jsValueClass = env->FindClass("com/didi/dimina/engine/qjs/JSValue");
-        jmethodID createErrorMethod = env->GetStaticMethodID(
-            jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
-        jstring errorMsg = env->NewStringUTF("Failed to get file path string");
-        jobject result = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, errorMsg);
-        env->DeleteLocalRef(errorMsg);
-        return result;
+        return createJSError(env, "Failed to get file path string");
     }
     
     // Read file content
     std::ifstream file(filePathStr);
     if (!file.is_open()) {
-        env->ReleaseStringUTFChars(filePath, filePathStr);
         std::string errorMsg = "Failed to open file: ";
         errorMsg += filePathStr;
-        JSValue error = JS_NewError(ctx);
-        JS_SetPropertyStr(ctx, error, "message", JS_NewString(ctx, errorMsg.c_str()));
-        jobject result = createJSValueObject(env, ctx, error);
-        JS_FreeValue(ctx, error);
-        return result;
+        env->ReleaseStringUTFChars(filePath, filePathStr);
+        return createJSError(env, errorMsg.c_str());
     }
     
     std::stringstream buffer;
@@ -1373,47 +988,40 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeEvaluateFromFile(
     std::string scriptContent = buffer.str();
     file.close();
     
-    // Release file path string
-    env->ReleaseStringUTFChars(filePath, filePathStr);
-    
     if (scriptContent.empty()) {
-        JSValue error = JS_NewError(ctx);
-        JS_SetPropertyStr(ctx, error, "message", JS_NewString(ctx, "File is empty"));
-        jobject result = createJSValueObject(env, ctx, error);
-        JS_FreeValue(ctx, error);
-        return result;
+        env->ReleaseStringUTFChars(filePath, filePathStr);
+        return createJSError(env, "File is empty");
     }
     
     // Evaluate JavaScript
-    JSValue val = JS_Eval(ctx, scriptContent.c_str(), scriptContent.length(), filePathStr, JS_EVAL_TYPE_GLOBAL);
+    JSValueGuard val(ctx, JS_Eval(ctx, scriptContent.c_str(), scriptContent.length(), 
+                                   filePathStr, JS_EVAL_TYPE_GLOBAL));
+    
+    // Release file path string
+    env->ReleaseStringUTFChars(filePath, filePathStr);
     
     // Check if there was an exception during evaluation
-    if (JS_IsException(val)) {
-        jclass jsValueClass = env->FindClass("com/didi/dimina/engine/qjs/JSValue");
-        jmethodID createErrorMethod = env->GetStaticMethodID(
-            jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
+    if (val.isException()) {
         jstring errorMsg = handleJSError(env, ctx);
-        jobject errorResult = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, errorMsg);
+        jobject errorResult = createJSError(env, env->GetStringUTFChars(errorMsg, nullptr));
         env->DeleteLocalRef(errorMsg);
-        JS_FreeValue(ctx, val);
         return errorResult;
     }
     
     // Run the event loop to process any pending Promise jobs
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Running event loop to process pending Promise jobs from file for instance %d", instanceId);
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+        "Running event loop to process pending Promise jobs from file for instance %d", instanceId);
     bool allJobsProcessed = runJavaScriptEventLoop(ctx);
     if (!allJobsProcessed) {
         __android_log_print(ANDROID_LOG_WARN, LOG_TAG, 
             "Error processing async jobs from file for instance %d", instanceId);
     } else {
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "All pending Promise jobs from file processed successfully for instance %d", instanceId);
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+            "All pending Promise jobs from file processed successfully for instance %d", instanceId);
     }
     
     // Create JSValue object from result
-    jobject result = createJSValueObject(env, ctx, val);
-    JS_FreeValue(ctx, val);
-    
-    return result;
+    return createJSValueObject(env, ctx, val.get());
 }
 
 // Evaluate JavaScript code and return JSValue
@@ -1427,13 +1035,7 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeEvaluate(
     // Get the engine instance
     EngineInstance* instance = getEngineInstance(instanceId);
     if (!instance || !instance->ctx) {
-        jclass jsValueClass = env->FindClass("com/didi/dimina/engine/qjs/JSValue");
-        jmethodID createErrorMethod = env->GetStaticMethodID(
-            jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
-        jstring errorMsg = env->NewStringUTF("QuickJS context is null or instance not found");
-        jobject result = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, errorMsg);
-        env->DeleteLocalRef(errorMsg);
-        return result;
+        return createJSError(env, "QuickJS context is null or instance not found");
     }
     
     JSContext* ctx = instance->ctx;
@@ -1441,49 +1043,89 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeEvaluate(
     // Convert Java string to C string
     const char* scriptStr = env->GetStringUTFChars(script, nullptr);
     if (!scriptStr) {
-        jclass jsValueClass = env->FindClass("com/didi/dimina/engine/qjs/JSValue");
-        jmethodID createErrorMethod = env->GetStaticMethodID(
-            jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
-        jstring errorMsg = env->NewStringUTF("Failed to get script string");
-        jobject result = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, errorMsg);
-        env->DeleteLocalRef(errorMsg);
-        return result;
+        return createJSError(env, "Failed to get script string");
     }
     
     // Evaluate JavaScript
-    JSValue val = JS_Eval(ctx, scriptStr, strlen(scriptStr), "<input>", JS_EVAL_TYPE_GLOBAL);
+    JSValueGuard val(ctx, JS_Eval(ctx, scriptStr, strlen(scriptStr), "<input>", JS_EVAL_TYPE_GLOBAL));
     env->ReleaseStringUTFChars(script, scriptStr);
     
     // Check if there was an exception during evaluation
-    if (JS_IsException(val)) {
-        jclass jsValueClass = env->FindClass("com/didi/dimina/engine/qjs/JSValue");
-        jmethodID createErrorMethod = env->GetStaticMethodID(
-            jsValueClass, "createError", "(Ljava/lang/String;)Lcom/didi/dimina/engine/qjs/JSValue;");
+    if (val.isException()) {
         jstring errorMsg = handleJSError(env, ctx);
-        jobject errorResult = env->CallStaticObjectMethod(jsValueClass, createErrorMethod, errorMsg);
+        jobject errorResult = createJSError(env, env->GetStringUTFChars(errorMsg, nullptr));
         env->DeleteLocalRef(errorMsg);
-        JS_FreeValue(ctx, val);
         return errorResult;
     }
     
     // Run the event loop to process any pending Promise jobs
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "Running event loop to process pending Promise jobs for instance %d", instanceId);
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+        "Running event loop to process pending Promise jobs for instance %d", instanceId);
     bool allJobsProcessed = runJavaScriptEventLoop(ctx);
     if (!allJobsProcessed) {
         __android_log_print(ANDROID_LOG_WARN, LOG_TAG, 
             "Error processing async jobs for instance %d", instanceId);
     } else {
-        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "All pending Promise jobs processed successfully for instance %d", instanceId);
+        __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+            "All pending Promise jobs processed successfully for instance %d", instanceId);
     }
     
     // Convert result to JSValue object
-    jobject result = createJSValueObject(env, ctx, val);
-    JS_FreeValue(ctx, val);
-    
-    return result;
+    return createJSValueObject(env, ctx, val.get());
 }
 
-// Destroy QuickJS runtime and context
+// Run the libuv event loop
+extern "C" JNIEXPORT void JNICALL
+Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeRunEventLoop(
+        JNIEnv* env,
+        jobject thiz,
+        jint instanceId) {
+    
+    // Get the engine instance
+    EngineInstance* instance = getEngineInstance(instanceId);
+    if (!instance || !instance->loop) {
+        __android_log_print(ANDROID_LOG_ERROR, LOG_TAG, 
+            "Failed to run event loop: Instance %d not found or loop is null", instanceId);
+        return;
+    }
+    
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+        "Starting libuv event loop for instance %d", instanceId);
+    
+    // Run the event loop in non-blocking mode with a timeout
+    // This allows the loop to process events without blocking indefinitely
+    uv_run(instance->loop, UV_RUN_NOWAIT);
+    
+    // Also process any pending JavaScript jobs
+    JSContext *ctx1;
+    while (JS_ExecutePendingJob(instance->runtime, &ctx1) > 0) {
+        // Continue processing jobs
+    }
+}
+
+// Stop the libuv event loop
+extern "C" JNIEXPORT void JNICALL
+Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeStopEventLoop(
+        JNIEnv* env,
+        jobject thiz,
+        jint instanceId) {
+    
+    // Get the engine instance
+    EngineInstance* instance = getEngineInstance(instanceId);
+    if (!instance || !instance->loop) {
+        __android_log_print(ANDROID_LOG_WARN, LOG_TAG, 
+            "Failed to stop event loop: Instance %d not found or loop is null", instanceId);
+        return;
+    }
+    
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+        "Stopping libuv event loop for instance %d", instanceId);
+    
+    instance->shouldStop = true;
+    uv_stop(instance->loop);
+}
+
+// Destroy QuickJS runtime, context, and libuv event loop
 extern "C" JNIEXPORT void JNICALL
 Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeDestroy(
         JNIEnv* env,
@@ -1504,23 +1146,65 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeDestroy(
         gEngineInstances.erase(it);
     }
     
+    // Stop the event loop
+    instance->shouldStop = true;
+    if (instance->loop) {
+        uv_stop(instance->loop);
+    }
+    
     // Set fields to 0 in Java object
     jclass cls = env->GetObjectClass(thiz);
     jfieldID runtimeField = env->GetFieldID(cls, "nativeRuntimePtr", "J");
     jfieldID contextField = env->GetFieldID(cls, "nativeContextPtr", "J");
+    jfieldID loopField = env->GetFieldID(cls, "nativeLoopPtr", "J");
     env->SetLongField(thiz, contextField, 0L);
     env->SetLongField(thiz, runtimeField, 0L);
+    env->SetLongField(thiz, loopField, 0L);
+    
+    // Clean up all active timers
+    for (auto& pair : instance->uvTimers) {
+        uv_timer_stop(pair.second);
+        uv_close((uv_handle_t*)pair.second, uv_close_callback);
+    }
+    instance->uvTimers.clear();
+    
+    // Clean up timer data and callbacks
+    if (instance->ctx) {
+        for (auto& pair : instance->timerCallbacks) {
+            TimerData* data = pair.second;
+            JS_FreeValue(instance->ctx, data->callback);
+            delete data;
+        }
+    }
+    instance->timerCallbacks.clear();
+    
+    // Close the event loop and wait for all handles to close
+    if (instance->loop) {
+        // Run the loop once more to process close callbacks
+        uv_run(instance->loop, UV_RUN_DEFAULT);
+        
+        // Close the loop
+        int result = uv_loop_close(instance->loop);
+        if (result != 0) {
+            __android_log_print(ANDROID_LOG_WARN, LOG_TAG, 
+                "Failed to close uv loop for instance %d: %s", instanceId, uv_strerror(result));
+            // Force close any remaining handles
+            uv_walk(instance->loop, [](uv_handle_t* handle, void* arg) {
+                if (!uv_is_closing(handle)) {
+                    uv_close(handle, nullptr);
+                }
+            }, nullptr);
+            uv_run(instance->loop, UV_RUN_DEFAULT);
+            uv_loop_close(instance->loop);
+        }
+        delete instance->loop;
+        instance->loop = nullptr;
+    }
     
     // Free context and runtime in the correct order
     if (instance->ctx && instance->runtime) {
-        // Run garbage collection before freeing the context to clean up any lingering objects
+        // Run garbage collection before freeing the context
         JS_RunGC(instance->runtime);
-        
-        // Clean up any remaining timer callbacks
-        for (auto& pair : instance->timerCallbacks) {
-            JS_FreeValue(instance->ctx, pair.second);
-        }
-        instance->timerCallbacks.clear();
         
         // Free the context first
         JS_FreeContext(instance->ctx);
@@ -1552,5 +1236,6 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeDestroy(
     // Delete the instance
     delete instance;
     
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, "QuickJS instance %d destroyed successfully", instanceId);
+    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
+        "QuickJS instance %d destroyed successfully with libuv cleanup", instanceId);
 }
