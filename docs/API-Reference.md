@@ -82,7 +82,7 @@ Vue 作为底层的渲染框架，自然会与小程序的语法存在一定的�
 |                   | showModal                        | ✓       | ✓   | ✓       | ✓   |
 |                   | showLoading                      | ✓       | ✓   | ✓       | ✓   |
 |                   | showActionSheet                  | ✓       | ✓   | ✓       | ✓   |
-|                   | hideToast                        | ✓       | ✓   | □       | ✓  |
+|                   | hideToast                        | ✓       | ✓   | ✓       | ✓   |
 |                   | hideLoading                      | ✓       | ✓   | ✓       | ✓   |
 | 界面 - 导航栏       | setNavigationBarTitle            | ✓       | ✓   | ✓       | ✓   |
 |                   | setNavigationBarColor            | ✓       | ✓   | ✓       | ✓   |
