@@ -349,19 +349,19 @@ export function mergeBehaviors(obj, behaviors) {
 			behavior.behaviors.forEach(b => merge(target, b))
 		}
 
-		// 合并 properties
-		// 规则: 靠后的 behavior 覆盖靠前的, 引用者覆盖被引用者
-		if (behavior.properties) {
-			target.properties = { ...target.properties, ...behavior.properties }
-		}
+	// 合并 properties
+	// 规则: 组件本身覆盖 behavior, 靠后的 behavior 覆盖靠前的, 引用者覆盖被引用者
+	if (behavior.properties) {
+		target.properties = { ...behavior.properties, ...target.properties }
+	}
 
 		// 合并 data
-		// 规则: 对象类型深度合并, 其他类型按优先级覆盖
+		// 规则: 组件本身覆盖 behavior, 对象类型深度合并, 其他类型按优先级覆盖
 		if (behavior.data) {
 			if (!target.data) {
 				target.data = {}
 			}
-			target.data = deepMergeData(target.data, behavior.data)
+			target.data = deepMergeData(behavior.data, target.data)
 		}
 
 		// 合并生命周期函数
@@ -389,11 +389,11 @@ export function mergeBehaviors(obj, behaviors) {
 			}
 		}
 
-		// 合并 methods
-		// 规则: 靠后的 behavior 覆盖靠前的, 引用者覆盖被引用者
-		if (behavior.methods) {
-			target.methods = { ...target.methods, ...behavior.methods }
-		}
+	// 合并 methods
+	// 规则: 组件本身覆盖 behavior, 靠后的 behavior 覆盖靠前的, 引用者覆盖被引用者
+	if (behavior.methods) {
+		target.methods = { ...behavior.methods, ...target.methods }
+	}
 
 		// 合并 relations
 		// 规则: 靠后的覆盖靠前的
