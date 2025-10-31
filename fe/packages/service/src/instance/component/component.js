@@ -453,8 +453,9 @@ export class Component {
 	/**
 	 * 触发观察者函数
 	 * triggerObserver
+	 * @param {object} data 要更新的数据
 	 */
-	tO(data, triggerObservers = true) {
+	tO(data) {
 		// 收集需要执行的观察者函数
 		const observersToExecute = []
 		
@@ -463,23 +464,26 @@ export class Component {
 			// 保存旧值
 			const oldVal = this.data[prop]
 
+			// 值未变化，则跳过观察器触发
+			if (Object.is(oldVal, val)) {
+				continue	
+			}
+
 			// 更新数据
 			this.data[prop] = val
 
-			if (triggerObservers) {
-				// 收集 observers
-				if (this.__info__.observers) {
-					observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, data, this, oldVal))
-				}
-				
-				// 收集属性观察器
-				const observer = this.__info__.properties?.[prop]?.observer
-				if (isString(observer)) {
-					observersToExecute.push(() => this[observer]?.(val, oldVal))
-				}
-				else if (isFunction(observer)) {
-					observersToExecute.push(() => observer.call(this, val, oldVal))
-				}
+			// 收集 observers
+			if (this.__info__.observers) {
+				observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, data, this, oldVal))
+			}
+			
+			// 收集属性观察器
+			const observer = this.__info__.properties?.[prop]?.observer
+			if (isString(observer)) {
+				observersToExecute.push(() => this[observer]?.(val, oldVal))
+			}
+			else if (isFunction(observer)) {
+				observersToExecute.push(() => observer.call(this, val, oldVal))
 			}
 		}
 		
