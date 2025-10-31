@@ -378,7 +378,7 @@ export class Component {
 		}
 
 		// 同步更新子组件的 properties，确保与微信小程序时序一致
-		syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
+		syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)	
 
 		message.send({
 			type: 'u',
@@ -454,7 +454,7 @@ export class Component {
 	 * 触发观察者函数
 	 * triggerObserver
 	 */
-	tO(data) {
+	tO(data, triggerObservers = true) {
 		// 收集需要执行的观察者函数
 		const observersToExecute = []
 		
@@ -462,22 +462,24 @@ export class Component {
 		for (const [prop, val] of Object.entries(data)) {
 			// 保存旧值
 			const oldVal = this.data[prop]
-			
+
 			// 更新数据
 			this.data[prop] = val
-			
-			// 收集 observers
-			if (this.__info__.observers) {
-				observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, data, this, oldVal))
-			}
-			
-			// 收集属性观察器
-			const observer = this.__info__.properties?.[prop]?.observer
-			if (isString(observer)) {
-				observersToExecute.push(() => this[observer]?.(val, oldVal))
-			}
-			else if (isFunction(observer)) {
-				observersToExecute.push(() => observer.call(this, val, oldVal))
+
+			if (triggerObservers) {
+				// 收集 observers
+				if (this.__info__.observers) {
+					observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, data, this, oldVal))
+				}
+				
+				// 收集属性观察器
+				const observer = this.__info__.properties?.[prop]?.observer
+				if (isString(observer)) {
+					observersToExecute.push(() => this[observer]?.(val, oldVal))
+				}
+				else if (isFunction(observer)) {
+					observersToExecute.push(() => observer.call(this, val, oldVal))
+				}
 			}
 		}
 		
