@@ -21,7 +21,7 @@
 	"devDependencies": {
 		"http-server": "^14.1.1",
 		"qrcode": "^1.5.4",
-		"sass": "^1.93.2",
+		"sass": "^1.95.1",
 		"vite-plugin-html-minifier": "^1.0.5"
 	}
 }
