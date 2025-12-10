@@ -1088,10 +1088,7 @@ Java_com_didi_dimina_engine_qjs_QuickJSEngine_nativeRunEventLoop(
             "Failed to run event loop: Instance %d not found or loop is null", instanceId);
         return;
     }
-    
-    __android_log_print(ANDROID_LOG_DEBUG, LOG_TAG, 
-        "Starting libuv event loop for instance %d", instanceId);
-    
+
     // Run the event loop in non-blocking mode with a timeout
     // This allows the loop to process events without blocking indefinitely
     uv_run(instance->loop, UV_RUN_NOWAIT);
