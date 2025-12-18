@@ -26,6 +26,9 @@ const wxsModuleRegistry = new Set()
 // wxs 文件路径映射表，用于快速查找模块对应的文件路径
 const wxsFilePathMap = new Map()
 
+// 用于缓存已处理的视图模块路径（规避循环依赖和深度依赖）
+const processedViewPaths = new Set()
+
 if (!isMainThread) {
 	parentPort.on('message', async ({ pages, storeInfo }) => {
 		try {
@@ -177,17 +180,11 @@ function isRegisteredWxsModule(modulePath) {
 function buildCompileView(module, isComponent = false, scriptRes, depthChain = []) {
 	const currentPath = module.path
 
-	// Circular dependency detected
-	if (depthChain.includes(currentPath)) {
-		console.warn('[view]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		return
+	// 使用全局缓存防止重复处理（同时规避循环依赖和深度依赖）
+	if (processedViewPaths.has(currentPath)) {
+		return null
 	}
-	// Deep dependency chain detected
-	if (depthChain.length > 20) {
-		console.warn('[view]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		return
-	}
-	depthChain = [...depthChain, currentPath]
+	processedViewPaths.add(currentPath)
 	
 	// 收集所有 wxs 模块（包括组件的）
 	const allScriptModules = []
@@ -206,12 +203,12 @@ function buildCompileView(module, isComponent = false, scriptRes, depthChain = [
 			}
 			// 检查自依赖：如果组件依赖自己，则跳过
 			if (componentModule.path === module.path) {
-				console.warn('[view]', `检测到循环依赖，跳过处理: ${module.path}`)
+				console.warn('[view]', `检测到自依赖，跳过处理: ${module.path}`)
 				continue
 			}
 			
 			// 递归编译组件，并收集其 wxs 模块
-			const componentInstruction = buildCompileView(componentModule, true, scriptRes, depthChain)
+			const componentInstruction = buildCompileView(componentModule, true, scriptRes)
 			if (componentInstruction && componentInstruction.scriptModule) {
 				// 将组件的 wxs 模块添加到当前模块的 wxs 模块列表中
 				for (const sm of componentInstruction.scriptModule) {
