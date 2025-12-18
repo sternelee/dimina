@@ -346,7 +346,7 @@ function compileModule(module, isComponent, scriptRes) {
 		}).code
 
 		tplComponents
-			+= `'${tm.path}':${code.replace(/;$/, '')},`
+			+= `'${tm.path}':${cleanCompiledCode(code)},`
 	}
 	tplComponents += '}'
 
@@ -363,7 +363,7 @@ function compileModule(module, isComponent, scriptRes) {
 	const code = `Module({
 		path: '${module.path}',
 		id: '${module.id}',
-		render: ${transCode.replace(/;$/, '')},
+		render: ${cleanCompiledCode(transCode)},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
 		tplComponents: ${tplComponents},
 		});`
@@ -676,7 +676,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 		}).code
 
 		tplComponents
-			+= `'${tm.path}':${code.replace(/;$/, '').replace(/^"use strict";\s*/, '')},`
+			+= `'${tm.path}':${cleanCompiledCode(code)},`
 	}
 	tplComponents += '}'
 
@@ -690,7 +690,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 	const code = `Module({
 		path: '${module.path}',
 		id: '${module.id}',
-		render: ${transCode.replace(/;$/, '').replace(/^"use strict";\s*/, '')},
+		render: ${cleanCompiledCode(transCode)},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
 		tplComponents: ${tplComponents},
 		});`
@@ -802,6 +802,15 @@ function processIncludedFileWxsDependencies(content, includePath, scriptModule, 
 			}
 		}
 	}
+}
+
+/**
+ * 清理编译后的代码，移除末尾分号和 "use strict" 声明
+ * @param {string} code - 待清理的代码
+ * @returns {string} 清理后的代码
+ */
+function cleanCompiledCode(code) {
+	return code.replace(/;$/, '').replace(/^"use strict";\s*/, '')
 }
 
 /**
