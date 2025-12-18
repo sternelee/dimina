@@ -527,11 +527,19 @@ internal fun createWebViewClientWithInterceptor(
 
 /**
  * 统一处理文件拦截请求的逻辑
- * 拦截file://协议的请求，从本地文件系统加载资源
+ * 拦截file://协议的请求，优先从本地文件系统加载资源
+ * 
+ * 处理策略：
+ * 1. 优先尝试作为本地文件加载
+ * 2. 如果文件不存在，则判断可能是被错误解析的协议相对URL，转换为https://协议加载
+ * 
+ * 这样可以兼容两种情况：
+ * - 真正的本地文件：直接加载
+ * - 被错误解析的网络资源：自动转换为https加载
  *
  * @param context 上下文对象
  * @param request WebView资源请求
- * @return 如果是文件协议请求且文件存在，返回WebResourceResponse；否则返回null
+ * @return 如果是文件协议请求且文件存在，返回WebResourceResponse；如果文件不存在则尝试网络加载；否则返回null
  */
 internal fun handleFileInterceptRequest(
     context: Context,
@@ -541,15 +549,42 @@ internal fun handleFileInterceptRequest(
     
     if (url.startsWith(FILE_PROTOCOL)) {
         try {
-            val localFile = getFilesFile(context, url.substring(FILE_PROTOCOL.length))
+            // 提取file://协议后的路径部分
+            val pathAfterProtocol = url.substring(FILE_PROTOCOL.length)
+            
+            // 优先尝试作为本地文件加载
+            val localFile = getFilesFile(context, pathAfterProtocol)
             if (localFile.exists()) {
                 LogUtils.d(WEBVIEW_TAG, "Loading file from local: $url")
                 val mimeType = MimeTypeMap.getSingleton()
                     .getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(url))
                     ?: "text/html" // Fallback MIME type
                 return WebResourceResponse(mimeType, "UTF-8", FileInputStream(localFile))
-            } else {
-                LogUtils.e(WEBVIEW_TAG, "intercepting file: $url is not existed")
+            }
+            
+            // 文件不存在，可能是被错误解析的协议相对URL，尝试转换为https://协议加载网络资源
+            LogUtils.d(WEBVIEW_TAG, "Local file not found: $url")
+            LogUtils.d(WEBVIEW_TAG, "Attempting to load as network resource via https")
+            
+            val correctedUrl = "https:/${pathAfterProtocol}" // 转换为 https://domain/path
+            LogUtils.d(WEBVIEW_TAG, "Corrected URL: $correctedUrl")
+            
+            try {
+                val connection = java.net.URL(correctedUrl).openConnection()
+                connection.connectTimeout = 5000
+                connection.readTimeout = 10000
+                val inputStream = connection.getInputStream()
+                val mimeType = connection.contentType?.split(";")?.firstOrNull()?.trim() 
+                    ?: MimeTypeMap.getSingleton()
+                        .getMimeTypeFromExtension(MimeTypeMap.getFileExtensionFromUrl(correctedUrl))
+                    ?: "application/octet-stream"
+                
+                LogUtils.d(WEBVIEW_TAG, "Successfully loaded network resource: $correctedUrl")
+                return WebResourceResponse(mimeType, "UTF-8", inputStream)
+            } catch (e: Exception) {
+                LogUtils.e(WEBVIEW_TAG, "Failed to load network resource: $correctedUrl", e)
+                // 返回null，让WebView按默认方式处理
+                return null
             }
         } catch (e: Exception) {
             LogUtils.e(WEBVIEW_TAG, "Error intercepting file: $url", e)
