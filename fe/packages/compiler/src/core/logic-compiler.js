@@ -112,24 +112,28 @@ async function compileJS(pages, root, mainCompileRes, progress) {
 }
 
 function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra, depthChain = [], putMain = false) {
+	// Track dependency chain to detect potential circular dependencies
+	const currentPath = module.path
+
+	// Circular dependency detected
+	if (depthChain.includes(currentPath)) {
+		console.warn('[logic]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+		return
+	}
+	// Deep dependency chain detected
+	if (depthChain.length > 20) {
+		console.warn('[logic]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+		return
+	}
+	depthChain = [...depthChain, currentPath]
 	if (!module.path) {
 		// 业务逻辑不存在
 		return
 	}
-	
-	// 使用全局缓存防止重复处理（同时规避循环依赖和深度依赖）
-	const moduleKey = packageName + module.path
-	if (processedModules.has(moduleKey)) {
-		return
-	}
-	
 	// 防止添加相同的 js
 	if (hasCompileInfo(module.path, compileRes, mainCompileRes)) {
 		return
 	}
-	
-	// 标记为已处理（提前标记以防止循环依赖）
-	processedModules.add(moduleKey)
 	const compileInfo = {
 		path: module.path,
 		code: '',
@@ -210,7 +214,7 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 				continue
 			}
 
-			buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, toMainSubPackage)
+			buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, depthChain, toMainSubPackage)
 
 			const props = types.objectProperty(types.identifier(`'${name}'`), types.stringLiteral(path))
 			components.value.properties.push(props)
@@ -245,7 +249,9 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 						id = '/' + id
 					}
 					ap.node.arguments[0] = types.stringLiteral(id)
-					buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false)
+					if (!processedModules.has(packageName + id)) {
+						buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false, depthChain)
+					}
 				}
 			}
 		},
@@ -286,7 +292,9 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 				
 				if (shouldProcess) {
 					ap.node.source = types.stringLiteral(id)
-					buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false)
+					if (!processedModules.has(packageName + id)) {
+						buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false, depthChain)
+					}
 				}
 			}
 		},
@@ -300,6 +308,8 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 		],
 	})
 	compileInfo.code = code
+	// 将当前模块标记为已处理
+	processedModules.add(packageName + currentPath)
 }
 
 /**
@@ -341,4 +351,3 @@ function getJSAbsolutePath(modulePath) {
 }
 
 export { compileJS, buildJSByPath }
-
