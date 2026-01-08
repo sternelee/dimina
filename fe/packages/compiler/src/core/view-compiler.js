@@ -4,6 +4,7 @@ import { isMainThread, parentPort } from 'node:worker_threads'
 import babel from '@babel/core'
 import _traverse from '@babel/traverse'
 import types from '@babel/types'
+import generate from '@babel/generator'
 import { compileTemplate } from '@vue/compiler-sfc'
 import * as cheerio from 'cheerio'
 import { transform } from 'esbuild'
@@ -14,15 +15,24 @@ import { parseBindings } from '../common/expression-parser.js'
 
 // https://github.com/babel/babel/issues/13855
 const traverse = _traverse.default ? _traverse.default : _traverse
+const generateCode = generate.default ? generate.default : generate
 
 const fileType = ['.wxml', '.ddml']
 
-// Babel 统一配置，确保跨平台编译一致性
-const BABEL_TRANSFORM_CONFIG = {
-	comments: false,
-	sourceType: 'script',
-	configFile: false,
-	babelrc: false
+/**
+ * 从 AST 生成代码，如果顶层是单个表达式语句，则只生成表达式部分
+ * @param {*} ast - Babel AST
+ * @returns {string} 生成的表达式代码
+ */
+function generateCodeFromAst(ast) {
+	// 检查是否是 Program 节点且只包含一个 ExpressionStatement
+	if (ast.type === 'File' && ast.program.body.length === 1) {
+		const statement = ast.program.body[0]
+		if (statement.type === 'ExpressionStatement') {
+			return generateCode(statement.expression, { comments: false }).code
+		}
+	}
+	return generateCode(ast, { comments: false }).code
 }
 
 // 页面文件编译内容缓存
@@ -351,16 +361,16 @@ function compileModule(module, isComponent, scriptRes) {
 
 		const ast = babel.parseSync(code)
 		insertWxsToRenderAst(ast, instruction.scriptModule, scriptRes)
-		code = babel.transformFromAstSync(ast, '', BABEL_TRANSFORM_CONFIG).code
+		code = generateCodeFromAst(ast)
 
 		tplComponents
-			+= `'${tm.path}':${cleanCompiledCode(code)},`
+			+= `'${tm.path}':${code},`
 	}
 	tplComponents += '}'
 
 	const tplAst = babel.parseSync(tplCode.code)
 	insertWxsToRenderAst(tplAst, instruction.scriptModule, scriptRes)
-	const { code: transCode } = babel.transformFromAstSync(tplAst, '', BABEL_TRANSFORM_CONFIG)
+	const transCode = generateCodeFromAst(tplAst)
 
 	// 通过 component 字段标记该页面 以 Component 形式进行渲染或着以 Page 形式进行渲染
 	// https://developers.weixin.qq.com/miniprogram/dev/framework/app-service/page.html
@@ -368,7 +378,7 @@ function compileModule(module, isComponent, scriptRes) {
 	const code = `Module({
 		path: '${module.path}',
 		id: '${module.id}',
-		render: ${cleanCompiledCode(transCode)},
+		render: ${transCode},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
 		tplComponents: ${tplComponents},
 		});`
@@ -569,7 +579,7 @@ function processWxsContent(wxsContent, wxsFilePath, scriptModule, workPath, file
 	})
 	
 	// 生成代码
-	return babel.transformFromAstSync(wxsAst, '', BABEL_TRANSFORM_CONFIG).code
+	return generateCodeFromAst(wxsAst)
 }
 
 /**
@@ -672,21 +682,21 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 
 		const ast = babel.parseSync(code)
 		insertWxsToRenderAst(ast, allScriptModules, scriptRes)
-		code = babel.transformFromAstSync(ast, '', BABEL_TRANSFORM_CONFIG).code
+		code = generateCodeFromAst(ast)
 
 		tplComponents
-			+= `'${tm.path}':${cleanCompiledCode(code)},`
+			+= `'${tm.path}':${code},`
 	}
 	tplComponents += '}'
 
 	const tplAst = babel.parseSync(tplCode.code)
 	insertWxsToRenderAst(tplAst, allScriptModules, scriptRes)
-	const { code: transCode } = babel.transformFromAstSync(tplAst, '', BABEL_TRANSFORM_CONFIG)
+	const transCode = generateCodeFromAst(tplAst)
 
 	const code = `Module({
 		path: '${module.path}',
 		id: '${module.id}',
-		render: ${cleanCompiledCode(transCode)},
+		render: ${transCode},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
 		tplComponents: ${tplComponents},
 		});`
@@ -801,21 +811,12 @@ function processIncludedFileWxsDependencies(content, includePath, scriptModule, 
 }
 
 /**
- * 清理编译后的代码，移除末尾分号和 "use strict" 声明
- * @param {string} code - 待清理的代码
- * @returns {string} 清理后的代码
- */
-function cleanCompiledCode(code) {
-	return code.replace(/;$/, '').replace(/^"use strict";\s*/, '')
-}
-
-/**
  * 转换成底层框架模板
  * @param {*} isComponent
  * @param {*} path
  * @param {*} components
  * @param {*} componentPlaceholder
- * @param {Set} processedPaths 已处理的路径集合，防止循环引用和栈溢出
+ * @param {Set} processedPaths 已处理的路径集合,防止循环引用和栈溢出
  */
 function toCompileTemplate(isComponent, path, components, componentPlaceholder, processedPaths = new Set()) {
 	const workPath = getWorkPath()
