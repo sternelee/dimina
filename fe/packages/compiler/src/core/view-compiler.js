@@ -22,6 +22,7 @@ const BABEL_TRANSFORM_CONFIG = {
 	comments: false,
 	sourceType: 'script',
 	configFile: false,
+	babelrc: false
 }
 
 // 页面文件编译内容缓存

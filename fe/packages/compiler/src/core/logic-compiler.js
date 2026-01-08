@@ -17,6 +17,7 @@ const traverse = _traverse.default ? _traverse.default : _traverse
 const BABEL_TRANSFORM_CONFIG = {
 	comments: false,
 	configFile: false,
+	babelrc: false,
 	plugins: [
 		// 将 ES6 import/export 转换为 CommonJS
 		transformModulesCommonjs
