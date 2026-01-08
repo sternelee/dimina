@@ -17,6 +17,13 @@ const traverse = _traverse.default ? _traverse.default : _traverse
 
 const fileType = ['.wxml', '.ddml']
 
+// Babel 统一配置，确保跨平台编译一致性
+const BABEL_TRANSFORM_CONFIG = {
+	comments: false,
+	sourceType: 'script',
+	configFile: false,
+}
+
 // 页面文件编译内容缓存
 const compileResCache = new Map()
 
@@ -343,10 +350,7 @@ function compileModule(module, isComponent, scriptRes) {
 
 		const ast = babel.parseSync(code)
 		insertWxsToRenderAst(ast, instruction.scriptModule, scriptRes)
-		code = babel.transformFromAstSync(ast, '', {
-			comments: false,
-			sourceType: 'script'
-		}).code
+		code = babel.transformFromAstSync(ast, '', BABEL_TRANSFORM_CONFIG).code
 
 		tplComponents
 			+= `'${tm.path}':${cleanCompiledCode(code)},`
@@ -355,10 +359,7 @@ function compileModule(module, isComponent, scriptRes) {
 
 	const tplAst = babel.parseSync(tplCode.code)
 	insertWxsToRenderAst(tplAst, instruction.scriptModule, scriptRes)
-	const { code: transCode } = babel.transformFromAstSync(tplAst, '', {
-		comments: false,
-		sourceType: 'script'
-	})
+	const { code: transCode } = babel.transformFromAstSync(tplAst, '', BABEL_TRANSFORM_CONFIG)
 
 	// 通过 component 字段标记该页面 以 Component 形式进行渲染或着以 Page 形式进行渲染
 	// https://developers.weixin.qq.com/miniprogram/dev/framework/app-service/page.html
@@ -567,10 +568,7 @@ function processWxsContent(wxsContent, wxsFilePath, scriptModule, workPath, file
 	})
 	
 	// 生成代码
-	return babel.transformFromAstSync(wxsAst, '', {
-		comments: false,
-		sourceType: 'script'
-	}).code
+	return babel.transformFromAstSync(wxsAst, '', BABEL_TRANSFORM_CONFIG).code
 }
 
 /**
@@ -673,10 +671,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 
 		const ast = babel.parseSync(code)
 		insertWxsToRenderAst(ast, allScriptModules, scriptRes)
-		code = babel.transformFromAstSync(ast, '', {
-			comments: false,
-			sourceType: 'script'
-		}).code
+		code = babel.transformFromAstSync(ast, '', BABEL_TRANSFORM_CONFIG).code
 
 		tplComponents
 			+= `'${tm.path}':${cleanCompiledCode(code)},`
@@ -685,10 +680,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 
 	const tplAst = babel.parseSync(tplCode.code)
 	insertWxsToRenderAst(tplAst, allScriptModules, scriptRes)
-	const { code: transCode } = babel.transformFromAstSync(tplAst, '', {
-		comments: false,
-		sourceType: 'script'
-	})
+	const { code: transCode } = babel.transformFromAstSync(tplAst, '', BABEL_TRANSFORM_CONFIG)
 
 	const code = `Module({
 		path: '${module.path}',

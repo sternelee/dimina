@@ -13,6 +13,16 @@ import { getAppConfigInfo, getComponent, getContentByPath, getTargetPath, getWor
 // https://github.com/babel/babel/issues/13855
 const traverse = _traverse.default ? _traverse.default : _traverse
 
+// Babel 统一配置，确保跨平台编译一致性
+const BABEL_TRANSFORM_CONFIG = {
+	comments: false,
+	configFile: false,
+	plugins: [
+		// 将 ES6 import/export 转换为 CommonJS
+		transformModulesCommonjs
+	]
+}
+
 // 用于缓存已处理的模块
 const processedModules = new Set()
 
@@ -300,13 +310,7 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 		},
 	})
 
-	const { code } = babel.transformFromAstSync(ast, '', {
-		comments: false,
-		plugins: [
-			// 将 ES6 import/export 转换为 CommonJS
-			transformModulesCommonjs
-		],
-	})
+	const { code } = babel.transformFromAstSync(ast, '', BABEL_TRANSFORM_CONFIG)
 	compileInfo.code = code
 	// 将当前模块标记为已处理
 	processedModules.add(packageName + currentPath)
