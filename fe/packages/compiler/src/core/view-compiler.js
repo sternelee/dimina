@@ -67,9 +67,19 @@ if (!isMainThread) {
 				await compileML(subPages.info, root, progress)
 			}
 
+			// Worker 任务完成后清理所有缓存，释放内存
+			compileResCache.clear()
+			wxsModuleRegistry.clear()
+			wxsFilePathMap.clear()
+
 			parentPort.postMessage({ success: true })
 		}
 		catch (error) {
+			// 错误时也清理缓存
+			compileResCache.clear()
+			wxsModuleRegistry.clear()
+			wxsFilePathMap.clear()
+			
 			parentPort.postMessage({ 
 				success: false, 
 				error: {
@@ -108,6 +118,9 @@ async function compileML(pages, root, progress) {
 			})
 			mergeRender += minifiedCode
 		}
+		
+		// 单个页面编译完成后清理 scriptRes，释放内存
+		scriptRes.clear()
 
 		const filename = `${page.path.replace(/\//g, '_')}`
 
@@ -771,6 +784,10 @@ function processIncludedFileWxsDependencies(content, includePath, scriptModule, 
 	const $ = cheerio.load(content, {
 		xmlMode: true,
 		decodeEntities: false,
+		_useHtmlParser2: true,
+		// 减少内存占用的配置
+		lowerCaseTags: false,
+		lowerCaseAttributeNames: false,
 	})
 	
 	// 查找所有组件标签
@@ -856,6 +873,10 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 	const $ = cheerio.load(content, {
 		xmlMode: true,
 		decodeEntities: false,
+		_useHtmlParser2: true,
+		// 减少内存占用的配置
+		lowerCaseTags: false,
+		lowerCaseAttributeNames: false,
 	})
 
 	// 处理 include 节点

@@ -44,8 +44,8 @@ function getCGroupMemoryLimit() {
 	return os.totalmem()
 }
 
-// 默认使用CPU核心数的1/4，减少内存压力
-export const MAX_WORKERS = Math.max(1, Math.floor(getCGroupCPUCount() / 4))
+// 默认使用CPU核心数的1/4，减少内存压力，最多4个worker
+export const MAX_WORKERS = Math.max(1, Math.min(4, Math.floor(getCGroupCPUCount() / 4)))
 
 // 工作线程池
 class WorkerPool {
@@ -53,7 +53,8 @@ class WorkerPool {
 		this.maxWorkers = maxWorkers
 		this.activeWorkers = 0
 		this.queue = []
-		this.memoryLimit = Math.floor(getCGroupMemoryLimit() * 0.7 / maxWorkers) // 70% of total memory divided by workers
+		// 使用更保守的内存分配策略：60% 总内存，并为每个 worker 预留更多空间
+		this.memoryLimit = Math.floor(getCGroupMemoryLimit() * 0.6 / maxWorkers)
 	}
 
 	async runWorker(workerCreator) {
@@ -77,11 +78,12 @@ class WorkerPool {
 	}
 
 	getWorkerOptions() {
+		const memoryMb = Math.floor(this.memoryLimit / (1024 * 1024))
 		return {
 			resourceLimits: {
-				maxOldGenerationSizeMb: Math.floor(this.memoryLimit / (1024 * 1024)), // Convert bytes to MB
-				maxYoungGenerationSizeMb: Math.floor(this.memoryLimit / (1024 * 1024) / 4),
-				codeRangeSizeMb: 128,
+				maxOldGenerationSizeMb: Math.max(256, memoryMb), // 最少 256MB
+				maxYoungGenerationSizeMb: Math.max(64, Math.floor(memoryMb / 4)), // 最少 64MB
+				codeRangeSizeMb: 64, // 减少代码范围大小从 128MB 到 64MB
 			},
 		}
 	}

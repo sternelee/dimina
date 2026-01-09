@@ -37,9 +37,15 @@ if (!isMainThread) {
 				await compileSS(subPages.info, root, progress)
 			}
 
+			// Worker 任务完成后清理缓存，释放内存
+			compileRes.clear()
+
 			parentPort.postMessage({ success: true })
 		}
 		catch (error) {
+			// 错误时也清理缓存
+			compileRes.clear()
+			
 			parentPort.postMessage({ 
 				success: false, 
 				error: {

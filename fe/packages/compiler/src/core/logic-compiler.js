@@ -60,9 +60,16 @@ if (!isMainThread) {
 				}
 			}
 			await writeCompileRes(mainCompileRes, null)
+			
+			// Worker 任务完成后清理缓存，释放内存
+			processedModules.clear()
+			
 			parentPort.postMessage({ success: true })
 		}
 		catch (error) {
+			// 错误时也清理缓存
+			processedModules.clear()
+			
 			parentPort.postMessage({ 
 				success: false, 
 				error: {
