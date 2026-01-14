@@ -128,6 +128,17 @@ function runCompileInWorker(script, ctx, task) {
 		const totalTasks = Object.keys(ctx.pages.mainPages).length
 			+ Object.values(ctx.pages.subPages).reduce((sum, item) => sum + item.info.length, 0)
 
+		let isResolved = false
+		let workerError = null
+
+		// 统一的错误处理函数，防止重复 reject
+		const handleError = (error) => {
+			if (isResolved) return
+			isResolved = true
+			worker.terminate()
+			reject(error)
+		}
+
 		worker.postMessage({ pages: ctx.pages, storeInfo: ctx.storeInfo })
 		// 接收 Worker 完成后的消息
 		worker.on('message', (message) => {
@@ -142,8 +153,10 @@ function runCompileInWorker(script, ctx, task) {
 				}
 
 				if (message.success) {
-					resolve()
+					if (isResolved) return
+					isResolved = true
 					worker.terminate()
+					resolve()
 				}
 				else if (message.error) {
 					const error = new Error(message.error.message || message.error)
@@ -153,20 +166,29 @@ function runCompileInWorker(script, ctx, task) {
 						error.file = message.error.file
 					if (message.error.line)
 						error.line = message.error.line
-					reject(error)
-					worker.terminate()
+					handleError(error)
 				}
 			}
 			catch (err) {
-				reject(new Error(`Error processing worker message: ${err.message}\n${err.stack}`))
-				worker.terminate()
+				handleError(new Error(`Error processing worker message: ${err.message}\n${err.stack}`))
 			}
 		})
 
-		worker.on('error', reject)
+		worker.on('error', (err) => {
+			// 保存错误信息，可能在 exit 事件中使用
+			workerError = err
+			handleError(err)
+		})
 		worker.on('exit', (code) => {
-			if (code !== 0) {
-				reject(new Error(`Worker stopped with exit code ${code}`))
+			if (code !== 0 && !isResolved) {
+				// 如果已经有 workerError，使用它；否则创建新的错误
+				// 退出码 1 通常表示内存溢出或其他致命错误
+				const error = workerError || new Error(
+					code === 1
+						? 'Worker terminated due to reaching memory limit: JS heap out of memory'
+						: `Worker stopped with exit code ${code}`
+				)
+				handleError(error)
 			}
 		})
 	}))
