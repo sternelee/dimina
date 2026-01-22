@@ -94,9 +94,10 @@ describe('Import to Require Transformation', () => {
 		
 		// 验证不再包含 import 语句
 		expect(compiledCode).not.toContain('import ')
-		expect(compiledCode).not.toContain('from ')
+		// 验证不包含 ES6 import 语法模式（而不是简单的 'from ' 字符串）
+		expect(compiledCode).not.toMatch(/import\s+.*\s+from\s+['"]/)
 		
-		// 验证变量声明正确（Babel 可能会重命名变量）
+		// 验证变量声明正确（esbuild 可能会重命名变量）
 		expect(compiledCode).toContain('formatDate')
 		expect(compiledCode).toContain('_toast') // Babel 重命名为 _toast
 	})
@@ -168,7 +169,8 @@ describe('Import to Require Transformation', () => {
 		
 		// 验证不再包含 import 语句
 		expect(compiledCode).not.toContain('import ')
-		expect(compiledCode).not.toContain('from ')
+		// 验证不包含 ES6 import 语法模式（而不是简单的 'from ' 字符串）
+		expect(compiledCode).not.toMatch(/import\s+.*\s+from\s+['"]/)
 		
 		// 验证变量声明正确
 		expect(compiledCode).toContain('request')

@@ -1,28 +1,14 @@
 import fs from 'node:fs'
 import { resolve, sep } from 'node:path'
 import { isMainThread, parentPort } from 'node:worker_threads'
-import babel from '@babel/core'
-import _traverse from '@babel/traverse'
-import types from '@babel/types'
+import { parseSync } from 'oxc-parser'
+import { walk } from 'oxc-walker'
+import { transformSync } from 'oxc-transform'
+import MagicString from 'magic-string'
 import { transform } from 'esbuild'
 import ts from 'typescript'
-import transformModulesCommonjs from '@babel/plugin-transform-modules-commonjs'
 import { hasCompileInfo } from '../common/utils.js'
 import { getAppConfigInfo, getComponent, getContentByPath, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
-
-// https://github.com/babel/babel/issues/13855
-const traverse = _traverse.default ? _traverse.default : _traverse
-
-// Babel 统一配置，确保跨平台编译一致性
-const BABEL_TRANSFORM_CONFIG = {
-	comments: false,
-	configFile: false,
-	babelrc: false,
-	plugins: [
-		// 将 ES6 import/export 转换为 CommonJS
-		transformModulesCommonjs
-	]
-}
 
 // 用于缓存已处理的模块
 const processedModules = new Set()
@@ -88,6 +74,7 @@ async function writeCompileRes(compileRes, root) {
 		const amdFormat = `modDefine('${module.path}', function(require, module, exports) {
 ${module.code}
 });`
+		//TODO: 替换成 https://oxc.rs/docs/guide/usage/minifier.html
 		const { code: minifiedCode } = await transform(amdFormat, {
 			minify: true,
 			target: ['es2023'], // quickjs 支持版本
@@ -118,18 +105,18 @@ ${module.code}
 async function compileJS(pages, root, mainCompileRes, progress) {
 	const compileRes = []
 	if (!root) {
-		buildJSByPath(root, { path: 'app' }, compileRes, mainCompileRes, false)
+		await buildJSByPath(root, { path: 'app' }, compileRes, mainCompileRes, false)
 	}
 
-	pages.forEach((page) => {
-		buildJSByPath(root, page, compileRes, mainCompileRes, true)
+	for (const page of pages) {
+		await buildJSByPath(root, page, compileRes, mainCompileRes, true)
 		progress.completedTasks++
-	})
+	}
 
 	return compileRes
 }
 
-function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra, depthChain = [], putMain = false) {
+async function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra, depthChain = [], putMain = false) {
 	// Track dependency chain to detect potential circular dependencies
 	const currentPath = module.path
 
@@ -177,7 +164,7 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 			const result = ts.transpileModule(sourceCode, {
 				compilerOptions: {
 					target: ts.ScriptTarget.ES2020,
-					module: ts.ModuleKind.CommonJS,
+					module: ts.ModuleKind.ESNext, // 保持 ES6 模块语法，让 oxc-transform 后续处理
 					strict: false,
 					esModuleInterop: true,
 					skipLibCheck: true,
@@ -191,21 +178,29 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 		}
 	}
 	
-	const ast = babel.parseSync(jsCode)
+	// 使用 oxc-parser 解析代码
+	const parseResult = parseSync(modulePath, jsCode, {
+		sourceType: 'module',
+		lang: modulePath.endsWith('.ts') ? 'ts' : 'js'
+	})
+	const ast = parseResult.program
+	
+	// 使用 MagicString 进行代码修改
+	const s = new MagicString(jsCode)
 
-	const addedArgs = types.objectExpression([
-		types.objectProperty(types.identifier('path'), types.stringLiteral(module.path)),
-	])
+	// 构建 extraInfo 对象（使用 JSON 而不是 AST）
+	const extraInfo = {
+		path: module.path
+	}
 
 	// https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/
 	// 将 component 字段设为 true 可将这一组文件设为自定义组件
 	if (module.component) {
-		const component = types.objectProperty(types.identifier('component'), types.booleanLiteral(true))
-		addedArgs.properties.push(component)
+		extraInfo.component = true
 	}
 
 	if (module.usingComponents) {
-		const components = types.objectProperty(types.identifier('usingComponents'), types.objectExpression([]))
+		const componentsObj = {}
 		const allSubPackages = getAppConfigInfo().subPackages
 
 		for (const [name, path] of Object.entries(module.usingComponents)) {
@@ -232,16 +227,17 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 				continue
 			}
 
-			buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, depthChain, toMainSubPackage)
+			await buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, depthChain, toMainSubPackage)
 
-			const props = types.objectProperty(types.identifier(`'${name}'`), types.stringLiteral(path))
-			components.value.properties.push(props)
+			componentsObj[name] = path
 		}
-		addedArgs.properties.push(components)
+		extraInfo.usingComponents = componentsObj
 	}
 
+	// 如果需要添加 extraInfo，在代码开头注入
 	if (addExtra) {
-		ast.program.body.splice(0, 0, getExtraInfoStatement('this', addedArgs))
+		const extraInfoCode = `globalThis.__extraInfo = ${JSON.stringify(extraInfo)};\n`
+		s.prepend(extraInfoCode)
 	}
 
 	if (putMain) {
@@ -251,96 +247,236 @@ function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra
 		compileRes.push(compileInfo)
 	}
 
-	traverse(ast, {
-		CallExpression(ap) {
-			if (ap.node.callee.name === 'require' || ap.node.callee.object?.name === 'require') {
-				// TODO: ap.node.callee.property?.name === 'async'
-				const requirePath = ap.node.arguments[0].value
-				if (requirePath) {
-					const requireFullPath = resolve(modulePath, `../${requirePath}`)
-					// 依赖的模块相对路径转换为绝对路径
-					let id = requireFullPath.split(`${getWorkPath()}${sep}`)[1]
-					// 移除文件扩展名（.js 或 .ts）
-					id = id.replace(/\.(js|ts)$/, '').replace(/\\/g, '/')
-					// 确保路径以 '/' 开头，保持一致性
-					if (!id.startsWith('/')) {
-						id = '/' + id
-					}
-					ap.node.arguments[0] = types.stringLiteral(id)
-					if (!processedModules.has(packageName + id)) {
-						buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false, depthChain)
+	// 收集需要修改的路径信息和依赖模块
+	const pathReplacements = []
+	const dependenciesToProcess = []
+
+	walk(ast, {
+		enter(node, parent) {
+			// 处理 require() 调用
+			if (node.type === 'CallExpression') {
+				// 检查是否是 require() 调用
+				const isRequire = node.callee.type === 'Identifier' && node.callee.name === 'require'
+				const isRequireProperty = node.callee.type === 'MemberExpression' && 
+					node.callee.object?.type === 'Identifier' && 
+					node.callee.object?.name === 'require'
+				
+				if ((isRequire || isRequireProperty) && 
+					node.arguments.length > 0 && 
+					(node.arguments[0].type === 'StringLiteral' || node.arguments[0].type === 'Literal')) {
+					const arg = node.arguments[0]
+					const requirePath = arg.value
+					
+					if (requirePath) {
+						let id
+						let shouldProcess = true
+						
+						// 处理不同类型的 require 路径
+						if (requirePath.startsWith('@') || requirePath.startsWith('miniprogram_npm/')) {
+							// 处理 npm 包导入（如 @vant/weapp/toast/toast）
+							if (requirePath.startsWith('@')) {
+								// 转换为 miniprogram_npm 路径
+								id = `/miniprogram_npm/${requirePath}`
+							} else {
+								// 已经是 miniprogram_npm 路径
+								id = requirePath.startsWith('/') ? requirePath : `/${requirePath}`
+							}
+						} else {
+							// 其他所有路径（相对路径、绝对路径等）都进行解析
+							// 这与 Babel 原版逻辑保持一致
+							const requireFullPath = resolve(modulePath, `../${requirePath}`)
+							// 依赖的模块相对路径转换为绝对路径
+							id = requireFullPath.split(`${getWorkPath()}${sep}`)[1]
+							// 移除文件扩展名（.js 或 .ts）
+							id = id.replace(/\.(js|ts)$/, '').replace(/\\/g, '/')
+							// 确保路径以 '/' 开头，保持一致性
+							if (!id.startsWith('/')) {
+								id = '/' + id
+							}
+						}
+						
+						if (shouldProcess) {
+							pathReplacements.push({
+								start: arg.start,
+								end: arg.end,
+								newValue: id
+							})
+							
+							if (!processedModules.has(packageName + id)) {
+								dependenciesToProcess.push(id)
+							}
+						}
 					}
 				}
 			}
-		},
-		ImportDeclaration(ap) {
+			
 			// 处理 ES6 import 语句
-			const importPath = ap.node.source.value
-			if (importPath) {
-				let id
-				let shouldProcess = false
-				
-				if (importPath.startsWith('@') || importPath.startsWith('miniprogram_npm/')) {
-					// 处理 npm 包导入（如 @vant/weapp/toast/toast）
-					if (importPath.startsWith('@')) {
-						// 转换为 miniprogram_npm 路径
-						id = `/miniprogram_npm/${importPath}`
+			if (node.type === 'ImportDeclaration') {
+				const importPath = node.source.value
+				if (importPath) {
+					let id
+					let shouldProcess = false
+					
+					if (importPath.startsWith('@') || importPath.startsWith('miniprogram_npm/')) {
+						// 处理 npm 包导入（如 @vant/weapp/toast/toast）
+						if (importPath.startsWith('@')) {
+							// 转换为 miniprogram_npm 路径
+							id = `/miniprogram_npm/${importPath}`
+						} else {
+							// 已经是 miniprogram_npm 路径
+							id = importPath.startsWith('/') ? importPath : `/${importPath}`
+						}
+						shouldProcess = true
+					} else if (importPath.startsWith('./') || importPath.startsWith('../') || !importPath.startsWith('/')) {
+						// 处理相对路径导入
+						const importFullPath = resolve(modulePath, `../${importPath}`)
+						// 依赖的模块相对路径转换为绝对路径
+						id = importFullPath.split(`${getWorkPath()}${sep}`)[1]
+						// 移除文件扩展名（.js 或 .ts）
+						id = id.replace(/\.(js|ts)$/, '').replace(/\\/g, '/')
+						// 确保路径以 '/' 开头，保持一致性
+						if (!id.startsWith('/')) {
+							id = '/' + id
+						}
+						shouldProcess = true
 					} else {
-						// 已经是 miniprogram_npm 路径
-						id = importPath.startsWith('/') ? importPath : `/${importPath}`
+						// 绝对路径直接使用
+						id = importPath
+						shouldProcess = true
 					}
-					shouldProcess = true
-				} else if (importPath.startsWith('./') || importPath.startsWith('../') || !importPath.startsWith('/')) {
-					// 处理相对路径导入
-					const importFullPath = resolve(modulePath, `../${importPath}`)
-					// 依赖的模块相对路径转换为绝对路径
-					id = importFullPath.split(`${getWorkPath()}${sep}`)[1]
-					// 移除文件扩展名（.js 或 .ts）
-					id = id.replace(/\.(js|ts)$/, '').replace(/\\/g, '/')
-					// 确保路径以 '/' 开头，保持一致性
-					if (!id.startsWith('/')) {
-						id = '/' + id
-					}
-					shouldProcess = true
-				} else {
-					// 绝对路径直接使用
-					id = importPath
-					shouldProcess = true
-				}
-				
-				if (shouldProcess) {
-					ap.node.source = types.stringLiteral(id)
-					if (!processedModules.has(packageName + id)) {
-						buildJSByPath(packageName, { path: id }, compileRes, mainCompileRes, false, depthChain)
+					
+					if (shouldProcess) {
+						pathReplacements.push({
+							start: node.source.start,
+							end: node.source.end,
+							newValue: id
+						})
+						
+						if (!processedModules.has(packageName + id)) {
+							dependenciesToProcess.push(id)
+						}
 					}
 				}
 			}
-		},
+		}
 	})
 
-	const { code } = babel.transformFromAstSync(ast, '', BABEL_TRANSFORM_CONFIG)
-	compileInfo.code = code
+	// 处理所有依赖模块（异步）
+	for (const depId of dependenciesToProcess) {
+		await buildJSByPath(packageName, { path: depId }, compileRes, mainCompileRes, false, depthChain)
+	}
+
+	// 反向遍历修改，避免位置偏移
+	for (const replacement of pathReplacements.reverse()) {
+		s.overwrite(replacement.start, replacement.end, `'${replacement.newValue}'`)
+	}
+
+	// 使用 oxc-transform 进行 TypeScript 和 JSX 转换
+	const modifiedCode = s.toString()
+	let transformedCode = modifiedCode
+	
+	// 如果是 TypeScript 文件，使用 oxc-transform 进行类型擦除
+	if (modulePath.endsWith('.ts') || modulePath.endsWith('.tsx')) {
+		try {
+			const result = transformSync(modulePath, modifiedCode, {
+				sourceType: 'module',
+				lang: modulePath.endsWith('.tsx') ? 'tsx' : 'ts',
+				target: 'es2020',
+				typescript: {
+					onlyRemoveTypeImports: true
+				}
+			})
+			transformedCode = result.code
+		} catch (error) {
+			console.error(`[logic] oxc-transform 转换失败 ${modulePath}:`, error.message)
+			// 如果转换失败，使用修改后的代码
+			transformedCode = modifiedCode
+		}
+	}
+	
+	// 使用 esbuild 进行最终的 CommonJS 转换和压缩
+	// 这是必需的，因为 oxc-transform 不支持模块格式转换
+	try {
+		const esbuildResult = await transform(transformedCode, {
+			format: 'cjs',
+			target: 'es2020',
+			platform: 'neutral',
+			loader: 'js'
+		})
+		
+		// esbuild 转换后，需要再次处理生成的 require 调用
+		// 因为 esbuild 可能生成新的 require 调用（从 import 转换而来）
+		const esbuildCode = esbuildResult.code
+		
+		// 解析 esbuild 输出的代码
+		const esbuildAst = parseSync(modulePath, esbuildCode, {
+			sourceType: 'module',
+			lang: 'js'
+		})
+		
+		// 再次收集需要修改的 require 路径
+		const postEsbuildReplacements = []
+		walk(esbuildAst.program, {
+			enter(node) {
+				if (node.type === 'CallExpression') {
+					const isRequire = node.callee.type === 'Identifier' && node.callee.name === 'require'
+					const isRequireProperty = node.callee.type === 'MemberExpression' && 
+						node.callee.object?.type === 'Identifier' && 
+						node.callee.object?.name === 'require'
+					
+					if ((isRequire || isRequireProperty) && 
+						node.arguments.length > 0 && 
+						(node.arguments[0].type === 'StringLiteral' || node.arguments[0].type === 'Literal')) {
+						const arg = node.arguments[0]
+						const requirePath = arg.value
+						
+						// 只处理仍然是相对路径的 require（说明没有被正确转换）
+						if (requirePath && (requirePath.startsWith('./') || requirePath.startsWith('../'))) {
+							let id
+							if (requirePath.startsWith('@') || requirePath.startsWith('miniprogram_npm/')) {
+								if (requirePath.startsWith('@')) {
+									id = `/miniprogram_npm/${requirePath}`
+								} else {
+									id = requirePath.startsWith('/') ? requirePath : `/${requirePath}`
+								}
+							} else {
+								const requireFullPath = resolve(modulePath, `../${requirePath}`)
+								id = requireFullPath.split(`${getWorkPath()}${sep}`)[1]
+								id = id.replace(/\.(js|ts)$/, '').replace(/\\/g, '/')
+								if (!id.startsWith('/')) {
+									id = '/' + id
+								}
+							}
+							
+							postEsbuildReplacements.push({
+								start: arg.start,
+								end: arg.end,
+								newValue: id
+							})
+						}
+					}
+				}
+			}
+		})
+		
+		// 如果有需要修改的路径，应用修改
+		if (postEsbuildReplacements.length > 0) {
+			const finalMagicString = new MagicString(esbuildCode)
+			for (const replacement of postEsbuildReplacements.reverse()) {
+				finalMagicString.overwrite(replacement.start, replacement.end, `"${replacement.newValue}"`)
+			}
+			compileInfo.code = finalMagicString.toString()
+		} else {
+			compileInfo.code = esbuildCode
+		}
+	} catch (error) {
+		console.error(`[logic] esbuild 转换失败 ${modulePath}:`, error.message)
+		// 如果 esbuild 转换失败，使用 oxc 转换后的代码
+		compileInfo.code = transformedCode
+	}
+	
 	// 将当前模块标记为已处理
 	processedModules.add(packageName + currentPath)
-}
-
-/**
- * 生成一条赋值语句
- * @param {*} type
- * @param {*} addedArgs
- */
-function getExtraInfoStatement(type, addedArgs) {
-	const propertyAssignment = types.objectProperty(types.identifier('__extraInfo'), addedArgs)
-	
-	// 创建安全的赋值语句，确保 __extraInfo 被设置到 globalThis 上
-	// globalThis.__extraInfo = {...}
-	const assignmentExpression = types.assignmentExpression(
-		'=',
-		types.memberExpression(types.identifier('globalThis'), propertyAssignment.key),
-		propertyAssignment.value,
-	)
-
-	return types.expressionStatement(assignmentExpression)
 }
 
 /**
