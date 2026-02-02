@@ -14,23 +14,23 @@ export function invokeAPI(name, data, target = 'container') {
 			}
 		}
 		else {
-			const { success, fail, complete, keep, ...rest } = data
+			const { success, fail, complete, keep, evtId, ...rest} = data
 
 			params = rest
 
 			if (isFunction(success)) {
-				params.success = callback.store(success, keep)
+				params.success = callback.store(success, keep, evtId)
 			}
 			else {
 				params.success = success
 			}
 
 			if (isFunction(fail)) {
-				params.fail = callback.store(fail, keep)
+				params.fail = callback.store(fail, keep, evtId)
 			}
 
 			if (isFunction(complete)) {
-				params.complete = callback.store(complete, keep)
+				params.complete = callback.store(complete, keep, evtId)
 			}
 		}
 	}
