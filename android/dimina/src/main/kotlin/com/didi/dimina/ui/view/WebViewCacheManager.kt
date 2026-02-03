@@ -594,8 +594,16 @@ internal fun handleFileInterceptRequest(
     return null
 }
 
+/**
+ * 创建配置好的WebView实例
+ * 此函数统一了WebView的配置逻辑，包括布局参数、JavaScript设置、调试模式等
+ * 
+ * @param context 上下文对象
+ * @param onPageLoadFinished 页面加载完成的回调函数
+ * @return 配置完成的WebView实例
+ */
 @SuppressLint("SetJavaScriptEnabled")
-private fun createWebView(context: Context, onPageLoadFinished: () -> Unit): WebView {
+internal fun createWebView(context: Context, onPageLoadFinished: () -> Unit): WebView {
     return WebView(context).apply {
         // Ensure WebView has explicit layoutParams.
         // Chromium determines viewport size during initial layout.
