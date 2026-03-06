@@ -1,8 +1,6 @@
 <script setup>
 // 富文本
 // https://developers.weixin.qq.com/miniprogram/dev/component/rich-text.html
-import { inject } from 'vue'
-
 const props = defineProps({
 	/**
 	 * 节点列表/HTML String
