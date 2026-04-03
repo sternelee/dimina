@@ -689,9 +689,7 @@ class Runtime {
 	}
 
 	addIntersectionObserver(opts) {
-		// 等待所有挂起的组件 setup（即等待 service 侧 created 完成）结束后再建立 observer，
-		// 避免 IntersectionObserver 首次回调早于子组件生命周期钩子注册而导致事件丢失
-		this._waitForPendingSetups().then(async () => {
+		(async () => {
 			const { bridgeId, params: { targetSelector, relativeInfo, moduleId, options, success } } = opts
 
 			const el = await this.waitForEl(this.instance.get(moduleId))
@@ -758,6 +756,10 @@ class Runtime {
 			}
 
 			const targetEls = await this.waitForElement(el, targetSelector, options.observeAll ? 'querySelectorAll' : 'querySelector')
+			// 目标 DOM 已出现（对应组件 setup 中 mC 已发出、_pendingSetupCount 已 ++），
+			// 此时等待所有 pending setup 完成（service 侧 created/attached 执行完毕），
+			// 确保 IntersectionObserver 首次回调到达 service 时相关生命周期钩子已注册
+			await this._waitForPendingSetups()
 			if (!targetEls) {
 				console.error('[system]', '[render]', 'Failed to find target element for intersection observer')
 				return
@@ -824,7 +826,7 @@ class Runtime {
 					args: { observerId },
 				},
 			})
-		})
+		})()
 	}
 
 	removeIntersectionObserver({ params: { observerId } }) {
