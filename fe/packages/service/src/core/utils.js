@@ -190,6 +190,76 @@ function convertToStringType(type) {
 }
 
 /**
+ * 在一次 setData 中，遍历所有变化的 key 并触发 observers，保证每个 observer 最多触发一次
+ * https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/observer.html
+ * @param {string[]} changedKeys 本次 setData 变化的所有 key
+ * @param {object} observers 组件定义的 observers 对象
+ * @param {object} data 更新后的完整数据
+ * @param {object} ctx 组件实例（this）
+ * @param {object} oldValues 各 key 的旧值 { key: oldVal }
+ */
+export function invokeObserversOnce(changedKeys, observers, data, ctx, oldValues) {
+	const triggered = new Set()
+
+	for (const changedKey of changedKeys) {
+		for (const observerKey in observers) {
+			if (triggered.has(observerKey)) {
+				continue
+			}
+
+			const keys = observerKey.split(',').map(k => k.trim())
+
+			// 简单字段匹配 / 组合字段匹配
+			if (keys.includes(changedKey)) {
+				triggered.add(observerKey)
+				const observerFn = observers[observerKey]
+				const args = keys.map(key => get(data, key))
+				if (keys.length === 1) {
+					observerFn.call(ctx, ...args, oldValues[changedKey])
+				} else {
+					observerFn.call(ctx, ...args)
+				}
+				continue
+			}
+
+			// 通配符 **
+			if (observerKey === '**') {
+				triggered.add(observerKey)
+				observers[observerKey].call(ctx, data)
+				continue
+			}
+
+			// 子字段路径匹配（如 'a.b' 监听 'a.b.c' 的变化，或 'a.**'）
+			const observerKeyParts = observerKey.split('.')
+			const changedKeyParts = changedKey.split('.')
+			let matched = true
+			for (let i = 0; i < observerKeyParts.length; i++) {
+				if (observerKeyParts[i] === '**' || changedKeyParts[i] === undefined) {
+					break
+				} else if (observerKeyParts[i] !== changedKeyParts[i]) {
+					matched = false
+					break
+				}
+			}
+			if (matched && observerKeyParts.length > 1) {
+				triggered.add(observerKey)
+				let targetData = data
+				for (const part of observerKeyParts) {
+					if (part !== '**') {
+						targetData = targetData?.[part]
+					}
+				}
+				if (observerKey === changedKey) {
+					observers[observerKey].call(ctx, targetData, oldValues[changedKey])
+				} else {
+					observers[observerKey].call(ctx, targetData)
+				}
+			}
+		}
+	}
+}
+
+/**
  * 触发数据监听器，一次 setData 最多触发每个监听器一次
  * https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/observer.html
  * @param {*} changedKey
