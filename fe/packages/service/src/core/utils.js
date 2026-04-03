@@ -34,18 +34,24 @@ export function deepEqual(a, b) {
 
 	return keysA.every(key => deepEqual(a[key], b[key]))
 }
+/**
+ * 将 computed 的 key 提前写入 data，确保渲染层初始化时能正确追踪这些 key 的响应式依赖。
+ *
+ * 背景：渲染层 setup() 收到 initData 后才首次渲染，若 computed key 不在 initData 里，
+ * 渲染函数第一次执行时访问该 key 拿到 undefined，Vue 不会建立依赖，后续值更新也不会触发重渲染。
+ *
+ * computed 经框架（如 mpx）的 filterOptions 处理后不会出现在 moduleInfo 里，
+ * 只能在实例初始化完成后从框架运行时读取。目前通过 __mpxProxy 访问，
+ * 后续若框架侧暴露标准字段（如 moduleInfo.__computedKeys），可在此替换为更通用的读取方式。
+ */
 export function addComputedData(self) {
-	// Fixme: 兼容 mpx 的 computed 属性
-	if (self.__mpxProxy?.options?.computed) {
-		Object.keys(self.__mpxProxy.options.computed).forEach((ck) => {
-			// https://github.com/didi/mpx/blob/master/packages/core/src/platform/builtInMixins/i18nMixin.js
-			if (ck !== '_l' && ck !== '_fl') {
-				// https://github.com/didi/mpx/blob/f1bd7c32ec48c4401ab1bf68247bc68834ca932b/docs-vuepress/articles/mpx2.md?plain=1#L505
-				if (!Object.hasOwn(self.data, ck)) {
-					self.data[ck] = null
-				}
+	const computed = self.__mpxProxy?.options?.computed
+	if (computed) {
+		for (const ck of Object.keys(computed)) {
+			if (!Object.hasOwn(self.data, ck)) {
+				self.data[ck] = null
 			}
-		})
+		}
 	}
 }
 
@@ -54,8 +60,8 @@ export function filterData(obj) {
 		return obj
 	}
 	return Object.entries(obj).reduce((acc, [key, value]) => {
-		if (key.startsWith('$') || key.startsWith('_l') || key.startsWith('_fl')) {
-			// 过滤以 $ 开头的属性，未完全过滤以 _ 开头的属性
+		if (key.startsWith('$')) {
+			// 过滤以 $ 开头的内部属性
 			return acc
 		}
 		else if (isFunction(value)) {
