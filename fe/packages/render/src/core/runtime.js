@@ -42,6 +42,9 @@ class Runtime {
 		this.pageId = null
 		this.instance = new Map()
 		this.intersectionObservers = new Map()
+		// 记录正在等待 service 侧 created 完成的组件数量（即 await message.wait(moduleId) 挂起中的 setup 数）
+		this._pendingSetupCount = 0
+		this._pendingSetupResolvers = []
 
 		window._Fragment = Fragment
 		window._createTextVNode = createTextVNode
@@ -287,7 +290,7 @@ class Runtime {
 					}
 				}
 
-				message.send({
+			message.send({
 					type: 'mC', // createInstance + componentAttached
 					target: 'service',
 					body: {
@@ -307,7 +310,10 @@ class Runtime {
 					},
 				})
 
-					onMounted(() => {
+				// mC 发出后 service 侧开始异步执行 created，在 wait 解除前计数 +1
+				self._pendingSetupCount++
+
+				onMounted(() => {
 						nextTick(() => {
 							// 从 DOM 元素读取属性绑定信息
 							const propBindings = instance.$el?._propBindings
@@ -371,16 +377,22 @@ class Runtime {
 				}
 			)
 					
-					const initData = await message.wait(moduleId)
-					const entries = Object.entries(initData)
-					for (let i = 0; i < entries.length; i++) {
-						const [key, value] = entries[i]
-						set(data, key, value)
-					}
-					return data
-				},
-				render: module.moduleInfo.render,
-			}
+				const initData = await message.wait(moduleId)
+				// service 侧 created 已完成（#invokeInitLifecycle.then 发出了 moduleId 消息）
+				self._pendingSetupCount--
+				if (self._pendingSetupCount === 0 && self._pendingSetupResolvers.length > 0) {
+					const resolvers = self._pendingSetupResolvers.splice(0)
+					resolvers.forEach(resolve => resolve())
+				}
+				const entries = Object.entries(initData)
+				for (let i = 0; i < entries.length; i++) {
+					const [key, value] = entries[i]
+					set(data, key, value)
+				}
+				return data
+			},
+			render: module.moduleInfo.render,
+		}
 		}
 		return components
 	}
@@ -663,8 +675,23 @@ class Runtime {
 		window.__globalAPI.hideToast(params)
 	}
 
+	/**
+	 * 等待所有正在初始化的组件（setup 中 await message.wait 挂起）完成 service 侧 created 流程。
+	 * 确保 IntersectionObserver 回调到达 service 侧时，相关子组件的生命周期钩子（如 created）已执行完毕。
+	 */
+	_waitForPendingSetups() {
+		if (this._pendingSetupCount === 0) {
+			return Promise.resolve()
+		}
+		return new Promise((resolve) => {
+			this._pendingSetupResolvers.push(resolve)
+		})
+	}
+
 	addIntersectionObserver(opts) {
-		setTimeout(async () => {
+		// 等待所有挂起的组件 setup（即等待 service 侧 created 完成）结束后再建立 observer，
+		// 避免 IntersectionObserver 首次回调早于子组件生命周期钩子注册而导致事件丢失
+		this._waitForPendingSetups().then(async () => {
 			const { bridgeId, params: { targetSelector, relativeInfo, moduleId, options, success } } = opts
 
 			const el = await this.waitForEl(this.instance.get(moduleId))
@@ -797,8 +824,7 @@ class Runtime {
 					args: { observerId },
 				},
 			})
-		// Fixme: 延迟为了解决当前父组件 watch 触发的 nextTick 优先于组件的 created 生命周期导致异常，eg: emit 事件发送先于注册事件执行导致没有回调
-		}, 300)
+		})
 	}
 
 	removeIntersectionObserver({ params: { observerId } }) {
