@@ -21,7 +21,6 @@ import {
 	openBlock,
 	provide,
 	reactive,
-	ref,
 	renderList,
 	renderSlot,
 	resolveComponent,
@@ -41,6 +40,7 @@ class Runtime {
 		this.app = null
 		this.pageId = null
 		this.instance = new Map()
+		this.setupData = new Map()
 		this.intersectionObservers = new Map()
 		// 追踪"mC 已发出但 service 侧 created 尚未完成"的组件 setup
 		// key: moduleId, value: Promise（created 完成时 resolve）
@@ -213,17 +213,18 @@ class Runtime {
 								window.removeEventListener('scroll', handleScroll)
 							})
 
-							const data = reactive({})
-							const initData = await message.wait(self.pageId)
-							const entries = Object.entries(initData)
-							for (let i = 0; i < entries.length; i++) {
-								const [key, value] = entries[i]
-								set(data, key, value)
-							}
-							return data
-						},
-						components,
-						render: pageModule.moduleInfo.render,
+						const data = reactive({})
+						self.setupData.set(self.pageId, data)
+						const initData = await message.wait(self.pageId)
+						const entries = Object.entries(initData)
+						for (let i = 0; i < entries.length; i++) {
+							const [key, value] = entries[i]
+							set(data, key, value)
+						}
+						return data
+					},
+					components,
+					render: pageModule.moduleInfo.render,
 					},
 				},
 
@@ -358,21 +359,23 @@ class Runtime {
 						}
 					})
 
-					onUnmounted(() => {
-						message.send({
-							type: 'mU',
-							target: 'service',
-							body: {
-								bridgeId,
-								moduleId,
-							},
-						})
-						self.instance.delete(moduleId)
+				onUnmounted(() => {
+					message.send({
+						type: 'mU',
+						target: 'service',
+						body: {
+							bridgeId,
+							moduleId,
+						},
 					})
+					self.instance.delete(moduleId)
+					self.setupData.delete(moduleId)
+				})
 
-				const data = reactive({})
-				
-			watch(
+			const data = reactive({})
+			self.setupData.set(moduleId, data)
+			
+		watch(
 				props,
 				(newProps) => {
 					Object.assign(data, newProps)
@@ -411,30 +414,11 @@ class Runtime {
 
 	updateModule(opts) {
 		const { moduleId, data } = opts
-		const viewModule = this.instance.get(moduleId)
+		const setupData = this.setupData.get(moduleId)
 
-		if (viewModule) {
+		if (setupData) {
 			for (const key in data) {
-				viewModule.$nextTick(() => {
-					// 检查属性是否已经存在于组件上
-					if (!key.includes('.') && !key.includes('[') && !(key in viewModule)) {
-						const refValue = ref(data[key])
-						Object.defineProperty(viewModule, key, {
-							get() {
-								return refValue.value
-							},
-							set(newValue) {
-								refValue.value = newValue
-							},
-							enumerable: true,
-							configurable: true,
-						})
-					}
-					else {
-						// 如果属性已存在，直接设置新值
-						set(viewModule, key, data[key])
-					}
-				})
+				set(setupData, key, data[key])
 			}
 		}
 		else {
