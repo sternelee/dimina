@@ -89,4 +89,7 @@
   <navigator class="intro" url="custom-class/index">
     <view class="weui-cell__bd">外部样式类</view>
   </navigator>
+  <navigator class="intro" url="ext-bridge/index">
+    <view class="weui-cell__bd">ExtBridge 第三方扩展</view>
+  </navigator>
 </view>

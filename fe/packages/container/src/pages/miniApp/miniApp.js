@@ -38,6 +38,8 @@ export class MiniApp {
 			timer: null,
 		}
 		this.color = null
+		// 维护第三方扩展的持续订阅，key: `${module}_${event}`，value: unsubscribe 函数
+		this._extSubscriptions = new Map()
 	}
 
 	viewDidLoad() {
@@ -529,6 +531,12 @@ export class MiniApp {
 	}
 
 	destroy() {
+		// 清理所有第三方扩展订阅
+		for (const unsubscribe of this._extSubscriptions.values()) {
+			unsubscribe?.()
+		}
+		this._extSubscriptions.clear()
+
 		AppManager.popView()
 		this.jscore.destroy()
 	}
@@ -756,11 +764,11 @@ export class MiniApp {
 
 		this.webviewsContainer.appendChild(mask)
 		this.webviewsContainer.appendChild(dialog)
-		// 动画效果可选
-		setTimeout(() => {
+		// 动画效果：等浏览器 paint 后再加 show class，触发 CSS transition
+		requestAnimationFrame(() => requestAnimationFrame(() => {
 			mask.classList.add('show')
 			dialog.classList.add('show')
-		}, 10)
+		}))
 	}
 
 	showActionSheet(opts) {
@@ -810,11 +818,11 @@ export class MiniApp {
 		// 挂载到 webviewsContainer
 		this.webviewsContainer.appendChild(mask)
 		this.webviewsContainer.appendChild(sheet)
-		// 动画效果
-		setTimeout(() => {
+		// 动画效果：等浏览器 paint 后再加 show class，触发 CSS transition
+		requestAnimationFrame(() => requestAnimationFrame(() => {
 			sheet.classList.add('show')
 			mask.classList.add('show')
-		}, 10)
+		}))
 	}
 
 	setNavigationBarTitle(opts) {
@@ -1108,6 +1116,142 @@ export class MiniApp {
 		}
 		finally {
 			onComplete?.()
+		}
+	}
+
+	/**
+	 * 从 `${module}_${event}` 格式的 key 中还原 module 与 event。
+	 * 通过遍历已注册模块名做前缀匹配，支持模块名含下划线的场景。
+	 * @param {string} eventKey
+	 * @returns {{ module: string|null, event: string|null }}
+	 */
+	_parseExtEventKey(eventKey) {
+		const modules = AppManager.getExtModules()
+		for (const moduleName of Object.keys(modules)) {
+			const prefix = `${moduleName}_`
+			if (eventKey.startsWith(prefix)) {
+				return { module: moduleName, event: eventKey.slice(prefix.length) }
+			}
+		}
+		return { module: null, event: null }
+	}
+
+	/**
+	 * 第三方扩展调用的统一入口
+	 *
+	 * service 侧 extBridge/extOnBridge/extOffBridge 的 invokeAPI 名称规则：
+	 *   extBridge   → name = event,              params = { module, data, success, fail, complete }
+	 *   extOnBridge → name = `${module}_${event}`, params = { success(callBack), evtId }
+	 *   extOffBridge→ name = `${module}_${event}`, params = { success(undefined) }（无 evtId，keep=false）
+	 *
+	 * 区分方式：
+	 *   - extBridge：params 中携带 module 字段
+	 *   - extOnBridge vs extOffBridge：evtId 存在且 success 有值 → on；否则 → off
+	 */
+	_handleExtCall(name, params = {}) {
+		if (params.module !== undefined) {
+			// ── extBridge ─────────────────────────────────────────────
+			this._extBridgeCall(name, params)
+		}
+		else if (params.success) {
+			// ── extOnBridge：name = `${module}_${event}` ──────────────
+			this._extOnBridgeCall(name, params)
+		}
+		else {
+			// ── extOffBridge：name = `${module}_${event}` ─────────────
+			this._extOffBridgeCall(name)
+		}
+	}
+
+	/**
+	 * 对应 service 侧 extBridge
+	 * invokeAPI(event, { module, data, success, fail, complete, keep })
+	 * → container: name=event, params={ module, data, success, fail, complete }
+	 */
+	_extBridgeCall(event, params) {
+		const { module, data = {}, success, fail, complete } = params
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		const handler = AppManager.getExtModule(module)
+		if (!handler) {
+			const errMsg = `extBridge:fail module "${module}" not registered`
+			console.error(`[container] ${errMsg}`)
+			onFail?.({ errMsg })
+			onComplete?.()
+			return
+		}
+
+		try {
+			handler({
+				event,
+				data,
+				success: (res) => {
+					onSuccess?.(res)
+					onComplete?.()
+				},
+				fail: (err) => {
+					onFail?.(err)
+					onComplete?.()
+				},
+			})
+		}
+		catch (error) {
+			onFail?.({ errMsg: `extBridge:fail ${error.message}` })
+			onComplete?.()
+		}
+	}
+
+	/**
+	 * 对应 service 侧 extOnBridge
+	 * invokeAPI(`${module}_${event}`, { evtId, keep:true, success:callBack })
+	 * → container: name=`${module}_${event}`, params={ success, evtId }
+	 *
+	 * 通过遍历已注册模块名匹配前缀来还原 module 与 event，
+	 * 避免模块名本身含下划线时解析出错。
+	 */
+	_extOnBridgeCall(eventKey, params) {
+		const { success } = params
+		const onCallback = this.createCallbackFunction(success)
+
+		const { module, event } = this._parseExtEventKey(eventKey)
+		if (!module) {
+			console.error(`[container] extOnBridge:fail no registered module matched for key "${eventKey}"`)
+			return
+		}
+
+		const handler = AppManager.getExtModule(module)
+
+		// 若已有相同订阅，先清理旧的
+		const prev = this._extSubscriptions.get(eventKey)
+		prev?.()
+
+		try {
+			const unsubscribe = handler({
+				event,
+				data: { isSustain: true },
+				success: res => onCallback?.(res),
+				fail: err => console.error(`[container] extOnBridge error (${eventKey}):`, err),
+			})
+
+			this._extSubscriptions.set(eventKey, unsubscribe ?? null)
+		}
+		catch (error) {
+			console.error(`[container] extOnBridge:fail ${error.message}`)
+		}
+	}
+
+	/**
+	 * 对应 service 侧 extOffBridge
+	 * invokeAPI(`${module}_${event}`, { success:undefined })
+	 * → container: name=`${module}_${event}`, params={ success:undefined }
+	 */
+	_extOffBridgeCall(eventKey) {
+		const unsubscribe = this._extSubscriptions.get(eventKey)
+		if (unsubscribe) {
+			unsubscribe()
+			this._extSubscriptions.delete(eventKey)
 		}
 	}
 }

@@ -33,7 +33,8 @@
 		"pages/data-observer/index",
 		"pages/behaviors/index",
 		"pages/animation/index",
-		"pages/custom-class/index"
+		"pages/custom-class/index",
+		"pages/ext-bridge/index"
 	],
 	"subPackages": [
     {

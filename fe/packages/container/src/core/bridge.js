@@ -98,8 +98,14 @@ export class Bridge {
 		else if (target === 'container') {
 			if (type === 'invokeAPI') {
 				const { name, params } = body
-				// parent 是 miniApp 对象
-				this.parent[name]?.(params)
+				if (typeof this.parent[name] === 'function') {
+					// parent 是 miniApp 对象
+					this.parent[name](params)
+				}
+				else {
+					// 未命中已知方法，转发给第三方扩展路由处理
+					this.parent._handleExtCall(name, params)
+				}
 			}
 		}
 	}
