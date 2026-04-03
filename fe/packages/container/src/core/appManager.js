@@ -6,7 +6,7 @@ export class AppManager {
 	static appStack = []
 
 	static async openApp(opts, dimina) {
-		const { appId, path, scene, destroy } = opts
+		const { appId, path, scene, destroy, restoreStack } = opts
 		const { pagePath, query } = queryPath(path)
 		const { name, logo } = await getMiniAppInfo(appId)
 
@@ -33,6 +33,7 @@ export class AppManager {
 				logo,
 				pagePath,
 				query,
+				restoreStack, // 完整页面栈，用于刷新后静默恢复
 			})
 
 			this.appStack.push(miniApp)

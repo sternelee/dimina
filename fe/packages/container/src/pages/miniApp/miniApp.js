@@ -77,10 +77,86 @@ export class MiniApp {
 
 		this.bridgeList.push(entryPageBridge)
 		entryPageBridge.start()
-		HashRouter.sync(this.appId, entryPagePath, this.appInfo.query)
 
-		// 6.隐藏 loading
+		// 7. 若携带额外的恢复栈（刷新后恢复场景），静默重建后续页面
+		if (this.appInfo.restoreStack && this.appInfo.restoreStack.length > 1) {
+			await this.restorePageStack(this.appInfo.restoreStack.slice(1))
+		}
+
+		this._syncHash()
+
+		// 8. 隐藏 loading
 		this.hideLaunchScreen()
+	}
+
+	/**
+	 * 静默恢复页面栈中根页之后的页面。
+	 * 这些页面的 bridge 会被初始化并推入 bridgeList，但不播放入场动画，
+	 * 当前页显示在最顶层，之前的页面以 slide-out 状态保留在 DOM 中，
+	 * 使后退按钮可以正常工作。
+	 * @param {Array<{pagePath: string, query: object}>} pages
+	 */
+	async restorePageStack(pages) {
+		for (let i = 0; i < pages.length; i++) {
+			const { pagePath: rawPagePath, query } = pages[i]
+			const isTop = i === pages.length - 1
+
+			// 规范化路径：去掉前导 /，与 app-config.json modules key 保持一致
+			const pagePath = rawPagePath.startsWith('/') ? rawPagePath.slice(1) : rawPagePath
+			// pageConfig 可能为空（该小程序所有页面共用 app.window 默认配置），
+			// mergePageConfig 支持 pageConfig 为 undefined，直接降级到 app 全局配置
+			const pageConfig = this.appConfig.modules[pagePath]
+			const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
+
+			const bridge = await this.createBridge({
+				pagePath,
+				query,
+				scene: this.appInfo.scene,
+				jscore: this.jscore,
+				isRoot: false,
+				root: pageConfig?.root || 'main',
+				appId: this.appInfo.appId,
+				pages: this.appConfig.app.pages,
+				configInfo: mergeConfig,
+			})
+
+			// 将上一个页面移到 slide-out 状态（不可见但保留在栈中，支持后退）
+			const prevBridge = this.bridgeList[this.bridgeList.length - 1]
+			prevBridge.webview.el.classList.remove('dimina-native-view--instage')
+			prevBridge.webview.el.classList.add('dimina-native-view--slide-out')
+
+			this.bridgeList.push(bridge)
+			bridge.webview.el.style.zIndex = this.bridgeList.length + 1
+
+			// 移除 before-enter（translateX 100%），让页面回到正常位置
+			bridge.webview.el.classList.remove('dimina-native-view--before-enter')
+			if (!isTop) {
+				// 中间页面再叠加 slide-out，被上层页面覆盖
+				bridge.webview.el.classList.add('dimina-native-view--slide-out')
+			}
+
+			bridge.start()
+		}
+
+		if (pages.length > 0) {
+			// 最顶层页面更新状态栏颜色
+			const topBridge = this.bridgeList[this.bridgeList.length - 1]
+			const topPageConfig = this.appConfig.modules[topBridge.opts.pagePath]
+			const topMergeConfig = mergePageConfig(this.appConfig.app, topPageConfig)
+			this.updateTargetPageColorStyle(topMergeConfig)
+		}
+	}
+
+	/**
+	 * 将当前 bridgeList 序列化到 URL hash，用于刷新后恢复完整页面栈。
+	 * pagePath 统一去掉前导 /，与 app-config.json modules key 保持一致。
+	 */
+	_syncHash() {
+		const stack = this.bridgeList.map((b) => {
+			const pagePath = b.opts.pagePath.startsWith('/') ? b.opts.pagePath.slice(1) : b.opts.pagePath
+			return { pagePath, query: b.opts.query || {} }
+		})
+		HashRouter.syncStack(this.appId, stack)
 	}
 
 	// 创建一个bridge对象
@@ -108,9 +184,6 @@ export class MiniApp {
 		// 首次异步创建时， bridge 不存在，会在[Service]自行调用 invokeInitLifecycle
 		currentBridge?.appShow()
 		currentBridge?.pageShow()
-		if (currentBridge) {
-			HashRouter.sync(this.appId, currentBridge.opts.pagePath, currentBridge.opts.query)
-		}
 	}
 
 	onPresentOut() {
@@ -217,7 +290,7 @@ export class MiniApp {
 
 		// 触发新页面的初始化逻辑
 		bridge.start()
-		HashRouter.sync(this.appId, pagePath, query)
+		this._syncHash()
 
 		// 上一个页面推出
 		preWebview.el.classList.remove('dimina-native-view--instage')
@@ -294,7 +367,7 @@ export class MiniApp {
 
 				// 启动新页面
 				bridge.start()
-				HashRouter.sync(this.appId, pagePath, query)
+				this._syncHash()
 
 				// 设置 z-index
 				bridge.webview.el.style.zIndex = 1
@@ -345,7 +418,7 @@ export class MiniApp {
 		}
 		curBridge.resetStatus()
 		curBridge.start()
-		HashRouter.sync(this.appId, pagePath, query)
+		this._syncHash()
 
 		this.webviewAnimaEnd = true
 		onSuccess?.()
@@ -385,7 +458,7 @@ export class MiniApp {
 
 		// 触发上一个页面的生命周期函数
 		preBridge?.pageShow()
-		HashRouter.sync(this.appId, preBridge.opts.pagePath, preBridge.opts.query)
+		this._syncHash()
 		await sleep(540)
 		this.webviewAnimaEnd = true
 
