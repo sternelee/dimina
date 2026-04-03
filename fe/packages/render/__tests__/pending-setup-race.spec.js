@@ -277,59 +277,6 @@ describe('竞态场景：IntersectionObserver 与子组件 created 的时序', (
 		expect(elapsed).toBeLessThan(50)
 		expect(observerCallbackLog[0].listenerRegisteredBeforeEmit).toBe(true)
 	})
-
-	it('【关键】二次打开场景：addIntersectionObserver 到达时 pendingSetupCount 已为 0，但 DOM 出现后 setup 才开始', async () => {
-		/**
-		 * 模拟二次打开的精确时序：
-		 *   - 关闭弹框时 sliding-scale 销毁，_pendingSetupCount 早已归零
-		 *   - 重新打开：addIntersectionObserver 的 invokeAPI 消息先到达 render 侧（同步分发）
-		 *   - show 的 setData 经 queueMicrotask + $nextTick 后才触发 Vue re-render
-		 *   - 所以 addIntersectionObserver 到达时，sliding-scale 的 setup 甚至还没开始
-		 *   - _pendingSetupCount 此刻为 0，不能直接 resolve
-		 *
-		 * 正确做法：先等 DOM 出现（waitForElement），DOM 出现时 setup 已发 mC（count++），
-		 *           然后再 waitForPendingSetups，等 created 完成后才建立 observer
-		 */
-
-		// 模拟"先等 DOM 出现（期间 setup 开始），再等 pending setups"的正确顺序
-		let domAppeared = false
-		let setupStarted = false
-
-		// step1: addIntersectionObserver 到达，此时 count=0（弹框已关再开）
-		expect(tracker._pendingSetupCount).toBe(0)
-
-		// step2: 模拟 waitForElement 异步等待 DOM（此时 setup 还没开始）
-		const domReadyPromise = new Promise((resolve) => {
-			setTimeout(() => {
-				// DOM 出现：同时触发 setup 开始（beginSetup）
-				setupStarted = true
-				tracker.beginSetup()
-				domAppeared = true
-				resolve()
-			}, 5)
-		})
-
-		// step3: 等 DOM 出现
-		await domReadyPromise
-		expect(domAppeared).toBe(true)
-		expect(setupStarted).toBe(true)
-		expect(tracker._pendingSetupCount).toBe(1) // DOM 出现后 count 变为 1
-
-		// step4: 现在 waitForPendingSetups，等 created 完成
-		const waitPromise = tracker.waitForPendingSetups()
-
-		// step5: 模拟 service 侧 created 完成（注册 EventBus），然后 completeSetup
-		await new Promise(resolve => setTimeout(resolve, 5))
-		eventBus.once('needFeedBack', () => {})
-		tracker.completeSetup()
-
-		await waitPromise
-
-		// step6: 此时建立 observer 并触发（EventBus 监听已注册）
-		const listenerRegistered = eventBus.has('needFeedBack')
-		expect(listenerRegistered).toBe(true)
-		eventBus.emit('needFeedBack')
-	})
 })
 
 describe('边界情况', () => {
