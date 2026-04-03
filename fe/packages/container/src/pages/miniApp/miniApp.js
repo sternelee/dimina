@@ -3,6 +3,20 @@ import { Bridge } from '@/core/bridge'
 import { JSCore } from '@/core/jscore'
 import { HashRouter } from '@/utils/hashRouter'
 import { mergePageConfig, queryPath, readFile, sleep, uuid } from '@/utils/util'
+
+// 等待元素上指定 transition property 结束，带超时兜底防止动画未触发时永久阻塞
+const waitTransitionEnd = (el, property, timeout = 600) =>
+	new Promise(resolve => {
+		const timer = setTimeout(resolve, timeout)
+		const handler = (e) => {
+			if (!property || e.propertyName === property) {
+				clearTimeout(timer)
+				el.removeEventListener('transitionend', handler)
+				resolve()
+			}
+		}
+		el.addEventListener('transitionend', handler)
+	})
 import tpl from './miniApp.html?raw'
 import './miniApp.scss'
 
@@ -39,13 +53,13 @@ export class MiniApp {
 		// 1. 等待逻辑线程初始化
 		await this.jscore.init()
 
-		// 2. 模拟拉取小程序资源
-		await sleep(260)
-
-		// 3. 读取配置文件
+		// 2. 读取配置文件，同时保证 LaunchScreen 最少展示 220ms
 		const root = 'main'
 		const configPath = `${this.appInfo.appId}/${root}/app-config.json`
-		const configContent = await readFile(`${import.meta.env.BASE_URL}${configPath}`)
+		const [configContent] = await Promise.all([
+			readFile(`${import.meta.env.BASE_URL}${configPath}`),
+			sleep(220),
+		])
 
 		if (!configContent) {
 			return
@@ -302,7 +316,7 @@ export class MiniApp {
 		bridge.webview.el.style.zIndex = this.bridgeList.length + 1
 		bridge.webview.el.classList.add('dimina-native-view--enter-anima')
 		bridge.webview.el.classList.add('dimina-native-view--instage')
-		await sleep(540)
+		await waitTransitionEnd(bridge.webview.el, 'transform')
 
 		// 页面进入后移出动画相关class
 		this.webviewAnimaEnd = true
@@ -459,7 +473,7 @@ export class MiniApp {
 		// 触发上一个页面的生命周期函数
 		preBridge?.pageShow()
 		this._syncHash()
-		await sleep(540)
+		await waitTransitionEnd(preBridge.webview.el, 'transform')
 		this.webviewAnimaEnd = true
 
 		// 页面进入后移出动画相关class
