@@ -15,6 +15,7 @@ import window from '@ohos.window'
 import { ImageKnife } from '@ohos/imageknife'
 import { DMPWebViewController } from '../HybridContainer/DMPWebViewController'
 import { DMPAppModuleManager } from '../Bridges/DMPAppModuleManager'
+import { DMPExtModuleHandler } from '../Bridges/DMPExtModuleHandler'
 import { DMPWindowUtil } from '../Utils/DMPWindowUtils'
 import { DMPEntryContext } from './config/DMPEntryContext'
 import { DMPChannelProxyNext } from '../Service/DMPChannelProxyNext'
@@ -288,7 +289,19 @@ export class DMPApp {
     DMPChannelProxyNext.ContainerToService(msg, this.appIndex)
   }
 
+  /**
+   * 注册宿主第三方扩展模块，使小程序可通过 wx.extBridge / wx.extOnBridge / wx.extOffBridge 调用。
+   *
+   * @param moduleName  宿主模块名，须与 JS 侧传入的 module 参数一致
+   * @param handler     模块处理函数，参见 DMPExtModuleHandler
+   */
+  registerExtModule(moduleName: string, handler: DMPExtModuleHandler): void {
+    this._appModuleManager.registerExtModule(moduleName, handler);
+  }
+
   destroyEngine() {
+    // 销毁前取消所有 extOnBridge 订阅，防止内存泄漏
+    this._appModuleManager.getExtBridgeModule()?.cancelAllSubscriptions();
     this._service.destroy()
     this.engineStatus.setStatus(EngineStatus.STOP)
   }
