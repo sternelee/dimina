@@ -31,6 +31,11 @@ import { DRouter } from '../Navigator/DRouter'
 import { DMPAppLifecycle } from './DMPAppLifecycle'
 import { DMPDeviceUtil } from '../Utils/DMPDeviceUtils'
 export type DMPBundleUpdateCallback = () => void;
+
+export interface DMPAppInitOptions {
+  apiNamespaces?: string[];
+}
+
 //小程序应用实例
 export class DMPApp {
   appIndex: number;
@@ -123,7 +128,7 @@ export class DMPApp {
     return DMPApp._entryContext.getWindowStage();
   }
 
-  static init(context: DMPEntryContext, options?: { apiNamespaces?: string[] }) {
+  static init(context: DMPEntryContext, options?: DMPAppInitOptions) {
     DMPApp._entryContext = context;
     DMPApp._context = DMPApp._entryContext.getContext();
     DMPApp._apiNamespaces = options?.apiNamespaces ?? [];
