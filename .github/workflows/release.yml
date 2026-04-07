@@ -64,7 +64,7 @@ jobs:
 
       - name: Verify podspec version
         run: |
-          PODSPEC_VERSION=$(grep "s.version" Dimina.podspec | sed -E "s/.*'(.*)'.*/\1/" | tr -d '[:space:]')
+          PODSPEC_VERSION=$(grep "^\s*s\.version" Dimina.podspec | sed -E "s/.*'(.*)'.*/\1/" | tr -d '[:space:]')
           TAG_VERSION="${{ steps.version.outputs.version }}"
           TAG_VERSION=$(echo "$TAG_VERSION" | tr -d '[:space:]')
           
