@@ -57,11 +57,9 @@ public class StorageAPI: DMPContainerApi {
     // Remove storage synchronously
     @BridgeMethod(REMOVE_STORAGE_SYNC)
     var removeStorageSync: DMPBridgeMethodHandler = { param, env, callback in
-        let param = param.getMap()
-        guard let key = param.get("key") as? String else { return DMPSyncResult(false) }
-        let encrypt = param.get("encrypt") as? Bool ?? false
+        guard let key = param.getValue() as? String else { return DMPSyncResult(false) }
 
-        DMPStorage.shared.remove(key: key, encrypted: encrypt)
+        DMPStorage.shared.remove(key: key, encrypted: false)
         return DMPSyncResult(true)
     }
 
