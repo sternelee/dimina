@@ -53,13 +53,14 @@ jobs:
         id: version
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            VERSION="${{ github.event.inputs.tag }}"
-            VERSION="${VERSION#v}"
+            TAG="${{ github.event.inputs.tag }}"
           else
-            VERSION=${GITHUB_REF#refs/tags/v}
+            TAG=${GITHUB_REF#refs/tags/}
           fi
+          # Remove 'v' prefix if present
+          VERSION="${TAG#v}"
           echo "version=$VERSION" >> $GITHUB_OUTPUT
-          echo "Extracted version: $VERSION"
+          echo "Tag: $TAG, Extracted version: $VERSION"
 
       - name: Verify podspec version
         run: |
