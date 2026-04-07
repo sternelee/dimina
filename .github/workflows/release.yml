@@ -10,9 +10,15 @@ on:
         description: 'Tag to release (e.g., v1.2.0)'
         required: true
         type: string
+      skip_changelog:
+        description: 'Skip changelog generation'
+        required: false
+        type: boolean
+        default: false
 
 jobs:
   changelog:
+    if: github.event_name == 'push' || !inputs.skip_changelog
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -31,6 +37,7 @@ jobs:
           GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
   cocoapods:
+    if: always()
     runs-on: macos-latest
     needs: changelog
     steps:
