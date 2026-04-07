@@ -64,11 +64,16 @@ jobs:
 
       - name: Verify podspec version
         run: |
-          PODSPEC_VERSION=$(grep "s.version" Dimina.podspec | sed -E "s/.*'(.*)'.*/\1/")
-          if [ "$PODSPEC_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+          PODSPEC_VERSION=$(grep "s.version" Dimina.podspec | sed -E "s/.*'(.*)'.*/\1/" | tr -d '[:space:]')
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          TAG_VERSION=$(echo "$TAG_VERSION" | tr -d '[:space:]')
+          
+          echo "Comparing versions:"
+          echo "  Tag version: [$TAG_VERSION]"
+          echo "  Podspec version: [$PODSPEC_VERSION]"
+          
+          if [ "$PODSPEC_VERSION" != "$TAG_VERSION" ]; then
             echo "❌ Version mismatch!"
-            echo "Tag version: ${{ steps.version.outputs.version }}"
-            echo "Podspec version: $PODSPEC_VERSION"
             exit 1
           fi
           echo "✅ Version check passed: $PODSPEC_VERSION"
