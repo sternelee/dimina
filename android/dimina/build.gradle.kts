@@ -23,6 +23,8 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         consumerProguardFiles("consumer-rules.pro")
         
+        buildConfigField("String", "SDK_VERSION", "\"${project.property("DIMINA_VERSION")}\"")
+        
         // Only include ARM architectures
         ndk {
             abiFilters.add("arm64-v8a")
@@ -44,6 +46,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
     
     // Add configuration to not compress jsapp files

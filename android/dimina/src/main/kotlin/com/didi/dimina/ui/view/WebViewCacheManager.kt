@@ -566,7 +566,7 @@ internal fun handleFileInterceptRequest(
             LogUtils.d(WEBVIEW_TAG, "Local file not found: $url")
             LogUtils.d(WEBVIEW_TAG, "Attempting to load as network resource via https")
             
-            val correctedUrl = "https:/${pathAfterProtocol}" // 转换为 https://domain/path
+            val correctedUrl = "https://${pathAfterProtocol.trimStart('/')}" // 转换为 https://domain/path
             LogUtils.d(WEBVIEW_TAG, "Corrected URL: $correctedUrl")
             
             try {
