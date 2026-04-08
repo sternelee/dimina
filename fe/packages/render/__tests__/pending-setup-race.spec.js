@@ -13,7 +13,7 @@
  *           但排除调用方自身（moduleId），避免 onLoad/created 内调用时的死锁
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // ─── 被测逻辑的最小实现（镜像自 runtime.js）────────────────────────────────────
 
