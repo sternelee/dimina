@@ -1152,7 +1152,7 @@ export class MiniApp {
 	 * 从 `${module}_${event}` 格式的 key 中还原 module 与 event。
 	 * 通过遍历已注册模块名做前缀匹配，支持模块名含下划线的场景。
 	 * @param {string} eventKey
-	 * @returns {{ module: string|null, event: string|null }}
+	 * @returns {{ module: string|null, event: string|null }} 包含解析出的模块名和事件名的对象，若解析失败则均为 null
 	 */
 	_parseExtEventKey(eventKey) {
 		const modules = AppManager.getExtModules()
