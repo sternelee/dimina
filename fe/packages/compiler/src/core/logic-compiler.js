@@ -304,6 +304,30 @@ async function buildJSByPath(packageName, module, compileRes, mainCompileRes, ad
 					}
 				}
 			}
+
+			// 处理 re-export 语句，如 export * from './foo'
+			// 这类语句不会出现在运行时 require 中，必须在这里提前收集依赖。
+			if (
+				(node.type === 'ExportAllDeclaration' || node.type === 'ExportNamedDeclaration')
+				&& node.source
+			) {
+				const exportPath = node.source.value
+				if (exportPath) {
+					const { id, shouldProcess } = resolveDependencyId(exportPath, modulePath, true)
+
+					if (shouldProcess) {
+						pathReplacements.push({
+							start: node.source.start,
+							end: node.source.end,
+							newValue: id,
+						})
+
+						if (!processedModules.has(packageName + id)) {
+							dependenciesToProcess.push(id)
+						}
+					}
+				}
+			}
 		}
 	})
 
