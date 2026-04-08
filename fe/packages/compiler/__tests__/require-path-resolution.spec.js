@@ -309,6 +309,56 @@ describe('Require Path Resolution', () => {
 		expect(pageModule.code).not.toContain('require("/miniprogram_npm/westore/root")')
 	})
 
+	it('should resolve crypto-js bare package requires via package entry', async () => {
+		fs.mkdirSync('miniprogram_npm/crypto-js', { recursive: true })
+
+		fs.writeFileSync('app.json', JSON.stringify({
+			pages: ['pages/crypto/index']
+		}))
+
+		fs.mkdirSync('pages/crypto', { recursive: true })
+		fs.writeFileSync('miniprogram_npm/crypto-js/package.json', JSON.stringify({
+			main: 'index.js'
+		}))
+		fs.writeFileSync('miniprogram_npm/crypto-js/index.js', `
+			module.exports = {
+				enc: {
+					Utf8: {
+						parse(value) {
+							return value
+						}
+					}
+				}
+			}
+		`)
+
+		fs.writeFileSync('pages/crypto/index.js', `
+			const CryptoJS = require('crypto-js')
+
+			Page({
+				onLoad() {
+					console.log(CryptoJS.enc.Utf8.parse('hello'))
+				}
+			})
+		`)
+
+		fs.writeFileSync('pages/crypto/index.json', JSON.stringify({
+			navigationBarTitleText: 'Crypto'
+		}))
+
+		storeInfo(tempDir)
+
+		const progress = { completedTasks: 0 }
+		const result = await compileJS([{ path: 'pages/crypto/index' }], null, null, progress)
+
+		const modulePaths = result.map(module => module.path)
+		expect(modulePaths).toContain('/miniprogram_npm/crypto-js/index')
+
+		const pageModule = result.find(module => module.path === 'pages/crypto/index')
+		expect(pageModule.code).toContain('require("/miniprogram_npm/crypto-js/index")')
+		expect(pageModule.code).not.toContain('require("/crypto-js")')
+	})
+
 	it('should handle mixed import and require statements', async () => {
 		// 创建测试文件结构
 		fs.mkdirSync('pages/mixed', { recursive: true })
