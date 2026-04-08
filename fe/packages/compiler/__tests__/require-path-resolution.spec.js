@@ -181,6 +181,134 @@ describe('Require Path Resolution', () => {
 		expect(compiledCode).not.toMatch(/require\(['"]@vant/)
 	})
 
+	it('should resolve bare npm package requires via package entry', async () => {
+		fs.mkdirSync('pages/npm-entry', { recursive: true })
+		fs.mkdirSync('miniprogram_npm/westore', { recursive: true })
+
+		fs.writeFileSync('app.json', JSON.stringify({
+			pages: ['pages/npm-entry/index']
+		}))
+
+		fs.writeFileSync('miniprogram_npm/westore/package.json', JSON.stringify({
+			main: 'index.js'
+		}))
+
+		fs.writeFileSync('miniprogram_npm/westore/index.js', `
+			module.exports = {
+				create: function() {
+					return 'westore'
+				}
+			}
+		`)
+
+		fs.writeFileSync('pages/npm-entry/index.js', `
+			const westore = require('westore')
+
+			Page({
+				onLoad() {
+					console.log(westore.create())
+				}
+			})
+		`)
+
+		fs.writeFileSync('pages/npm-entry/index.json', JSON.stringify({
+			navigationBarTitleText: 'NPM Entry'
+		}))
+
+		storeInfo(tempDir)
+
+		const progress = { completedTasks: 0 }
+		const result = await compileJS([{ path: 'pages/npm-entry/index' }], null, null, progress)
+
+		const modulePaths = result.map(module => module.path)
+		expect(modulePaths).toContain('/miniprogram_npm/westore/index')
+
+		const pageModule = result.find(module => module.path === 'pages/npm-entry/index')
+		expect(pageModule.code).toContain('require("/miniprogram_npm/westore/index")')
+	})
+
+	it('should resolve npm directory requires to index modules', async () => {
+		fs.mkdirSync('pages/npm-dir', { recursive: true })
+		fs.mkdirSync('miniprogram_npm/@vant/weapp/util', { recursive: true })
+
+		fs.writeFileSync('app.json', JSON.stringify({
+			pages: ['pages/npm-dir/index']
+		}))
+
+		fs.writeFileSync('miniprogram_npm/@vant/weapp/util/index.js', `
+			exports.getName = function() {
+				return 'vant-util'
+			}
+		`)
+
+		fs.writeFileSync('pages/npm-dir/index.js', `
+			const { getName } = require('@vant/weapp/util')
+
+			Page({
+				onLoad() {
+					console.log(getName())
+				}
+			})
+		`)
+
+		fs.writeFileSync('pages/npm-dir/index.json', JSON.stringify({
+			navigationBarTitleText: 'NPM Dir'
+		}))
+
+		storeInfo(tempDir)
+
+		const progress = { completedTasks: 0 }
+		const result = await compileJS([{ path: 'pages/npm-dir/index' }], null, null, progress)
+
+		const modulePaths = result.map(module => module.path)
+		expect(modulePaths).toContain('/miniprogram_npm/@vant/weapp/util/index')
+
+		const pageModule = result.find(module => module.path === 'pages/npm-dir/index')
+		expect(pageModule.code).toContain('require("/miniprogram_npm/@vant/weapp/util/index")')
+	})
+
+	it('should prefer the nearest miniprogram_npm directory for bare package requires', async () => {
+		fs.mkdirSync('pages/near/index/miniprogram_npm/westore', { recursive: true })
+		fs.mkdirSync('miniprogram_npm/westore', { recursive: true })
+
+		fs.writeFileSync('app.json', JSON.stringify({
+			pages: ['pages/near/index/index']
+		}))
+
+		fs.writeFileSync('pages/near/index/miniprogram_npm/westore/package.json', JSON.stringify({
+			main: 'local.js'
+		}))
+		fs.writeFileSync('pages/near/index/miniprogram_npm/westore/local.js', 'module.exports = "local"')
+
+		fs.writeFileSync('miniprogram_npm/westore/package.json', JSON.stringify({
+			main: 'root.js'
+		}))
+		fs.writeFileSync('miniprogram_npm/westore/root.js', 'module.exports = "root"')
+
+		fs.writeFileSync('pages/near/index/index.js', `
+			const westore = require('westore')
+
+			Page({
+				onLoad() {
+					console.log(westore)
+				}
+			})
+		`)
+
+		fs.writeFileSync('pages/near/index/index.json', JSON.stringify({
+			navigationBarTitleText: 'Nearest NPM'
+		}))
+
+		storeInfo(tempDir)
+
+		const progress = { completedTasks: 0 }
+		const result = await compileJS([{ path: 'pages/near/index/index' }], null, null, progress)
+
+		const pageModule = result.find(module => module.path === 'pages/near/index/index')
+		expect(pageModule.code).toContain('require("/pages/near/index/miniprogram_npm/westore/local")')
+		expect(pageModule.code).not.toContain('require("/miniprogram_npm/westore/root")')
+	})
+
 	it('should handle mixed import and require statements', async () => {
 		// 创建测试文件结构
 		fs.mkdirSync('pages/mixed', { recursive: true })
