@@ -35,6 +35,55 @@ function generateCodeFromAst(ast) {
 	return generateCode(ast, { comments: false }).code
 }
 
+/**
+ * 为模板表达式中的成员访问补充空值保护，避免生成的 render 函数直接访问 null/undefined 属性
+ * 例如: stickyProps.zIndex -> stickyProps?.zIndex
+ * @param {string} expression
+ * @returns {string}
+ */
+function addOptionalChaining(expression) {
+	if (!expression || typeof expression !== 'string') {
+		return expression
+	}
+
+	try {
+		const ast = babel.parseSync(`(${expression})`, {
+			parserOpts: {
+				plugins: [
+					'optionalChaining',
+					'nullishCoalescingOperator',
+				],
+			},
+		})
+
+		traverse(ast, {
+			MemberExpression: {
+				exit(astPath) {
+					if (astPath.node.optional) {
+						return
+					}
+					astPath.replaceWith(
+						types.optionalMemberExpression(
+							astPath.node.object,
+							astPath.node.property,
+							astPath.node.computed,
+							true,
+						),
+					)
+				},
+			},
+		})
+
+		return generateCodeFromAst(ast)
+	} catch (error) {
+		return expression
+	}
+}
+
+function parseSafeBraceExp(exp) {
+	return addOptionalChaining(parseBraceExp(exp))
+}
+
 // 页面文件编译内容缓存
 const compileResCache = new Map()
 
@@ -1176,13 +1225,13 @@ function getProps(attrs, tag, components) {
 		if (name.endsWith(':if')) {
 			attrsList.push({
 				name: 'v-if',
-				value: parseBraceExp(value),
+				value: parseSafeBraceExp(value),
 			})
 		}
 		else if (name.endsWith(':elif')) {
 			attrsList.push({
 				name: 'v-else-if',
-				value: parseBraceExp(value),
+				value: parseSafeBraceExp(value),
 			})
 		}
 		else if (name.endsWith(':else')) {
@@ -1211,7 +1260,7 @@ function getProps(attrs, tag, components) {
 			// 内联样式
 			attrsList.push({
 				name: 'v-c-style',
-				value: transformRpx(parseBraceExp(value)),
+				value: transformRpx(parseSafeBraceExp(value)),
 			})
 		}
 		else if (name === 'class') {
@@ -1236,7 +1285,7 @@ function getProps(attrs, tag, components) {
 		else if (name === 'is' && tag === 'component') {
 			attrsList.push({
 				name: ':is',
-				value: '\'dd-\'+' + `${parseBraceExp(value)}`,
+				value: '\'dd-\'+' + `${parseSafeBraceExp(value)}`,
 			})
 		}
 		else if (name === 'animation' && (tag !== 'movable-view' && tagWhiteList.includes(tag))) {
@@ -1244,13 +1293,13 @@ function getProps(attrs, tag, components) {
 			// 自定义组件的属性有可能是 animation，所以只在普通组件节点生效
 			attrsList.push({
 				name: 'v-c-animation',
-				value: parseBraceExp(value),
+				value: parseSafeBraceExp(value),
 			})
 		}
 		else if ((name === 'value' && (tag === 'input' || tag === 'textarea'))
 			|| ((name === 'x' || name === 'y') && tag === 'movable-view')
 		) {
-			const parsedValue = parseBraceExp(value)
+			const parsedValue = parseSafeBraceExp(value)
 			const conditionExp = generateVModelTemplate(parsedValue)
 			if (conditionExp) {
 				// v-model 不支持表达式
@@ -1280,7 +1329,7 @@ function getProps(attrs, tag, components) {
 
 				attrsList.push({
 					name: `:${name}`,
-					value: parseBraceExp(value),
+					value: parseSafeBraceExp(value),
 				})
 			}
 			else {
@@ -1293,7 +1342,7 @@ function getProps(attrs, tag, components) {
 		else if (isWrappedByBraces(value)) {
 			const pVal = tag === 'template' && name === 'data'
 				? parseTemplateDataExp(value)
-				: parseBraceExp(value)
+				: parseSafeBraceExp(value)
 			
 			// 如果是自定义组件的属性绑定，记录绑定关系
 			if (components && components[tag]) {
