@@ -115,6 +115,49 @@ describe('Require Path Resolution', () => {
 		expect(compiledCode).not.toMatch(/require\(['"]\.\//)
 	})
 
+	it('should resolve app alias require paths correctly', async () => {
+		fs.mkdirSync('pages/alias-test', { recursive: true })
+		fs.mkdirSync('utils', { recursive: true })
+
+		fs.writeFileSync('app.json', JSON.stringify({
+			pages: ['pages/alias-test/index'],
+			resolveAlias: {
+				'~/*': '/*',
+			},
+		}))
+
+		fs.writeFileSync('utils/util.js', `
+			module.exports = {
+				formatTime: function(time) {
+					return time.toISOString()
+				}
+			}
+		`)
+
+		fs.writeFileSync('pages/alias-test/index.js', `
+			const util = require('~/utils/util.js')
+			Page({
+				onLoad() {
+					console.log(util.formatTime(new Date()))
+				}
+			})
+		`)
+
+		fs.writeFileSync('pages/alias-test/index.json', JSON.stringify({
+			navigationBarTitleText: 'Alias Test'
+		}))
+
+		storeInfo(tempDir)
+
+		const progress = { completedTasks: 0 }
+		const result = await compileJS([{ path: 'pages/alias-test/index' }], null, null, progress)
+
+		const pageModule = result.find(module => module.path === 'pages/alias-test/index')
+		expect(pageModule).toBeDefined()
+		expect(pageModule.code).toContain('require("/utils/util")')
+		expect(pageModule.code).not.toContain('require("~/utils/util.js")')
+	})
+
 	it('should handle npm package requires correctly', async () => {
 		// 创建测试文件结构
 		fs.mkdirSync('pages/npm-test', { recursive: true })

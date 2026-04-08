@@ -1291,10 +1291,9 @@ function getProps(attrs, tag, components) {
 			}
 		}
 		else if (isWrappedByBraces(value)) {
-			let pVal = parseBraceExp(value)
-			if (tag === 'template' && name === 'data') {
-				pVal = `{${pVal}}`
-			}
+			const pVal = tag === 'template' && name === 'data'
+				? parseTemplateDataExp(value)
+				: parseBraceExp(value)
 			
 			// 如果是自定义组件的属性绑定，记录绑定关系
 			if (components && components[tag]) {
@@ -1616,6 +1615,19 @@ function parseBraceExp(exp) {
 	return group.join('').replace(/^\+|\+$/g, '')
 }
 
+/**
+ * 解析 template 的 data 对象表达式，保留对象字面量和内部三元表达式
+ * @param {string} exp
+ * @returns {string} 解析后的对象表达式字符串
+ */
+function parseTemplateDataExp(exp) {
+	const matchResult = exp.trim().match(/^\{\{([\s\S]*)\}\}$/)
+	if (matchResult) {
+		return `{${matchResult[1].trim()}}`
+	}
+	return `{${parseBraceExp(exp)}}`
+}
+
 function transTagWxs($, scriptModule, filePath) {
 	let wxsNodes = $('wxs')
 	if (wxsNodes.length === 0) {
@@ -1861,6 +1873,7 @@ export {
 	parseBraceExp,
 	parseClassRules,
 	parseKeyExpression,
+	parseTemplateDataExp,
 	processIncludeConditionalAttrs,
 	processWxsContent,
 	splitWithBraces,

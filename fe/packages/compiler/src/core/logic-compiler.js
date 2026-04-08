@@ -8,7 +8,7 @@ import MagicString from 'magic-string'
 import { transform } from 'esbuild'
 import ts from 'typescript'
 import { hasCompileInfo } from '../common/utils.js'
-import { getAppConfigInfo, getComponent, getContentByPath, getNpmResolver, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
+import { getAppConfigInfo, getComponent, getContentByPath, getNpmResolver, getTargetPath, getWorkPath, resetStoreInfo, resolveAppAlias } from '../env.js'
 
 // 用于缓存已处理的模块
 const processedModules = new Set()
@@ -447,14 +447,6 @@ function resolveDependencyId(specifier, modulePath, allowAbsolute) {
 		}
 	}
 
-	if (specifier.startsWith('@') || isBareModuleSpecifier(specifier)) {
-		const npmModuleId = resolveNpmModuleId(specifier, modulePath)
-		return {
-			id: npmModuleId || specifier,
-			shouldProcess: Boolean(npmModuleId),
-		}
-	}
-
 	if (specifier.startsWith('./') || specifier.startsWith('../')) {
 		return {
 			id: resolveRelativeModuleId(specifier, modulePath),
@@ -466,6 +458,22 @@ function resolveDependencyId(specifier, modulePath, allowAbsolute) {
 		return {
 			id: allowAbsolute ? normalizeModuleId(specifier) : resolveRelativeModuleId(specifier, modulePath),
 			shouldProcess: true,
+		}
+	}
+
+	const aliasResolved = resolveAppAlias(specifier)
+	if (aliasResolved) {
+		return {
+			id: normalizeModuleId(aliasResolved),
+			shouldProcess: true,
+		}
+	}
+
+	if (specifier.startsWith('@') || isBareModuleSpecifier(specifier)) {
+		const npmModuleId = resolveNpmModuleId(specifier, modulePath)
+		return {
+			id: npmModuleId || specifier,
+			shouldProcess: Boolean(npmModuleId),
 		}
 	}
 
