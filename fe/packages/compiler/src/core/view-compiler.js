@@ -1463,6 +1463,11 @@ function getViewPath(workPath, src) {
 		if (fs.existsSync(mlFullPath)) {
 			return mlFullPath
 		}
+
+		const indexMlFullPath = `${workPath}${aSrc}/index${mlType}`
+		if (fs.existsSync(indexMlFullPath)) {
+			return indexMlFullPath
+		}
 	}
 }
 
@@ -1834,7 +1839,9 @@ function extractWxsDependencies(moduleCode) {
 }
 
 function insertWxsToRenderAst(ast, scriptModule, scriptRes) {
-	for (const sm of scriptModule) {
+	const replacements = []
+
+	for (const [index, sm] of scriptModule.entries()) {
 		if (!scriptRes.has(sm.path)) {
 			scriptRes.set(sm.path, sm.code)
 		}
@@ -1842,28 +1849,46 @@ function insertWxsToRenderAst(ast, scriptModule, scriptRes) {
 		// 使用原始模块名作为模板中的属性名，唯一模块名作为 require 的参数
 		const templatePropertyName = sm.originalName || sm.path
 		const requireModuleName = sm.path
-		
-		const assignmentExpression = types.assignmentExpression(
-			'=',
-			// 创建赋值表达式
-			types.memberExpression(
-				types.identifier('_ctx'), // 对象标识符
-				types.identifier(templatePropertyName), // 使用原始模块名作为属性名
-				false, // 是否是计算属性
+		const localIdentifier = `__wxs_${index}`
+
+		replacements.push({
+			localIdentifier,
+			templatePropertyName,
+		})
+
+		const variableDeclaration = types.variableDeclaration('const', [
+			types.variableDeclarator(
+				types.identifier(localIdentifier),
+				types.callExpression(
+					types.identifier('require'),
+					[types.stringLiteral(requireModuleName)],
+				),
 			),
+		])
 
-			// 创建require调用表达式
-			types.callExpression(
-				types.identifier('require'), // 函数标识符
-				[types.stringLiteral(requireModuleName)], // 使用唯一模块名作为 require 参数
-			),
-		)
-
-		// 将这个赋值表达式包装在一个表达式语句中
-		const expressionStatement = types.expressionStatement(assignmentExpression)
-
-		ast.program.body[0].expression.body.body.unshift(expressionStatement)
+		ast.program.body[0].expression.body.body.unshift(variableDeclaration)
 	}
+
+	if (replacements.length === 0) {
+		return
+	}
+
+	traverse(ast, {
+		MemberExpression(astPath) {
+			const { node } = astPath
+			if (
+				node.object?.type === 'Identifier'
+				&& node.object.name === '_ctx'
+				&& !node.computed
+				&& node.property?.type === 'Identifier'
+			) {
+				const replacement = replacements.find(item => item.templatePropertyName === node.property.name)
+				if (replacement) {
+					astPath.replaceWith(types.identifier(replacement.localIdentifier))
+				}
+			}
+		},
+	})
 }
 
 export {
