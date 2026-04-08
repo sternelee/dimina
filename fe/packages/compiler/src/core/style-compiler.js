@@ -264,6 +264,11 @@ function getAbsolutePath(modulePath) {
 		if (fs.existsSync(ssFullPath)) {
 			return ssFullPath
 		}
+
+		const indexSsFullPath = `${workPath}${src}/index${ssType}`
+		if (fs.existsSync(indexSsFullPath)) {
+			return indexSsFullPath
+		}
 	}
 }
 
