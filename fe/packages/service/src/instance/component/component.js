@@ -464,6 +464,7 @@ export class Component {
 	tO(data, triggerObservers = true) {
 		// 收集需要执行的观察者函数
 		const observersToExecute = []
+		const propertyObserversToExecute = []
 		
 		// 保存旧值并更新数据，收集观察者
 		for (const [prop, val] of Object.entries(data)) {
@@ -482,16 +483,18 @@ export class Component {
 				// 收集属性观察器
 				const observer = this.__info__.properties?.[prop]?.observer
 				if (isString(observer)) {
-					observersToExecute.push(() => this[observer]?.(val, oldVal))
+					propertyObserversToExecute.push(() => this[observer]?.(val, oldVal))
 				}
 				else if (isFunction(observer)) {
-					observersToExecute.push(() => observer.call(this, val, oldVal))
+					propertyObserversToExecute.push(() => observer.call(this, val, oldVal))
 				}
 			}
 		}
 		
-		// 执行所有观察者函数
-		observersToExecute.forEach(fn => fn())
+		observersToExecute.forEach(run => run())
+
+		// 同批次 props 更新时，优先让后写入的属性观察器完成派生状态计算
+		propertyObserversToExecute.reverse().forEach(run => run())
 	}
 
 	getPageId() {
