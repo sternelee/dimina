@@ -3,6 +3,7 @@ import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import { createIntersectionObserver } from '../../api/core/wxml/intersection-observer'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
+import { beginUpdateBatch, createUpdateCallback, endUpdateBatch, enqueueUpdate } from '../../core/update-queue'
 import { addComputedData, deepEqual, filterData, filterInvokeObserver, invokeObserversOnce, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
 
 // 组件生命周期
@@ -56,6 +57,7 @@ export class Component {
 		// 初始化 groupSetData 相关属性
 		this.__groupSetDataMode__ = false // 是否处于批量更新模式
 		this.__groupSetDataBuffer__ = {} // 批量更新数据缓存
+		this.__groupSetDataCallbacks__ = [] // 批量更新回调缓存
 	
 		// 保存子组件 properties 绑定关系（用于同步更新）
 		// 格式：{ childModuleId: { childPropName: parentDataKey } }
@@ -357,7 +359,7 @@ export class Component {
 	 * https://developers.weixin.qq.com/miniprogram/dev/framework/performance/tips/runtime_setData.html
 	 * @param {*} data
 	 */
-	setData(data) {
+	setData(data, callback) {
 		const fData = filterData(data)
 		
 		// 更新数据并收集旧值（用于触发 observers）
@@ -382,20 +384,19 @@ export class Component {
 			for (const key in fData) {
 				this.__groupSetDataBuffer__[key] = fData[key]
 			}
+			if (isFunction(callback)) {
+				this.__groupSetDataCallbacks__.push(callback)
+			}
 			return
 		}
 
 		// 同步更新子组件的 properties，确保与微信小程序时序一致
-		syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)	
+		const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
 
-		message.send({
-			type: 'u',
-			target: 'render',
-			body: {
-				bridgeId: this.bridgeId,
-				moduleId: this.__id__,
-				data: fData,
-			},
+		enqueueUpdate(this.bridgeId, this.__id__, fData, createUpdateCallback(this, callback))
+
+		syncedChildren.forEach(({ child, data }) => {
+			enqueueUpdate(this.bridgeId, child.__id__, data)
 		})
 	}
 
@@ -470,6 +471,7 @@ export class Component {
 				&& Object.hasOwn(this.__pendingSyncedProps__, prop)
 				&& deepEqual(this.__pendingSyncedProps__[prop], val)
 			) {
+				this.data[prop] = val
 				delete this.__pendingSyncedProps__[prop]
 				continue
 			}
@@ -620,9 +622,11 @@ export class Component {
 
 		// 标记进入批量更新模式
 		this.__groupSetDataMode__ = true
+		beginUpdateBatch(this.bridgeId)
 		
 		// 存储批量更新的数据
 		this.__groupSetDataBuffer__ = {}
+		this.__groupSetDataCallbacks__ = []
 		
 		try {
 			// 执行回调函数
@@ -636,19 +640,23 @@ export class Component {
 			// 如果有缓存的数据，统一发送更新
 			if (this.__groupSetDataBuffer__ && Object.keys(this.__groupSetDataBuffer__).length > 0) {
 				const bufferedData = this.__groupSetDataBuffer__
+				const bufferedCallbacks = this.__groupSetDataCallbacks__
 				this.__groupSetDataBuffer__ = {}
+				this.__groupSetDataCallbacks__ = []
+				const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], bufferedData)
 				
 				// 发送合并后的数据更新
-				message.send({
-					type: 'u',
-					target: 'render',
-					body: {
-						bridgeId: this.bridgeId,
-						moduleId: this.__id__,
-						data: bufferedData,
-					},
+				enqueueUpdate(this.bridgeId, this.__id__, bufferedData, createUpdateCallback(this, bufferedCallbacks))
+
+				syncedChildren.forEach(({ child, data }) => {
+					enqueueUpdate(this.bridgeId, child.__id__, data)
 				})
 			}
+			else {
+				this.__groupSetDataBuffer__ = {}
+				this.__groupSetDataCallbacks__ = []
+			}
+			endUpdateBatch(this.bridgeId)
 		}
 	}
 
@@ -698,24 +706,30 @@ export class Component {
 	 * @param {*} options // 触发事件的选项
 	 */
 	async triggerEvent(methodName, detail, options = {}) {
+		if (!methodName) {
+			return
+		}
 		const type = methodName.trim()
-		await runtime.triggerEvent({
-			bridgeId: this.bridgeId,
-			moduleId: this.__pageId__,
-			methodName: this.__eventAttr__[type],
-			event: {
-				type,
-				detail,
-				currentTarget: {
-					id: this.id,
-					dataset: this.dataset,
+		const eventHandler = this.__eventAttr__[type]
+		if (eventHandler) {
+			await runtime.triggerEvent({
+				bridgeId: this.bridgeId,
+				moduleId: this.__pageId__,
+				methodName: eventHandler,
+				event: {
+					type,
+					detail,
+					currentTarget: {
+						id: this.id,
+						dataset: this.dataset,
+					},
+					target: {
+						id: this.id,
+						dataset: this.dataset,
+					},
 				},
-				target: {
-					id: this.id,
-					dataset: this.dataset,
-				},
-			},
-		})
+			})
+		}
 
 		// 事件是否冒泡
 		if (options.bubbles) {

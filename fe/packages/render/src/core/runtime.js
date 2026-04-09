@@ -402,6 +402,26 @@ class Runtime {
 		}
 	}
 
+	updateModules(opts) {
+		const { bridgeId, updates = [], callbackIds = [] } = opts
+		updates.forEach(update => this.updateModule(update))
+
+		if (callbackIds.length > 0) {
+			nextTick(() => {
+				callbackIds.forEach((id) => {
+					message.send({
+						type: 'triggerCallback',
+						target: 'service',
+						body: {
+							bridgeId,
+							id,
+						},
+					})
+				})
+			})
+		}
+	}
+
 	async waitForEl(instance, timeout = 500) {
 		if (!instance) {
 			return

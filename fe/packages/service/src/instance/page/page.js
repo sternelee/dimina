@@ -2,6 +2,7 @@ import { cloneDeep, isFunction, set } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
+import { createUpdateCallback, enqueueUpdate } from '../../core/update-queue'
 import { addComputedData, filterData, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
 
 // https://developers.weixin.qq.com/miniprogram/dev/reference/api/Page.html
@@ -45,7 +46,7 @@ export class Page {
 		})
 	}
 
-	setData(data) {
+	setData(data, callback) {
 		const fData = filterData(data)
 		
 		// 更新数据
@@ -58,16 +59,12 @@ export class Page {
 		}
 
 		// 同步更新子组件的 properties，确保与微信小程序时序一致
-		syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
+		const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
 
-		message.send({
-			type: 'u',
-			target: 'render',
-			body: {
-				bridgeId: this.bridgeId,
-				moduleId: this.__id__,
-				data: fData,
-			},
+		enqueueUpdate(this.bridgeId, this.__id__, fData, createUpdateCallback(this, callback))
+
+		syncedChildren.forEach(({ child, data }) => {
+			enqueueUpdate(this.bridgeId, child.__id__, data)
 		})
 	}
 

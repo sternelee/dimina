@@ -672,6 +672,7 @@ function evaluateExpression(bindingInfo, parentData) {
  */
 export function syncUpdateChildrenProps(parent, allInstances, changedData) {
 	const children = Object.values(allInstances || {})
+	const syncedChildren = []
 	
 	// 遍历所有子组件
 	for (const child of children) {
@@ -702,9 +703,12 @@ export function syncUpdateChildrenProps(parent, allInstances, changedData) {
 
 		// 如果有数据需要更新，直接触发子组件 observers，确保属性驱动的行为在 service 侧即时生效
 		if (Object.keys(updateData).length > 0) {
+			child.tO?.(updateData)
 			child.__pendingSyncedProps__ = child.__pendingSyncedProps__ || {}
 			Object.assign(child.__pendingSyncedProps__, updateData)
-			child.tO?.(updateData)
+			syncedChildren.push({ child, data: updateData })
 		}
 	}
+
+	return syncedChildren
 }

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import runtime from '../src/core/runtime'
 import { Component } from '../src/instance/component/component'
 
 describe('Component.tO observer ordering', () => {
@@ -47,11 +48,11 @@ describe('Component.tO observer ordering', () => {
 		])
 	})
 
-	it('skips duplicate observer execution for identical render replay after parent sync', () => {
+	it('skips duplicate observer execution but keeps data in sync for identical render replay after parent sync', () => {
 		const observeShow = vi.fn()
 		const instance = {
 			data: {
-				show: true,
+				show: false,
 			},
 			__pendingSyncedProps__: {
 				show: true,
@@ -74,5 +75,21 @@ describe('Component.tO observer ordering', () => {
 		expect(observeShow).not.toHaveBeenCalled()
 		expect(instance.__pendingSyncedProps__).toEqual({})
 		expect(instance.data.show).toBe(true)
+	})
+
+	it('does not throw when triggerEvent has no external listener', async () => {
+		const instance = {
+			bridgeId: 'bridge-1',
+			__pageId__: 'page-1',
+			__eventAttr__: {},
+			id: 'tabs-1',
+			dataset: {},
+		}
+		const trigger = vi.spyOn(runtime, 'triggerEvent')
+
+		await expect(Component.prototype.triggerEvent.call(instance, 'change', { value: 'follow' })).resolves.toBeUndefined()
+		expect(trigger).not.toHaveBeenCalled()
+
+		trigger.mockRestore()
 	})
 })
