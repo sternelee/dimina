@@ -64,7 +64,7 @@ if (!isMainThread) {
 async function compileSS(pages, root, progress) {
 	// page 样式
 	for (const page of pages) {
-		const code = await buildCompileCss(page, []) || ''
+		const code = await buildCompileCss(page, [], new Set()) || ''
 		const filename = `${page.path.replace(/\//g, '_')}`
 		if (root) {
 			const subDir = `${getTargetPath()}/${root}`
@@ -87,8 +87,8 @@ async function compileSS(pages, root, progress) {
 	}
 }
 
-async function buildCompileCss(module, depthChain = []) {
-	const currentPath = module.path
+async function buildCompileCss(module, depthChain = [], compiledPaths = new Set()) {
+	const currentPath = module.path || module.absolutePath
 
 	// Circular dependency detected
 	if (depthChain.includes(currentPath)) {
@@ -100,6 +100,10 @@ async function buildCompileCss(module, depthChain = []) {
 		console.warn('[style]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
 		return
 	}
+	if (compiledPaths.has(currentPath)) {
+		return ''
+	}
+	compiledPaths.add(currentPath)
 	depthChain = [...depthChain, currentPath]
 	let result = await enhanceCSS(module) || ''
 
@@ -112,7 +116,7 @@ async function buildCompileCss(module, depthChain = []) {
 			if (!componentModule) {
 				continue
 			}
-			result += await buildCompileCss(componentModule, depthChain)
+			result += await buildCompileCss(componentModule, depthChain, compiledPaths)
 		}
 	}
 
@@ -179,7 +183,7 @@ async function enhanceCSS(module) {
 
 			node.remove()
 
-			promises.push(buildCompileCss({ absolutePath: importFullPath, id: module.id }))
+			promises.push(buildCompileCss({ absolutePath: importFullPath, id: module.id }, [], new Set()))
 		}
 		else if (node.type === 'rule') {
 			// 处理 ::v-deep
