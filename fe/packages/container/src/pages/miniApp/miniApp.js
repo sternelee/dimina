@@ -720,7 +720,6 @@ export class MiniApp {
 	}
 
 	getSystemInfoSync() {
-		const rect = this.getMenuButtonBoundingClientRect()
 		const statusBar = this.parent.parent.root.querySelector('.iphone__status-bar')
 		const viewport = this.parent.el.querySelector('.dimina-native-webview__root')
 		const viewportRect = viewport?.getBoundingClientRect()

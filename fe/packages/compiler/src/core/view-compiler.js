@@ -39,7 +39,7 @@ function generateCodeFromAst(ast) {
  * 为模板表达式中的成员访问补充空值保护，避免生成的 render 函数直接访问 null/undefined 属性
  * 例如: stickyProps.zIndex -> stickyProps?.zIndex
  * @param {string} expression
- * @returns {string}
+ * @returns {string} 添加了可选链操作符的表达式字符串
  */
 function addOptionalChaining(expression) {
 	if (!expression || typeof expression !== 'string') {
