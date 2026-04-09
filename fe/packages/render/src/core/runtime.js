@@ -41,6 +41,9 @@ class Runtime {
 		this.pageId = null
 		this.instance = new Map()
 		this.setupData = new Map()
+		this.modulePaths = new Map()
+		this.initializedModules = new Set()
+		this.preInitUpdates = new Map()
 		this.intersectionObservers = new Map()
 
 		window._Fragment = Fragment
@@ -164,6 +167,7 @@ class Runtime {
 							const instance = getCurrentInstance().proxy
 							instance.__page__ = true
 							self.instance.set(self.pageId, instance)
+							self.modulePaths.set(self.pageId, path)
 
 							let ticking = false
 							const handleScroll = () => {
@@ -205,11 +209,7 @@ class Runtime {
 						const data = reactive({})
 						self.setupData.set(self.pageId, data)
 						const initData = await message.wait(self.pageId)
-						const entries = Object.entries(initData)
-						for (let i = 0; i < entries.length; i++) {
-							const [key, value] = entries[i]
-							set(data, key, value)
-						}
+						self.applyInitialData(self.pageId, data, initData)
 						return data
 					},
 					components,
@@ -219,6 +219,37 @@ class Runtime {
 
 			},
 		}
+	}
+
+	getParentModuleId(vueInstance) {
+		let parent = vueInstance?.parent
+		while (parent) {
+			for (const [moduleId, instance] of this.instance.entries()) {
+				if (instance === parent.proxy) {
+					return moduleId
+				}
+			}
+			parent = parent.parent
+		}
+	}
+
+	applyInitialData(moduleId, data, initData) {
+		const entries = Object.entries(initData)
+		for (let i = 0; i < entries.length; i++) {
+			const [key, value] = entries[i]
+			set(data, key, value)
+		}
+
+		const pendingUpdate = this.preInitUpdates.get(moduleId)
+		if (pendingUpdate) {
+			for (const [key, value] of Object.entries(pendingUpdate)) {
+				set(data, key, value)
+			}
+			this.preInitUpdates.delete(moduleId)
+		}
+
+		this.initializedModules.add(moduleId)
+		return pendingUpdate
 	}
 
 	createComponent(path, bridgeId, usingComponents, depthChain = []) {
@@ -254,7 +285,9 @@ class Runtime {
 						props,
 						sId: parentInfo.sId,
 					})
-					const parentId = parentInfo.id
+					const vueInstance = getCurrentInstance()
+					const vueParentId = self.getParentModuleId(vueInstance)
+					const parentId = vueParentId || parentInfo.id
 					const pageInfo = inject(path)
 					const pageId = pageInfo.id
 					const moduleId = `${id}_${uuid()}`
@@ -269,8 +302,9 @@ class Runtime {
 						pageId,
 					})
 
-					const instance = getCurrentInstance().proxy
+					const instance = vueInstance.proxy
 					self.instance.set(moduleId, instance)
+					self.modulePaths.set(moduleId, componentPath)
 
 					const externalClasses = []
 					for (const [k, v] of Object.entries(module.props ?? {})) {
@@ -312,7 +346,7 @@ class Runtime {
 						nextTick(() => {
 							// 从 DOM 元素读取属性绑定信息
 							const propBindings = instance.$el?._propBindings
-							
+
 							message.send({
 								type: 'mR',
 								target: 'service',
@@ -349,15 +383,23 @@ class Runtime {
 					})
 					self.instance.delete(moduleId)
 					self.setupData.delete(moduleId)
+					self.modulePaths.delete(moduleId)
+					self.initializedModules.delete(moduleId)
+					self.preInitUpdates.delete(moduleId)
 				})
 
 			const data = reactive({})
 			self.setupData.set(moduleId, data)
+			let skipInitialPropsNotify = true
 			
 		watch(
 				props,
 				(newProps) => {
 					Object.assign(data, newProps)
+					if (skipInitialPropsNotify) {
+						skipInitialPropsNotify = false
+						return
+					}
 					message.send({
 						type: 't',
 						target: 'service',
@@ -375,11 +417,7 @@ class Runtime {
 			)
 					
 					const initData = await message.wait(moduleId)
-					const entries = Object.entries(initData)
-					for (let i = 0; i < entries.length; i++) {
-						const [key, value] = entries[i]
-						set(data, key, value)
-					}
+					self.applyInitialData(moduleId, data, initData)
 					return data
 				},
 				render: module.moduleInfo.render,
@@ -393,6 +431,11 @@ class Runtime {
 		const setupData = this.setupData.get(moduleId)
 
 		if (setupData) {
+			if (!this.initializedModules.has(moduleId)) {
+				const pendingUpdate = this.preInitUpdates.get(moduleId) || {}
+				Object.assign(pendingUpdate, data)
+				this.preInitUpdates.set(moduleId, pendingUpdate)
+			}
 			for (const key in data) {
 				set(setupData, key, data[key])
 			}

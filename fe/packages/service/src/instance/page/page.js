@@ -28,6 +28,7 @@ export class Page {
 		// 保存子组件 properties 绑定关系（用于同步更新）
 		// 格式：{ childModuleId: { childPropName: parentDataKey } }
 		this.__childPropsBindings__ = {}
+		this.__pendingInitSetDataCallbacks__ = []
 	}
 
 	init() {
@@ -46,6 +47,16 @@ export class Page {
 		})
 	}
 
+	flushInitSetDataCallbacks() {
+		if (this.__pendingInitSetDataCallbacks__.length === 0) {
+			return
+		}
+
+		const callbacks = this.__pendingInitSetDataCallbacks__
+		this.__pendingInitSetDataCallbacks__ = []
+		enqueueUpdate(this.bridgeId, this.__id__, {}, createUpdateCallback(this, callbacks))
+	}
+
 	setData(data, callback) {
 		const fData = filterData(data)
 		
@@ -55,6 +66,9 @@ export class Page {
 		}
 
 		if (!this.initd) {
+			if (isFunction(callback)) {
+				this.__pendingInitSetDataCallbacks__.push(callback)
+			}
 			return
 		}
 

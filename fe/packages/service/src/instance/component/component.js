@@ -58,6 +58,7 @@ export class Component {
 		this.__groupSetDataMode__ = false // 是否处于批量更新模式
 		this.__groupSetDataBuffer__ = {} // 批量更新数据缓存
 		this.__groupSetDataCallbacks__ = [] // 批量更新回调缓存
+		this.__pendingInitSetDataCallbacks__ = [] // 初始化期间 setData 回调缓存
 	
 		// 保存子组件 properties 绑定关系（用于同步更新）
 		// 格式：{ childModuleId: { childPropName: parentDataKey } }
@@ -95,6 +96,16 @@ export class Component {
 				},
 			})
 		})
+	}
+
+	flushInitSetDataCallbacks() {
+		if (this.__pendingInitSetDataCallbacks__.length === 0) {
+			return
+		}
+
+		const callbacks = this.__pendingInitSetDataCallbacks__
+		this.__pendingInitSetDataCallbacks__ = []
+		enqueueUpdate(this.bridgeId, this.__id__, {}, createUpdateCallback(this, callbacks))
 	}
 
 	/**
@@ -195,7 +206,7 @@ export class Component {
 
 			// 根据关系类型过滤组件
 			const relatedComponents = matchingComponents.filter(instance => {
-				return this.#checkRelationType(instance, type)
+				return this.#checkRelationType(instance, type) || this.#checkImplicitRelation(instance, type)
 			})
 
 			// 建立关系连接
@@ -241,10 +252,31 @@ export class Component {
 				matches = targetInstance.is === resolvedPath || targetInstance.is.endsWith(`/${resolvedPath}`)
 			}
 			
-			if (matches && this.#checkRelationType(targetInstance, type)) {
+			const direct = this.#checkRelationType(targetInstance, type)
+			const implicit = this.#checkImplicitRelation(targetInstance, type)
+
+			if (matches && (direct || implicit)) {
 				this.#linkRelation(relationPath, targetInstance, relationConfig)
 			}
 		}
+	}
+
+	#checkImplicitRelation(targetInstance, relationType) {
+		if (relationType !== 'descendant' && relationType !== 'ancestor') {
+			return false
+		}
+
+		const reverseRelationType = relationType === 'descendant' ? 'ancestor' : 'descendant'
+		const targetRelations = targetInstance.__info__?.relations
+		if (!targetRelations) {
+			return false
+		}
+
+		return Object.entries(targetRelations).some(([relationPath, relationConfig]) => {
+			const resolvedPath = targetInstance.__relationPaths__?.get(relationPath)
+			return relationConfig.type === reverseRelationType
+				&& (this.is === resolvedPath || this.is.endsWith(`/${resolvedPath}`))
+		})
 	}
 
 	/**
@@ -375,6 +407,9 @@ export class Component {
 		}
 
 		if (!this.initd) {
+			if (isFunction(callback)) {
+				this.__pendingInitSetDataCallbacks__.push(callback)
+			}
 			return
 		}
 

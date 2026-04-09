@@ -133,6 +133,7 @@ class Runtime {
 			instance.componentReadied()
 			// 标记组件已准备就绪
 			instance.__componentReadied__ = true
+			instance.flushInitSetDataCallbacks?.()
 			
 			// 检查是否可以调用页面的 onReady
 			const pageInstance = this.getPageInstance(bridgeId)
@@ -204,6 +205,7 @@ class Runtime {
 		// 标记页面准备就绪，但延迟调用 onReady
 		// 等待所有组件的 ready 执行完毕后再调用
 		instance.__pageReadyPending__ = true
+		instance.flushInitSetDataCallbacks?.()
 		
 		// 检查是否所有组件都已经准备就绪
 		this.checkAndCallPageReady(bridgeId, moduleId)
