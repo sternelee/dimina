@@ -693,16 +693,61 @@ export class MiniApp {
 	}
 
 	getMenuButtonBoundingClientRect() {
-		return this.el.querySelector('.dimina-mini-app-navigation__actions').getBoundingClientRect()
+		const rect = this.el.querySelector('.dimina-mini-app-navigation__actions').getBoundingClientRect()
+		const statusBar = this.parent.parent.root.querySelector('.iphone__status-bar')
+		const statusBarHeight = statusBar?.getBoundingClientRect().height || 20
+		// 对齐到小程序导航栏的几何模型：
+		// navbar 总高约等于 statusBarHeight + 40px，胶囊在内容区内垂直居中
+		const normalizedTop = statusBarHeight + 4
+		const normalizedBottom = normalizedTop + rect.height
+		return {
+			top: normalizedTop,
+			right: rect.right,
+			bottom: normalizedBottom,
+			left: rect.left,
+			width: rect.width,
+			height: rect.height,
+			x: rect.x,
+			y: normalizedTop,
+		}
+	}
+
+	getHostEnvSnapshot() {
+		return {
+			menuRect: this.getMenuButtonBoundingClientRect(),
+			systemInfo: this.getSystemInfoSync(),
+		}
 	}
 
 	getSystemInfoSync() {
+		const rect = this.getMenuButtonBoundingClientRect()
+		const statusBar = this.parent.parent.root.querySelector('.iphone__status-bar')
+		const viewport = this.parent.el.querySelector('.dimina-native-webview__root')
+		const viewportRect = viewport?.getBoundingClientRect()
+		const width = viewportRect?.width || this.el.clientWidth || 375
+		const height = viewportRect?.height || this.el.clientHeight || 667
+		const statusBarHeight = statusBar?.getBoundingClientRect().height || 20
+
 		return {
 			brand: 'devtools',
 			model: 'web',
 			platform: 'devtools',
 			system: 'web',
 			SDKVersion: '3.0.0', // vant组件库 判断  canIUseModel version 需要大于 2.9.3
+			pixelRatio: globalThis.devicePixelRatio || 1,
+			screenWidth: width,
+			screenHeight: height,
+			windowWidth: width,
+			windowHeight: height,
+			statusBarHeight,
+			safeArea: {
+				left: 0,
+				right: width,
+				top: statusBarHeight,
+				bottom: height,
+				width,
+				height: Math.max(height - statusBarHeight, 0),
+			},
 		}
 	}
 

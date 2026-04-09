@@ -597,8 +597,15 @@ class Runtime {
 		}
 
 		if (fields.size) {
-			data.width = targetElement.offsetWidth
-			data.height = targetElement.offsetHeight
+			if (fields.rect) {
+				const { width, height } = targetElement.getBoundingClientRect()
+				data.width = width
+				data.height = height
+			}
+			else {
+				data.width = targetElement.offsetWidth
+				data.height = targetElement.offsetHeight
+			}
 		}
 
 		if (fields.scrollOffset) {
