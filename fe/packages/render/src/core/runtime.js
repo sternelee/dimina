@@ -41,7 +41,6 @@ class Runtime {
 		this.pageId = null
 		this.instance = new Map()
 		this.setupData = new Map()
-		this.modulePaths = new Map()
 		this.initializedModules = new Set()
 		this.preInitUpdates = new Map()
 		this.intersectionObservers = new Map()
@@ -167,7 +166,6 @@ class Runtime {
 							const instance = getCurrentInstance().proxy
 							instance.__page__ = true
 							self.instance.set(self.pageId, instance)
-							self.modulePaths.set(self.pageId, path)
 
 							let ticking = false
 							const handleScroll = () => {
@@ -304,7 +302,6 @@ class Runtime {
 
 					const instance = vueInstance.proxy
 					self.instance.set(moduleId, instance)
-					self.modulePaths.set(moduleId, componentPath)
 
 					const externalClasses = []
 					for (const [k, v] of Object.entries(module.props ?? {})) {
@@ -383,7 +380,6 @@ class Runtime {
 					})
 					self.instance.delete(moduleId)
 					self.setupData.delete(moduleId)
-					self.modulePaths.delete(moduleId)
 					self.initializedModules.delete(moduleId)
 					self.preInitUpdates.delete(moduleId)
 				})

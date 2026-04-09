@@ -82,6 +82,7 @@ export class Component {
 
 		this.#initLifecycle()
 		this.#initCustomMethods()
+		this.#invokeInitialPropertyObservers()
 		this.#initRelations()
 		this.#initComponentExport()
 		this.#invokeInitLifecycle().then(() => {
@@ -474,6 +475,26 @@ export class Component {
 				this[attr] = methods[attr].bind(this)
 			}
 		}
+	}
+
+	#invokeInitialPropertyObservers() {
+		if (!this.__isComponent__ || !this.__info__.properties) {
+			return
+		}
+
+		const propertyObserversToExecute = []
+		for (const prop of Object.keys(this.__info__.properties)) {
+			const observer = this.__info__.properties[prop]?.observer
+			const val = this.data[prop]
+			if (isString(observer)) {
+				propertyObserversToExecute.push(() => this[observer]?.(val, undefined))
+			}
+			else if (isFunction(observer)) {
+				propertyObserversToExecute.push(() => observer.call(this, val, undefined))
+			}
+		}
+
+		propertyObserversToExecute.reverse().forEach(run => run())
 	}
 
 	async #invokeInitLifecycle() {

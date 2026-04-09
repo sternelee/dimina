@@ -1,8 +1,41 @@
 import { describe, expect, it, vi } from 'vitest'
 import runtime from '../src/core/runtime'
 import { Component } from '../src/instance/component/component'
+import { ComponentModule } from '../src/instance/component/component-module'
 
 describe('Component.tO observer ordering', () => {
+	it('executes property observers for initial component properties', () => {
+		const componentModule = new ComponentModule({
+			properties: {
+				icon: {
+					observer: 'observeIcon',
+				},
+			},
+			methods: {
+				observeIcon(icon) {
+					this.setData({ _icon: icon ? { name: icon } : null })
+				},
+			},
+		}, {
+			component: true,
+		})
+
+		const component = new Component(componentModule, {
+			bridgeId: 'bridge-1',
+			moduleId: 'button-1',
+			path: '/button',
+			pageId: 'page-1',
+			parentId: 'page-1',
+			properties: {
+				icon: 'add',
+			},
+		})
+
+		component.init()
+
+		expect(component.data._icon).toEqual({ name: 'add' })
+	})
+
 	it('executes property observers in reverse batch order after raw observers', () => {
 		const calls = []
 		const instance = {
