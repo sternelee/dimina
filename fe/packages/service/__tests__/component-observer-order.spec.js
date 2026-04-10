@@ -125,4 +125,29 @@ describe('Component.tO observer ordering', () => {
 
 		trigger.mockRestore()
 	})
+
+	it('executes property observers for internal setData on properties', () => {
+		const instance = {
+			data: {
+				visible: false,
+			},
+			initd: false,
+			__pendingInitSetDataCallbacks__: [],
+			__info__: {
+				properties: {
+					visible: {
+						observer: 'watchVisible',
+					},
+				},
+			},
+			watchVisible: vi.fn(),
+		}
+
+		Component.prototype.setData.call(instance, {
+			visible: true,
+		})
+
+		expect(instance.data.visible).toBe(true)
+		expect(instance.watchVisible).toHaveBeenCalledWith(true, false)
+	})
 })

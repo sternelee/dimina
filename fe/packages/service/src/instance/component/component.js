@@ -11,6 +11,44 @@ const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached',
 // 组件所在页面的生命周期
 const pageLifetimes = ['show', 'hide', 'resize', 'routeDone']
 
+function invokeBehaviorObservers(ctx, changedKeys, oldValues) {
+	if (!ctx.__info__.behaviorObservers) {
+		return
+	}
+
+	for (const observerKey in ctx.__info__.behaviorObservers) {
+		const observers = ctx.__info__.behaviorObservers[observerKey]
+		if (!Array.isArray(observers) || observers.length === 0) {
+			continue
+		}
+
+		for (const changedKey of changedKeys) {
+			observers.forEach((observer) => {
+				filterInvokeObserver(changedKey, { [observerKey]: observer }, ctx.data, ctx, oldValues[changedKey])
+			})
+		}
+	}
+}
+
+function invokePropertyObservers(ctx, changedKeys, oldValues) {
+	const propertyObserversToExecute = []
+
+	for (const prop of changedKeys) {
+		const observer = ctx.__info__.properties?.[prop]?.observer
+		const val = ctx.data[prop]
+		const oldVal = oldValues[prop]
+
+		if (isString(observer)) {
+			propertyObserversToExecute.push(() => ctx[observer]?.(val, oldVal))
+		}
+		else if (isFunction(observer)) {
+			propertyObserversToExecute.push(() => observer.call(ctx, val, oldVal))
+		}
+	}
+
+	propertyObserversToExecute.reverse().forEach(run => run())
+}
+
 /**
  * https://developers.weixin.qq.com/miniprogram/dev/reference/api/Component.html
  */
@@ -406,6 +444,8 @@ export class Component {
 		if (this.__info__.observers) {
 			invokeObserversOnce(Object.keys(fData), this.__info__.observers, this.data, this, oldValues)
 		}
+		invokeBehaviorObservers(this, Object.keys(fData), oldValues)
+		invokePropertyObservers(this, Object.keys(fData), oldValues)
 
 		if (!this.initd) {
 			if (isFunction(callback)) {
@@ -566,6 +606,7 @@ export class Component {
 		}
 		
 		observersToExecute.forEach(run => run())
+		invokeBehaviorObservers(this, Object.keys(nextData), Object.fromEntries(Object.entries(nextData).map(([prop]) => [prop, undefined])))
 
 		// 同批次 props 更新时，优先让后写入的属性观察器完成派生状态计算
 		propertyObserversToExecute.reverse().forEach(run => run())
