@@ -705,6 +705,211 @@ class Runtime {
 		return data
 	}
 
+	triggerCallback(bridgeId, id, args = [], data) {
+		if (!id) {
+			return
+		}
+		const body = {
+			bridgeId,
+			id,
+		}
+		if (args !== undefined) {
+			body.args = args
+		}
+		if (data !== undefined) {
+			body.data = data
+		}
+		message.send({
+			type: 'triggerCallback',
+			target: 'service',
+			body,
+		})
+	}
+
+	triggerCanvasFailure(bridgeId, params, errMsg) {
+		const result = { errMsg }
+		this.triggerCallback(bridgeId, params.fail, [result], result)
+		this.triggerCallback(bridgeId, params.complete, [result], result)
+	}
+
+	async getCanvasElement(canvasId, moduleId) {
+		const selector = `canvas[canvas-id="${canvasId}"]`
+		const scope = moduleId ? await this.waitForEl(this.instance.get(moduleId)) : document.body
+		if (scope?.querySelector) {
+			const scopedCanvas = await this.waitForElement(scope, selector, 'querySelector')
+			if (scopedCanvas) {
+				return scopedCanvas
+			}
+		}
+		return document.querySelector(selector)
+	}
+
+	ensureCanvasResolution(canvas) {
+		const rect = canvas.getBoundingClientRect()
+		const width = Math.max(Math.round(rect.width), 1)
+		const height = Math.max(Math.round(rect.height), 1)
+
+		if (canvas.width !== width) {
+			canvas.width = width
+		}
+		if (canvas.height !== height) {
+			canvas.height = height
+		}
+	}
+
+	loadCanvasImage(src) {
+		return new Promise((resolve, reject) => {
+			const image = new Image()
+			image.crossOrigin = 'anonymous'
+			image.onload = () => resolve(image)
+			image.onerror = () => reject(new Error(`Failed to load image: ${src}`))
+			image.src = src
+		})
+	}
+
+	async replayCanvasActions(context, actions = []) {
+		const state = {
+			fontSize: 10,
+		}
+
+		const applyFont = () => {
+			context.font = `${state.fontSize}px sans-serif`
+		}
+		applyFont()
+
+		for (const action of actions) {
+			const { type, args = [] } = action || {}
+			switch (type) {
+				case 'beginPath':
+				case 'closePath':
+				case 'moveTo':
+				case 'lineTo':
+				case 'rect':
+				case 'arc':
+				case 'quadraticCurveTo':
+				case 'bezierCurveTo':
+				case 'fill':
+				case 'stroke':
+				case 'clearRect':
+				case 'save':
+				case 'restore':
+				case 'translate':
+				case 'rotate':
+				case 'scale':
+					context[type](...args)
+					break
+				case 'fillText':
+					context.fillText(args[0], args[1], args[2], args[3])
+					break
+				case 'drawImage': {
+					const [src, ...drawArgs] = args
+					const image = await this.loadCanvasImage(src)
+					context.drawImage(image, ...drawArgs)
+					break
+				}
+				case 'setFillStyle':
+					context.fillStyle = args[0]
+					break
+				case 'setStrokeStyle':
+					context.strokeStyle = args[0]
+					break
+				case 'setGlobalAlpha':
+					context.globalAlpha = args[0]
+					break
+				case 'setLineCap':
+					context.lineCap = args[0]
+					break
+				case 'setLineJoin':
+					context.lineJoin = args[0]
+					break
+				case 'setLineWidth':
+					context.lineWidth = args[0]
+					break
+				case 'setMiterLimit':
+					context.miterLimit = args[0]
+					break
+				case 'setFontSize':
+					state.fontSize = args[0]
+					applyFont()
+					break
+				case 'setShadow':
+					context.shadowOffsetX = args[0]
+					context.shadowOffsetY = args[1]
+					context.shadowBlur = args[2]
+					context.shadowColor = args[3]
+					break
+				default:
+					console.warn('[system]', '[render]', `Unsupported canvas action: ${type}`)
+			}
+		}
+	}
+
+	async drawCanvas({ bridgeId, params }) {
+		const { canvasId, actions = [], reserve = false } = params
+		const canvas = await this.getCanvasElement(canvasId, params.moduleId)
+		if (!canvas) {
+			this.triggerCanvasFailure(bridgeId, params, `drawCanvas:fail canvas ${canvasId} not found`)
+			return
+		}
+
+		try {
+			this.ensureCanvasResolution(canvas)
+			const context = canvas.getContext('2d')
+			if (!reserve) {
+				context.clearRect(0, 0, canvas.width, canvas.height)
+			}
+			await this.replayCanvasActions(context, actions)
+			const result = { errMsg: 'drawCanvas:ok' }
+			this.triggerCallback(bridgeId, params.success, [result], result)
+			this.triggerCallback(bridgeId, params.complete, [result], result)
+		}
+		catch (error) {
+			this.triggerCanvasFailure(bridgeId, params, `drawCanvas:fail ${error.message}`)
+		}
+	}
+
+	async canvasToTempFilePath({ bridgeId, params }) {
+		const { canvasId, x = 0, y = 0, width, height, destWidth, destHeight, fileType = 'png', quality = 1 } = params
+		const canvas = await this.getCanvasElement(canvasId, params.moduleId)
+		if (!canvas) {
+			this.triggerCanvasFailure(bridgeId, params, `canvasToTempFilePath:fail canvas ${canvasId} not found`)
+			return
+		}
+
+		try {
+			this.ensureCanvasResolution(canvas)
+			const exportWidth = width || canvas.width
+			const exportHeight = height || canvas.height
+			const outputCanvas = document.createElement('canvas')
+			outputCanvas.width = destWidth || exportWidth
+			outputCanvas.height = destHeight || exportHeight
+			const outputContext = outputCanvas.getContext('2d')
+			outputContext.drawImage(
+				canvas,
+				x,
+				y,
+				exportWidth,
+				exportHeight,
+				0,
+				0,
+				outputCanvas.width,
+				outputCanvas.height,
+			)
+
+			const mimeType = fileType === 'jpg' || fileType === 'jpeg' ? 'image/jpeg' : 'image/png'
+			const tempFilePath = outputCanvas.toDataURL(mimeType, quality)
+			const result = {
+				errMsg: 'canvasToTempFilePath:ok',
+				tempFilePath,
+			}
+			this.triggerCallback(bridgeId, params.success, [result], result)
+			this.triggerCallback(bridgeId, params.complete, [result], result)
+		}
+		catch (error) {
+			this.triggerCanvasFailure(bridgeId, params, `canvasToTempFilePath:fail ${error.message}`)
+		}
+	}
+
 	showToast({ params }) {
 		window.__globalAPI.showToast(params)
 	}
