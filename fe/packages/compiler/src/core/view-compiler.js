@@ -84,6 +84,23 @@ function parseSafeBraceExp(exp) {
 	return addOptionalChaining(parseBraceExp(exp))
 }
 
+function transformTextInterpolation(text) {
+	if (!text || typeof text !== 'string' || !isWrappedByBraces(text)) {
+		return text
+	}
+
+	return text.replace(braceRegex, (match, bracePart) => {
+		if (!bracePart) {
+			return match
+		}
+		const matchResult = bracePart.match(noBraceRegex)
+		if (!matchResult) {
+			return match
+		}
+		return `{{${addOptionalChaining(matchResult[1].trim())}}}`
+	})
+}
+
 // 页面文件编译内容缓存
 const compileResCache = new Map()
 
@@ -1113,7 +1130,7 @@ function transHtmlTag(html, res, components, componentPlaceholder) {
 				res.push(transTag({ isStart: true, tag, attrs, components, componentPlaceholder }))
 			},
 			ontext(text) {
-				res.push(text)
+				res.push(transformTextInterpolation(text))
 			},
 			onclosetag(tag) {
 				res.push(transTag({ tag, attrs: attrsList.pop(), components }))
