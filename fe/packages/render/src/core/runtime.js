@@ -270,6 +270,26 @@ class Runtime {
 		return pendingUpdate
 	}
 
+	refreshProxyAccess(moduleId, changedData) {
+		const instance = this.instance.get(moduleId)
+		const internal = instance?.$
+		if (!internal) {
+			return
+		}
+
+		const { accessCache, ctx } = internal
+		for (const [key, value] of Object.entries(changedData)) {
+			if (accessCache && Object.hasOwn(accessCache, key)) {
+				delete accessCache[key]
+			}
+			if (ctx && !Object.hasOwn(ctx, key)) {
+				ctx[key] = value
+			}
+		}
+
+		internal.update?.()
+	}
+
 	createComponent(path, bridgeId, usingComponents, depthChain = []) {
 		// 循环依赖检测（A -> B -> A）
 		if (depthChain.includes(path)) {
@@ -447,13 +467,23 @@ class Runtime {
 		const setupData = this.setupData.get(moduleId)
 
 		if (setupData) {
+			let hasNewReactiveKey = false
+			const newKeys = {}
+
 			if (!this.initializedModules.has(moduleId)) {
 				const pendingUpdate = this.preInitUpdates.get(moduleId) || {}
 				Object.assign(pendingUpdate, data)
 				this.preInitUpdates.set(moduleId, pendingUpdate)
 			}
 			for (const key in data) {
+				if (!Object.hasOwn(setupData, key)) {
+					hasNewReactiveKey = true
+					newKeys[key] = data[key]
+				}
 				set(setupData, key, data[key])
+			}
+			if (hasNewReactiveKey) {
+				this.refreshProxyAccess(moduleId, newKeys)
 			}
 		}
 		else {
