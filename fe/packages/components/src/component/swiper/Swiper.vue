@@ -3,6 +3,7 @@
 // https://developers.weixin.qq.com/miniprogram/dev/component/swiper.html
 
 import { transformRpx } from '@dimina/common'
+import { cloneVNode } from 'vue'
 import { triggerEvent, useInfo } from '@/common/events'
 
 const props = defineProps({
@@ -143,6 +144,13 @@ function findSwiperItems(nodes) {
 	return res
 }
 
+function cloneSwiperItems(items, position) {
+	return items.map((item, idx) => cloneVNode(item, {
+		key: `${position}-${idx}-${item.key ?? idx}`,
+		'data-dd-cloned': '',
+	}))
+}
+
 const swiperSliders = ref(null)
 const swiperFrame = ref(null)
 
@@ -247,8 +255,8 @@ watchEffect(() => {
 		slotItems.value = res
 
 		if (circularEnabled.value) {
-			leadingClonedItems.value = res.slice(-normalizedDisplayMultipleItems.value)
-			trailingClonedItems.value = res.slice(0, normalizedDisplayMultipleItems.value)
+			leadingClonedItems.value = cloneSwiperItems(res.slice(-normalizedDisplayMultipleItems.value), 'leading')
+			trailingClonedItems.value = cloneSwiperItems(res.slice(0, normalizedDisplayMultipleItems.value), 'trailing')
 		}
 		else {
 			leadingClonedItems.value = []
