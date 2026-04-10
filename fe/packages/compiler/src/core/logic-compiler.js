@@ -227,7 +227,7 @@ async function buildJSByPath(packageName, module, compileRes, mainCompileRes, ad
 				continue
 			}
 
-			await buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, depthChain, toMainSubPackage)
+			await buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, depthChain, putMain || toMainSubPackage)
 
 			componentsObj[name] = path
 		}
@@ -341,7 +341,7 @@ async function buildJSByPath(packageName, module, compileRes, mainCompileRes, ad
 
 	// 处理所有依赖模块（异步）
 	for (const depId of dependenciesToProcess) {
-		await buildJSByPath(packageName, { path: depId }, compileRes, mainCompileRes, false, depthChain)
+		await buildJSByPath(packageName, { path: depId }, compileRes, mainCompileRes, false, depthChain, putMain)
 	}
 
 	// 反向遍历修改，避免位置偏移
