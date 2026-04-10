@@ -97,10 +97,28 @@ class Runtime {
 		// 全量加载基础组件，是否有必要可优化为按需加载组件
 		this.app.use(Components)
 
-		// 注册页面模板
-		for (const [tplName, render] of Object.entries(options.tplComponents)) {
+		this.registerTplComponentsByPath(opts.pagePath, bridgeId)
+
+		this.app.mount(document.body)
+	}
+
+	registerTplComponentsByPath(path, bridgeId, visited = new Set()) {
+		if (visited.has(path)) {
+			return
+		}
+		visited.add(path)
+
+		const module = loader.getModuleByPath(path)
+		if (!module?.moduleInfo) {
+			return
+		}
+
+		const { id, tplComponents = {}, usingComponents = {} } = module.moduleInfo
+		const components = this.createComponent(path, bridgeId, usingComponents)
+		for (const [tplName, render] of Object.entries(tplComponents)) {
 			this.app.component(`dd-${tplName}`, {
-				__scopeId: `data-v-${options.id}`,
+				__scopeId: `data-v-${id}`,
+				components,
 				props: {
 					data: Object,
 				},
@@ -113,7 +131,9 @@ class Runtime {
 			})
 		}
 
-		this.app.mount(document.body)
+		for (const componentPath of Object.values(usingComponents)) {
+			this.registerTplComponentsByPath(componentPath, bridgeId, visited)
+		}
 	}
 
 	// Component create -> Page create -> Page attached -> Component attached -> Component ready -> Page ready
