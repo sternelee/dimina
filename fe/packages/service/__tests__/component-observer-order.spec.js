@@ -32,8 +32,50 @@ describe('Component.tO observer ordering', () => {
 		})
 
 		component.init()
+		component.componentReadied()
 
 		expect(component.data._icon).toEqual({ name: 'add' })
+	})
+
+	it('runs initial property observers after behavior created hooks', () => {
+		const componentModule = new ComponentModule({
+			behaviors: [{
+				created() {
+					Object.defineProperty(this, 'children', {
+						get() {
+							return []
+						},
+						configurable: true,
+					})
+				},
+			}],
+			properties: {
+				animated: {
+					type: Boolean,
+					observer() {
+						this.children.forEach(() => {})
+						this.data._animatedObserved = true
+					},
+				},
+			},
+		}, {
+			component: true,
+		})
+
+		const component = new Component(componentModule, {
+			bridgeId: 'bridge-1',
+			moduleId: 'tabs-1',
+			path: '/tabs',
+			pageId: 'page-1',
+			parentId: 'page-1',
+			properties: {
+				animated: true,
+			},
+		})
+
+		expect(() => component.init()).not.toThrow()
+		component.componentReadied()
+		expect(component.data._animatedObserved).toBe(true)
 	})
 
 	it('executes property observers in reverse batch order after raw observers', () => {

@@ -141,7 +141,6 @@ export class Component {
 
 		this.#initLifecycle()
 		this.#initCustomMethods()
-		this.#invokeInitialPropertyObservers()
 		this.#initRelations()
 		this.#initComponentExport()
 		this.#invokeInitLifecycle().then(() => {
@@ -940,6 +939,7 @@ export class Component {
 	 * 在组件在视图层布局完成后执行
 	 */
 	componentReadied() {
+		this.#invokeInitialPropertyObservers()
 		this.__info__.behaviorLifetimes?.ready?.forEach(method => method.call(this))
 		this.ready?.()
 	}
