@@ -1,3 +1,4 @@
+import { LAUNCH_SCREEN_MIN_MS, WAIT_TRANSITION_TIMEOUT_MS } from '@/constants/animation'
 import { AppManager } from '@/core/appManager'
 import { Bridge } from '@/core/bridge'
 import { JSCore } from '@/core/jscore'
@@ -5,7 +6,7 @@ import { HashRouter } from '@/utils/hashRouter'
 import { mergePageConfig, queryPath, readFile, sleep, uuid } from '@/utils/util'
 
 // 等待元素上指定 transition property 结束，带超时兜底防止动画未触发时永久阻塞
-const waitTransitionEnd = (el, property, timeout = 600) =>
+const waitTransitionEnd = (el, property, timeout = WAIT_TRANSITION_TIMEOUT_MS) =>
 	new Promise(resolve => {
 		const timer = setTimeout(resolve, timeout)
 		const handler = (e) => {
@@ -84,12 +85,12 @@ export class MiniApp {
 		// 1. 等待逻辑线程初始化
 		await this.jscore.init()
 
-		// 2. 读取配置文件，同时保证 LaunchScreen 最少展示 220ms
+		// 2. 读取配置文件，同时保证 LaunchScreen 最少展示一个略长于 present 的时长
 		const root = 'main'
 		const configPath = `${this.appInfo.appId}/${root}/app-config.json`
 		const [configContent] = await Promise.all([
 			readFile(`${import.meta.env.BASE_URL}${configPath}`),
-			sleep(220),
+			sleep(LAUNCH_SCREEN_MIN_MS),
 		])
 
 		if (!configContent) {
