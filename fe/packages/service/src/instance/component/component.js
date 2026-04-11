@@ -4,7 +4,7 @@ import { createIntersectionObserver } from '../../api/core/wxml/intersection-obs
 import message from '../../core/message'
 import runtime from '../../core/runtime'
 import { beginUpdateBatch, createUpdateCallback, endUpdateBatch, enqueueUpdate } from '../../core/update-queue'
-import { addComputedData, deepEqual, filterData, filterInvokeObserver, invokeBehaviorObservers, invokeObserversOnce, invokePropertyObservers, isChildComponent, matchComponent, resolveEventHandler, syncUpdateChildrenProps } from '../../core/utils'
+import { addComputedData, deepEqual, filterData, filterInvokeObserver, invokeBehaviorObservers, invokeObserversOnce, invokePropertyObservers, isChildComponent, matchComponent, resolveEventHandler, runPropertyObservers, syncUpdateChildrenProps } from '../../core/utils'
 
 // 组件生命周期
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
@@ -543,12 +543,12 @@ export class Component {
 
 		// 收集需要执行的观察者函数
 		const observersToExecute = []
-		const propertyObserversToExecute = []
-		
+		const oldValues = {}
 		// 保存旧值并更新数据，收集观察者
 		for (const [prop, val] of Object.entries(nextData)) {
 			// 保存旧值
 			const oldVal = this.data[prop]
+			oldValues[prop] = oldVal
 
 			// 更新数据
 			this.data[prop] = val
@@ -558,21 +558,11 @@ export class Component {
 				observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, this.data, this, oldVal))
 			}
 			
-			// 收集属性观察器
-			const observer = this.__info__.properties?.[prop]?.observer
-			if (isString(observer)) {
-				propertyObserversToExecute.push(() => this[observer]?.(val, oldVal))
-			}
-			else if (isFunction(observer)) {
-				propertyObserversToExecute.push(() => observer.call(this, val, oldVal))
-			}
 		}
 		
 		observersToExecute.forEach(run => run())
-		invokeBehaviorObservers(this, Object.keys(nextData), Object.fromEntries(Object.entries(nextData).map(([prop]) => [prop, undefined])))
-
-		// 同批次 props 更新时，让后写入的属性观察器覆盖前者的派生状态
-		propertyObserversToExecute.reverse().forEach(run => run())
+		invokeBehaviorObservers(this, Object.keys(nextData), Object.fromEntries(Object.keys(nextData).map(prop => [prop, undefined])))
+		runPropertyObservers(this, Object.keys(nextData), oldValues)
 	}
 
 	getPageId() {

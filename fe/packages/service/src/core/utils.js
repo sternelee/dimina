@@ -373,6 +373,10 @@ export function invokeBehaviorObservers(ctx, changedKeys, oldValues) {
 }
 
 export function invokePropertyObservers(ctx, changedKeys, oldValues) {
+	runPropertyObservers(ctx, changedKeys, oldValues)
+}
+
+export function collectPropertyObservers(ctx, changedKeys, oldValues) {
 	const propertyObserversToExecute = []
 
 	for (const prop of changedKeys) {
@@ -388,7 +392,11 @@ export function invokePropertyObservers(ctx, changedKeys, oldValues) {
 		}
 	}
 
-	propertyObserversToExecute.reverse().forEach(run => run())
+	return propertyObserversToExecute
+}
+
+export function runPropertyObservers(ctx, changedKeys, oldValues) {
+	collectPropertyObservers(ctx, changedKeys, oldValues).reverse().forEach(run => run())
 }
 
 /**
