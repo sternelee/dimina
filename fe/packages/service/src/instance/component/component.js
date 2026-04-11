@@ -1,4 +1,4 @@
-import { cloneDeep, isFunction, isString, set } from '@dimina/common'
+import { camelCaseToUnderscore, cloneDeep, isFunction, isString, set, toCamelCase } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import { createIntersectionObserver } from '../../api/core/wxml/intersection-observer'
 import message from '../../core/message'
@@ -10,6 +10,27 @@ import { addComputedData, deepEqual, filterData, filterInvokeObserver, invokeObs
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
 // 组件所在页面的生命周期
 const pageLifetimes = ['show', 'hide', 'resize', 'routeDone']
+
+function resolveEventHandler(eventAttr = {}, type = '') {
+	const normalizedType = type.trim()
+	if (!normalizedType) {
+		return
+	}
+
+	const compactType = normalizedType.replace(/-/g, '').toLowerCase()
+	const candidates = [
+		normalizedType,
+		toCamelCase(normalizedType),
+		camelCaseToUnderscore(normalizedType),
+		compactType,
+	]
+
+	for (const candidate of candidates) {
+		if (candidate && eventAttr[candidate] !== undefined) {
+			return eventAttr[candidate]
+		}
+	}
+}
 
 function invokeBehaviorObservers(ctx, changedKeys, oldValues) {
 	if (!ctx.__info__.behaviorObservers) {
@@ -807,7 +828,7 @@ export class Component {
 			return
 		}
 		const type = methodName.trim()
-		const eventHandler = this.__eventAttr__[type]
+		const eventHandler = resolveEventHandler(this.__eventAttr__, type)
 		if (eventHandler) {
 			await runtime.triggerEvent({
 				bridgeId: this.bridgeId,
