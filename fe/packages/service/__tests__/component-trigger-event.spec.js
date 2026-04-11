@@ -45,4 +45,35 @@ describe('Component triggerEvent', () => {
 			detail: { value: 'cancel' },
 		}))
 	})
+
+	test('queues events for custom components until componentReadied', async () => {
+		const bridgeId = 'test-bridge'
+		const moduleId = 'component-1'
+		const onLoad = vi.fn()
+
+		runtime.instances[bridgeId] = {
+			[moduleId]: {
+				__type__: ComponentModule.type,
+				__isComponent__: true,
+				__componentReadied__: false,
+				is: '/component/image',
+				onLoad,
+			},
+		}
+
+		const pending = runtime.triggerEvent({
+			bridgeId,
+			moduleId,
+			methodName: 'onLoad',
+			event: { detail: { width: 100 } },
+		})
+
+		expect(onLoad).not.toHaveBeenCalled()
+
+		runtime.instances[bridgeId][moduleId].__componentReadied__ = true
+		await runtime.flushPendingEvents(runtime.instances[bridgeId][moduleId])
+		await pending
+
+		expect(onLoad).toHaveBeenCalledWith({ detail: { width: 100 } })
+	})
 })

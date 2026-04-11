@@ -13,6 +13,39 @@ class Runtime {
 		this.instances = {}
 	}
 
+	queuePendingEvent(instance, payload) {
+		instance.__pendingRuntimeEvents__ = instance.__pendingRuntimeEvents__ || []
+		return new Promise((resolve, reject) => {
+			instance.__pendingRuntimeEvents__.push({
+				...payload,
+				resolve,
+				reject,
+			})
+		})
+	}
+
+	async flushPendingEvents(instance) {
+		const pendingEvents = instance?.__pendingRuntimeEvents__ || []
+		instance.__pendingRuntimeEvents__ = []
+
+		for (const pendingEvent of pendingEvents) {
+			try {
+				const result = await this.dispatchEvent(pendingEvent)
+				pendingEvent.resolve(result)
+			}
+			catch (error) {
+				pendingEvent.reject(error)
+			}
+		}
+	}
+
+	async dispatchEvent({ instance, bridgeId, moduleId, methodName, event }) {
+		if (isFunction(instance[methodName])) {
+			return await instance[methodName](event)
+		}
+		console.warn(`[service] triggerEvent ${bridgeId} ${moduleId}, is: ${instance.is}, method: ${methodName} is not exist`)
+	}
+
 	createApp(opts) {
 		// app 实例只有一个，避免重复创建
 		if (this.app) {
@@ -133,6 +166,7 @@ class Runtime {
 			instance.componentReadied()
 			// 标记组件已准备就绪
 			instance.__componentReadied__ = true
+			this.flushPendingEvents(instance)
 			instance.flushInitSetDataCallbacks?.()
 			
 			// 检查是否可以调用页面的 onReady
@@ -404,12 +438,27 @@ class Runtime {
 			return
 		}
 
-		if (isFunction(instance[methodName])) {
-			return await instance[methodName](event)
+		if (
+			instance.__type__ === ComponentModule.type
+			&& instance.__isComponent__
+			&& !instance.__componentReadied__
+		) {
+			return this.queuePendingEvent(instance, {
+				instance,
+				bridgeId,
+				moduleId,
+				methodName,
+				event,
+			})
 		}
-		else {
-			console.warn(`[service] triggerEvent ${bridgeId} ${moduleId}, is: ${instance.is}, method: ${methodName} is not exist`)
-		}
+
+		return this.dispatchEvent({
+			instance,
+			bridgeId,
+			moduleId,
+			methodName,
+			event,
+		})
 	}
 }
 

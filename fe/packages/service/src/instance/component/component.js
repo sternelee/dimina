@@ -64,6 +64,7 @@ export class Component {
 		// 格式：{ childModuleId: { childPropName: parentDataKey } }
 		this.__childPropsBindings__ = {}
 		this.__pendingSyncedProps__ = {}
+		this.__initialPropertyObserversInvoked__ = false
 	}
 
 	init() {
@@ -479,7 +480,7 @@ export class Component {
 	}
 
 	#invokeInitialPropertyObservers() {
-		if (!this.__isComponent__ || !this.__info__.properties) {
+		if (!this.__isComponent__ || !this.__info__.properties || this.__initialPropertyObserversInvoked__) {
 			return
 		}
 
@@ -496,6 +497,7 @@ export class Component {
 		}
 
 		propertyObserversToExecute.forEach(run => run())
+		this.__initialPropertyObserversInvoked__ = true
 	}
 
 	async #invokeInitLifecycle() {
