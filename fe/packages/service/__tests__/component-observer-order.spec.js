@@ -81,6 +81,50 @@ describe('Component.tO observer ordering', () => {
 		])
 	})
 
+	it('runs later changed props before earlier props in reverse batch order', () => {
+		const calls = []
+		const instance = {
+			data: {
+				defaultDate: 1,
+				type: 'single',
+				currentDate: null,
+			},
+			__pendingSyncedProps__: {},
+			__info__: {
+				observers: {},
+				properties: {
+					defaultDate: {
+						observer: 'observeDefaultDate',
+					},
+					type: {
+						observer: 'observeType',
+					},
+				},
+			},
+			observeDefaultDate: vi.fn(function observeDefaultDate(val) {
+				this.data.currentDate = val
+				calls.push(`defaultDate:${this.data.currentDate}`)
+			}),
+			observeType: vi.fn(function observeType() {
+				if (this.data.type === 'multiple') {
+					this.data.currentDate = [this.data.defaultDate]
+				}
+				calls.push(`type:${Array.isArray(this.data.currentDate) ? 'array' : typeof this.data.currentDate}`)
+			}),
+		}
+
+		Component.prototype.tO.call(instance, {
+			defaultDate: 1,
+			type: 'multiple',
+		})
+
+		expect(calls).toEqual([
+			'type:array',
+			'defaultDate:1',
+		])
+		expect(instance.data.currentDate).toBe(1)
+	})
+
 	it('skips duplicate observer execution but keeps data in sync for identical render replay after parent sync', () => {
 		const observeShow = vi.fn()
 		const instance = {

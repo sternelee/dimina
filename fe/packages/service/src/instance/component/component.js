@@ -534,7 +534,7 @@ export class Component {
 			}
 		}
 
-		propertyObserversToExecute.reverse().forEach(run => run())
+		propertyObserversToExecute.forEach(run => run())
 	}
 
 	async #invokeInitLifecycle() {
@@ -608,7 +608,7 @@ export class Component {
 		observersToExecute.forEach(run => run())
 		invokeBehaviorObservers(this, Object.keys(nextData), Object.fromEntries(Object.entries(nextData).map(([prop]) => [prop, undefined])))
 
-		// 同批次 props 更新时，优先让后写入的属性观察器完成派生状态计算
+		// 同批次 props 更新时，让后写入的属性观察器覆盖前者的派生状态
 		propertyObserversToExecute.reverse().forEach(run => run())
 	}
 

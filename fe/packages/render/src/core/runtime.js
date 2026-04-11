@@ -1,4 +1,4 @@
-import { getDataAttributes, set, uuid } from '@dimina/common'
+import { deepEqual, getDataAttributes, set, uuid } from '@dimina/common'
 import { Components, deepToRaw, triggerEvent } from '@dimina/components'
 import {
 	createApp,
@@ -429,13 +429,25 @@ class Runtime {
 			let skipInitialPropsNotify = true
 			
 		watch(
-				props,
-				(newProps) => {
+				() => deepToRaw(props),
+				(newProps, oldProps = {}) => {
 					Object.assign(data, newProps)
 					if (skipInitialPropsNotify) {
 						skipInitialPropsNotify = false
 						return
 					}
+
+					const changedProps = Object.entries(newProps).reduce((acc, [key, value]) => {
+						if (!deepEqual(value, oldProps[key])) {
+							acc[key] = value
+						}
+						return acc
+					}, {})
+
+					if (Object.keys(changedProps).length === 0) {
+						return
+					}
+
 					message.send({
 						type: 't',
 						target: 'service',
@@ -443,7 +455,7 @@ class Runtime {
 							bridgeId,
 							moduleId,
 							methodName: 'tO', // triggerObserver
-							event: deepToRaw(newProps),
+							event: changedProps,
 						},
 					})
 				},

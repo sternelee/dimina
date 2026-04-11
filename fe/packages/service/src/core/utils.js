@@ -1,4 +1,4 @@
-import { get, isFunction, isNil } from '@dimina/common'
+import { deepEqual, get, isFunction, isNil } from '@dimina/common'
 
 const queue = []
 let isFlushing = false
@@ -21,19 +21,7 @@ function flushQueue() {
 	}
 }
 
-export function deepEqual(a, b) {
-	if (a === b)
-		return true // 引用相同
-	if (typeof a !== 'object' || typeof b !== 'object' || a == null || b == null)
-		return false
-
-	const keysA = Object.keys(a)
-	const keysB = Object.keys(b)
-	if (keysA.length !== keysB.length)
-		return false
-
-	return keysA.every(key => deepEqual(a[key], b[key]))
-}
+export { deepEqual }
 /**
  * 将 computed 的 key 提前写入 data，确保渲染层初始化时能正确追踪这些 key 的响应式依赖。
  *
