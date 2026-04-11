@@ -291,12 +291,6 @@ class Runtime {
 	}
 
 	createComponent(path, bridgeId, usingComponents, depthChain = []) {
-		// 循环依赖检测（A -> B -> A）
-		if (depthChain.includes(path)) {
-			console.warn('[render]', `检测到循环依赖: ${[...depthChain, path].join(' -> ')}`)
-			return {}
-		}
-
 		if (!usingComponents || Object.keys(usingComponents).length === 0) {
 			return
 		}
@@ -306,7 +300,16 @@ class Runtime {
 		const newDepthChain = [...depthChain, path]
 
 		for (const [componentName, componentPath] of Object.entries(usingComponents)) {
+			// 循环依赖检测（A -> B -> A）
+			if (newDepthChain.includes(componentPath)) {
+				continue
+			}
+
 			const module = loader.getModuleByPath(componentPath)
+			if (!module?.moduleInfo) {
+				continue
+			}
+
 			const { id, usingComponents: subUsing } = module.moduleInfo
 			const subComponents = this.createComponent(componentPath, bridgeId, subUsing, newDepthChain)
 			const sId = `data-v-${id}`
