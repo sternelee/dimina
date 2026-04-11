@@ -44,6 +44,129 @@ export class MiniApp {
 		this._extSubscriptions = new Map()
 	}
 
+	getCurrentPagePath() {
+		const currentBridge = this.bridgeList[this.bridgeList.length - 1]
+		return currentBridge?.opts?.pagePath || this.appInfo.pagePath || this.appConfig?.app?.entryPagePath || ''
+	}
+
+	getCurrentPageQuery() {
+		const currentBridge = this.bridgeList[this.bridgeList.length - 1]
+		return currentBridge?.opts?.query || this.appInfo.query || {}
+	}
+
+	getEntryPagePath() {
+		return this.appInfo.pagePath || this.appConfig?.app?.entryPagePath || ''
+	}
+
+	async copyText(text, successText) {
+		try {
+			if (navigator.clipboard?.writeText) {
+				await navigator.clipboard.writeText(text)
+			}
+			else {
+				const textarea = document.createElement('textarea')
+				textarea.value = text
+				textarea.setAttribute('readonly', 'readonly')
+				textarea.style.position = 'fixed'
+				textarea.style.opacity = '0'
+				document.body.appendChild(textarea)
+				textarea.select()
+				document.execCommand('copy')
+				document.body.removeChild(textarea)
+			}
+			this.showToast({
+				title: successText,
+				icon: 'success',
+			})
+		}
+		catch {
+			this.showToast({
+				title: '复制失败',
+				icon: 'none',
+			})
+		}
+	}
+
+	closeMiniProgram() {
+		HashRouter.clear()
+		this.closeMiniAppMenu()
+		AppManager.closeApp(this)
+	}
+
+	renderMiniAppMenu() {
+		const name = this.el.querySelector('.dimina-mini-app-menu__app-name')
+		const appId = this.el.querySelector('.dimina-mini-app-menu__app-id')
+		const desc = this.el.querySelector('.dimina-mini-app-menu__app-desc')
+		const logo = this.el.querySelector('.dimina-mini-app-menu__app-logo-img')
+		const quickActions = this.el.querySelector('.dimina-mini-app-menu__quick-actions')
+		const currentPagePath = this.getCurrentPagePath()
+		const entryPagePath = this.getEntryPagePath()
+		const currentPageQuery = this.getCurrentPageQuery()
+		const pagePath = currentPagePath || entryPagePath || ''
+		const pageWithQuery = `${pagePath}${Object.keys(currentPageQuery).length ? `?${new URLSearchParams(currentPageQuery).toString()}` : ''}`
+		const addressUrl = `${window.location.origin}${window.location.pathname}#${this.appId}|${pageWithQuery}`
+
+		name.textContent = this.appInfo.name || '未命名小程序'
+		appId.textContent = `AppID：${this.appId || '--'}`
+		desc.textContent = `当前页面：${pagePath || '--'}`
+		logo.src = this.appInfo.logo || ''
+
+		const quickActionItems = [
+			{
+				label: '复制链接',
+				icon: '↗',
+				handler: () => this.copyText(addressUrl, '链接已复制'),
+			},
+			{
+				label: '重新进入',
+				icon: '↻',
+				handler: () => {
+					this.closeMiniAppMenu()
+					this.reLaunch({
+						url: entryPagePath || currentPagePath,
+					})
+				},
+			},
+			{
+				label: '关闭小程序',
+				icon: '×',
+				danger: true,
+				handler: () => this.closeMiniProgram(),
+			},
+		]
+
+		quickActions.innerHTML = quickActionItems
+			.map((item, index) => `
+				<button type="button" class="dimina-mini-app-menu__quick-action${item.danger ? ' is-danger' : ''}" data-quick-index="${index}">
+					<span class="dimina-mini-app-menu__quick-action-icon">${item.icon}</span>
+					<span class="dimina-mini-app-menu__quick-action-label">${item.label}</span>
+				</button>
+			`)
+			.join('')
+
+		quickActions.querySelectorAll('[data-quick-index]').forEach((node, index) => {
+			node.onclick = () => quickActionItems[index].handler()
+		})
+	}
+
+	openMiniAppMenu() {
+		const overlay = this.el.querySelector('.dimina-mini-app-menu__mask')
+		const menu = this.el.querySelector('.dimina-mini-app-menu')
+		this.renderMiniAppMenu()
+		overlay.style.display = 'block'
+		requestAnimationFrame(() => {
+			overlay.classList.add('show')
+			menu.classList.add('show')
+		})
+	}
+
+	closeMiniAppMenu() {
+		const overlay = this.el.querySelector('.dimina-mini-app-menu__mask')
+		const menu = this.el.querySelector('.dimina-mini-app-menu')
+		overlay.classList.remove('show')
+		menu.classList.remove('show')
+	}
+
 	/**
 	 * 注册自定义 API 处理函数
 	 * @param {string} name API 名称
@@ -528,35 +651,27 @@ export class MiniApp {
 
 	bindMoreEvent() {
 		const moreBtn = this.el.querySelector('.dimina-mini-app-navigation__actions-variable')
-		const dialog = this.el.querySelector('.dimina-mini-app_dialog-content')
-		const overlay = this.el.querySelector('.dimina-mini-app_dialog-bg')
-		const info = this.el.querySelector('.dimina-mini-app_dialog-info')
-		info.innerHTML = `app id: ${this.appId}`
+		const overlay = this.el.querySelector('.dimina-mini-app-menu__mask')
+		const menu = this.el.querySelector('.dimina-mini-app-menu')
+		const cancelBtn = this.el.querySelector('.dimina-mini-app-menu__footer-btn--cancel')
 
 		overlay.addEventListener('transitionend', () => {
-			if (overlay.style.opacity === '0') {
+			if (!overlay.classList.contains('show')) {
 				overlay.style.display = 'none'
 			}
 		})
 
-		moreBtn.onclick = () => {
-			overlay.style.display = 'block'
-			overlay.style.opacity = 1
-			dialog.classList.add('show')
-		}
-
-		overlay.onclick = () => {
-			overlay.style.opacity = 0
-			dialog.classList.remove('show')
-		}
+		moreBtn.onclick = () => this.openMiniAppMenu()
+		overlay.onclick = () => this.closeMiniAppMenu()
+		cancelBtn.onclick = () => this.closeMiniAppMenu()
+		menu.onclick = e => e.stopPropagation()
 	}
 
 	bindCloseEvent() {
 		const closeBtn = this.el.querySelector('.dimina-mini-app-navigation__actions-close')
 
 		closeBtn.onclick = () => {
-			HashRouter.clear()
-			AppManager.closeApp(this)
+			this.closeMiniProgram()
 		}
 	}
 
