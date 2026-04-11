@@ -328,14 +328,29 @@ class Runtime {
 	}
 
 	pageResize(opts) {
-		const { bridgeId, moduleId } = opts
-		const instance = this.instances[bridgeId][moduleId]
+		const { bridgeId, size } = opts
+		const instances = this.instances[bridgeId]
 
-		if (!instance) {
+		if (!instances) {
 			return
 		}
 
-		instance.pageResize()
+		Object.values(instances).forEach((instance) => {
+			if (!instance) {
+				return
+			}
+			if (instance.__type__ === PageModule.type) {
+				instance.pageResize(size)
+			}
+			else if (instance.__type__ === ComponentModule.type) {
+				if (!instance.__isComponent__) {
+					instance.pageResize(size)
+				}
+				else {
+					instance.pageResize(size)
+				}
+			}
+		})
 	}
 
 	componentError(opts) {
@@ -352,16 +367,18 @@ class Runtime {
 	}
 
 	componentRouteDone(opts) {
-		const { bridgeId, moduleId } = opts
-		const instance = this.instances[bridgeId][moduleId]
+		const { bridgeId } = opts
+		const instances = this.instances[bridgeId]
 
-		if (!instance) {
+		if (!instances) {
 			return
 		}
 
-		if (instance.__type__ === ComponentModule.type) {
-			instance.componentRouteDone()
-		}
+		Object.values(instances).forEach((instance) => {
+			if (instance?.__type__ === ComponentModule.type) {
+				instance.componentRouteDone()
+			}
+		})
 	}
 
 	/**

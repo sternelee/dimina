@@ -1,74 +1,15 @@
-import { camelCaseToUnderscore, cloneDeep, isFunction, isString, set, toCamelCase } from '@dimina/common'
+import { cloneDeep, isFunction, isString, set } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import { createIntersectionObserver } from '../../api/core/wxml/intersection-observer'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
 import { beginUpdateBatch, createUpdateCallback, endUpdateBatch, enqueueUpdate } from '../../core/update-queue'
-import { addComputedData, deepEqual, filterData, filterInvokeObserver, invokeObserversOnce, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
+import { addComputedData, deepEqual, filterData, filterInvokeObserver, invokeBehaviorObservers, invokeObserversOnce, invokePropertyObservers, isChildComponent, matchComponent, resolveEventHandler, syncUpdateChildrenProps } from '../../core/utils'
 
 // 组件生命周期
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
 // 组件所在页面的生命周期
 const pageLifetimes = ['show', 'hide', 'resize', 'routeDone']
-
-function resolveEventHandler(eventAttr = {}, type = '') {
-	const normalizedType = type.trim()
-	if (!normalizedType) {
-		return
-	}
-
-	const compactType = normalizedType.replace(/-/g, '').toLowerCase()
-	const candidates = [
-		normalizedType,
-		toCamelCase(normalizedType),
-		camelCaseToUnderscore(normalizedType),
-		compactType,
-	]
-
-	for (const candidate of candidates) {
-		if (candidate && eventAttr[candidate] !== undefined) {
-			return eventAttr[candidate]
-		}
-	}
-}
-
-function invokeBehaviorObservers(ctx, changedKeys, oldValues) {
-	if (!ctx.__info__.behaviorObservers) {
-		return
-	}
-
-	for (const observerKey in ctx.__info__.behaviorObservers) {
-		const observers = ctx.__info__.behaviorObservers[observerKey]
-		if (!Array.isArray(observers) || observers.length === 0) {
-			continue
-		}
-
-		for (const changedKey of changedKeys) {
-			observers.forEach((observer) => {
-				filterInvokeObserver(changedKey, { [observerKey]: observer }, ctx.data, ctx, oldValues[changedKey])
-			})
-		}
-	}
-}
-
-function invokePropertyObservers(ctx, changedKeys, oldValues) {
-	const propertyObserversToExecute = []
-
-	for (const prop of changedKeys) {
-		const observer = ctx.__info__.properties?.[prop]?.observer
-		const val = ctx.data[prop]
-		const oldVal = oldValues[prop]
-
-		if (isString(observer)) {
-			propertyObserversToExecute.push(() => ctx[observer]?.(val, oldVal))
-		}
-		else if (isFunction(observer)) {
-			propertyObserversToExecute.push(() => observer.call(ctx, val, oldVal))
-		}
-	}
-
-	propertyObserversToExecute.reverse().forEach(run => run())
-}
 
 /**
  * https://developers.weixin.qq.com/miniprogram/dev/reference/api/Component.html
@@ -143,7 +84,7 @@ export class Component {
 		this.#initCustomMethods()
 		this.#initRelations()
 		this.#initComponentExport()
-		this.#invokeInitLifecycle().then(() => {
+		return this.#invokeInitLifecycle().then(() => {
 			addComputedData(this)
 			message.send({
 				type: this.__id__,
@@ -892,6 +833,7 @@ export class Component {
 	 * 组件所在的页面被展示时执行
 	 */
 	pageShow() {
+		this.__info__.behaviorPageLifetimes?.show?.forEach(method => method.call(this))
 		this.onShow?.()
 	}
 
@@ -899,6 +841,7 @@ export class Component {
 	 * 组件所在的页面被隐藏时执行
 	 */
 	pageHide() {
+		this.__info__.behaviorPageLifetimes?.hide?.forEach(method => method.call(this))
 		this.onHide?.()
 	}
 
@@ -907,11 +850,13 @@ export class Component {
 	 * @param {object} size
 	 */
 	pageResize(size) {
+		this.__info__.behaviorPageLifetimes?.resize?.forEach(method => method.call(this, size))
 		this.resize?.(size)
 	}
 
 	// 组件所在页面路由动画完成时执行
 	componentRouteDone() {
+		this.__info__.behaviorPageLifetimes?.routeDone?.forEach(method => method.call(this))
 		this.routeDone?.()
 	}
 
