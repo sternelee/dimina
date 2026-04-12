@@ -36,6 +36,7 @@ import {
 import loader from './loader'
 import message from './message'
 
+// Keep these aliases in sync with @vue/compiler-core helperNameMap/aliasHelper output.
 const VUE_RUNTIME_HELPERS = {
 	_Fragment: Fragment,
 	_createTextVNode: createTextVNode,
@@ -63,25 +64,38 @@ class Runtime {
 		this.app = null
 		this.pageId = null
 		this.instance = new Map()
+		this.moduleIds = new WeakMap()
 		this.setupData = new Map()
 		this.initializedModules = new Set()
 		this.preInitUpdates = new Map()
 		this.intersectionObservers = new Map()
+		this.handleBeforeUnload = this.handleBeforeUnload.bind(this)
 
 		this.installVueRuntimeHelpers()
-
-		window.addEventListener('beforeunload', () => {
-			if (this.intersectionObservers.size > 0) {
-				for (const observers of this.intersectionObservers.values()) {
-					observers.forEach(observer => observer.disconnect())
-				}
-				this.intersectionObservers.clear()
-			}
-		})
+		window.addEventListener('beforeunload', this.handleBeforeUnload)
 	}
 
 	installVueRuntimeHelpers(target = window) {
 		Object.assign(target, VUE_RUNTIME_HELPERS)
+	}
+
+	handleBeforeUnload() {
+		if (this.intersectionObservers.size > 0) {
+			for (const observers of this.intersectionObservers.values()) {
+				observers.forEach(observer => observer.disconnect())
+			}
+			this.intersectionObservers.clear()
+		}
+	}
+
+	syncReactiveState(state, nextState = {}) {
+		for (const key in state) {
+			if (!(key in nextState)) {
+				delete state[key]
+			}
+		}
+
+		Object.assign(state, nextState)
 	}
 
 	/**
@@ -208,7 +222,7 @@ class Runtime {
 
 							const instance = getCurrentInstance().proxy
 							instance.__page__ = true
-							self.instance.set(self.pageId, instance)
+							self.setModuleInstance(self.pageId, instance)
 
 							let ticking = false
 							const handleScroll = () => {
@@ -265,10 +279,9 @@ class Runtime {
 	getParentModuleId(vueInstance) {
 		let parent = vueInstance?.parent
 		while (parent) {
-			for (const [moduleId, instance] of this.instance.entries()) {
-				if (instance === parent.proxy) {
-					return moduleId
-				}
+			const moduleId = this.moduleIds.get(parent.proxy)
+			if (moduleId) {
+				return moduleId
 			}
 			parent = parent.parent
 		}
@@ -311,6 +324,22 @@ class Runtime {
 		}
 
 		internal.update?.()
+	}
+
+	setModuleInstance(moduleId, instance) {
+		if (!instance) {
+			return
+		}
+		this.instance.set(moduleId, instance)
+		this.moduleIds.set(instance, moduleId)
+	}
+
+	deleteModuleInstance(moduleId) {
+		const instance = this.instance.get(moduleId)
+		if (instance) {
+			this.moduleIds.delete(instance)
+		}
+		this.instance.delete(moduleId)
 	}
 
 	createComponent(path, bridgeId, usingComponents, depthChain = []) {
@@ -367,7 +396,7 @@ class Runtime {
 					})
 
 					const instance = vueInstance.proxy
-					self.instance.set(moduleId, instance)
+					self.setModuleInstance(moduleId, instance)
 
 					const externalClasses = []
 					for (const [k, v] of Object.entries(module.props ?? {})) {
@@ -444,7 +473,7 @@ class Runtime {
 							moduleId,
 						},
 					})
-					self.instance.delete(moduleId)
+					self.deleteModuleInstance(moduleId)
 					self.setupData.delete(moduleId)
 					self.initializedModules.delete(moduleId)
 					self.preInitUpdates.delete(moduleId)
@@ -591,13 +620,13 @@ class Runtime {
 			return null
 		}
 		const elements = parent[method](selector)
-		if (elements) {
+		if (this.hasMatchedElements(elements)) {
 			return elements
 		}
 		return new Promise((resolve) => {
 			const observer = new MutationObserver((_, obs) => {
 				const elements = parent[method](selector)
-				if (elements) {
+				if (this.hasMatchedElements(elements)) {
 					obs.disconnect()
 					resolve(elements)
 				}
@@ -610,6 +639,16 @@ class Runtime {
 				resolve()
 			}, timeout)
 		})
+	}
+
+	hasMatchedElements(elements) {
+		if (!elements) {
+			return false
+		}
+		if (elements instanceof NodeList || Array.isArray(elements)) {
+			return elements.length > 0
+		}
+		return true
 	}
 
 	async selectorQuery(opts) {
@@ -734,7 +773,7 @@ class Runtime {
 		}
 
 		if (fields.rect) {
-			const { left, top, right, bottom, width, height } = targetElement.getBoundingClientRect()
+			const { left, top, right, bottom, width, height } = this.getElementRect(targetElement)
 			data.left = left
 			data.top = top
 			data.right = right
@@ -745,7 +784,7 @@ class Runtime {
 
 		if (fields.size) {
 			if (fields.rect) {
-				const { width, height } = targetElement.getBoundingClientRect()
+				const { width, height } = this.getElementRect(targetElement)
 				data.width = width
 				data.height = height
 			}
@@ -791,6 +830,10 @@ class Runtime {
 		// }
 
 		return data
+	}
+
+	getElementRect(element) {
+		return element.getBoundingClientRect()
 	}
 
 	triggerCallback(bridgeId, id, args = [], data) {
