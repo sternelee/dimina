@@ -117,29 +117,37 @@ class Runtime {
 		const { id, tplComponents = {}, usingComponents = {} } = module.moduleInfo
 		const components = this.createComponent(path, bridgeId, usingComponents)
 		for (const [tplName, render] of Object.entries(tplComponents)) {
-			this.app.component(`dd-${tplName}`, {
-				__scopeId: `data-v-${id}`,
+			this.app.component(`dd-${tplName}`, this.createTplComponent({
+				id,
 				components,
-				props: {
-					data: Object,
-				},
-				setup(props) {
-					const state = reactive({})
-					watchEffect(() => {
-						const newData = props.data || {}
-						for (const key in state) {
-							if (!(key in newData)) delete state[key]
-						}
-						Object.assign(state, newData)
-					})
-					return state
-				},
 				render,
-			})
+			}))
 		}
 
 		for (const componentPath of Object.values(usingComponents)) {
 			this.registerTplComponentsByPath(componentPath, bridgeId, visited)
+		}
+	}
+
+	createTplComponent({ id, components, render }) {
+		return {
+			__scopeId: `data-v-${id}`,
+			components,
+			props: {
+				data: Object,
+			},
+			setup(props) {
+				const state = reactive({})
+				watchEffect(() => {
+					const newData = props.data || {}
+					for (const key in state) {
+						if (!(key in newData)) delete state[key]
+					}
+					Object.assign(state, newData)
+				})
+				return state
+			},
+			render,
 		}
 	}
 
