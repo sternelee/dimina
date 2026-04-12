@@ -36,6 +36,28 @@ import {
 import loader from './loader'
 import message from './message'
 
+const VUE_RUNTIME_HELPERS = {
+	_Fragment: Fragment,
+	_createTextVNode: createTextVNode,
+	_createVNode: createVNode,
+	_createBlock: createBlock,
+	_createCommentVNode: createCommentVNode,
+	_createElementBlock: createElementBlock,
+	_createElementVNode: createElementVNode,
+	_createSlots: createSlots,
+	_normalizeClass: normalizeClass,
+	_normalizeStyle: normalizeStyle,
+	_openBlock: openBlock,
+	_renderList: renderList,
+	_renderSlot: renderSlot,
+	_resolveComponent: resolveComponent,
+	_resolveDirective: resolveDirective,
+	_resolveDynamicComponent: resolveDynamicComponent,
+	_toDisplayString: toDisplayString,
+	_withCtx: withCtx,
+	_withDirectives: withDirectives,
+}
+
 class Runtime {
 	constructor() {
 		this.app = null
@@ -46,25 +68,7 @@ class Runtime {
 		this.preInitUpdates = new Map()
 		this.intersectionObservers = new Map()
 
-		window._Fragment = Fragment
-		window._createTextVNode = createTextVNode
-		window._createVNode = createVNode
-		window._createBlock = createBlock
-		window._createCommentVNode = createCommentVNode
-		window._createElementBlock = createElementBlock
-		window._createElementVNode = createElementVNode
-		window._createSlots = createSlots
-		window._normalizeClass = normalizeClass
-		window._normalizeStyle = normalizeStyle
-		window._openBlock = openBlock
-		window._renderList = renderList
-		window._renderSlot = renderSlot
-		window._resolveComponent = resolveComponent
-		window._resolveDirective = resolveDirective
-		window._resolveDynamicComponent = resolveDynamicComponent
-		window._toDisplayString = toDisplayString
-		window._withCtx = withCtx
-		window._withDirectives = withDirectives
+		this.installVueRuntimeHelpers()
 
 		window.addEventListener('beforeunload', () => {
 			if (this.intersectionObservers.size > 0) {
@@ -74,6 +78,10 @@ class Runtime {
 				this.intersectionObservers.clear()
 			}
 		})
+	}
+
+	installVueRuntimeHelpers(target = window) {
+		Object.assign(target, VUE_RUNTIME_HELPERS)
 	}
 
 	/**
