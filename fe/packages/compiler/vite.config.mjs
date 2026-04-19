@@ -2,6 +2,15 @@ import { resolve } from 'node:path'
 import { defineConfig } from 'vite'
 
 export default defineConfig({
+	appType: 'custom',
+	environments: {
+		client: {
+			consumer: 'server',
+		},
+		ssr: {
+			consumer: 'server',
+		},
+	},
 	build: {
 		lib: {
 			// Multiple entry points
