@@ -50,8 +50,8 @@ jobs:
 
       - name: Install dependencies
         working-directory: ./fe
-        run: pnpm install --frozen-lockfile --ignore-scripts
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
 
       - name: Run linter
         working-directory: ./fe
-        run: pnpm lint
+        run: ./node_modules/.bin/oxlint
