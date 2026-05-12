@@ -41,7 +41,27 @@ export class MiniApp {
 		this.color = null
 		this.apiRegistry = {}
 		// 维护第三方扩展的持续订阅，key: `${module}_${event}`，value: unsubscribe 函数
-		this._extSubscriptions = new Map()
+		this._extSubscriptions = new Map();
+		this.tabBarConfig = null            // app.tabBar 配置
+		this.tabBarPaths = []               // 与 list 等长，pagePath 数组（已规范化、无前导 /）
+		this.tabBarBridges = new Map()      // pagePath -> Bridge：懒加载的持久 tab 池
+		this.currentTabPath = null          // 当前激活的 tab 路径；null 表示当前不在任何 tab 页
+		this.tabBarEl = null                // .dimina-mini-app__tabbar 根节点
+	}
+
+	/**
+	 * 规范化 pagePath：去除前导 /，与 app.tabBar.list 中声明的格式对齐。
+	 */
+	_normalizePagePath(path) {
+		if (!path) return ''
+		return path.startsWith('/') ? path.slice(1) : path
+	}
+
+	/**
+	 * 判断给定路径是否为 tabBar 页面。
+	 */
+	_isTabBarPage(pagePath) {
+		return this.tabBarPaths.includes(this._normalizePagePath(pagePath))
 	}
 
 	getCurrentPagePath() {
@@ -222,6 +242,9 @@ export class MiniApp {
 
 		this.appConfig = JSON.parse(configContent)
 
+		// 缓存 tabBar 配置（list、color 等），并渲染 tabBar 容器；后续仅做选中态/可见性切换
+		this._initTabBar()
+
 		const entryPagePath = this.appInfo.pagePath || this.appConfig.app.entryPagePath
 
 		// 4. 读取页面配置
@@ -245,6 +268,16 @@ export class MiniApp {
 		})
 
 		this.bridgeList.push(entryPageBridge)
+
+		// 入口若是 tab 页：登记到 tab 池并设为当前 tab、显示 TabBar
+		if (this._isTabBarPage(entryPagePath)) {
+			const normalizedPath = this._normalizePagePath(entryPagePath)
+			this.tabBarBridges.set(normalizedPath, entryPageBridge)
+			this.currentTabPath = normalizedPath
+			this._setTabBarVisible(true)
+			this._updateTabBarSelection(normalizedPath)
+		}
+
 		entryPageBridge.start()
 
 		// 7. 若携带额外的恢复栈（刷新后恢复场景），静默重建后续页面
@@ -313,6 +346,11 @@ export class MiniApp {
 			const topPageConfig = this.appConfig.modules[topBridge.opts.pagePath]
 			const topMergeConfig = mergePageConfig(this.appConfig.app, topPageConfig)
 			this.updateTargetPageColorStyle(topMergeConfig)
+
+			// 恢复后栈顶为非 tab 页：隐藏 TabBar（tab bridge 仍保留在 pool 中以备后退恢复）
+			if (!this._isTabBarPage(topBridge.opts.pagePath)) {
+				this._setTabBarVisible(false)
+			}
 		}
 	}
 
@@ -423,15 +461,24 @@ export class MiniApp {
 	}
 
 	async navigateTo(opts) {
+		const { url, success, fail, complete } = opts
+		const { query, pagePath } = queryPath(url)
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		// 微信规范：navigateTo 不允许跳转到 tabBar 页面
+		if (this._isTabBarPage(pagePath)) {
+			onFail?.({ errMsg: `navigateTo:fail can not navigateTo a tabbar page` })
+			onComplete?.()
+			return
+		}
+
 		// 防抖处理
 		if (!this.webviewAnimaEnd) {
 			return
 		}
 		this.webviewAnimaEnd = false
-
-		const { url, success } = opts
-		const { query, pagePath } = queryPath(url)
-		const onSuccess = this.createCallbackFunction(success)
 
 		const pageConfig = this.appConfig.modules[pagePath]
 		const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
@@ -480,7 +527,11 @@ export class MiniApp {
 		bridge.webview.el.classList.remove('dimina-native-view--enter-anima')
 		bridge.webview.el.classList.remove('dimina-native-view--instage')
 
-		onSuccess?.()
+		// navigateTo 的目标按规范不应是 tab 页：栈顶变为非 tab 页，隐藏 TabBar
+		this._setTabBarVisible(false)
+
+		onSuccess?.({ errMsg: 'navigateTo:ok' })
+		onComplete?.()
 	}
 
 	reLaunch(opts) {
@@ -505,14 +556,15 @@ export class MiniApp {
 			// 更新状态栏颜色模式
 			this.updateTargetPageColorStyle(mergeConfig)
 
-			// 销毁所有现有的 bridge
-			while (this.bridgeList.length > 0) {
-				const bridge = this.bridgeList.pop()
+			// 销毁所有现有的 bridge：合并 stack 与 tab 池（用 Set 去重）
+			const allBridges = new Set([...this.bridgeList, ...this.tabBarBridges.values()])
+			for (const bridge of allBridges) {
 				bridge.destroy()
-				if (bridge.webview && bridge.webview.el) {
-					bridge.webview.el.remove()
-				}
+				bridge.webview?.el?.remove()
 			}
+			this.bridgeList.length = 0
+			this.tabBarBridges.clear()
+			this.currentTabPath = null
 
 			// 清空 webviews 容器
 			if (this.webviewsContainer) {
@@ -533,6 +585,18 @@ export class MiniApp {
 			}).then((bridge) => {
 				// 添加到 bridgeList
 				this.bridgeList.push(bridge)
+
+				// 入口若是 tab 页：登记到 pool 并显示 TabBar
+				if (this._isTabBarPage(pagePath)) {
+					const normalizedPath = this._normalizePagePath(pagePath)
+					this.tabBarBridges.set(normalizedPath, bridge)
+					this.currentTabPath = normalizedPath
+					this._setTabBarVisible(true)
+					this._updateTabBarSelection(normalizedPath)
+				}
+				else {
+					this._setTabBarVisible(false)
+				}
 
 				// 启动新页面
 				bridge.start()
@@ -561,18 +625,28 @@ export class MiniApp {
 	}
 
 	redirectTo(opts) {
+		const { url, success, fail, complete } = opts
+		const { query, pagePath } = queryPath(url)
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		// 微信规范：redirectTo 不允许跳转到 tabBar 页面
+		if (this._isTabBarPage(pagePath)) {
+			onFail?.({ errMsg: `redirectTo:fail can not redirectTo a tabbar page` })
+			onComplete?.()
+			return
+		}
+
 		// 防抖处理
 		if (!this.webviewAnimaEnd) {
 			return
 		}
 		this.webviewAnimaEnd = false
 
-		const { url, success } = opts
-		const { query, pagePath } = queryPath(url)
-		const onSuccess = this.createCallbackFunction(success)
-
 		// 获取当前 bridge
 		const curBridge = this.bridgeList[this.bridgeList.length - 1]
+		const prevPath = this._normalizePagePath(curBridge.opts.pagePath)
 		const pageConfig = this.appConfig.modules[pagePath]
 		const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
 
@@ -589,8 +663,18 @@ export class MiniApp {
 		curBridge.start()
 		this._syncHash()
 
+		// redirectTo 的目标按规范不能是 tab 页：若被替换的是当前 tab 页，需从 pool 中移除并隐藏 TabBar
+		if (this.tabBarBridges.get(prevPath) === curBridge) {
+			this.tabBarBridges.delete(prevPath)
+			if (this.currentTabPath === prevPath) {
+				this.currentTabPath = null
+			}
+		}
+		this._setTabBarVisible(false)
+
 		this.webviewAnimaEnd = true
-		onSuccess?.()
+		onSuccess?.({ errMsg: 'redirectTo:ok' })
+		onComplete?.()
 	}
 
 	async navigateBack() {
@@ -628,6 +712,15 @@ export class MiniApp {
 		// 触发上一个页面的生命周期函数
 		preBridge?.pageShow()
 		this._syncHash()
+
+		// 后退到 tab 页：恢复 TabBar 可见 + 选中态
+		if (this._isTabBarPage(preBridge.opts.pagePath)) {
+			const path = this._normalizePagePath(preBridge.opts.pagePath)
+			this.currentTabPath = path
+			this._setTabBarVisible(true)
+			this._updateTabBarSelection(path)
+		}
+
 		await waitTransitionEnd(preBridge.webview.el, 'transform')
 		this.webviewAnimaEnd = true
 
@@ -635,6 +728,324 @@ export class MiniApp {
 		preBridge.webview.el.classList.remove('dimina-native-view--enter-anima')
 		preBridge.webview.el.classList.remove('dimina-native-view--instage')
 		currentBridge.webview.el.parentNode.removeChild(currentBridge.webview.el)
+	}
+
+	/**
+	 * 跳转到 tabBar 页面，并关闭其他所有非 tabBar 页面。
+	 * 参考鸿蒙 DMPNavigator.switchTab + DMPTabBarContainerView 的“按需创建 + 持久缓存”模型：
+	 *   1. 弹出并销毁所有非 tab 页面
+	 *   2. 隐藏旧 tab 的 iframe（保留在 pool 中）
+	 *   3. 目标 tab 已在 pool → 复用；否则懒加载新建并入池
+	 *   4. 切换生命周期：旧 pageHide / 新 pageShow
+	 *   5. 更新 TabBar 选中态、状态栏颜色、URL hash
+	 */
+	async switchTab(opts) {
+		const { url, success, fail, complete } = opts
+		const { query, pagePath } = queryPath(url)
+		const targetPath = this._normalizePagePath(pagePath)
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		if (!this._isTabBarPage(targetPath)) {
+			onFail?.({ errMsg: `switchTab:fail not a tabBar page: ${targetPath}` })
+			onComplete?.()
+			return
+		}
+
+		// 防抖处理：避免与 navigateTo / navigateBack 动画并发
+		if (!this.webviewAnimaEnd) {
+			onFail?.({ errMsg: 'switchTab:fail busy' })
+			onComplete?.()
+			return
+		}
+
+		// 命中当前 tab：仅更新选中态 + 显示
+		if (this.currentTabPath === targetPath && this.bridgeList.length === 1) {
+			this._setTabBarVisible(true)
+			this._updateTabBarSelection(targetPath)
+			onSuccess?.({ errMsg: 'switchTab:ok' })
+			onComplete?.()
+			return
+		}
+
+		this.webviewAnimaEnd = false
+
+		try {
+			const prevPath = this.currentTabPath;
+            const prevTabBridge = prevPath
+                ? this.tabBarBridges.get(prevPath)
+                : null;
+            const wasPrevTabVisible =
+                !!prevTabBridge &&
+                this.bridgeList.length === 1 &&
+                this.bridgeList[0] === prevTabBridge;
+
+            // 1. 隐藏 / 卸载非 tab 页面（从栈顶往下，遇到 tab 页停止）
+            while (this.bridgeList.length > 0) {
+                const top = this.bridgeList[this.bridgeList.length - 1];
+                if (this._isTabBarPage(top.opts.pagePath)) {
+                    break;
+                }
+                top.pageHide();
+                top.destroy();
+                top.webview?.el?.remove();
+                this.bridgeList.pop();
+            }
+
+            // 2. 隐藏旧 tab 的 iframe（保留在 pool 中），栈顶若是旧 tab 则弹出（不销毁）
+            if (
+                prevTabBridge &&
+                prevTabBridge !== this.tabBarBridges.get(targetPath)
+            ) {
+                if (wasPrevTabVisible) {
+                    prevTabBridge.pageHide();
+                }
+                if (prevTabBridge.webview?.el) {
+                    prevTabBridge.webview.el.style.display = "none";
+                }
+                const idx = this.bridgeList.indexOf(prevTabBridge);
+                if (idx >= 0) {
+                    this.bridgeList.splice(idx, 1);
+                }
+            }
+
+			// 3. 取出 / 懒加载目标 tab
+			let targetBridge = this.tabBarBridges.get(targetPath)
+			const targetPageConfig = this.appConfig.modules[targetPath]
+			const targetMergeConfig = mergePageConfig(this.appConfig.app, targetPageConfig)
+			this.updateTargetPageColorStyle(targetMergeConfig)
+
+			if (!targetBridge) {
+				targetBridge = await this.createBridge({
+					pagePath: targetPath,
+					query,
+					scene: this.appInfo.scene,
+					jscore: this.jscore,
+					isRoot: true,
+					root: targetPageConfig?.root || 'main',
+					appId: this.appInfo.appId,
+					pages: this.appConfig.app.pages,
+					configInfo: targetMergeConfig,
+				})
+				this.tabBarBridges.set(targetPath, targetBridge)
+				targetBridge.start()
+			}
+
+			// 4. 显示目标 tab：清理动画类、重置 z-index、display
+			const targetEl = targetBridge.webview.el
+			targetEl.classList.remove(
+				'dimina-native-view--before-enter',
+				'dimina-native-view--slide-out',
+				'dimina-native-view--enter-anima',
+				'dimina-native-view--linear-anima',
+				'dimina-native-view--instage',
+			)
+			targetEl.style.display = ''
+			targetEl.style.zIndex = 1
+
+			// 5. 入栈（若不在），更新当前 tab，触发 pageShow
+			if (!this.bridgeList.includes(targetBridge)) {
+				this.bridgeList.push(targetBridge)
+			}
+			this.currentTabPath = targetPath
+			targetBridge.pageShow()
+
+			// 6. UI / 状态同步
+			this._setTabBarVisible(true)
+			this._updateTabBarSelection(targetPath)
+			this._syncHash()
+
+			onSuccess?.({ errMsg: 'switchTab:ok' })
+		}
+		catch (error) {
+			onFail?.({ errMsg: `switchTab:fail ${error.message}` })
+		}
+		finally {
+			this.webviewAnimaEnd = true
+			onComplete?.()
+		}
+	}
+
+	/**
+	 * 解析并缓存 tabBar 配置；首次渲染 TabBar DOM（默认隐藏）。
+	 * 后续切换仅通过 _setTabBarVisible / _updateTabBarSelection 调整，不重渲染。
+	 */
+	_initTabBar() {
+		const tabBar = this.appConfig?.app?.tabBar
+		if (!tabBar || !Array.isArray(tabBar.list) || tabBar.list.length === 0) {
+			return
+		}
+		this.tabBarConfig = tabBar
+		this.tabBarPaths = tabBar.list.map(item => this._normalizePagePath(item.pagePath))
+		this._renderTabBar()
+	}
+
+	/**
+	 * 一次性渲染 TabBar DOM，使用事件委托处理点击。
+	 */
+	_renderTabBar() {
+		this.tabBarEl = this.el.querySelector('.dimina-mini-app__tabbar')
+		if (!this.tabBarEl) return
+
+		const { color, backgroundColor, borderStyle, list } = this.tabBarConfig
+		const normalColor = this._sanitizeCssColor(color) || '#999999'
+		const bg = this._sanitizeCssColor(backgroundColor) || '#ffffff'
+		const borderColor = borderStyle === 'white' ? '#FFFFFF' : '#E0E0E0'
+
+		// 用 DOM API 构建，避免 innerHTML 拼接被配置中的引号 / HTML 片段污染宿主 DOM
+		this.tabBarEl.textContent = ''
+		const tabbar = document.createElement('div')
+		tabbar.className = 'dimina-tabbar'
+		tabbar.style.backgroundColor = bg
+		tabbar.style.borderTop = `0.5px solid ${borderColor}`
+
+		list.forEach((item, index) => {
+			const path = this._normalizePagePath(item.pagePath)
+
+			const itemEl = document.createElement('div')
+			itemEl.className = 'dimina-tabbar-item'
+			itemEl.dataset.path = path
+			itemEl.dataset.index = String(index)
+
+			const defaultIconUrl = this._resolveTabBarIcon(item.iconPath)
+			if (defaultIconUrl) {
+				itemEl.appendChild(this._createTabBarIcon(defaultIconUrl, 'dimina-tabbar-icon-default'))
+			}
+			const selectedIconUrl = this._resolveTabBarIcon(item.selectedIconPath)
+			if (selectedIconUrl) {
+				itemEl.appendChild(this._createTabBarIcon(selectedIconUrl, 'dimina-tabbar-icon-selected'))
+			}
+
+			const text = document.createElement('span')
+			text.className = 'dimina-tabbar-text'
+			text.style.color = normalColor
+			text.textContent = item.text || ''
+			itemEl.appendChild(text)
+
+			tabbar.appendChild(itemEl)
+		})
+
+		this.tabBarEl.appendChild(tabbar)
+
+		// 事件委托：单一监听器处理所有 tab 项点击
+		this.tabBarEl.addEventListener('click', (e) => {
+			const item = e.target.closest('.dimina-tabbar-item')
+			if (!item) return
+			const path = item.dataset.path
+			if (path && path !== this.currentTabPath) {
+				this.switchTab({ url: `/${path}` })
+			}
+		})
+
+		// 监听 TabBar 实际高度（含 safe-area-inset-bottom）变化，
+		// 通过 CSS 变量同步 webviews 容器底部留白，避免硬编码与样式漂移
+		if (typeof ResizeObserver !== 'undefined') {
+			this._tabBarResizeObserver?.disconnect()
+			this._tabBarResizeObserver = new ResizeObserver(() => this._syncTabBarHeightVar())
+			this._tabBarResizeObserver.observe(this.tabBarEl)
+		}
+	}
+
+	/**
+	 * 创建一张 tabBar 图标 <img>，带加载失败兜底（隐藏，避免破图占位）。
+	 */
+	_createTabBarIcon(src, modifierClass) {
+		const img = document.createElement('img')
+		img.className = `dimina-tabbar-icon ${modifierClass}`
+		img.src = src
+		img.alt = ''
+		img.addEventListener('error', () => {
+			img.style.display = 'none'
+		})
+		return img
+	}
+
+	/**
+	 * 简单 CSS 颜色白名单：#hex / rgb(a)/hsl(a)/常见关键字。
+	 * 拒绝包含尖括号、引号、分号、url() 等可能逃逸 style 上下文的字符；
+	 * 不命中白名单时返回空串，让调用方走默认色。
+	 */
+	_sanitizeCssColor(value) {
+		if (!value || typeof value !== 'string') return ''
+		const v = value.trim()
+		if (v.length === 0 || v.length > 64) return ''
+		// 任意 url()/expression()/HTML 注入尝试都会包含下面的字符
+		if (/[<>"';{}()\\]/.test(v)) {
+			// 兼容 rgb(a)/hsl(a) 函数：仅放行严格匹配的形态
+			if (/^(?:rgb|rgba|hsl|hsla)\(\s*[\d.,%\s/-]+\)$/i.test(v)) {
+				return v
+			}
+			return ''
+		}
+		return v
+	}
+
+	/**
+	 * 把 TabBar 当前实际高度同步到 CSS 变量，让 webviews 容器底部留白与之对齐。
+	 * - 隐藏时高度记为 0，等价于不留白
+	 * - 显示时取 getBoundingClientRect().height，含 safe-area-inset-bottom
+	 */
+	_syncTabBarHeightVar() {
+		if (!this.tabBarEl) return
+		const visible = this.tabBarEl.style.display !== 'none'
+		const height = visible ? this.tabBarEl.getBoundingClientRect().height : 0
+		this.el.style.setProperty('--dimina-tabbar-height', `${height}px`)
+	}
+
+	/**
+	 * 解析 tabBar 图标路径。
+	 * 编译期 collectAssets 已把 list 中的 iconPath/selectedIconPath 改写成
+	 * /${appId}/main/static/${prefix}_${filename}（带前导 /），
+	 * 这里只负责拼上 BASE_URL，并兼容已是完整 URL / data: 的场景。
+	 */
+	_resolveTabBarIcon(iconPath) {
+		if (!iconPath || typeof iconPath !== 'string') return null
+		// 已是完整 URL / data 协议 / 协议无关路径：保持原值
+		if (/^(?:data:|blob:|https?:|\/\/)/i.test(iconPath)) {
+			return iconPath
+		}
+		const baseUrl = import.meta.env.BASE_URL
+		// 编译产物：以 / 开头的站点根绝对路径
+		if (iconPath.startsWith('/')) {
+			return `${baseUrl.replace(/\/$/, '')}${iconPath}`
+		}
+		// 兜底：用户配置里仍是包内相对路径（未走 collectAssets 改写）
+		return `${baseUrl}${this.appId}/main/${iconPath}`
+	}
+
+	/**
+	 * 控制 TabBar 容器的显示/隐藏。底部留白通过 CSS 变量 --dimina-tabbar-height
+	 * 自动联动（由 ResizeObserver 在尺寸变化时同步），不再硬编码 49px。
+	 */
+	_setTabBarVisible(visible) {
+		if (!this.tabBarEl) return
+		this.tabBarEl.style.display = visible ? 'block' : 'none'
+		// display 切换通常不会触发 ResizeObserver（隐藏 → 显示时高度从 0 → N，
+		// 但切到 display:none 浏览器对 ResizeObserver 行为各不相同），主动同步一次
+		this._syncTabBarHeightVar()
+	}
+
+	/**
+	 * 仅更新 TabBar 选中态（颜色 / 图标 / class），不重渲染。
+	 */
+	_updateTabBarSelection(currentPath) {
+		if (!this.tabBarEl || !this.tabBarConfig) return
+		const normalColor = this.tabBarConfig.color || '#999999'
+		const selectedColor = this.tabBarConfig.selectedColor || '#1890ff'
+
+		this.tabBarEl.querySelectorAll('.dimina-tabbar-item').forEach((item) => {
+			const path = item.getAttribute('data-path')
+			const isSelected = path === currentPath
+			const text = item.querySelector('.dimina-tabbar-text')
+			const defaultIcon = item.querySelector('.dimina-tabbar-icon-default')
+			const selectedIcon = item.querySelector('.dimina-tabbar-icon-selected')
+
+			if (text) text.style.color = isSelected ? selectedColor : normalColor
+			if (defaultIcon) defaultIcon.style.display = isSelected ? 'none' : 'block'
+			if (selectedIcon) selectedIcon.style.display = isSelected ? 'block' : 'none'
+			item.classList.toggle('dimina-tabbar-item--selected', isSelected)
+		})
 	}
 
 	navigateToMiniProgram(opts) {
@@ -681,6 +1092,10 @@ export class MiniApp {
 			unsubscribe?.()
 		}
 		this._extSubscriptions.clear()
+
+		// 释放 TabBar 高度观察器
+		this._tabBarResizeObserver?.disconnect()
+		this._tabBarResizeObserver = null
 
 		AppManager.popView()
 		this.jscore.destroy()
