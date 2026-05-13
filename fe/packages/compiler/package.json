@@ -30,10 +30,14 @@
 		"dmcc": "dist/bin/index.js"
 	},
 	"scripts": {
+		"prebuild": "node scripts/sync-compatibility-reference.js",
 		"build": "vite build",
+		"sync:compat": "node scripts/sync-compatibility-reference.js",
+		"pretest": "node scripts/sync-compatibility-reference.js",
 		"test": "vitest run",
 		"test:dev": "vitest",
 		"coverage": "vitest run --coverage",
+		"prepack": "npm run build",
 		"release:beta": "npm version prerelease --preid=beta && npm publish --tag beta",
 		"release": "npm version patch && npm publish"
 	},
