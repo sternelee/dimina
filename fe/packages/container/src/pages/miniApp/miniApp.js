@@ -47,6 +47,7 @@ export class MiniApp {
 		this.tabBarBridges = new Map()      // pagePath -> Bridge：懒加载的持久 tab 池
 		this.currentTabPath = null          // 当前激活的 tab 路径；null 表示当前不在任何 tab 页
 		this.tabBarEl = null                // .dimina-mini-app__tabbar 根节点
+		this.tabBarHeight = 0               // TabBar 实际高度，用于给 tab 页 webview 单独预留底部空间
 		// showModal 用 LIFO stack：后来的 modal 压在前一个之上（z-index 递增），
 		// 关闭顶上 modal 露出下方；前后 modal 互不干扰，各自 success/complete 独立。
 		this._modalStack = []
@@ -674,6 +675,7 @@ export class MiniApp {
 				this.currentTabPath = null
 			}
 		}
+		this._setBridgeTabBarInset(curBridge, false)
 		this._setTabBarVisible(false)
 
 		this.webviewAnimaEnd = true
@@ -838,6 +840,7 @@ export class MiniApp {
 
 			// 4. 显示目标 tab：清理动画类、重置 z-index、display
 			const targetEl = targetBridge.webview.el
+			this._setBridgeTabBarInset(targetBridge, true)
 			targetEl.classList.remove(
 				'dimina-native-view--before-enter',
 				'dimina-native-view--slide-out',
@@ -943,7 +946,7 @@ export class MiniApp {
 		})
 
 		// 监听 TabBar 实际高度（含 safe-area-inset-bottom）变化，
-		// 通过 CSS 变量同步 webviews 容器底部留白，避免硬编码与样式漂移
+		// 并同步到所有 tab 页 webview，避免硬编码与样式漂移
 		if (typeof ResizeObserver !== 'undefined') {
 			this._tabBarResizeObserver?.disconnect()
 			this._tabBarResizeObserver = new ResizeObserver(() => this._syncTabBarHeightVar())
@@ -986,15 +989,57 @@ export class MiniApp {
 	}
 
 	/**
-	 * 把 TabBar 当前实际高度同步到 CSS 变量，让 webviews 容器底部留白与之对齐。
-	 * - 隐藏时高度记为 0，等价于不留白
-	 * - 显示时取 getBoundingClientRect().height，含 safe-area-inset-bottom
+	 * 获取 TabBar 实际高度。隐藏状态下临时不可见测量一次，避免首次 switchTab
+	 * 到 tab 页时缺少底部留白。
+	 */
+	_getTabBarHeight() {
+		if (!this.tabBarEl) return this.tabBarHeight
+
+		let height = this.tabBarEl.getBoundingClientRect().height
+		if (!height && this.tabBarEl.style.display === 'none') {
+			const oldDisplay = this.tabBarEl.style.display
+			const oldVisibility = this.tabBarEl.style.visibility
+
+			this.tabBarEl.style.visibility = 'hidden'
+			this.tabBarEl.style.display = 'block'
+			height = this.tabBarEl.getBoundingClientRect().height
+			this.tabBarEl.style.display = oldDisplay
+			this.tabBarEl.style.visibility = oldVisibility
+		}
+
+		if (height > 0) {
+			this.tabBarHeight = height
+		}
+		return this.tabBarHeight
+	}
+
+	/**
+	 * 把 TabBar 当前实际高度同步到 CSS 变量和 tab 页 webview。
+	 * webviews 容器保持全屏，只有 tab 页自身预留底部空间；这样隐藏
+	 * tabbar 跳转到非 tab 页时，不会触发所有页面整体重排。
 	 */
 	_syncTabBarHeightVar() {
-		if (!this.tabBarEl) return
-		const visible = this.tabBarEl.style.display !== 'none'
-		const height = visible ? this.tabBarEl.getBoundingClientRect().height : 0
+		const height = this._getTabBarHeight()
 		this.el.style.setProperty('--dimina-tabbar-height', `${height}px`)
+		this._syncTabBarBridgeInsets()
+	}
+
+	_setBridgeTabBarInset(bridge, enabled) {
+		const webviewEl = bridge?.webview?.el
+		if (!webviewEl) return
+
+		if (!enabled) {
+			webviewEl.style.removeProperty('bottom')
+			return
+		}
+
+		webviewEl.style.bottom = `${this._getTabBarHeight()}px`
+	}
+
+	_syncTabBarBridgeInsets() {
+		for (const bridge of this.tabBarBridges.values()) {
+			this._setBridgeTabBarInset(bridge, true)
+		}
 	}
 
 	/**
@@ -1022,14 +1067,13 @@ export class MiniApp {
 	}
 
 	/**
-	 * 控制 TabBar 容器的显示/隐藏。底部留白通过 CSS 变量 --dimina-tabbar-height
-	 * 自动联动（由 ResizeObserver 在尺寸变化时同步），不再硬编码 49px。
+	 * 控制 TabBar 容器的显示/隐藏。底部留白只作用在 tab 页 webview 上，
+	 * 避免非 tab 跳转过程中改变 webviews 容器高度。
 	 */
 	_setTabBarVisible(visible) {
 		if (!this.tabBarEl) return
 		this.tabBarEl.style.display = visible ? 'block' : 'none'
-		// display 切换通常不会触发 ResizeObserver（隐藏 → 显示时高度从 0 → N，
-		// 但切到 display:none 浏览器对 ResizeObserver 行为各不相同），主动同步一次
+		// display 切换通常不会触发 ResizeObserver，主动同步一次
 		this._syncTabBarHeightVar()
 	}
 
@@ -1392,7 +1436,7 @@ export class MiniApp {
 		p.textContent = String(title)
 		dom.appendChild(p)
 
-		// 挂到 mini-app 根节点，避免被 webviewsContainer 的 tabbar 留白裁剪 / 被遮挡
+		// 挂到 mini-app 根节点，避免被 webviewsContainer 的页面层级裁剪 / 遮挡
 		this.el.appendChild(dom)
 		this.toastInfo.dom = dom
 		this.toastInfo.maskEl = maskEl
@@ -1633,7 +1677,7 @@ export class MiniApp {
 		sheet.appendChild(cancelBtn)
 
 		mask.onclick = cleanup
-		// 挂载到 mini-app 根，避免被 webviewsContainer 的 tabbar 留白（bottom: var(--tabbar-height)）抬高
+		// 挂载到 mini-app 根，避免被 webviewsContainer 的页面层级影响
 		this.el.appendChild(mask)
 		this.el.appendChild(sheet)
 		// 动画效果：等浏览器 paint 后再加 show class，触发 CSS transition
