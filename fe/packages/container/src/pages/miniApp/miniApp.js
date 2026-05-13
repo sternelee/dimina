@@ -1,4 +1,4 @@
-import { LAUNCH_SCREEN_MIN_MS, WAIT_TRANSITION_TIMEOUT_MS } from '@/constants/animation'
+import { LAUNCH_SCREEN_MIN_MS, MODAL_GUARD_MS, WAIT_TRANSITION_TIMEOUT_MS } from '@/constants/animation'
 import { AppManager } from '@/core/appManager'
 import { Bridge } from '@/core/bridge'
 import { JSCore } from '@/core/jscore'
@@ -47,6 +47,11 @@ export class MiniApp {
 		this.tabBarBridges = new Map()      // pagePath -> Bridge：懒加载的持久 tab 池
 		this.currentTabPath = null          // 当前激活的 tab 路径；null 表示当前不在任何 tab 页
 		this.tabBarEl = null                // .dimina-mini-app__tabbar 根节点
+		// showModal 用 LIFO stack：后来的 modal 压在前一个之上（z-index 递增），
+		// 关闭顶上 modal 露出下方；前后 modal 互不干扰，各自 success/complete 独立。
+		this._modalStack = []
+		this._modalPendingTimers = new Set()
+		this._destroyed = false
 	}
 
 	/**
@@ -1048,6 +1053,63 @@ export class MiniApp {
 		})
 	}
 
+	/**
+	 * wx.setTabBarStyle：动态修改 TabBar 整体样式
+	 * https://developers.weixin.qq.com/miniprogram/dev/api/ui/tab-bar/wx.setTabBarStyle.html
+	 *
+	 * 入参：
+	 *   color: string           — tab 上文字默认颜色（HexColor）
+	 *   selectedColor: string   — tab 上文字选中颜色（HexColor）
+	 *   backgroundColor: string — tab 背景色（HexColor）
+	 *   borderStyle: 'black' | 'white' — 上边框颜色
+	 *   success / fail / complete: 回调
+	 *
+	 * 行为：原地更新 this.tabBarConfig 和已渲染的 DOM（背景、上边框、所有 tab 文字颜色），
+	 * 不重新构建 tabbar，保留事件绑定 / 图标 / 选中态。
+	 */
+	setTabBarStyle(opts = {}) {
+		const { color, selectedColor, backgroundColor, borderStyle, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		if (!this.tabBarConfig || !this.tabBarEl) {
+			onFail?.({ errMsg: 'setTabBarStyle:fail tabBar not configured' })
+			onComplete?.()
+			return
+		}
+
+		// 仅认 wechat 文档支持的 borderStyle 值
+		const validBorderStyle = borderStyle === 'black' || borderStyle === 'white' ? borderStyle : null
+
+		// 用 _sanitizeCssColor 校验颜色，命中黑名单的字符（注入风险）直接丢弃
+		const safeColor = color !== undefined ? this._sanitizeCssColor(color) : null
+		const safeSelectedColor = selectedColor !== undefined ? this._sanitizeCssColor(selectedColor) : null
+		const safeBg = backgroundColor !== undefined ? this._sanitizeCssColor(backgroundColor) : null
+
+		// 1. 更新缓存 config —— 后续 _updateTabBarSelection / _renderTabBar 都依赖它
+		if (safeColor) this.tabBarConfig.color = safeColor
+		if (safeSelectedColor) this.tabBarConfig.selectedColor = safeSelectedColor
+		if (safeBg) this.tabBarConfig.backgroundColor = safeBg
+		if (validBorderStyle) this.tabBarConfig.borderStyle = validBorderStyle
+
+		// 2. 更新已渲染的 tabbar DOM（背景 / 边框）
+		const tabbar = this.tabBarEl.querySelector('.dimina-tabbar')
+		if (tabbar) {
+			if (safeBg) tabbar.style.backgroundColor = safeBg
+			if (validBorderStyle) {
+				const borderColor = validBorderStyle === 'white' ? '#FFFFFF' : '#E0E0E0'
+				tabbar.style.borderTop = `0.5px solid ${borderColor}`
+			}
+		}
+
+		// 3. 文字颜色按当前选中态重新刷一遍（同时处理 color 和 selectedColor）
+		this._updateTabBarSelection(this.currentTabPath)
+
+		onSuccess?.({ errMsg: 'setTabBarStyle:ok' })
+		onComplete?.()
+	}
+
 	navigateToMiniProgram(opts) {
 		const { appId, path } = opts
 		AppManager.openApp(
@@ -1087,6 +1149,9 @@ export class MiniApp {
 	}
 
 	destroy() {
+		// 标记 destroyed，所有异步回调据此短路（modal 100ms mount、toast timer 等）
+		this._destroyed = true
+
 		// 清理所有第三方扩展订阅
 		for (const unsubscribe of this._extSubscriptions.values()) {
 			unsubscribe?.()
@@ -1096,6 +1161,20 @@ export class MiniApp {
 		// 释放 TabBar 高度观察器
 		this._tabBarResizeObserver?.disconnect()
 		this._tabBarResizeObserver = null
+
+		// 清掉所有 showModal pending 的 100ms 计时器
+		for (const t of this._modalPendingTimers) clearTimeout(t)
+		this._modalPendingTimers.clear()
+
+		// 清空 modal stack（避免泄漏 DOM）
+		for (const entry of this._modalStack) {
+			entry.mask?.remove()
+			entry.dialog?.remove()
+		}
+		this._modalStack.length = 0
+
+		// 清掉残留 toast
+		this.hideToast({})
 
 		AppManager.popView()
 		this.jscore.destroy()
@@ -1281,8 +1360,8 @@ export class MiniApp {
 		}
 	}
 
-	showToast(opts) {
-		const { title = '', duration = 1500, icon = 'success', success, complete } = opts
+	showToast(opts = {}) {
+		const { title = '', duration = 1500, icon = 'success', mask = false, success, complete } = opts
 
 		if (!title) {
 			return
@@ -1293,28 +1372,55 @@ export class MiniApp {
 		const onSuccess = this.createCallbackFunction(success)
 		const onComplete = this.createCallbackFunction(complete)
 
-		this.toastInfo.dom = document.createElement('div')
-		this.toastInfo.dom.classList.add('dimina-toast', `dimina-toast--${icon}`)
-		this.toastInfo.dom.innerHTML = `<p>${title}</p>`
-		this.webviewsContainer.appendChild(this.toastInfo.dom)
+		// 可选遮罩层：mask:true 时阻止用户点击下层内容（对齐 wx.showToast）
+		let maskEl = null
+		if (mask) {
+			maskEl = document.createElement('div')
+			maskEl.className = 'dimina-toast-mask'
+			this.el.appendChild(maskEl)
+		}
+
+		const dom = document.createElement('div')
+		dom.className = `dimina-toast dimina-toast--${icon}`
+		// 没图标的 toast（icon: 'none'）：只渲染文本，不再占 120x120 大方块
+		if (icon === 'none') {
+			dom.classList.add('dimina-toast--text-only')
+		}
+		const p = document.createElement('p')
+		p.textContent = String(title)
+		dom.appendChild(p)
+
+		// 挂到 mini-app 根节点，避免被 webviewsContainer 的 tabbar 留白裁剪 / 被遮挡
+		this.el.appendChild(dom)
+		this.toastInfo.dom = dom
+		this.toastInfo.maskEl = maskEl
 
 		this.toastInfo.timer = setTimeout(() => {
-			this.webviewsContainer.removeChild(this.toastInfo.dom)
-			this.toastInfo.dom = null
+			dom.remove()
+			maskEl?.remove()
+			if (this.toastInfo.dom === dom) {
+				this.toastInfo.dom = null
+				this.toastInfo.maskEl = null
+				this.toastInfo.timer = null
+			}
 		}, duration)
 
 		onSuccess?.()
 		onComplete?.()
 	}
 
-	hideToast(opts) {
+	hideToast(opts = {}) {
 		const { success, complete } = opts
 		const onSuccess = this.createCallbackFunction(success)
 		const onComplete = this.createCallbackFunction(complete)
 
 		if (this.toastInfo.dom) {
-			this.webviewsContainer.removeChild(this.toastInfo.dom)
+			this.toastInfo.dom.remove()
 			this.toastInfo.dom = null
+		}
+		if (this.toastInfo.maskEl) {
+			this.toastInfo.maskEl.remove()
+			this.toastInfo.maskEl = null
 		}
 		if (this.toastInfo.timer) {
 			clearTimeout(this.toastInfo.timer)
@@ -1324,56 +1430,162 @@ export class MiniApp {
 		onComplete?.()
 	}
 
-	showLoading(opts) {
+	showLoading(opts = {}) {
 		this.showToast({ ...opts, icon: 'loading' })
 	}
 
-	hideLoading(opts) {
-		this.hideLoading(opts)
+	hideLoading(opts = {}) {
+		// 修复：之前是 this.hideLoading(opts)，无限递归
+		this.hideToast(opts)
 	}
+
 
 	showModal(opts) {
-		const { content = '', cancelText = '取消', confirmText = '确定', success, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onComplete = this.createCallbackFunction(complete)
+		if (this._destroyed) return
+		// 同步 mount + push：栈状态立即生效（destroy / 栈深查询都能看到这条 entry）
+		const entry = this._mountModal(opts || {})
+		this._modalStack.push(entry)
+		// push 后触发一次视图更新：只展示栈顶，其它全部隐藏（不再叠加渲染）
+		this._updateModalView()
 
-		// 遮罩层
-		const mask = document.createElement('div')
-		mask.className = 'dimina-dialog-mask'
-		// 弹窗内容
-		const dialog = document.createElement('div')
-		dialog.className = 'dimina-dialog'
-		dialog.innerHTML = `<p>${content}</p>
-		<div>
-			<a id="cancelBtn" class="dimina-dialog__button" href="javascript:">${cancelText}</a>
-			<a id="confirmBtn" class="dimina-dialog__button" style="color: #576b95;" href="javascript:">${confirmText}</a>
-    	</div>`
+		// mask 同步加 .show：立即变黑遮罩，吸收触发 showModal 那次 click 链路的 mouseup
+		// （dialog 仍 pointer-events:none 不接收点击 → click 落到 mask 被吸收，不穿透到按钮）
+		entry.mask.classList.add('show')
 
-		const cleanup = () => {
-			mask.remove()
-			dialog.remove()
-		}
-
-		dialog.querySelector('#cancelBtn').addEventListener('click', () => {
-			cleanup()
-			onSuccess?.({ cancel: true })
-			onComplete?.()
-		})
-		dialog.querySelector('#confirmBtn').addEventListener('click', () => {
-			cleanup()
-			onSuccess?.({ confirm: true })
-			onComplete?.()
-		})
-		mask.onclick = cleanup
-
-		this.webviewsContainer.appendChild(mask)
-		this.webviewsContainer.appendChild(dialog)
-		// 动画效果：等浏览器 paint 后再加 show class，触发 CSS transition
-		requestAnimationFrame(() => requestAnimationFrame(() => {
-			mask.classList.add('show')
-			dialog.classList.add('show')
-		}))
+		const timer = setTimeout(() => {
+			this._modalPendingTimers.delete(timer)
+			if (this._destroyed) return
+			// 已被外部 close 出栈了就不再 show
+			if (!this._modalStack.includes(entry)) return
+			entry.dialog.classList.add('show')
+		}, MODAL_GUARD_MS)
+		this._modalPendingTimers.add(timer)
 	}
+
+	/**
+	 * 根据 _modalStack 当前状态更新视图：仅栈顶 modal 可见，其余 mask + dialog 都 display:none。
+	 * 任何改变栈结构的操作（push / pop）之后都该调一次。
+	 */
+	_updateModalView() {
+		const topIdx = this._modalStack.length - 1
+		for (let i = 0; i < this._modalStack.length; i++) {
+			const e = this._modalStack[i]
+			if (i === topIdx) {
+				e.mask.classList.remove('dimina-modal--occluded')
+				e.dialog.classList.remove('dimina-modal--occluded')
+			}
+			else {
+				e.mask.classList.add('dimina-modal--occluded')
+				e.dialog.classList.add('dimina-modal--occluded')
+			}
+		}
+	}
+
+	_mountModal(opts) {
+        const {
+            title = "",
+            content = "",
+            showCancel = true,
+            cancelText = "取消",
+            cancelColor = "#000",
+            confirmText = "确定",
+            confirmColor = "#576b95",
+            success,
+            complete,
+        } = opts;
+        const onSuccess = this.createCallbackFunction(success);
+        const onComplete = this.createCallbackFunction(complete);
+
+        const mask = document.createElement("div");
+        mask.className = "dimina-dialog-mask";
+
+        const dialog = document.createElement("div");
+        dialog.className = "dimina-dialog";
+
+        const depth = this._modalStack.length;
+        mask.style.zIndex = String(1100 + depth * 20);
+        dialog.style.zIndex = String(1110 + depth * 20);
+
+        if (title) {
+            const titleEl = document.createElement("h2");
+            titleEl.className = "dimina-dialog__title";
+            titleEl.textContent = String(title);
+            dialog.appendChild(titleEl);
+        }
+
+        // content 为空就不渲染——避免空的 padding 占位
+        if (content) {
+            const contentEl = document.createElement("p");
+            contentEl.className = "dimina-dialog__content";
+            contentEl.textContent = String(content);
+            dialog.appendChild(contentEl);
+        }
+
+        const btnRow = document.createElement("div");
+        btnRow.className = "dimina-dialog__buttons";
+
+        let closed = false;
+        const entry = { mask, dialog, close: null };
+        const close = (result) => {
+            if (closed) return;
+            closed = true;
+            // 从 stack 中弹掉自己（可能不是栈顶，例如外部 destroy 提前关掉了下层 modal）
+            const idx = this._modalStack.indexOf(entry);
+            if (idx >= 0) this._modalStack.splice(idx, 1);
+
+            // 栈空 → 这是最后一个 modal，播放收缩淡出动画再移除
+            // 栈非空 → 下面还有 modal 要露出，直接移除当前 DOM 不播动画，让下一个立刻可见
+            if (this._modalStack.length === 0) {
+                mask.classList.remove("show");
+                dialog.classList.remove("show");
+                setTimeout(() => {
+                    mask.remove();
+                    dialog.remove();
+                }, 200);
+            } else {
+                mask.remove();
+                dialog.remove();
+            }
+
+            // pop 后触发视图更新：之前的下一层（新栈顶）显示出来
+            this._updateModalView();
+            onSuccess?.(result);
+            onComplete?.();
+        };
+        entry.close = close;
+
+        if (showCancel) {
+            const cancelBtn = document.createElement("button");
+            cancelBtn.type = "button";
+            cancelBtn.className = "dimina-dialog__button";
+            cancelBtn.style.color = cancelColor;
+            cancelBtn.textContent = String(cancelText);
+            cancelBtn.addEventListener("click", () => {
+                close({ cancel: true, confirm: false, errMsg: "showModal:ok" });
+            });
+            btnRow.appendChild(cancelBtn);
+        }
+
+        const confirmBtn = document.createElement("button");
+        confirmBtn.type = "button";
+        confirmBtn.className = "dimina-dialog__button";
+        confirmBtn.style.color = confirmColor;
+        confirmBtn.textContent = String(confirmText);
+        confirmBtn.addEventListener("click", () => {
+            close({ cancel: false, confirm: true, errMsg: "showModal:ok" });
+        });
+        btnRow.appendChild(confirmBtn);
+
+        dialog.appendChild(btnRow);
+
+        this.el.appendChild(mask);
+        this.el.appendChild(dialog);
+
+        // .show 由 showModal 在 100ms 后统一加，触发 transition + 打开 pointer-events
+        // （这里不再 rAF 自动加 show——展示和挂载已分离）
+
+        return entry;
+    }
 
 	showActionSheet(opts) {
 		const { itemList = [], itemColor = '#000', success, fail, complete } = opts || {}
@@ -1419,9 +1631,9 @@ export class MiniApp {
 		sheet.appendChild(cancelBtn)
 
 		mask.onclick = cleanup
-		// 挂载到 webviewsContainer
-		this.webviewsContainer.appendChild(mask)
-		this.webviewsContainer.appendChild(sheet)
+		// 挂载到 mini-app 根，避免被 webviewsContainer 的 tabbar 留白（bottom: var(--tabbar-height)）抬高
+		this.el.appendChild(mask)
+		this.el.appendChild(sheet)
 		// 动画效果：等浏览器 paint 后再加 show class，触发 CSS transition
 		requestAnimationFrame(() => requestAnimationFrame(() => {
 			sheet.classList.add('show')
