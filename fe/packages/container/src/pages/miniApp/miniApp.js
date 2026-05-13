@@ -1042,28 +1042,40 @@ export class MiniApp {
 		}
 	}
 
+	_joinBaseUrl(...segments) {
+		const baseUrl = import.meta.env.BASE_URL || '/'
+		const normalizedBaseUrl = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`
+		const path = segments
+			.map(segment => String(segment).trim().replace(/^\/+|\/+$/g, ''))
+			.filter(Boolean)
+			.join('/')
+		return `${normalizedBaseUrl}${path}`
+	}
+
 	/**
 	 * 解析 tabBar 图标路径。
-	 * 编译期 collectAssets 输出有两种形态（看 ASSETS_PATH_PREFIX 环境变量）：
-	 *   - 未设置：/${appId}/main/static/${prefix}_${filename}    ← 带前导 /
-	 *   - 已设置：${appId}/main/static/${prefix}_${filename}     ← 无前导 /（如 GitHub Pages 生产构建）
+	 * 编译期 collectAssets 会输出 appId/main/static/...，本地源路径则按小程序
+	 * 根目录兜底到 appId/main/...，两类路径都统一挂到 Vite BASE_URL 下。
 	 */
 	_resolveTabBarIcon(iconPath) {
 		if (!iconPath || typeof iconPath !== 'string') return null
+
+		const rawPath = iconPath.trim()
+		if (!rawPath) return null
+
 		// 已是完整 URL / data 协议 / 协议无关路径：保持原值
-		if (/^(?:data:|blob:|https?:|\/\/)/i.test(iconPath)) {
-			return iconPath
+		if (/^(?:data:|blob:|https?:|\/\/)/i.test(rawPath)) {
+			return rawPath
 		}
-		const baseUrl = import.meta.env.BASE_URL
-		if (iconPath.startsWith('/')) {
-            return `${baseUrl.replace(/\/$/, "")}${iconPath}`;
-        }
-		const appIdPrefix = `${this.appId}/`
-		if (iconPath.startsWith(appIdPrefix)) {
-			return `${baseUrl}${iconPath}`
+
+		const localPath = rawPath.replace(/^\/+/, '').replace(/^\.\//, '')
+		const appRootPrefix = `${this.appId}/`
+		if (localPath.startsWith(appRootPrefix)) {
+			return this._joinBaseUrl(localPath)
 		}
-		// 兜底：用户配置里仍是包内相对路径（未走 collectAssets 改写）
-		return `${baseUrl}${this.appId}/main/${iconPath}`
+
+		// 兜底：用户配置里仍是包内相对路径（未走 collectAssets 改写或拷贝失败）
+		return this._joinBaseUrl(this.appId, 'main', localPath)
 	}
 
 	/**
