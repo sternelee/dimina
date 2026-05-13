@@ -33,7 +33,7 @@ function parseJs(code, filename = 'view-compiler.js', sourceType = 'module') {
  * 如果顶层是单个表达式语句，则只返回表达式源码
  * @param {string} code
  * @param {*} ast - Oxc Program AST
- * @returns {string}
+ * @returns {string} Program code or the source of the single top-level expression.
  */
 function getProgramCode(code, ast) {
 	const statement = ast.body?.[0]
