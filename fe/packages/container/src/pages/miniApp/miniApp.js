@@ -519,6 +519,8 @@ export class MiniApp {
 		preWebview.el.classList.add('dimina-native-view--linear-anima')
 		preBridge?.pageHide()
 
+		this._setTabBarVisible(false)
+
 		// 新页面推入
 		bridge.webview.el.style.zIndex = this.bridgeList.length + 1
 		bridge.webview.el.classList.add('dimina-native-view--enter-anima')
@@ -531,9 +533,6 @@ export class MiniApp {
 		bridge.webview.el.classList.remove('dimina-native-view--before-enter')
 		bridge.webview.el.classList.remove('dimina-native-view--enter-anima')
 		bridge.webview.el.classList.remove('dimina-native-view--instage')
-
-		// navigateTo 的目标按规范不应是 tab 页：栈顶变为非 tab 页，隐藏 TabBar
-		this._setTabBarVisible(false)
 
 		onSuccess?.({ errMsg: 'navigateTo:ok' })
 		onComplete?.()
@@ -1000,9 +999,9 @@ export class MiniApp {
 
 	/**
 	 * 解析 tabBar 图标路径。
-	 * 编译期 collectAssets 已把 list 中的 iconPath/selectedIconPath 改写成
-	 * /${appId}/main/static/${prefix}_${filename}（带前导 /），
-	 * 这里只负责拼上 BASE_URL，并兼容已是完整 URL / data: 的场景。
+	 * 编译期 collectAssets 输出有两种形态（看 ASSETS_PATH_PREFIX 环境变量）：
+	 *   - 未设置：/${appId}/main/static/${prefix}_${filename}    ← 带前导 /
+	 *   - 已设置：${appId}/main/static/${prefix}_${filename}     ← 无前导 /（如 GitHub Pages 生产构建）
 	 */
 	_resolveTabBarIcon(iconPath) {
 		if (!iconPath || typeof iconPath !== 'string') return null
@@ -1011,9 +1010,12 @@ export class MiniApp {
 			return iconPath
 		}
 		const baseUrl = import.meta.env.BASE_URL
-		// 编译产物：以 / 开头的站点根绝对路径
 		if (iconPath.startsWith('/')) {
-			return `${baseUrl.replace(/\/$/, '')}${iconPath}`
+            return `${baseUrl.replace(/\/$/, "")}${iconPath}`;
+        }
+		const appIdPrefix = `${this.appId}/`
+		if (iconPath.startsWith(appIdPrefix)) {
+			return `${baseUrl}${iconPath}`
 		}
 		// 兜底：用户配置里仍是包内相对路径（未走 collectAssets 改写）
 		return `${baseUrl}${this.appId}/main/${iconPath}`
