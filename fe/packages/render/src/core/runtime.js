@@ -764,6 +764,10 @@ class Runtime {
 		}
 	}
 
+	videoContext(opts) {
+		message.event.emit('videoContext', opts.params)
+	}
+
 	/**
 	 * 确保元素已准备好（有尺寸）
 	 */
