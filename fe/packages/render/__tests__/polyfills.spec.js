@@ -1,3 +1,4 @@
+/* eslint-disable no-extend-native */
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const originalDescriptors = {

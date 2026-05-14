@@ -66,7 +66,7 @@ function isObject(value) {
 }
 
 function isSymbol(value) {
-	return typeof value === 'symbol' || value instanceof Symbol
+	return typeof value === 'symbol' || Object.prototype.toString.call(value) === '[object Symbol]'
 }
 
 function isEqualsSameValueZero(value, other) {

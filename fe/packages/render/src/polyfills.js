@@ -1,3 +1,4 @@
+/* eslint-disable no-extend-native */
 function defineArrayMethod(name, value) {
 	if (typeof Array.prototype[name] === 'function') {
 		return
