@@ -570,6 +570,7 @@ internal fun createWebView(context: Context, onPageLoadFinished: () -> Unit): We
             android.view.ViewGroup.LayoutParams.MATCH_PARENT,
             android.view.ViewGroup.LayoutParams.MATCH_PARENT
         )
+        overScrollMode = WebView.OVER_SCROLL_NEVER
         // 配置 WebView 设置
         settings.apply {
             javaScriptEnabled = true
