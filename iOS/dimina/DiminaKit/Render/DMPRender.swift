@@ -39,6 +39,7 @@ public class DMPRender: DMPWebViewDelegate {
     @MainActor
     public func releaseWebView(_ webview: DMPWebview) {
         let webViewId = webview.getWebViewId()
+        NativeComponentAPI.clear(webViewId: webViewId)
         webviewsMap.removeValue(forKey: webViewId)
         DMPWebViewPool.shared.releaseWebView(webview)
     }
@@ -132,4 +133,3 @@ public class DMPRender: DMPWebViewDelegate {
         }
     }
 }
-

@@ -4,7 +4,7 @@
 
 - iOS 14.0+
 - Swift 5.0+
-- Xcode 14.0+
+- Xcode 16.0+
 
 ## 快速接入
 
@@ -12,19 +12,19 @@
 
 您可以通过以下方式将 Dimina SDK 添加到您的 iOS 项目中：
 
-#### CocoaPods
+#### Swift Package Manager
 
-在您的 `Podfile` 中添加：
+在 Xcode 中打开 `dimina.xcodeproj`，选择：
 
-```ruby
-pod 'Dimina', :git => 'https://github.com/didi/dimina.git'
+`File > Add Package Dependencies...`
+
+然后填写仓库地址：
+
+```txt
+https://github.com/didi/dimina.git
 ```
 
-然后运行：
-
-```bash
-pod install
-```
+版本选择 `Up to Next Major Version`，或按需要固定到具体版本。
 
 ### 步骤 2: 准备小程序资源
 
@@ -128,7 +128,7 @@ app.destroy()
 
 运行命令：
 ```bash
-cd iOS && pod install
+open iOS/dimina.xcodeproj
 ```
 
-使用 Xcode 打开 dimina.xcworkspace 可以查看示例项目。
+使用 Xcode 打开 `dimina.xcodeproj` 可以查看示例项目。

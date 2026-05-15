@@ -81,6 +81,7 @@ public class DMPContainerApi: NSObject {
         _ = MenuAPI(app: app)
         _ = NavigationBarAPI(app: app)
         _ = ScrollAPI(app: app)
+        _ = NativeComponentAPI(app: app)
         
         // 返回一个基础 API 实例
         return DMPContainerApi(app: app)

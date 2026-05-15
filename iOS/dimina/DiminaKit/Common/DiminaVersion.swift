@@ -25,7 +25,7 @@ public class DiminaVersion {
             return frameworkBundle
         }
         
-        // 默认值（与 Dimina.podspec 同步）
+        // 默认值（与 Package.swift / MARKETING_VERSION 同步）
         return "1.2.0"
     }
     
