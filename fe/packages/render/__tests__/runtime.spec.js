@@ -90,4 +90,36 @@ describe('runtime template components', () => {
 
 		app.unmount()
 	})
+
+	it('treats missing template data fields as undefined', async () => {
+		const warnings = []
+		const TplHead = runtime.createTplComponent({
+			id: 'tpl-head',
+			render() {
+				return h('div', [
+					h('span', { class: 'head-title' }, this.title),
+					this.desc ? h('span', { class: 'head-desc' }, this.desc) : null,
+				])
+			},
+		})
+
+		const app = createApp({
+			render() {
+				return h(TplHead, { data: { title: 'swiper' } })
+			},
+		})
+		app.config.warnHandler = (message) => {
+			warnings.push(message)
+		}
+
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+		await nextTick()
+
+		expect(root.textContent).toBe('swiper')
+		expect(warnings).toEqual([])
+
+		app.unmount()
+	})
 })

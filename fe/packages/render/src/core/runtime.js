@@ -166,6 +166,15 @@ class Runtime {
 			},
 			setup(props) {
 				const state = reactive({})
+				const stateProxy = new Proxy(state, {
+					getOwnPropertyDescriptor(target, key) {
+						return Reflect.getOwnPropertyDescriptor(target, key) || (
+							typeof key === 'string' && !key.startsWith('$') && !key.startsWith('_')
+								? { configurable: true, enumerable: false, value: undefined }
+								: undefined
+						)
+					},
+				})
 				watchEffect(() => {
 					const newData = props.data || {}
 					for (const key in state) {
@@ -173,7 +182,7 @@ class Runtime {
 					}
 					Object.assign(state, newData)
 				})
-				return state
+				return stateProxy
 			},
 			render,
 		}
