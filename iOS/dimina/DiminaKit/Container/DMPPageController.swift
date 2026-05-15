@@ -73,6 +73,8 @@ public class DMPPageController: UIViewController {
         
         print("🔧 DMPPageController: WebView (ID: \(webview.getWebViewId())) configuration completed, current page path: \(webview.getPagePath())")
         
+        app?.render?.setupJSBridge(webViewId: webview.getWebViewId())
+
         webview.poolState = .loading
         webview.loadPageFrame()
     }

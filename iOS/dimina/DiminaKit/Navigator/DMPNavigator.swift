@@ -80,6 +80,7 @@ public class DMPNavigator: NSObject {
             return
         }
 
+        navigationController.view.endEditing(true)
         pageLifecycle?.onHide(webviewId: app!.getCurrentWebViewId())
 
         // 使用DMPPageController创建页面
@@ -116,6 +117,7 @@ public class DMPNavigator: NSObject {
             return
         }
 
+        navigationController.view.endEditing(true)
         pageLifecycle?.onHide(webviewId: app!.getCurrentWebViewId())
 
         // 使用DMPPageController创建页面
@@ -154,6 +156,7 @@ public class DMPNavigator: NSObject {
             return
         }
 
+        navigationController.view.endEditing(true)
         // 检查是否可以返回
         if navigationController.viewControllers.count <= 1 {
             if destroy {
@@ -201,6 +204,7 @@ public class DMPNavigator: NSObject {
             return
         }
 
+        navigationController.view.endEditing(true)
         let currentIndex = navigationController.viewControllers.count - 1
 
         // 如果当前只有一个页面，则需要特殊处理
@@ -275,6 +279,7 @@ public class DMPNavigator: NSObject {
             return
         }
 
+        navigationController.view.endEditing(true)
         navigationController.popToRootViewController(animated: animated)
         pageRecords.removeAll()
 
