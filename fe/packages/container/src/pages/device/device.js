@@ -71,14 +71,28 @@ export class Device {
 	bindPowerButton() {
 		const powerButton = this.root.querySelector('.power-btn')
 
-		powerButton?.addEventListener('click', () => {
-			if (this.isScreenSleeping) {
-				this.wakeScreen()
-			}
-			else {
-				this.sleepScreen()
-			}
+		powerButton?.addEventListener('pointerdown', (event) => {
+			event.preventDefault()
+			this.toggleScreen()
 		})
+
+		powerButton?.addEventListener('keydown', (event) => {
+			if (event.repeat || (event.key !== 'Enter' && event.key !== ' ')) {
+				return
+			}
+
+			event.preventDefault()
+			this.toggleScreen()
+		})
+	}
+
+	toggleScreen() {
+		if (this.isScreenSleeping) {
+			this.wakeScreen()
+		}
+		else {
+			this.sleepScreen()
+		}
 	}
 
 	sleepScreen() {
@@ -88,6 +102,7 @@ export class Device {
 
 		this.isScreenSleeping = true
 		this.root.querySelector('.iphone__screen')?.classList.add('iphone__screen--sleeping')
+		this.root.querySelector('.power-btn')?.setAttribute('aria-pressed', 'true')
 		this.application?.sleepActiveView?.()
 	}
 
@@ -98,27 +113,21 @@ export class Device {
 
 		this.isScreenSleeping = false
 		this.root.querySelector('.iphone__screen')?.classList.remove('iphone__screen--sleeping')
+		this.root.querySelector('.power-btn')?.setAttribute('aria-pressed', 'false')
 		this.application?.wakeActiveView?.()
 	}
 
 	// black white
 	updateDeviceBarColor(color) {
 		const statusBar = this.root.querySelector('.iphone__status-bar')
-		const homeBar = this.root.querySelector('.iphone__home-touch-bar')
 
 		if (color === 'black') {
 			statusBar.classList.remove('iphone__status-bar--white')
 			statusBar.classList.add('iphone__status-bar--black')
-
-			homeBar.classList.remove('iphone__home-touch-bar--white')
-			homeBar.classList.add('iphone__home-touch-bar--black')
 		}
 		else if (color === 'white') {
 			statusBar.classList.add('iphone__status-bar--white')
 			statusBar.classList.remove('iphone__status-bar--black')
-
-			homeBar.classList.add('iphone__home-touch-bar--white')
-			homeBar.classList.remove('iphone__home-touch-bar--black')
 		}
 	}
 
