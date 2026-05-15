@@ -337,10 +337,7 @@ function triggerVideoEvent(type, event, detail = {}) {
 onMounted(() => {
 	bindVideoContextEvent()
 
-	if (!isAndroid) {
-		if (isNativeVideo.value) {
-			invokeNative('componentMount')
-		}
+	if (!isNativeVideo.value) {
 		return
 	}
 
@@ -431,7 +428,7 @@ onBeforeUnmount(() => {
 		type="application/view"
 		:comp_type="type"
 	/>
-	<div v-else-if="isIOS" v-bind="$attrs" class="dd-video">
+	<div v-else-if="isIOS" :id="id" ref="rootRef" v-bind="$attrs" class="dd-video">
 		<div class="dd-video-container">
 			<div style="width: 101%; height: 101%" />
 		</div>
@@ -439,6 +436,7 @@ onBeforeUnmount(() => {
 	<embed
 		v-else-if="isHarmonyOS"
 		:id="id"
+		ref="rootRef"
 		v-bind="$attrs"
 		class="dd-video"
 		:type="type"
