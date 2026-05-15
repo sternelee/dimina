@@ -526,9 +526,17 @@ function resolveDependencyId(specifier, modulePath, allowAbsolute) {
 
 	if (specifier.startsWith('@') || isBareModuleSpecifier(specifier)) {
 		const npmModuleId = resolveNpmModuleId(specifier, modulePath)
+		if (npmModuleId) {
+			return {
+				id: npmModuleId,
+				shouldProcess: true,
+			}
+		}
+
+		const siblingModuleId = resolveBareSiblingModuleId(specifier, modulePath)
 		return {
-			id: npmModuleId || specifier,
-			shouldProcess: Boolean(npmModuleId),
+			id: siblingModuleId || specifier,
+			shouldProcess: Boolean(siblingModuleId),
 		}
 	}
 
@@ -543,6 +551,11 @@ function resolveRelativeModuleId(specifier, modulePath) {
 	const requireFullPath = resolve(modulePath, `../${specifier}`)
 	const relativeId = requireFullPath.split(`${getWorkPath()}${sep}`)[1]
 	return normalizeModuleId(relativeId)
+}
+
+function resolveBareSiblingModuleId(specifier, modulePath) {
+	const siblingModuleId = resolveRelativeModuleId(`./${specifier}`, modulePath)
+	return resolveModuleIdToExistingPath(siblingModuleId)
 }
 
 function normalizeModuleId(moduleId) {
