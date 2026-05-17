@@ -129,14 +129,15 @@ async function enhanceCSS(module) {
 		// 样式文件不存在
 		return ''
 	}
+	const cacheKey = `${absolutePath}::${module.id || ''}`
 
 	const inputCSS = getContentByPath(absolutePath)
 	if (!inputCSS) {
 		return ''
 	}
 
-	if (compileRes.has(absolutePath)) {
-		return compileRes.get(absolutePath)
+	if (compileRes.has(cacheKey)) {
+		return compileRes.get(cacheKey)
 	}
 
 	// 预处理器编译
@@ -242,7 +243,7 @@ async function enhanceCSS(module) {
 
 	const result = importCss + res.css
 
-	compileRes.set(absolutePath, result)
+	compileRes.set(cacheKey, result)
 
 	return result
 }
