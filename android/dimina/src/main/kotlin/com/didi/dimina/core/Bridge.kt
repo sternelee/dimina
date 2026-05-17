@@ -8,6 +8,7 @@ import com.didi.dimina.common.PathUtils
 import com.didi.dimina.common.Utils
 import com.didi.dimina.common.VersionUtils
 import com.didi.dimina.engine.qjs.JSValue
+import com.didi.dimina.ui.view.DiminaNativeComponentBridge
 import com.didi.dimina.ui.container.DiminaActivity
 import com.didi.dimina.ui.view.DiminaRenderBridge
 import com.didi.dimina.ui.view.postMessage
@@ -48,6 +49,10 @@ class Bridge(
                     invokeHandler = { msg -> messageInvoke("render", msg) },
                     publishHandler = { msg -> messagePublish(msg) }
                 ), DiminaRenderBridge.TAG)
+            options.webview.addJavascriptInterface(
+                DiminaNativeComponentBridge(
+                    touchHandler = { msg -> parent.dispatchNativeComponentTouch(msg) }
+                ), DiminaNativeComponentBridge.TAG)
         }
         // 加载模版页面
         options.webview.loadUrl(

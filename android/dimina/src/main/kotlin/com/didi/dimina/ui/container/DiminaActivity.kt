@@ -618,6 +618,10 @@ class DiminaActivity : ComponentActivity() {
         return nativeComponentHost?.handle(apiName, params) ?: false
     }
 
+    fun dispatchNativeComponentTouch(params: JSONObject): Boolean {
+        return nativeComponentHost?.dispatchTouchFromWeb(params) ?: false
+    }
+
     fun clearNativeComponents() {
         nativeComponentHost?.clear()
     }
