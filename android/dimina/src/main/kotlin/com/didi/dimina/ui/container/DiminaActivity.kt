@@ -711,10 +711,15 @@ class DiminaActivity : ComponentActivity() {
         } catch (_: Exception) {
             Color.White
         }
+        val isCustomNavigation = !showNavigationBar.value
 
-        // Set status bar color
+        // Custom navigation is drawn by the mini program and must extend behind the system status bar.
         @Suppress("DEPRECATION")
-        window.statusBarColor = navBarBgColor.toArgb()
+        window.statusBarColor = if (isCustomNavigation) {
+            Color.Transparent.toArgb()
+        } else {
+            navBarBgColor.toArgb()
+        }
 
         Scaffold(
             topBar = {
@@ -748,7 +753,9 @@ class DiminaActivity : ComponentActivity() {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding())
+                    .padding(
+                        top = if (isCustomNavigation) 0.dp else innerPadding.calculateTopPadding()
+                    )
                     .background(bgColor)
             ) {
                 // 始终创建DiminaWebView
