@@ -51,7 +51,7 @@ class Bridge(
                 ), DiminaRenderBridge.TAG)
             options.webview.addJavascriptInterface(
                 DiminaNativeComponentBridge(
-                    touchHandler = { msg -> parent.dispatchNativeComponentTouch(msg) }
+                    touchHandler = { msg -> parent.dispatchNativeComponentTouch(msg, this@Bridge) }
                 ), DiminaNativeComponentBridge.TAG)
         }
         // 加载模版页面
@@ -229,7 +229,7 @@ class Bridge(
     }
 
     fun destroy(keepHandler: Boolean = false) {
-        parent.clearNativeComponents()
+        parent.clearNativeComponents(this)
         if (!isResourceLoaded()) {
             return
         }
@@ -278,14 +278,16 @@ class Bridge(
             LogUtils.d(tag, "API invocation: $apiName with params: $params")
 
             // Use MiniApp to handle API invocation
-            return MiniApp.getInstance().invokeAPI(
-                appId = options.appId,
-                context = parent,
-                apiName = apiName,
-                params = params
-            ) { response ->
-                // Send response back to JavaScript
-                options.jscore.postMessage(response)
+            return parent.runWithBridgeContext(this) {
+                MiniApp.getInstance().invokeAPI(
+                    appId = options.appId,
+                    context = parent,
+                    apiName = apiName,
+                    params = params
+                ) { response ->
+                    // Send response back to JavaScript
+                    options.jscore.postMessage(response)
+                }
             }
         } catch (e: Exception) {
             e.printStackTrace()
