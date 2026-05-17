@@ -39,6 +39,9 @@ public class NavigationBarAPI: DMPContainerApi {
         DispatchQueue.main.async {
             if let pageController = navigationController.topViewController as? DMPPageController {
                 pageController.updateNavigationTitle(title)
+            } else if let tabBarController = navigationController.topViewController as? DMPTabBarContainerController,
+                      let pageController = tabBarController.currentPageController {
+                pageController.updateNavigationTitle(title)
             } else {
                 navigationController.topViewController?.title = title
             }
@@ -107,6 +110,13 @@ public class NavigationBarAPI: DMPContainerApi {
             
             UIView.animate(withDuration: animationDuration, delay: 0, options: animationOptions) {
                 if let pageController = topViewController as? DMPPageController {
+                    pageController.updateNavigationColor(
+                        backgroundColor: bgColor,
+                        textColor: textColor,
+                        darkStyle: frontColor == "#ffffff"
+                    )
+                } else if let tabBarController = topViewController as? DMPTabBarContainerController,
+                          let pageController = tabBarController.currentPageController {
                     pageController.updateNavigationColor(
                         backgroundColor: bgColor,
                         textColor: textColor,

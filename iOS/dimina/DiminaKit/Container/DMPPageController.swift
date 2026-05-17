@@ -450,7 +450,8 @@ public class DMPPageController: UIViewController {
         navigationItem.hidesBackButton = true
         navigationItem.backButtonTitle = ""
 
-        let navStyle = navigator?.getTopPageRecord()?.navStyle
+        let navStyle = navigator?.pageRecord(webViewId: webview.getWebViewId())?.navStyle
+            ?? app?.getBundleAppConfig()?.getPageConfig(pagePath: pagePath)
         let darkStyle = (navStyle?["navigationBarTextStyle"] as? String) == "white"
         var title = appConfig.appName
         var backgroundColor = UIColor.white
