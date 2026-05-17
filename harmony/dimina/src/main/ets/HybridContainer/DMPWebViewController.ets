@@ -23,6 +23,7 @@ export class DMPWebViewController extends web_webview.WebviewController {
   subController?: DMPWebViewController;
   webViewLifeCycle: WebViewLifeCycle = new WebViewLifeCycle()
   isPageEnd: Boolean = false;
+  isControllerAttached: boolean = false;
 
   constructor(webViewId: number, app: DMPApp) {
     super()
@@ -76,6 +77,17 @@ export class DMPWebViewController extends web_webview.WebviewController {
   }
 
   notifyPageBegin() {
+    this.isPageEnd = false;
     this.webViewLifeCycle.notifyPageBegin()
+  }
+
+  notifyControllerAttached() {
+    this.isControllerAttached = true;
+    this.initConfig()
+    this.app.render.flushPendingScripts(this.webViewId)
+  }
+
+  notifyControllerDetached() {
+    this.isControllerAttached = false;
   }
 }
