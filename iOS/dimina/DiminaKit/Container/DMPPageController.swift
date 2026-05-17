@@ -603,6 +603,6 @@ public struct DMPWebViewContainer: View {
         ZStack {
             DMPWebview.WebViewRepresentable(webview: webview)
         }
-        .ignoresSafeArea(.container, edges: .bottom)
+        .ignoresSafeArea(.container, edges: [.top, .bottom])
     }
 }
