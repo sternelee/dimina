@@ -20,6 +20,8 @@ public class DMPApp {
     public var service: DMPService?
     public var container: DMPContainer?
     public var containerApi: DMPContainerApi?
+
+    private var isLaunching = false
     
     public init(appConfig: DMPAppConfig, appIndex: Int) {
         self.appConfig = appConfig
@@ -29,8 +31,17 @@ public class DMPApp {
 
     @MainActor
     public func launch(launchConfig: DMPLaunchConfig) async {
-        showLoading()
-        initBundle()
+        guard !isLaunching else {
+            print("launch skipped: app is already launching")
+            return
+        }
+
+        isLaunching = true
+        defer {
+            isLaunching = false
+        }
+
+        await Self.prepareBundleResources(appId: appId)
 
         initContainer()
 
@@ -41,8 +52,6 @@ public class DMPApp {
         initRender()
         
         await openPage(launchConfig: launchConfig)
-
-        hideLoading()
     }
 
     public func initService() async {
@@ -83,9 +92,17 @@ public class DMPApp {
     
     public func initBundle() {
         print("initBundle")
-        DMPSandboxManager.initBundleDirectoryForApp(appId: appId)
         DMPResourceManager.prepareSdk()
         DMPResourceManager.prepareApp(appId: appId)
+        DMPSandboxManager.initBundleDirectoryForApp(appId: appId)
+    }
+
+    private static func prepareBundleResources(appId: String) async {
+        await Task.detached(priority: .userInitiated) {
+            DMPResourceManager.prepareSdk()
+            DMPResourceManager.prepareApp(appId: appId)
+            DMPSandboxManager.initBundleDirectoryForApp(appId: appId)
+        }.value
     }
 
     public func initContainer() {
@@ -129,14 +146,6 @@ public class DMPApp {
         newLaunchConfig.appEntryPath = self.bundleAppConfig?.entryPagePath ?? ""
         await navigator?.launch(to: newLaunchConfig.appEntryPath ?? "", query: newLaunchConfig.query)
     }
-
-    public func showLoading() {
-        print("showLoading")
-    }
-
-    public func hideLoading() {
-        print("hideLoading")
-    } 
 
     /// 注册第三方扩展 bridge 模块。
     ///

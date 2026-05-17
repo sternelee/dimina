@@ -74,7 +74,10 @@ public class DMPNavigator: NSObject {
 
     /// 启动到指定页面
     @MainActor
-    public func launch(to path: String, query: [String: Any]? = nil, animated: Bool = true) async {
+    public func launch(
+        to path: String, query: [String: Any]? = nil, animated: Bool = true,
+        showsLaunchLoading: Bool = true
+    ) async {
         guard let navigationController = navigationController else {
             print("导航控制器未设置")
             return
@@ -90,7 +93,8 @@ public class DMPNavigator: NSObject {
             appConfig: app!.getAppConfig()!,
             app: app,
             navigator: self,
-            isRoot: true
+            isRoot: true,
+            showsLaunchLoading: showsLaunchLoading
         )
 
         let pageRecord = DMPPageRecord(
@@ -102,6 +106,9 @@ public class DMPNavigator: NSObject {
 
         await app?.service?.loadSubPackage(pagePath: path)
 
+        if showsLaunchLoading {
+            pageController.preparePageLoading(in: navigationController)
+        }
         navigationController.pushViewController(pageController, animated: animated)
 
         pageLifecycle?.onShow(webviewId: pageController.getWebView().getWebViewId())
@@ -142,7 +149,6 @@ public class DMPNavigator: NSObject {
 
         await app?.service?.loadSubPackage(pagePath: path)
 
-        // 推入视图控制器
         navigationController.pushViewController(pageController, animated: animated)
 
         pageLifecycle?.onShow(webviewId: pageController.getWebView().getWebViewId())
@@ -283,7 +289,7 @@ public class DMPNavigator: NSObject {
         navigationController.popToRootViewController(animated: animated)
         pageRecords.removeAll()
 
-        await launch(to: path, query: query, animated: animated)
+        await launch(to: path, query: query, animated: animated, showsLaunchLoading: false)
     }
 
     /// 返回到根页面
