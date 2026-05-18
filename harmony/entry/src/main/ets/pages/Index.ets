@@ -12,6 +12,8 @@ import { common } from '@kit.AbilityKit';
 import { MiniProgramDataSource, MiniProgramModel } from './data/MiniProgramDataSource';
 import { util } from '@kit.ArkTS';
 
+const PAGE_BACKGROUND_COLOR: string = '#F4F5F6';
+
 @Entry
 @Component
 struct Index {
@@ -75,18 +77,20 @@ struct Index {
       .onBackPressed(() => {
         return true;
       })
+      .backgroundColor(PAGE_BACKGROUND_COLOR)
     }
     .hideBackButton(true)
     .hideToolBar(true)
     .hideTitleBar(true)
     .navDestination(this.routerFactory)
+    .backgroundColor(PAGE_BACKGROUND_COLOR)
 
   }
 
   @Builder
   content() {
     Column() {
-      Column().height(px2vp(this.safeAreaTop)).width('100%').backgroundColor('#F4F5F6');
+      Column().height(px2vp(this.safeAreaTop)).width('100%').backgroundColor(PAGE_BACKGROUND_COLOR);
       Column() {
         Text('星河小程序').fontSize(20).fontColor(Color.Black);
       }.width('100%').padding(10);
@@ -124,9 +128,10 @@ struct Index {
               this.openDiminaApp(item);
             });
           }, (item: MiniProgramModel) => item.appId);
-        };
-      }.width('100%').flexGrow(1);
-    }.backgroundColor('#F4F5F6').height('100%')
+        }
+        .backgroundColor(PAGE_BACKGROUND_COLOR);
+      }.width('100%').flexGrow(1).backgroundColor(PAGE_BACKGROUND_COLOR);
+    }.backgroundColor(PAGE_BACKGROUND_COLOR).height('100%')
   }
 
   @Builder
