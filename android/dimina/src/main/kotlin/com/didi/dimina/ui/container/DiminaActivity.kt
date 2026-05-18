@@ -325,16 +325,22 @@ class DiminaActivity : ComponentActivity() {
 
         setContent {
             DiminaAndroidTheme {
-                Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
+                val pageBackgroundColor = parseCssColor(backgroundColor.value)
+                Scaffold(
+                    modifier = Modifier.fillMaxSize(),
+                    containerColor = pageBackgroundColor
+                ) { innerPadding ->
                     DiminaContent(
                         miniProgram = miniProgram,
                         isLoading = isLoading,
-                        modifier = Modifier.padding(
-                            0.dp,
-                            0.dp,
-                            0.dp,
-                            innerPadding.calculateBottomPadding()
-                        )
+                        modifier = Modifier
+                            .background(pageBackgroundColor)
+                            .padding(
+                                0.dp,
+                                0.dp,
+                                0.dp,
+                                innerPadding.calculateBottomPadding()
+                            )
                     )
                 }
             }
@@ -519,8 +525,47 @@ class DiminaActivity : ComponentActivity() {
         // Set page background color
         backgroundColor.value = config.backgroundColor
 
+        updateSystemNavigationBarColor(config.backgroundColor)
+        updateWebViewBackgroundColor(config.backgroundColor)
+
         // Update status bar style based on text style
         this.updateActionColorStyle(config.navigationBarTextStyle)
+    }
+
+    private fun parseCssColor(value: String, fallback: Color = Color.White): Color {
+        return try {
+            Color(value.toColorInt())
+        } catch (_: Exception) {
+            fallback
+        }
+    }
+
+    private fun updateSystemNavigationBarColor(color: String) {
+        val navigationBarColor = parseCssColor(color)
+        @Suppress("DEPRECATION")
+        window.navigationBarColor = navigationBarColor.toArgb()
+        WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightNavigationBars =
+            isLightColor(navigationBarColor)
+    }
+
+    private fun updateWebViewBackgroundColor(color: String) {
+        val backgroundColor = parseCssColor(color).toArgb()
+        val activeWebView = getWebViewForBridge(apiBridgeContext)
+        if (activeWebView != null) {
+            activeWebView.setBackgroundColor(backgroundColor)
+        } else {
+            withWebView { webView ->
+                webView.setBackgroundColor(backgroundColor)
+            }
+        }
+    }
+
+    private fun isLightColor(color: Color): Boolean {
+        val argb = color.toArgb()
+        val red = android.graphics.Color.red(argb)
+        val green = android.graphics.Color.green(argb)
+        val blue = android.graphics.Color.blue(argb)
+        return (red * 299 + green * 587 + blue * 114) / 1000 > 128
     }
 
     fun isTabBarPageUrl(url: String): Boolean {
@@ -839,6 +884,7 @@ class DiminaActivity : ComponentActivity() {
      */
     private fun onWebViewReady(webView: WebView) {
         this.webView = webView
+        webView.setBackgroundColor(parseCssColor(backgroundColor.value).toArgb())
         bindNativeComponentHost()
         LogUtils.d(tag, "WebView is now initialized and ready")
 
@@ -863,6 +909,7 @@ class DiminaActivity : ComponentActivity() {
     private fun onTabWebViewReady(index: Int, webView: WebView) {
         val state = tabPageStates[index] ?: return
         state.webView = webView
+        webView.setBackgroundColor(parseCssColor(state.configInfo.backgroundColor).toArgb())
         if (index == selectedTabIndex.intValue) {
             this.webView = webView
         }
@@ -1089,17 +1136,9 @@ class DiminaActivity : ComponentActivity() {
             },
         )
         // Convert color strings to Color objects
-        val bgColor = try {
-            Color(backgroundColor.value.toColorInt())
-        } catch (_: Exception) {
-            Color.White
-        }
+        val bgColor = parseCssColor(backgroundColor.value)
 
-        val navBarBgColor = try {
-            Color(navigationBarBackgroundColor.value.toColorInt())
-        } catch (_: Exception) {
-            Color.White
-        }
+        val navBarBgColor = parseCssColor(navigationBarBackgroundColor.value)
         val isCustomNavigation = !showNavigationBar.value
         val tabBarConfig = tabBarConfigState.value
         val shouldShowTabBar = !isLoading.value && tabBarConfig != null && getTabBarIndex(currentPagePath.value) >= 0
@@ -1143,7 +1182,8 @@ class DiminaActivity : ComponentActivity() {
                         )
                     }
                 },
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                containerColor = bgColor
             ) { innerPadding ->
                 Column(
                     modifier = Modifier
