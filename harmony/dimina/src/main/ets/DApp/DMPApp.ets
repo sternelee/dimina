@@ -12,7 +12,7 @@ import { DMPContainer } from '../Container/DMPContainer'
 import { DMPLogger } from '../EventTrack/DMPLogger'
 import { Tags } from '../EventTrack/Tags'
 import window from '@ohos.window'
-import { ImageKnife } from '@ohos/imageknife'
+import { ImageKnife } from '@ohos/imageknifepro'
 import { DMPWebViewController } from '../HybridContainer/DMPWebViewController'
 import { DMPAppModuleManager } from '../Bridges/DMPAppModuleManager'
 import { DMPExtModuleHandler } from '../Bridges/DMPExtModuleHandler'
@@ -134,7 +134,11 @@ export class DMPApp {
     DMPApp._entryContext = context;
     DMPApp._context = DMPApp._entryContext.getContext();
     DMPApp._apiNamespaces = options?.apiNamespaces ?? [];
-    ImageKnife.with(DMPApp._entryContext.getContext())
+    ImageKnife.getInstance()
+      .initFileCache(DMPApp._entryContext.getContext())
+      .catch((error: Error) => {
+        DMPLogger.e(Tags.LAUNCH, `ImageKnifePro initFileCache failed: ${error.message}`)
+      })
     context.getWindowStage().on('windowStageEvent', DMPAppLifecycle.onWindowStageEvent);
     DMPDeviceUtil.prepareSafeAreaAndDisplayWH(DMPApp._entryContext.getContext())
   }
