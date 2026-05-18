@@ -34,11 +34,14 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets as ComposeWindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -568,6 +571,13 @@ class DiminaActivity : ComponentActivity() {
         return (red * 299 + green * 587 + blue * 114) / 1000 > 128
     }
 
+    private fun isWhiteNavigationTextStyle(color: String): Boolean {
+        return when (color.trim().lowercase()) {
+            "white", "#fff", "#ffffff", "#ffffffff" -> true
+            else -> false
+        }
+    }
+
     fun isTabBarPageUrl(url: String): Boolean {
         if (!::appConfig.isInitialized) {
             return false
@@ -726,14 +736,15 @@ class DiminaActivity : ComponentActivity() {
      * 设置状态栏样式
      */
     private fun updateActionColorStyle(color: String) {
-        if (color == "white" || color == "#ffffff") {
+        val isWhiteTextStyle = isWhiteNavigationTextStyle(color)
+        if (isWhiteTextStyle) {
             navigationBarTextColor.value = Color.White
         } else {
             navigationBarTextColor.value = Color.Black
         }
         runOnUiThread {
             WindowInsetsControllerCompat(window, window.decorView).isAppearanceLightStatusBars =
-                color != "white"
+                !isWhiteTextStyle
         }
     }
 
@@ -1142,14 +1153,7 @@ class DiminaActivity : ComponentActivity() {
         val isCustomNavigation = !showNavigationBar.value
         val tabBarConfig = tabBarConfigState.value
         val shouldShowTabBar = !isLoading.value && tabBarConfig != null && getTabBarIndex(currentPagePath.value) >= 0
-
-        // Custom navigation is drawn by the mini program and must extend behind the system status bar.
-        @Suppress("DEPRECATION")
-        window.statusBarColor = if (isCustomNavigation) {
-            Color.Transparent.toArgb()
-        } else {
-            navBarBgColor.toArgb()
-        }
+        val statusBarHeight = ComposeWindowInsets.statusBars.asPaddingValues().calculateTopPadding()
 
         Box(modifier = modifier.fillMaxSize()) {
             Scaffold(
@@ -1250,6 +1254,16 @@ class DiminaActivity : ComponentActivity() {
                         )
                     }
                 }
+            }
+
+            if (!isCustomNavigation) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .fillMaxWidth()
+                        .height(statusBarHeight)
+                        .background(navBarBgColor)
+                )
             }
 
             if (!isLoading.value) {
