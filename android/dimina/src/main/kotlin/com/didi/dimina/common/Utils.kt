@@ -282,7 +282,8 @@ object Utils {
         val systemInfo = getMiniProgramSystemInfo(currentActivity)
         val width = 87
         val height = 32
-        val top = systemInfo.getInt("statusBarHeight")
+        val navigationBarContentHeight = 64
+        val top = systemInfo.getInt("statusBarHeight") + (navigationBarContentHeight - height) / 2
         val right = systemInfo.getInt("windowWidth") - 10
         val left = right - width
         val bottom = top + height

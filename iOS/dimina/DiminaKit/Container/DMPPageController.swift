@@ -32,6 +32,12 @@ public class DMPPageController: UIViewController {
     private var customNavigationContentView: UIView?
     private var customNavigationTitleLabel: UILabel?
     private var customNavigationBackButton: UIButton?
+    private var customNavigationCapsuleView: UIView?
+    private var customNavigationCapsuleMoreButton: UIButton?
+    private var customNavigationCapsuleCloseButton: UIButton?
+    private var customNavigationCapsuleSeparatorView: UIView?
+    private var miniProgramMenuContainerView: UIView?
+    private var isClosingMiniProgram = false
     private var webViewTopToNavigationConstraint: NSLayoutConstraint?
     private var webViewTopToViewConstraint: NSLayoutConstraint?
     private var loadingView: UIView?
@@ -136,6 +142,12 @@ public class DMPPageController: UIViewController {
         super.viewDidLayoutSubviews()
         if let customNavigationBar = customNavigationBar, !customNavigationBar.isHidden {
             view.bringSubviewToFront(customNavigationBar)
+        }
+        if let customNavigationCapsuleView = customNavigationCapsuleView {
+            view.bringSubviewToFront(customNavigationCapsuleView)
+        }
+        if let miniProgramMenuContainerView = miniProgramMenuContainerView {
+            view.bringSubviewToFront(miniProgramMenuContainerView)
         }
         loadingView?.superview?.bringSubviewToFront(loadingView!)
     }
@@ -254,7 +266,16 @@ public class DMPPageController: UIViewController {
         titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
 
+        let capsuleView = makeCapsuleButton()
+        let menuButtonRect = MenuAPI.getMenuButtonBoundingClientRect()
+        let capsuleWidth = CGFloat(menuButtonRect.getDouble(key: "width") ?? 87)
+        let capsuleHeight = CGFloat(menuButtonRect.getDouble(key: "height") ?? 32)
+        let screenWidth = UIScreen.main.bounds.width
+        let capsuleRight = CGFloat(menuButtonRect.getDouble(key: "right") ?? (screenWidth - 10))
+        let capsuleTrailing = screenWidth - capsuleRight
+
         view.addSubview(navigationBar)
+        view.addSubview(capsuleView)
         navigationBar.addSubview(contentView)
         contentView.addSubview(backButton)
         contentView.addSubview(titleLabel)
@@ -278,13 +299,108 @@ public class DMPPageController: UIViewController {
             titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -60),
+            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -110),
+
+            capsuleView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
+            capsuleView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -capsuleTrailing),
+            capsuleView.widthAnchor.constraint(equalToConstant: capsuleWidth),
+            capsuleView.heightAnchor.constraint(equalToConstant: capsuleHeight),
         ])
 
         customNavigationBar = navigationBar
         customNavigationContentView = contentView
         customNavigationBackButton = backButton
         customNavigationTitleLabel = titleLabel
+        customNavigationCapsuleView = capsuleView
+    }
+
+    private func makeCapsuleButton() -> UIView {
+        let capsuleView = UIView()
+        capsuleView.translatesAutoresizingMaskIntoConstraints = false
+        capsuleView.layer.cornerRadius = 16
+        capsuleView.layer.borderWidth = 0.5
+        capsuleView.layer.shadowColor = UIColor.black.cgColor
+        capsuleView.layer.shadowOpacity = 0.08
+        capsuleView.layer.shadowRadius = 2
+        capsuleView.layer.shadowOffset = CGSize(width: 0, height: 1)
+
+        let moreButton = UIButton(type: .custom)
+        moreButton.translatesAutoresizingMaskIntoConstraints = false
+        moreButton.contentHorizontalAlignment = .center
+        moreButton.contentVerticalAlignment = .center
+        moreButton.setImage(makeCapsuleMoreImage(color: UIColor(red: 31 / 255, green: 31 / 255, blue: 31 / 255, alpha: 1)), for: .normal)
+        moreButton.accessibilityLabel = "More"
+        moreButton.addTarget(self, action: #selector(capsuleMoreButtonTapped), for: .touchUpInside)
+
+        let closeButton = UIButton(type: .custom)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        closeButton.contentHorizontalAlignment = .center
+        closeButton.contentVerticalAlignment = .center
+        closeButton.setImage(makeCapsuleCloseImage(color: UIColor(red: 31 / 255, green: 31 / 255, blue: 31 / 255, alpha: 1)), for: .normal)
+        closeButton.accessibilityLabel = "Close"
+        closeButton.addTarget(self, action: #selector(capsuleCloseButtonTapped), for: .touchUpInside)
+
+        let separatorView = UIView()
+        separatorView.translatesAutoresizingMaskIntoConstraints = false
+
+        capsuleView.addSubview(moreButton)
+        capsuleView.addSubview(separatorView)
+        capsuleView.addSubview(closeButton)
+
+        NSLayoutConstraint.activate([
+            moreButton.leadingAnchor.constraint(equalTo: capsuleView.leadingAnchor),
+            moreButton.topAnchor.constraint(equalTo: capsuleView.topAnchor),
+            moreButton.bottomAnchor.constraint(equalTo: capsuleView.bottomAnchor),
+            moreButton.widthAnchor.constraint(equalToConstant: 43),
+
+            separatorView.centerXAnchor.constraint(equalTo: capsuleView.centerXAnchor),
+            separatorView.centerYAnchor.constraint(equalTo: capsuleView.centerYAnchor),
+            separatorView.widthAnchor.constraint(equalToConstant: 0.5),
+            separatorView.heightAnchor.constraint(equalToConstant: 16),
+
+            closeButton.trailingAnchor.constraint(equalTo: capsuleView.trailingAnchor),
+            closeButton.topAnchor.constraint(equalTo: capsuleView.topAnchor),
+            closeButton.bottomAnchor.constraint(equalTo: capsuleView.bottomAnchor),
+            closeButton.widthAnchor.constraint(equalToConstant: 43),
+        ])
+
+        customNavigationCapsuleMoreButton = moreButton
+        customNavigationCapsuleCloseButton = closeButton
+        customNavigationCapsuleSeparatorView = separatorView
+
+        return capsuleView
+    }
+
+    private func makeCapsuleMoreImage(color: UIColor) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 22, height: 22))
+        return renderer.image { context in
+            color.setFill()
+            let centerY: CGFloat = 11
+            let centers: [(CGFloat, CGFloat)] = [(5, 2), (11, 3.2), (17, 2)]
+            for (centerX, radius) in centers {
+                context.cgContext.fillEllipse(in: CGRect(
+                    x: centerX - radius,
+                    y: centerY - radius,
+                    width: radius * 2,
+                    height: radius * 2
+                ))
+            }
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func makeCapsuleCloseImage(color: UIColor) -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 22, height: 22))
+        return renderer.image { context in
+            let cgContext = context.cgContext
+            let center = CGPoint(x: 11, y: 11)
+
+            color.setStroke()
+            cgContext.setLineWidth(2.4)
+            cgContext.strokeEllipse(in: CGRect(x: 3.2, y: 3.2, width: 15.6, height: 15.6))
+
+            color.setFill()
+            cgContext.fillEllipse(in: CGRect(x: center.x - 3.1, y: center.y - 3.1, width: 6.2, height: 6.2))
+        }.withRenderingMode(.alwaysOriginal)
     }
 
     private func makePageLoadingView() -> UIView {
@@ -423,6 +539,7 @@ public class DMPPageController: UIViewController {
         customNavigationBar?.backgroundColor = backgroundColor
         customNavigationTitleLabel?.textColor = textColor
         updateCustomBackButton(darkStyle: darkStyle)
+        updateCustomCapsuleButton(darkStyle: darkStyle)
     }
 
     private func updateCustomBackButton(darkStyle: Bool) {
@@ -446,6 +563,298 @@ public class DMPPageController: UIViewController {
 
     @objc private func customBackButtonTapped() {
         navigator?.handleBackButtonTapped()
+    }
+
+    private func updateCustomCapsuleButton(darkStyle: Bool) {
+        customNavigationCapsuleView?.backgroundColor = .white
+        let borderColor = UIColor(red: 229 / 255, green: 229 / 255, blue: 229 / 255, alpha: 1)
+        customNavigationCapsuleView?.layer.borderColor = borderColor.cgColor
+        customNavigationCapsuleSeparatorView?.backgroundColor = UIColor(red: 233 / 255, green: 233 / 255, blue: 233 / 255, alpha: 1)
+    }
+
+    @objc private func capsuleMoreButtonTapped() {
+        showMiniProgramMenu()
+    }
+
+    @objc private func capsuleCloseButtonTapped() {
+        guard !isClosingMiniProgram else {
+            return
+        }
+        isClosingMiniProgram = true
+        let appToDestroy = app
+
+        dismissMiniProgramMenu()
+        customNavigationCapsuleMoreButton?.isEnabled = false
+        customNavigationCapsuleCloseButton?.isEnabled = false
+
+        if let navigationController = navigationController {
+            navigationController.view.endEditing(true)
+            if navigationController.viewControllers.first === self {
+                navigationController.dismiss(animated: true) {
+                    appToDestroy?.destroy()
+                }
+                return
+            }
+
+            CATransaction.begin()
+            CATransaction.setCompletionBlock {
+                appToDestroy?.destroy()
+            }
+            navigationController.popToRootViewController(animated: true)
+            CATransaction.commit()
+        } else {
+            dismiss(animated: true) {
+                appToDestroy?.destroy()
+            }
+        }
+    }
+
+    private func showMiniProgramMenu() {
+        guard miniProgramMenuContainerView == nil else {
+            return
+        }
+
+        let overlay = UIControl()
+        overlay.translatesAutoresizingMaskIntoConstraints = false
+        overlay.backgroundColor = UIColor.black.withAlphaComponent(0.55)
+        overlay.addTarget(self, action: #selector(dismissMiniProgramMenu), for: .touchUpInside)
+
+        let sheetView = UIView()
+        sheetView.translatesAutoresizingMaskIntoConstraints = false
+        sheetView.backgroundColor = .white
+        sheetView.layer.cornerRadius = 18
+        if #available(iOS 11.0, *) {
+            sheetView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        }
+
+        let iconLabel = UILabel()
+        iconLabel.translatesAutoresizingMaskIntoConstraints = false
+        iconLabel.text = String(appConfig.appName.prefix(1)).isEmpty ? "小" : String(appConfig.appName.prefix(1))
+        iconLabel.textAlignment = .center
+        iconLabel.font = .systemFont(ofSize: 18, weight: .medium)
+        iconLabel.textColor = UIColor(red: 138 / 255, green: 138 / 255, blue: 138 / 255, alpha: 1)
+        iconLabel.backgroundColor = UIColor(red: 244 / 255, green: 244 / 255, blue: 244 / 255, alpha: 1)
+        iconLabel.layer.cornerRadius = 22
+        iconLabel.clipsToBounds = true
+
+        let titleLabel = UILabel()
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        titleLabel.text = appConfig.appName
+        titleLabel.font = .systemFont(ofSize: 18, weight: .semibold)
+        titleLabel.textColor = UIColor(red: 32 / 255, green: 32 / 255, blue: 32 / 255, alpha: 1)
+
+        let subtitleLabel = UILabel()
+        subtitleLabel.translatesAutoresizingMaskIntoConstraints = false
+        subtitleLabel.text = "小程序"
+        subtitleLabel.font = .systemFont(ofSize: 14)
+        subtitleLabel.textColor = UIColor(red: 154 / 255, green: 154 / 255, blue: 154 / 255, alpha: 1)
+
+        let titleStack = UIStackView(arrangedSubviews: [titleLabel, subtitleLabel])
+        titleStack.translatesAutoresizingMaskIntoConstraints = false
+        titleStack.axis = .vertical
+        titleStack.spacing = 3
+
+        let headerView = UIView()
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(iconLabel)
+        headerView.addSubview(titleStack)
+
+        let topDivider = UIView()
+        topDivider.translatesAutoresizingMaskIntoConstraints = false
+        topDivider.backgroundColor = UIColor(red: 242 / 255, green: 242 / 255, blue: 242 / 255, alpha: 1)
+
+        let reenterItem = makeMiniProgramMenuItem(
+            title: "重新进入\n小程序",
+            image: makeMenuReenterImage(),
+            action: #selector(miniProgramMenuReenterTapped)
+        )
+        let closeItem = makeMiniProgramMenuItem(
+            title: "关闭小程序",
+            image: makeMenuCloseImage(),
+            action: #selector(miniProgramMenuCloseTapped)
+        )
+
+        let actionStack = UIStackView(arrangedSubviews: [reenterItem, closeItem])
+        actionStack.translatesAutoresizingMaskIntoConstraints = false
+        actionStack.axis = .horizontal
+        actionStack.distribution = .fill
+        actionStack.spacing = 16
+
+        let bottomDivider = UIView()
+        bottomDivider.translatesAutoresizingMaskIntoConstraints = false
+        bottomDivider.backgroundColor = UIColor(red: 237 / 255, green: 237 / 255, blue: 237 / 255, alpha: 1)
+
+        let cancelButton = UIButton(type: .custom)
+        cancelButton.translatesAutoresizingMaskIntoConstraints = false
+        cancelButton.setTitle("取消", for: .normal)
+        cancelButton.setTitleColor(UIColor(red: 87 / 255, green: 107 / 255, blue: 149 / 255, alpha: 1), for: .normal)
+        cancelButton.titleLabel?.font = .systemFont(ofSize: 18)
+        cancelButton.addTarget(self, action: #selector(dismissMiniProgramMenu), for: .touchUpInside)
+
+        view.addSubview(overlay)
+        overlay.addSubview(sheetView)
+        sheetView.addSubview(headerView)
+        sheetView.addSubview(topDivider)
+        sheetView.addSubview(actionStack)
+        sheetView.addSubview(bottomDivider)
+        sheetView.addSubview(cancelButton)
+
+        let bottomInset = view.safeAreaInsets.bottom
+        NSLayoutConstraint.activate([
+            overlay.topAnchor.constraint(equalTo: view.topAnchor),
+            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+
+            sheetView.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
+            sheetView.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
+            sheetView.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
+
+            headerView.topAnchor.constraint(equalTo: sheetView.topAnchor),
+            headerView.leadingAnchor.constraint(equalTo: sheetView.leadingAnchor),
+            headerView.trailingAnchor.constraint(equalTo: sheetView.trailingAnchor),
+            headerView.heightAnchor.constraint(equalToConstant: 84),
+
+            iconLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor, constant: 24),
+            iconLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            iconLabel.widthAnchor.constraint(equalToConstant: 44),
+            iconLabel.heightAnchor.constraint(equalToConstant: 44),
+
+            titleStack.leadingAnchor.constraint(equalTo: iconLabel.trailingAnchor, constant: 14),
+            titleStack.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            titleStack.trailingAnchor.constraint(lessThanOrEqualTo: headerView.trailingAnchor, constant: -24),
+
+            topDivider.topAnchor.constraint(equalTo: headerView.bottomAnchor),
+            topDivider.leadingAnchor.constraint(equalTo: sheetView.leadingAnchor),
+            topDivider.trailingAnchor.constraint(equalTo: sheetView.trailingAnchor),
+            topDivider.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+
+            actionStack.topAnchor.constraint(equalTo: topDivider.bottomAnchor, constant: 20),
+            actionStack.leadingAnchor.constraint(equalTo: sheetView.leadingAnchor, constant: 24),
+            actionStack.widthAnchor.constraint(equalToConstant: 172),
+            actionStack.heightAnchor.constraint(equalToConstant: 94),
+
+            bottomDivider.topAnchor.constraint(equalTo: actionStack.bottomAnchor, constant: 20),
+            bottomDivider.leadingAnchor.constraint(equalTo: sheetView.leadingAnchor),
+            bottomDivider.trailingAnchor.constraint(equalTo: sheetView.trailingAnchor),
+            bottomDivider.heightAnchor.constraint(equalToConstant: 1 / UIScreen.main.scale),
+
+            cancelButton.topAnchor.constraint(equalTo: bottomDivider.bottomAnchor),
+            cancelButton.leadingAnchor.constraint(equalTo: sheetView.leadingAnchor),
+            cancelButton.trailingAnchor.constraint(equalTo: sheetView.trailingAnchor),
+            cancelButton.heightAnchor.constraint(equalToConstant: 58),
+            cancelButton.bottomAnchor.constraint(equalTo: sheetView.bottomAnchor, constant: -bottomInset),
+        ])
+
+        miniProgramMenuContainerView = overlay
+        view.bringSubviewToFront(overlay)
+    }
+
+    private func makeMiniProgramMenuItem(title: String, image: UIImage, action: Selector) -> UIControl {
+        let control = UIControl()
+        control.translatesAutoresizingMaskIntoConstraints = false
+        control.addTarget(self, action: action, for: .touchUpInside)
+
+        let iconContainer = UIView()
+        iconContainer.translatesAutoresizingMaskIntoConstraints = false
+        iconContainer.backgroundColor = UIColor(red: 248 / 255, green: 248 / 255, blue: 248 / 255, alpha: 1)
+        iconContainer.layer.cornerRadius = 10
+        iconContainer.isUserInteractionEnabled = false
+
+        let imageView = UIImageView(image: image)
+        imageView.translatesAutoresizingMaskIntoConstraints = false
+        imageView.contentMode = .center
+
+        let label = UILabel()
+        label.translatesAutoresizingMaskIntoConstraints = false
+        label.text = title
+        label.font = .systemFont(ofSize: 13)
+        label.textColor = UIColor(red: 104 / 255, green: 104 / 255, blue: 104 / 255, alpha: 1)
+        label.textAlignment = .center
+        label.numberOfLines = 2
+
+        control.addSubview(iconContainer)
+        iconContainer.addSubview(imageView)
+        control.addSubview(label)
+
+        NSLayoutConstraint.activate([
+            control.widthAnchor.constraint(equalToConstant: 78),
+
+            iconContainer.topAnchor.constraint(equalTo: control.topAnchor),
+            iconContainer.centerXAnchor.constraint(equalTo: control.centerXAnchor),
+            iconContainer.widthAnchor.constraint(equalToConstant: 52),
+            iconContainer.heightAnchor.constraint(equalToConstant: 52),
+
+            imageView.centerXAnchor.constraint(equalTo: iconContainer.centerXAnchor),
+            imageView.centerYAnchor.constraint(equalTo: iconContainer.centerYAnchor),
+            imageView.widthAnchor.constraint(equalToConstant: 24),
+            imageView.heightAnchor.constraint(equalToConstant: 24),
+
+            label.topAnchor.constraint(equalTo: iconContainer.bottomAnchor, constant: 8),
+            label.leadingAnchor.constraint(equalTo: control.leadingAnchor),
+            label.trailingAnchor.constraint(equalTo: control.trailingAnchor),
+            label.bottomAnchor.constraint(lessThanOrEqualTo: control.bottomAnchor),
+        ])
+
+        return control
+    }
+
+    private func makeMenuReenterImage() -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
+        return renderer.image { _ in
+            let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+            let text = "↻" as NSString
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 24, weight: .medium),
+                .foregroundColor: color
+            ]
+            let textSize = text.size(withAttributes: attributes)
+            text.draw(
+                at: CGPoint(
+                    x: (24 - textSize.width) / 2,
+                    y: (24 - textSize.height) / 2
+                ),
+                withAttributes: attributes
+            )
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    private func makeMenuCloseImage() -> UIImage {
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
+        return renderer.image { _ in
+            let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+            let text = "×" as NSString
+            let attributes: [NSAttributedString.Key: Any] = [
+                .font: UIFont.systemFont(ofSize: 26, weight: .medium),
+                .foregroundColor: color
+            ]
+            let textSize = text.size(withAttributes: attributes)
+            text.draw(
+                at: CGPoint(
+                    x: (24 - textSize.width) / 2,
+                    y: (24 - textSize.height) / 2
+                ),
+                withAttributes: attributes
+            )
+        }.withRenderingMode(.alwaysOriginal)
+    }
+
+    @objc private func dismissMiniProgramMenu() {
+        miniProgramMenuContainerView?.removeFromSuperview()
+        miniProgramMenuContainerView = nil
+    }
+
+    @objc private func miniProgramMenuReenterTapped() {
+        dismissMiniProgramMenu()
+        let entryPath = app?.getBundleAppConfig()?.entryPagePath ?? pagePath
+        Task { @MainActor in
+            await navigator?.relaunch(to: entryPath.isEmpty ? pagePath : entryPath, query: nil, animated: false)
+        }
+    }
+
+    @objc private func miniProgramMenuCloseTapped() {
+        dismissMiniProgramMenu()
+        capsuleCloseButtonTapped()
     }
 
     // Set navigation bar style

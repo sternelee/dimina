@@ -22,6 +22,7 @@ public class DMPApp {
     public var containerApi: DMPContainerApi?
 
     private var isLaunching = false
+    private var isDestroyed = false
     
     public init(appConfig: DMPAppConfig, appIndex: Int) {
         self.appConfig = appConfig
@@ -160,19 +161,30 @@ public class DMPApp {
     }
 
     public func destroy() {
+        guard !isDestroyed else {
+            return
+        }
+        isDestroyed = true
         print("app destroy")
 
-        // 清理第三方扩展的持续订阅，防止内存泄漏
-        container?.clearExtSubscriptions()
+        let serviceToDestroy = service
+        let containerToDestroy = container
 
-        // Clear WebView cache pool (execute on main thread)
-        Task { @MainActor in
-            DMPWebViewPool.shared.clearPool()
-        }
-        
-        DMPStorage.teardownModule()
-        
+        service = nil
+        container = nil
+        containerApi = nil
+        render = nil
+
         DMPAppManager.sharedInstance().removeApp(appId: appId)
-        service?.destroy()
+
+        // 清理第三方扩展的持续订阅，防止内存泄漏
+        containerToDestroy?.clearExtSubscriptions()
+
+        // Storage is a global singleton. Tear it down before another app initializes it.
+        DMPStorage.teardownModule()
+
+        DispatchQueue.global(qos: .utility).async {
+            serviceToDestroy?.destroy()
+        }
     }
 }

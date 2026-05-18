@@ -24,26 +24,35 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
@@ -54,11 +63,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
@@ -119,6 +132,7 @@ class DiminaActivity : ComponentActivity() {
 
     // State for ActionSheet
     private val showActionSheet = mutableStateOf(false)
+    private val showMiniProgramMenu = mutableStateOf(false)
     private var actionTextColor = "#000000"
     private var actionSheetOptions = listOf<String>()
     private var actionSheetCallback: ((Int) -> Unit)? = null
@@ -261,6 +275,11 @@ class DiminaActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        if (intent.getBooleanExtra(CLOSE_MINI_PROGRAM_KEY, false)) {
+            finish()
+            return
+        }
         
         // 获取屏幕高度
         screenHeight = resources.displayMetrics.heightPixels
@@ -330,6 +349,11 @@ class DiminaActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         setIntent(intent)
+
+        if (intent.getBooleanExtra(CLOSE_MINI_PROGRAM_KEY, false)) {
+            finish()
+            return
+        }
 
         val program = getMiniProgramFromIntent(intent) ?: return
         if (::miniProgram.isInitialized && program.appId != miniProgram.appId) {
@@ -422,7 +446,7 @@ class DiminaActivity : ComponentActivity() {
 
             // 3.读取页面配置
             val entryPagePath =
-                miniProgram.path ?: appConfig.app.entryPagePath ?: run {
+                miniProgram.path ?: getDefaultEntryPagePath() ?: run {
                     withContext(Dispatchers.Main) { finish() }
                     return@withContext
                 }
@@ -1031,6 +1055,24 @@ class DiminaActivity : ComponentActivity() {
                 }
             )
         }
+        if (showMiniProgramMenu.value) {
+            MiniProgramMenuSheet(
+                appName = miniProgram.name.ifBlank {
+                    navigationBarTitle.value.ifBlank { "小程序" }
+                },
+                onReenterClick = {
+                    showMiniProgramMenu.value = false
+                    reenterMiniProgram()
+                },
+                onCloseClick = {
+                    showMiniProgramMenu.value = false
+                    closeMiniProgram()
+                },
+                onDismiss = {
+                    showMiniProgramMenu.value = false
+                }
+            )
+        }
         MediaPickerRoot(
             type = mediaType.value,
             maxCount = maxImageCount.intValue,
@@ -1070,98 +1112,365 @@ class DiminaActivity : ComponentActivity() {
             navBarBgColor.toArgb()
         }
 
-        Scaffold(
-            topBar = {
-                // Only show the navigation bar when not loading and showNavigationBar is true
-                if (!isLoading.value && showNavigationBar.value) {
-                    CenterAlignedTopAppBar(
-                        title = {
-                            Text(
-                                text = navigationBarTitle.value,
-                                style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, color = navigationBarTextColor.value)
-                            )
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = navBarBgColor
-                        ),
-                        navigationIcon = {
-                            IconButton(onClick = { finish() }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                    contentDescription = "Back",
-                                    tint = navigationBarTextColor.value,
-                                    modifier = Modifier.size(30.dp)
+        Box(modifier = modifier.fillMaxSize()) {
+            Scaffold(
+                topBar = {
+                    // Only show the navigation bar when not loading and showNavigationBar is true
+                    if (!isLoading.value && showNavigationBar.value) {
+                        CenterAlignedTopAppBar(
+                            title = {
+                                Text(
+                                    text = navigationBarTitle.value,
+                                    style = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold, color = navigationBarTextColor.value)
                                 )
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = navBarBgColor
+                            ),
+                            navigationIcon = {
+                                IconButton(onClick = { finish() }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                                        contentDescription = "Back",
+                                        tint = navigationBarTextColor.value,
+                                        modifier = Modifier.size(30.dp)
+                                    )
+                                }
+                            },
+                            actions = {
+                                Spacer(modifier = Modifier.width(97.dp))
                             }
+                        )
+                    }
+                },
+                modifier = Modifier.fillMaxSize()
+            ) { innerPadding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(
+                            top = if (isCustomNavigation) 0.dp else innerPadding.calculateTopPadding()
+                        )
+                        .background(bgColor)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                    ) {
+                        if (useTabBarContainer.value) {
+                            loadedTabIndices.value.sorted().forEach { tabIndex ->
+                                key(tabIndex) {
+                                    val isSelected = tabIndex == selectedTabIndex.intValue
+                                    DiminaWebView(
+                                        onInitReady = { webView -> onTabWebViewReady(tabIndex, webView) },
+                                        onPageCompleted = { onTabPageReady(tabIndex) },
+                                        onNativeOverlayReady = { overlay ->
+                                            onTabNativeOverlayReady(tabIndex, overlay)
+                                        },
+                                        identifier = tabWebViewIdentifier(tabIndex),
+                                        modifier = Modifier
+                                            .fillMaxSize()
+                                            .alpha(if (isSelected) 1f else 0f)
+                                            .zIndex(if (isSelected) 1f else 0f)
+                                    )
+                                }
+                            }
+                        } else {
+                            // 始终创建DiminaWebView
+                            DiminaWebView(
+                                onInitReady = { webView -> onWebViewReady(webView) },
+                                onPageCompleted = { onPageReady() },
+                                onNativeOverlayReady = { overlay -> onNativeOverlayReady(overlay) },
+                            )
                         }
-                    )
+
+                        // 加载遮罩层使用 AnimatedVisibility 只添加淡出效果
+                        androidx.compose.animation.AnimatedVisibility(
+                            visible = isLoading.value && miniProgram.root,
+                            exit = fadeOut(animationSpec = tween(300)),
+                            modifier = Modifier.fillMaxSize()
+                        ) {
+                            LoadingAnimation(miniProgram)
+                        }
+                    }
+
+                    tabBarConfig?.takeIf { shouldShowTabBar }?.let { visibleTabBarConfig ->
+                        DiminaTabBar(
+                            tabBarConfig = visibleTabBarConfig,
+                            selectedIndex = selectedTabIndex.intValue,
+                            appId = miniProgram.appId,
+                            filesDir = filesDir,
+                            onSelected = { index ->
+                                visibleTabBarConfig.list.getOrNull(index)?.let { item ->
+                                    switchTab(item.pagePath)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                 }
-            },
-            modifier = modifier.fillMaxSize()
-        ) { innerPadding ->
-            Column(
+            }
+
+            if (!isLoading.value) {
+                val menuRect = remember { Utils.getMenuButtonBoundingClientRect(this@DiminaActivity) }
+                MiniProgramCapsuleButton(
+                    onMoreClick = {
+                        showMiniProgramMenu.value = true
+                    },
+                    onCloseClick = { closeMiniProgram() },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(
+                            top = menuRect.optInt("top", Utils.getStatusBarHeight(this@DiminaActivity)).dp,
+                            end = (Utils.getMiniProgramSystemInfo(this@DiminaActivity)
+                                .optInt("windowWidth") - menuRect.optInt("right", 0)).dp
+                        )
+                        .zIndex(10f)
+                )
+            }
+        }
+    }
+
+    private fun closeMiniProgram() {
+        val closeIntent = Intent(this, DiminaActivity::class.java).apply {
+            putExtra(MINI_PROGRAM_KEY, miniProgram.copy(root = true))
+            putExtra(CLOSE_MINI_PROGRAM_KEY, true)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(closeIntent)
+        finish()
+    }
+
+    private fun reenterMiniProgram() {
+        val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
+        DiminaActivity.launch(
+            this,
+            miniProgram.copy(root = true, path = entryPagePath),
+            Intent.FLAG_ACTIVITY_CLEAR_TOP
+        )
+    }
+
+    private fun getDefaultEntryPagePath(): String? {
+        if (!::appConfig.isInitialized) {
+            return null
+        }
+        return appConfig.app.entryPagePath ?: appConfig.app.pages.firstOrNull()
+    }
+
+    @OptIn(ExperimentalMaterial3Api::class)
+    @Composable
+    private fun MiniProgramMenuSheet(
+        appName: String,
+        onReenterClick: () -> Unit,
+        onCloseClick: () -> Unit,
+        onDismiss: () -> Unit
+    ) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = onDismiss,
+            sheetState = sheetState,
+            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
+            containerColor = Color.White,
+            dragHandle = { }
+        ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(Color(0xFFF4F4F4)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = appName.take(1).ifBlank { "小" },
+                            fontSize = 18.sp,
+                            color = Color(0xFF8A8A8A),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    Column(modifier = Modifier.padding(start = 14.dp)) {
+                        Text(
+                            text = appName,
+                            fontSize = 18.sp,
+                            color = Color(0xFF202020),
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "小程序",
+                            fontSize = 14.sp,
+                            color = Color(0xFF9A9A9A)
+                        )
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFFF2F2F2), thickness = 1.dp)
+
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 20.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    MiniProgramMenuItem(
+                        label = "重新进入\n小程序",
+                        onClick = onReenterClick,
+                        modifier = Modifier.width(78.dp)
+                    ) {
+                        ReenterMenuIcon()
+                    }
+                    MiniProgramMenuItem(
+                        label = "关闭小程序",
+                        onClick = onCloseClick,
+                        modifier = Modifier.width(78.dp)
+                    ) {
+                        CloseMenuIcon()
+                    }
+                }
+
+                HorizontalDivider(color = Color(0xFFEDEDED), thickness = 1.dp)
+                Text(
+                    text = "取消",
+                    fontSize = 18.sp,
+                    color = Color(0xFF576B95),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable(onClick = onDismiss)
+                        .padding(vertical = 18.dp)
+                )
+            }
+        }
+    }
+
+    @Composable
+    private fun MiniProgramMenuItem(
+        label: String,
+        onClick: () -> Unit,
+        modifier: Modifier = Modifier,
+        icon: @Composable () -> Unit
+    ) {
+        Column(
+            modifier = modifier.clickable(onClick = onClick),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(
-                        top = if (isCustomNavigation) 0.dp else innerPadding.calculateTopPadding()
-                    )
-                    .background(bgColor)
+                    .size(52.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFFF8F8F8)),
+                contentAlignment = Alignment.Center
+            ) {
+                icon()
+            }
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                color = Color(0xFF686868),
+                textAlign = TextAlign.Center,
+                lineHeight = 17.sp,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+        }
+    }
+
+    @Composable
+    private fun ReenterMenuIcon() {
+        Text(
+            text = "↻",
+            fontSize = 24.sp,
+            lineHeight = 24.sp,
+            color = Color(0xFF333333),
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center
+        )
+    }
+
+    @Composable
+    private fun CloseMenuIcon() {
+        Text(
+            text = "×",
+            fontSize = 24.sp,
+            lineHeight = 24.sp,
+            color = Color(0xFF333333),
+            fontWeight = FontWeight.Normal,
+            textAlign = TextAlign.Center
+        )
+    }
+
+    @Composable
+    private fun MiniProgramCapsuleButton(
+        onMoreClick: () -> Unit,
+        onCloseClick: () -> Unit,
+        modifier: Modifier = Modifier
+    ) {
+        val foreground = Color(0xFF1F1F1F)
+        val borderColor = Color(0xFFE5E5E5)
+        val separatorColor = Color(0xFFE9E9E9)
+        val shape = RoundedCornerShape(16.dp)
+
+        Box(
+            modifier = modifier
+                .size(width = 87.dp, height = 32.dp)
+                .shadow(1.dp, shape, clip = false)
+                .clip(shape)
+                .background(Color.White)
+                .border(BorderStroke(0.5.dp, borderColor), shape)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
+                        .size(width = 43.dp, height = 32.dp)
+                        .clickable(onClick = onMoreClick),
+                    contentAlignment = Alignment.Center
                 ) {
-                    if (useTabBarContainer.value) {
-                        loadedTabIndices.value.sorted().forEach { tabIndex ->
-                            key(tabIndex) {
-                                val isSelected = tabIndex == selectedTabIndex.intValue
-                                DiminaWebView(
-                                    onInitReady = { webView -> onTabWebViewReady(tabIndex, webView) },
-                                    onPageCompleted = { onTabPageReady(tabIndex) },
-                                    onNativeOverlayReady = { overlay ->
-                                        onTabNativeOverlayReady(tabIndex, overlay)
-                                    },
-                                    identifier = tabWebViewIdentifier(tabIndex),
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .alpha(if (isSelected) 1f else 0f)
-                                        .zIndex(if (isSelected) 1f else 0f)
-                                )
-                            }
-                        }
-                    } else {
-                        // 始终创建DiminaWebView
-                        DiminaWebView(
-                            onInitReady = { webView -> onWebViewReady(webView) },
-                            onPageCompleted = { onPageReady() },
-                            onNativeOverlayReady = { overlay -> onNativeOverlayReady(overlay) },
-                        )
-                    }
-
-                    // 加载遮罩层使用 AnimatedVisibility 只添加淡出效果
-                    androidx.compose.animation.AnimatedVisibility(
-                        visible = isLoading.value && miniProgram.root,
-                        exit = fadeOut(animationSpec = tween(300)),
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        LoadingAnimation(miniProgram)
+                    Canvas(modifier = Modifier.size(width = 20.dp, height = 10.dp)) {
+                        val centerY = size.height / 2
+                        val gap = 7.2.dp.toPx()
+                        val centerX = size.width / 2
+                        drawCircle(foreground, 1.9.dp.toPx(), Offset(centerX - gap, centerY))
+                        drawCircle(foreground, 3.2.dp.toPx(), Offset(centerX, centerY))
+                        drawCircle(foreground, 1.9.dp.toPx(), Offset(centerX + gap, centerY))
                     }
                 }
 
-                tabBarConfig?.takeIf { shouldShowTabBar }?.let { visibleTabBarConfig ->
-                    DiminaTabBar(
-                        tabBarConfig = visibleTabBarConfig,
-                        selectedIndex = selectedTabIndex.intValue,
-                        appId = miniProgram.appId,
-                        filesDir = filesDir,
-                        onSelected = { index ->
-                            visibleTabBarConfig.list.getOrNull(index)?.let { item ->
-                                switchTab(item.pagePath)
-                            }
-                        },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                Box(
+                    modifier = Modifier
+                        .width(1.dp)
+                        .height(16.dp)
+                        .align(Alignment.CenterVertically)
+                        .background(separatorColor)
+                )
+
+                Box(
+                    modifier = Modifier
+                        .size(width = 43.dp, height = 32.dp)
+                        .clickable(onClick = onCloseClick),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(modifier = Modifier.size(22.dp)) {
+                        val center = Offset(size.width / 2, size.height / 2)
+                        drawCircle(
+                            color = foreground,
+                            radius = 7.8.dp.toPx(),
+                            center = center,
+                            style = Stroke(width = 2.4.dp.toPx())
+                        )
+                        drawCircle(
+                            color = foreground,
+                            radius = 3.1.dp.toPx(),
+                            center = center
+                        )
+                    }
                 }
             }
         }
@@ -1323,6 +1632,7 @@ class DiminaActivity : ComponentActivity() {
 
     companion object {
         const val MINI_PROGRAM_KEY = "mini_program"
+        private const val CLOSE_MINI_PROGRAM_KEY = "close_mini_program"
 
         fun launch(
             context: Context,
