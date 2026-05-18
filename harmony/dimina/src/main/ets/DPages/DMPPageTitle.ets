@@ -12,6 +12,7 @@ export struct DMPPageTitle {
   appIndex: number
   @Prop
   webViewId: number
+  private readonly titleHorizontalInset: number = 110
 
   aboutToAppear(): void {
 
@@ -25,11 +26,13 @@ export struct DMPPageTitle {
         Text(this.getPageStyle(this.pageRecord)?.getTitleString() ?? '')
           .height('100%')
           .width('100%')
-          .padding({ left: 60, right: 110 })
+          .padding({ left: this.titleHorizontalInset, right: this.titleHorizontalInset })
           .fontSize(18)
           .fontColor(this.getPageStyle(this.pageRecord)?.getTitleTextColor() ?? '#000000')
           .fontWeight('500')
           .textAlign(TextAlign.Center)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
 
         Image($r(this.getPageStyle(this.pageRecord)?.isStatusBarDarkMode() ? 'app.media.ic_dmp_back_black' :
           'app.media.ic_dmp_back_white'))
