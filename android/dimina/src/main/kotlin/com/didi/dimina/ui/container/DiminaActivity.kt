@@ -888,7 +888,8 @@ class DiminaActivity : ComponentActivity() {
     }
 
     private fun onTabPageReady(index: Int) {
-        tabPageStates[index]?.pageReadyCallback?.invoke()
+        val state = tabPageStates[index] ?: return
+        state.pageReadyCallback?.invoke()
     }
 
     private fun onNativeOverlayReady(overlay: FrameLayout) {

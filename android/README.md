@@ -58,7 +58,7 @@ class MyApplication : Application() {
         super.onCreate()
 
         Dimina.init(this, Dimina.DiminaConfig.Builder()
-            // 是否启用调试模式：影响日志显示
+            // 是否启用调试模式：影响日志显示，并允许 pageFrame 初始化 vConsole
             // 调试模式不检测 App 是否已更新，都会进入 JSSDK 和 JSApp 的更新检测逻辑
             .setDebugMode(true)
             .build()
@@ -66,6 +66,10 @@ class MyApplication : Application() {
     }
 }
 ```
+
+#### 调试模式与 vConsole
+
+当 `setDebugMode(true)` 时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测到该启用标记时，pageFrame 才会在 render 初始化前同步初始化 vConsole。
 
 ### 步骤 4: 启动小程序
 

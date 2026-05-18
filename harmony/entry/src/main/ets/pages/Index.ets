@@ -45,6 +45,7 @@ struct Index {
   openDiminaApp(item: MiniProgramModel) {
     this.curProgram = item;
     const appConfig: DMPAppConfig = new DMPAppConfig(item.name, item.appId)
+    appConfig.isDebugMode = true
     this.app = DMPAppManager.sharedInstance().appWithConfig(appConfig)
     this.app.router.init(this.pageInfos)
     this.app.startPackageLoader(getContext(this) as common.UIAbilityContext)
@@ -137,4 +138,3 @@ struct Index {
     }
   }
 }
-

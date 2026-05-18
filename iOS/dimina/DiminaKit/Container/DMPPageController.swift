@@ -154,7 +154,11 @@ public class DMPPageController: UIViewController {
         hasStartedLoading = true
         showPageLoadingIfNeeded()
         webview.poolState = .loading
-        webview.loadPageFrame()
+        var enableVConsole = appConfig.isDebugMode
+        #if DEBUG
+        enableVConsole = true
+        #endif
+        webview.loadPageFrame(enableVConsole: enableVConsole)
     }
 
     public func preparePageLoading(in parentController: UIViewController) {

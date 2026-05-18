@@ -33,7 +33,8 @@ struct ContentView: View {
 
         // 创建小程序配置和实例
         let manager = DMPAppManager.sharedInstance()
-        let appConfig = DMPAppConfig(appName: item.appName, appId: item.id)
+        var appConfig = DMPAppConfig(appName: item.appName, appId: item.id)
+        appConfig.isDebugMode = true
         let app = manager.appWithConfig(appConfig: appConfig)
 
         // 设置DMPNavigator

@@ -1,5 +1,6 @@
 package com.didi.dimina.core
 
+import com.didi.dimina.Dimina
 import com.didi.dimina.bean.BridgeOptions
 import com.didi.dimina.bean.MergedPageConfig
 import com.didi.dimina.bean.PathInfo
@@ -54,9 +55,10 @@ class Bridge(
                     touchHandler = { msg -> parent.dispatchNativeComponentTouch(msg, this@Bridge) }
                 ), DiminaNativeComponentBridge.TAG)
         }
-        // 加载模版页面
+        // 加载模版页面。调试模式通过 URL 参数让 pageFrame 在 render 初始化前启用 vConsole。
+        val vConsoleQuery = if (Dimina.getInstance().isDebugMode()) "?vconsole=1" else ""
         options.webview.loadUrl(
-            "${PathUtils.WEBVIEW_JSSDK_BASE_URL}${VersionUtils.getJSVersion()}/main/pageFrame.html"
+            "${PathUtils.WEBVIEW_JSSDK_BASE_URL}${VersionUtils.getJSVersion()}/main/pageFrame.html$vConsoleQuery"
         )
     }
 

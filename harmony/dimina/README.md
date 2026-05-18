@@ -17,7 +17,7 @@
    ohpm install @didi-dimina/dimina
 ```
 
-### 步骤2：初始化 
+### 步骤2：初始化
 
 在应用的EntryAbility 中初始化DMPApp：
 
@@ -42,7 +42,7 @@ DMPApp.init(dmpConfig);
         .....
   }
   .navDestination(this.routerFactory)
-  
+
   @Builder
   routerFactory(name: string, paramMap: Map<string, Object>) {
     if (name == DMPPage.ROUTE_NAME) {
@@ -90,6 +90,7 @@ rawfile/
 
 ```ts
 const appConfig: DMPAppConfig = new DMPAppConfig("小程序名称", "appId")//appId 小程序唯一标识
+appConfig.isDebugMode = true
 this.app = DMPAppManager.sharedInstance().appWithConfig(appConfig)
 ```
 
@@ -107,5 +108,9 @@ const launchConfig: DMPLaunchConfig = new DMPLaunchConfig()
 launchConfig.openType = DMPOpenType.NavigateTo
 this.app.launch(launchConfig)
 ```
-   
 
+### 调试模式与 vConsole
+
+当 `appConfig.isDebugMode = true`，或当前 HAP 为 debug 包时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。
+
+JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测到该启用标记时，pageFrame 才会在 render 初始化前同步初始化 vConsole。

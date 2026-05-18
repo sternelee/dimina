@@ -87,7 +87,8 @@ struct ContentView: View {
 
             // 创建小程序配置和实例
             let manager: DMPAppManager = DMPAppManager.sharedInstance()
-            let appConfig: DMPAppConfig = DMPAppConfig(appName: "小程序名称", appId: "wx92269e3b2f304afc")
+            var appConfig: DMPAppConfig = DMPAppConfig(appName: "小程序名称", appId: "wx92269e3b2f304afc")
+            appConfig.isDebugMode = true
             let app: DMPApp = manager.appWithConfig(appConfig: appConfig)
 
             // 设置导航
@@ -102,6 +103,12 @@ struct ContentView: View {
     }
 }
 ```
+
+#### 调试模式与 vConsole
+
+iOS Debug 构建会自动尝试启用 vConsole；也可以通过 `appConfig.isDebugMode = true` 在指定小程序上启用。启用后，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。
+
+JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测到该启用标记时，pageFrame 才会在 render 初始化前同步初始化 vConsole。
 
 
 ### 关闭小程序
