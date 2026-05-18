@@ -6,7 +6,7 @@
 
 - Android SDK: 最低 API 26 (Android 8.0)
 - Java 17
-- Gradle 8.0+
+- Android Gradle Plugin 8.0+
 - 仅支持 ARM64 架构 (arm64-v8a)
 
 ## 快速接入
@@ -73,21 +73,21 @@ class MyApplication : Application() {
 
 ### 步骤 4: 启动小程序
 
-将编译好的小程序压缩包放入 `assets/jsapp` 文件夹，文件夹以小程序id命名。每个小程序文件夹需包含以下内容：
+将编译好的小程序压缩包放入 `app/src/main/assets/jsapp` 文件夹，文件夹以小程序 ID 命名。仓库示例工程会在构建时从根目录 `shared/jsapp` 自动复制资源到该目录。每个小程序文件夹需包含以下内容：
 
 1. `config.json` - 小程序配置文件，包含以下字段：
 
 ```json5
-   {
-     "appId": "wx92269e3b2f304afc", // 小程序唯一标识
-     "name": "小程序名称",
-     "path": "example/index", // 小程序入口路径
-     "versionCode": 1, // 启动小程序时会根据版本号确认是否需要更新
-     "versionName": "1.0.0"
-   }
-   ```
+{
+  "appId": "wx92269e3b2f304afc", // 小程序唯一标识
+  "name": "小程序名称",
+  "path": "example/index", // 小程序入口路径
+  "versionCode": 1, // 启动小程序时会根据版本号确认是否需要更新
+  "versionName": "1.0.0"
+}
+```
 
-2. `[appId].zip` - 小程序代码包，文件名需与appId一致
+2. `[appId].zip` - 小程序代码包，文件名需与 appId 一致
 
 目录结构示例：
 
@@ -120,5 +120,5 @@ Dimina.getInstance().startMiniProgram(context, miniProgram)
 
 ## 模块说明
 
-- **dimina**: 核心库，包含小程序运行环境、UI组件和生命周期管理
-- **engine-qjs**: QuickJS JavaScript引擎，提供高性能的JS执行环境
+- **dimina**: 核心库，包含小程序运行环境、UI 组件和生命周期管理
+- **engine-qjs**: QuickJS JavaScript 引擎，提供 JS 执行环境

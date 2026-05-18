@@ -15,13 +15,16 @@
 
 ## 环境要求
 
-建议使用 Node 18+, pnpm 8+。
+建议使用 Node.js 22+ 和 pnpm 7+。仓库已配置 Volta Node.js 22.22.3；如果使用 Volta，可直接在 `fe/` 目录执行 pnpm 命令。
 
 ## 开始上手
-
+ 
 ### 安装说明
 
 ```sh
+# 进入前端工作区
+cd fe
+
 # 安装依赖
 pnpm install
 ```
@@ -82,7 +85,7 @@ pnpm compile -f
 
 #### pnpm generate:app
 
-将编译好的小程序打包并复制到共享目录 `shared/jsapp` 中。
+将编译好的小程序打包并复制到仓库根目录的 `shared/jsapp` 中。
 
 **注意事项：**
 - 运行前必须确保 `shared/jsapp` 目录已存在，否则命令将终止
@@ -91,7 +94,7 @@ pnpm compile -f
 
 #### pnpm generate:sdk
 
-将构建好的 SDK 打包并复制到共享目录 `shared/jssdk` 中。
+将构建好的 SDK 打包并复制到仓库根目录的 `shared/jssdk` 中。
 
 **注意事项：**
 - 运行前必须先执行构建命令 `pnpm build` 或 `pnpm build:dev`

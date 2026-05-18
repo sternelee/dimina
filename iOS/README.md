@@ -3,7 +3,7 @@
 ## 系统要求
 
 - iOS 14.0+
-- Swift 5.0+
+- Swift 6.0+
 - Xcode 16.0+
 
 ## 快速接入
@@ -28,11 +28,11 @@ https://github.com/didi/dimina.git
 
 ### 步骤 2: 准备小程序资源
 
-将编译好的小程序压缩包放入 `JsApp.bundle` 文件夹，文件夹以小程序id命名。每个小程序文件夹需包含以下内容：
+将编译好的小程序压缩包放入 `iOS/dimina/Resources/JsApp.bundle` 文件夹，文件夹以小程序 ID 命名。示例工程可通过 `copy-shared-resources.sh` 从根目录 `shared/jsapp` 同步资源。每个小程序文件夹需包含以下内容：
 
 1. `config.json` - 小程序配置文件，包含以下字段：
 
-```json
+```json5
 {
   "appId": "wx92269e3b2f304afc", // 小程序唯一标识
   "name": "小程序名称",
@@ -42,7 +42,7 @@ https://github.com/didi/dimina.git
 }
 ```
 
-2. `[appId].zip` - 小程序代码包，文件名需与appId一致
+2. `[appId].zip` - 小程序代码包，文件名需与 appId 一致
 
 目录结构示例：
 
@@ -138,4 +138,4 @@ app.destroy()
 open iOS/dimina.xcodeproj
 ```
 
-使用 Xcode 打开 `dimina.xcodeproj` 可以查看示例项目。
+使用 Xcode 打开 `dimina.xcodeproj` 可以查看示例项目。示例工程构建前会执行 `copy-shared-resources.sh`，将根目录 `shared/jsapp` 和 `shared/jssdk` 中的资源同步到 `iOS/dimina/Resources`。
