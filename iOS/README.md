@@ -56,6 +56,8 @@ JsApp.bundle/
       └── wxbaf4b47de04f1d8a.zip
 ```
 
+内置包会在启动时按 `versionCode` 复制或解压到应用沙盒目录后运行。动态下发、远程下载和 `wx.getUpdateManager` 的职责边界请参考[小程序包更新说明](../docs/MiniProgram-Update.md)。
+
 ### 步骤 3: 启动小程序
 
 ```swift

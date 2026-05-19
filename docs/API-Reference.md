@@ -140,6 +140,7 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 | ------------- | -------------------------------- | ------- | --- | ------- | --- |
 | 基础          | env                              | ✓       | ✓   | ✓       | ✓   |
 |               | canIUse                          | ✓       | ✓   | ✓       | ✗   |
+| 基础 - 更新   | getUpdateManager                 | ✓       | ✓   | ✓       | ✓   |
 | 基础 - 系统   | openSystemBluetoothSetting       | ✓       | ✗   | ✗       | ✗   |
 |               | getWindowInfo                    | ✓       | ✓   | ✓       | ✗   |
 |               | getSystemSetting                 | ✓       | ✓   | ✓       | ✗   |
@@ -202,6 +203,7 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 - "✓" 表示支持该平台。
 - "□" 表示当前不支持。
 - "✗" 表示明确不支持该平台。
+- `getUpdateManager` 只负责更新状态通知和重启入口，包下载、校验和动态下发流程请参考[小程序包更新说明](./MiniProgram-Update.md)。
 
 ---
 

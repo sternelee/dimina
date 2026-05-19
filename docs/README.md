@@ -9,6 +9,7 @@
 - [核心架构](./Architecture-Diagram.md)：整体运行时、编译流程和跨平台结构图。
 - [生命周期](./Architecture-Lifecycle.md)：小程序、页面和组件生命周期调用顺序。
 - [技术细节](./Architecture-Details.md)：离线包加载、逻辑视图分离、原生能力调用等实现说明。
+- [小程序包更新说明](./MiniProgram-Update.md)：内置包更新、动态下发接入流程和 `wx.getUpdateManager` 的职责边界。
 - [能力参考指南](./API-Reference.md)：模板语法、组件、API、扩展 Bridge 和平台支持状态。
 
 ## 平台接入文档
