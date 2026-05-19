@@ -4,6 +4,7 @@
 const supportedBuiltinComponents = [
 	"block",
 	"button",
+	"canvas",
 	"checkbox",
 	"checkbox-group",
 	"cover-image",
@@ -65,6 +66,9 @@ const supportedWxApis = [
 	"pageScrollTo",
 	"getMenuButtonBoundingClientRect",
 	"createAnimation",
+	"createCanvasContext",
+	"createOffscreenCanvas",
+	"canvasToTempFilePath",
 	"createSelectorQuery",
 	"createIntersectionObserver",
 	"request",
