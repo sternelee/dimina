@@ -58,7 +58,8 @@ class RouteApi : BaseApiHandler() {
                         root = false,
                         path = url,
                         versionCode = miniProgram.versionCode,
-                        versionName = miniProgram.versionName
+                        versionName = miniProgram.versionName,
+                        updateManifestUrl = miniProgram.updateManifestUrl
                     )
                 )
                 AsyncResult(JSONObject().apply {
@@ -114,7 +115,8 @@ class RouteApi : BaseApiHandler() {
                         root = true, // Set as root since we're clearing the stack
                         path = url,
                         versionCode = miniProgram.versionCode,
-                        versionName = miniProgram.versionName
+                        versionName = miniProgram.versionName,
+                        updateManifestUrl = miniProgram.updateManifestUrl
                     ),
                     // Clear all activities below the top and reuse the top activity if it exists
                     Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK

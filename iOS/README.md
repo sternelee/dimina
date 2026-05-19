@@ -91,6 +91,7 @@ struct ContentView: View {
             let manager: DMPAppManager = DMPAppManager.sharedInstance()
             var appConfig: DMPAppConfig = DMPAppConfig(appName: "小程序名称", appId: "wx92269e3b2f304afc")
             appConfig.isDebugMode = true
+            appConfig.updateManifestUrl = "https://example.com/jsapp/wx92269e3b2f304afc.json" // 可选：远程更新 manifest
             let app: DMPApp = manager.appWithConfig(appConfig: appConfig)
 
             // 设置导航

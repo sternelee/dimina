@@ -95,6 +95,7 @@ import com.didi.dimina.common.Utils
 import com.didi.dimina.common.VersionUtils
 import com.didi.dimina.core.Bridge
 import com.didi.dimina.core.MiniApp
+import com.didi.dimina.core.RemoteUpdateManager
 import com.didi.dimina.ui.theme.DiminaAndroidTheme
 import com.didi.dimina.ui.view.ActionSheet
 import com.didi.dimina.ui.view.ContactPicker
@@ -171,6 +172,7 @@ class DiminaActivity : ComponentActivity() {
     private var imageChooseCallback: ((List<String>) -> Unit)? = null
     
     private var adjustBottom = 0.0
+    private var updateCheckStarted = false
 
     // 屏幕高度
     private var screenHeight = 0
@@ -364,6 +366,14 @@ class DiminaActivity : ComponentActivity() {
             return
         }
 
+        if (intent.getBooleanExtra(APPLY_UPDATE_RESTART_KEY, false)) {
+            getMiniProgramFromIntent(intent)?.let { program ->
+                DiminaActivity.launch(this, program)
+            }
+            finish()
+            return
+        }
+
         val program = getMiniProgramFromIntent(intent) ?: return
         if (::miniProgram.isInitialized && program.appId != miniProgram.appId) {
             return
@@ -511,7 +521,25 @@ class DiminaActivity : ComponentActivity() {
         if (setAsActive) {
             this.bridge = bridge
         }
+        startUpdateCheckIfNeeded()
         return bridge
+    }
+
+    private fun startUpdateCheckIfNeeded() {
+        if (updateCheckStarted) {
+            return
+        }
+        updateCheckStarted = true
+
+        CoroutineScope(Dispatchers.IO).launch {
+            RemoteUpdateManager.checkForUpdate(
+                context = applicationContext,
+                miniProgram = miniProgram,
+                notify = { event ->
+                    miniApp.postUpdateStatus(miniProgram.appId, event)
+                }
+            )
+        }
     }
 
 
@@ -605,7 +633,8 @@ class DiminaActivity : ComponentActivity() {
                     root = true,
                     path = url,
                     versionCode = miniProgram.versionCode,
-                    versionName = miniProgram.versionName
+                    versionName = miniProgram.versionName,
+                    updateManifestUrl = miniProgram.updateManifestUrl
                 ),
                 Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP
             )
@@ -1307,11 +1336,14 @@ class DiminaActivity : ComponentActivity() {
 
     fun applyUpdate() {
         val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
-        DiminaActivity.launch(
-            this,
-            miniProgram.copy(root = true, path = entryPagePath),
-            Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
-        )
+        val updatedMiniProgram = miniProgram.copy(root = true, path = entryPagePath)
+        miniApp.clear(miniProgram.appId)
+        val intent = Intent(this, DiminaActivity::class.java).apply {
+            putExtra(MINI_PROGRAM_KEY, updatedMiniProgram)
+            putExtra(APPLY_UPDATE_RESTART_KEY, true)
+            addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        startActivity(intent)
     }
 
     private fun getDefaultEntryPagePath(): String? {
@@ -1696,6 +1728,7 @@ class DiminaActivity : ComponentActivity() {
     companion object {
         const val MINI_PROGRAM_KEY = "mini_program"
         private const val CLOSE_MINI_PROGRAM_KEY = "close_mini_program"
+        private const val APPLY_UPDATE_RESTART_KEY = "apply_update_restart"
 
         fun launch(
             context: Context,

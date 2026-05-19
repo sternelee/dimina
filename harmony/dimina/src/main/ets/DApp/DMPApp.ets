@@ -30,6 +30,7 @@ import { DMPNavigatorManager } from '../Navigator/DMPNavigatorManager'
 import { DRouter } from '../Navigator/DRouter'
 import { DMPAppLifecycle } from './DMPAppLifecycle'
 import { DMPDeviceUtil } from '../Utils/DMPDeviceUtils'
+import { DMPRemoteUpdateManager } from '../Bundle/DMPRemoteUpdateManager'
 export type DMPBundleUpdateCallback = () => void;
 
 export interface DMPAppInitOptions {
@@ -244,7 +245,7 @@ export class DMPApp {
         this._service.updateWorkerAppData();
         await this.startEngineService()
         await this.startMainService()
-        this.notifyUpdateManagerStatus('noupdate')
+        this.startRemoteUpdateCheck()
 
         this._engineStatus.setStatus(EngineStatus.RUN)
       };
@@ -344,7 +345,16 @@ export class DMPApp {
     }
   }
 
-  private notifyUpdateManagerStatus(event: string) {
+  private startRemoteUpdateCheck() {
+    DMPRemoteUpdateManager.sharedInstance()
+      .checkForUpdate(this)
+      .catch((error: Error) => {
+        DMPLogger.e(Tags.LOAD_REMOTE_BUNDLE, `远程更新检查失败: ${error.message}`)
+        this.notifyUpdateManagerStatus('noupdate')
+      })
+  }
+
+  public notifyUpdateManagerStatus(event: string) {
     const msg: DMPMap = new DMPMap({
       type: 'onUpdateStatusChange',
       body: {

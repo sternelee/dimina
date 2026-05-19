@@ -51,7 +51,14 @@ public class DMPApp {
 
         await loadBundle()
 
-        await notifyUpdateStatus(event: "noupdate")
+        if let manifestUrl = appConfig?.updateManifestUrl,
+           !manifestUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            Task {
+                await DMPRemoteUpdateManager.shared.checkForUpdate(app: self, manifestUrl: manifestUrl)
+            }
+        } else {
+            await notifyUpdateStatus(event: "noupdate")
+        }
 
         initRender()
         
@@ -143,7 +150,7 @@ public class DMPApp {
         self.bundleAppConfig = DMPBundleAppConfig.fromJsonString(json: config)
     }
 
-    private func notifyUpdateStatus(event: String) async {
+    func notifyUpdateStatus(event: String) async {
         let message = DMPMap([
             "type": "onUpdateStatusChange",
             "body": [
@@ -165,6 +172,10 @@ public class DMPApp {
     @MainActor
     public func applyUpdate() async {
         let launchConfig = currentLaunchConfig
+        service?.destroy()
+        await initService()
+        await loadBundle()
+
         let entryPath = launchConfig?.appEntryPath ?? bundleAppConfig?.entryPagePath ?? ""
         await navigator?.relaunch(to: entryPath, query: launchConfig?.query, animated: false)
     }

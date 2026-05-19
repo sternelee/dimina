@@ -338,6 +338,7 @@ fun Context.getMiniProgramsList(): List<MiniProgram> {
                 versionCode = jsonObject.getInt("versionCode"),
                 versionName = jsonObject.getString("versionName"),
                 path = jsonObject.getString("path"),
+                updateManifestUrl = jsonObject.optString("updateManifestUrl", ""),
             ))
         }
         

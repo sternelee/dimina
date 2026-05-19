@@ -91,6 +91,10 @@ class MiniApp private constructor() {
         return getOrCreateJsCore(appId, context)
     }
 
+    fun postUpdateStatus(appId: String, event: String) {
+        jsCoreMap[appId]?.postMessage("onUpdateStatusChange", mapOf("event" to event))
+    }
+
     /**
      * Get or create a JsCore instance for a specific MiniProgram
      *
@@ -150,7 +154,6 @@ class MiniApp private constructor() {
                                         "jssdk/${VersionUtils.getJSVersion()}/main/assets/service.js"
                                     ).absolutePath
                                 )
-                                postMessage("onUpdateStatusChange", mapOf("event" to "noupdate"))
                                 LogUtils.d(tag, "JsCore initialized for appId: $appId")
                             } catch (e: Exception) {
                                 LogUtils.e(tag, "Error extracting js sdk: ${e.message}")

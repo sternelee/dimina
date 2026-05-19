@@ -94,6 +94,7 @@ rawfile/
 ```ts
 const appConfig: DMPAppConfig = new DMPAppConfig("小程序名称", "appId")//appId 小程序唯一标识
 appConfig.isDebugMode = true
+appConfig.updateManifestUrl = "https://example.com/jsapp/appId.json" // 可选：远程更新 manifest
 this.app = DMPAppManager.sharedInstance().appWithConfig(appConfig)
 ```
 

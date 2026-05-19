@@ -113,7 +113,8 @@ val miniProgram = MiniProgram(
     name = "小程序名称",      // 小程序名称
     versionCode = 1,            // 版本号
     versionName = "1.0.0",      // 版本名称
-    path = "example/index"       // 小程序入口路径
+    path = "example/index",      // 小程序入口路径
+    // updateManifestUrl = "https://example.com/jsapp/wx92269e3b2f304afc.json" // 可选：远程更新 manifest
 )
 
 // 启动小程序
