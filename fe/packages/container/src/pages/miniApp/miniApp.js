@@ -129,8 +129,10 @@ export class MiniApp {
 		const entryPagePath = this.getEntryPagePath()
 		const currentPageQuery = this.getCurrentPageQuery()
 		const pagePath = currentPagePath || entryPagePath || ''
-		const pageWithQuery = `${pagePath}${Object.keys(currentPageQuery).length ? `?${new URLSearchParams(currentPageQuery).toString()}` : ''}`
-		const addressUrl = `${window.location.origin}${window.location.pathname}#${this.appId}|${pageWithQuery}`
+		const addressUrl = HashRouter.buildRouteURL(this.appId, [
+			{ pagePath: entryPagePath, query: this.appInfo.query || {} },
+			{ pagePath, query: currentPageQuery },
+		])
 
 		name.textContent = this.appInfo.name || '未命名小程序'
 		appId.textContent = `AppID：${this.appId || '--'}`
@@ -361,7 +363,7 @@ export class MiniApp {
 	}
 
 	/**
-	 * 将当前 bridgeList 序列化到 URL hash，用于刷新后恢复完整页面栈。
+	 * 将当前 bridgeList 序列化到 URL query，用于刷新后恢复入口页与当前页。
 	 * pagePath 统一去掉前导 /，与 app-config.json modules key 保持一致。
 	 */
 	_syncHash() {
