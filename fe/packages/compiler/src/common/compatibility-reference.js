@@ -45,6 +45,7 @@ const supportedBuiltinComponents = [
 const supportedWxApis = [
 	"env",
 	"canIUse",
+	"getUpdateManager",
 	"openSystemBluetoothSetting",
 	"getWindowInfo",
 	"getSystemSetting",
