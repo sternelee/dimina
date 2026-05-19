@@ -1305,6 +1305,15 @@ class DiminaActivity : ComponentActivity() {
         )
     }
 
+    fun applyUpdate() {
+        val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
+        DiminaActivity.launch(
+            this,
+            miniProgram.copy(root = true, path = entryPagePath),
+            Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
+        )
+    }
+
     private fun getDefaultEntryPagePath(): String? {
         if (!::appConfig.isInitialized) {
             return null

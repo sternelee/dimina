@@ -41,7 +41,7 @@ export class DMPApp {
   appIndex: number;
   appConfig: DMPAppConfig
   customConfig: DMPCustomConfig = new DMPCustomConfig();
-  private onUpdateResult?: DMPBundleUpdateCallback
+  private onUpdateResults: DMPBundleUpdateCallback[] = []
   private _container: DMPContainer = new DMPContainer(this)
   private static _context: common.UIAbilityContext
   private static _apiNamespaces: string[] = []
@@ -244,6 +244,7 @@ export class DMPApp {
         this._service.updateWorkerAppData();
         await this.startEngineService()
         await this.startMainService()
+        this.notifyUpdateManagerStatus('noupdate')
 
         this._engineStatus.setStatus(EngineStatus.RUN)
       };
@@ -323,10 +324,8 @@ export class DMPApp {
   }
 
   invokeUpdateResult() {
-    if (this.onUpdateResult) {
-      this.onUpdateResult()
-      this.onUpdateResult = undefined
-    }
+    const callbacks = this.onUpdateResults.splice(0)
+    callbacks.forEach((callback) => callback())
   }
 
   onUpdateManagerCall(method: string, arg: DMPMap) {
@@ -339,10 +338,20 @@ export class DMPApp {
     if (this._container.isResourceLoaded(this.currentWebViewId)) {
       DMPChannelProxyNext.ContainerToService(msg, this.appIndex)
     } else {
-      this.onUpdateResult = () => {
+      this.onUpdateResults.push(() => {
         DMPChannelProxyNext.ContainerToService(msg, this.appIndex)
-      }
+      })
     }
+  }
+
+  private notifyUpdateManagerStatus(event: string) {
+    const msg: DMPMap = new DMPMap({
+      type: 'onUpdateStatusChange',
+      body: {
+        event,
+      }
+    })
+    this._service.postMessage(msg)
   }
 
   public getWindowBottomSafeArea(): number {

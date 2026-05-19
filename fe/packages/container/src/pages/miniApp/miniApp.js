@@ -631,6 +631,12 @@ export class MiniApp {
 		}
 	}
 
+	applyUpdate() {
+		this.reLaunch({
+			url: this.getEntryPagePath(),
+		})
+	}
+
 	redirectTo(opts) {
 		const { url, success, fail, complete } = opts
 		const { query, pagePath } = queryPath(url)

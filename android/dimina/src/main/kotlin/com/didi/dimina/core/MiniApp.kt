@@ -11,6 +11,7 @@ import com.didi.dimina.api.ext.ExtModuleHandler
 import com.didi.dimina.api.base.AppEventApi
 import com.didi.dimina.api.base.BaseAPI
 import com.didi.dimina.api.base.SystemApi
+import com.didi.dimina.api.base.UpdateApi
 import com.didi.dimina.api.device.ClipboardApi
 import com.didi.dimina.api.device.ContactApi
 import com.didi.dimina.api.device.KeyboardApi
@@ -149,6 +150,7 @@ class MiniApp private constructor() {
                                         "jssdk/${VersionUtils.getJSVersion()}/main/assets/service.js"
                                     ).absolutePath
                                 )
+                                postMessage("onUpdateStatusChange", mapOf("event" to "noupdate"))
                                 LogUtils.d(tag, "JsCore initialized for appId: $appId")
                             } catch (e: Exception) {
                                 LogUtils.e(tag, "Error extracting js sdk: ${e.message}")
@@ -169,6 +171,7 @@ class MiniApp private constructor() {
         // base
         BaseAPI().registerWith(apiRegistry)
         SystemApi().registerWith(apiRegistry)
+        UpdateApi().registerWith(apiRegistry)
 
         // device
         ClipboardApi().registerWith(apiRegistry)
@@ -388,4 +391,3 @@ class MiniApp private constructor() {
         apiRegistry.clear()
     }
 }
-

@@ -15,6 +15,7 @@ public class DMPApp {
     private lazy var navigator: DMPNavigator? = DMPNavigator(app: self)
 
     private var bundleAppConfig: DMPBundleAppConfig?
+    private var currentLaunchConfig: DMPLaunchConfig?
     
     public var render: DMPRender?
     public var service: DMPService?
@@ -49,6 +50,8 @@ public class DMPApp {
         await initService()
 
         await loadBundle()
+
+        await notifyUpdateStatus(event: "noupdate")
 
         initRender()
         
@@ -140,12 +143,30 @@ public class DMPApp {
         self.bundleAppConfig = DMPBundleAppConfig.fromJsonString(json: config)
     }
 
+    private func notifyUpdateStatus(event: String) async {
+        let message = DMPMap([
+            "type": "onUpdateStatusChange",
+            "body": [
+                "event": event,
+            ],
+        ])
+        await service?.postMessage(data: message)
+    }
+
     @MainActor
     public func openPage(launchConfig: DMPLaunchConfig) async {
         print("openPage")
         var newLaunchConfig = launchConfig
         newLaunchConfig.appEntryPath = self.bundleAppConfig?.entryPagePath ?? ""
+        currentLaunchConfig = newLaunchConfig
         await navigator?.launch(to: newLaunchConfig.appEntryPath ?? "", query: newLaunchConfig.query)
+    }
+
+    @MainActor
+    public func applyUpdate() async {
+        let launchConfig = currentLaunchConfig
+        let entryPath = launchConfig?.appEntryPath ?? bundleAppConfig?.entryPagePath ?? ""
+        await navigator?.relaunch(to: entryPath, query: launchConfig?.query, animated: false)
     }
 
     /// 注册第三方扩展 bridge 模块。
