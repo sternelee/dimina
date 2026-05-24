@@ -42,6 +42,12 @@ FetchContent_Declare(
 set(LIBUV_BUILD_SHARED OFF CACHE BOOL "Build shared libuv" FORCE)
 FetchContent_MakeAvailable(libuv)
 
+if(ANDROID AND TARGET uv_a)
+    # Android NDK r28 does not expose LLONG_MAX from <limits.h> in libuv's
+    # default GNU90 mode, while current libuv uses it in src/unix/linux.c.
+    set_property(TARGET uv_a PROPERTY C_STANDARD 99)
+endif()
+
 # Handle the version file to prevent compilation errors
 set(VERSION_FILE "${quickjs_SOURCE_DIR}/version")
 if(EXISTS "${VERSION_FILE}")
