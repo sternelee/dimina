@@ -97,6 +97,25 @@ describe('file api service adapter', () => {
 		expect(bytes(result.data)).toEqual([104, 105])
 	})
 
+	it('decodes binary readZipEntry item data back into ArrayBuffer', async () => {
+		vi.mocked(invokeAPI).mockResolvedValueOnce({
+			entries: {
+				'a.txt': {
+					data: { __diminaArrayBufferBase64: 'aGk=' },
+					errMsg: 'FileSystemManager.readZipEntry:ok',
+				},
+			},
+		})
+
+		const result = await getFileSystemManager().readZipEntry({
+			filePath: 'difile://usr/archive.zip',
+			entries: [{ path: 'a.txt' }],
+		})
+
+		expect(bytes(result.entries['a.txt'].data)).toEqual([104, 105])
+		expect(result.entries['a.txt'].errMsg).toBe('FileSystemManager.readZipEntry:ok')
+	})
+
 	it('forwards saveFileToDisk as a top-level file API', () => {
 		vi.mocked(invokeAPI).mockReturnValueOnce('bridge-result')
 

@@ -123,6 +123,29 @@ function normalizeReadFileResult(res) {
 	return res
 }
 
+function normalizeReadZipEntryResult(res) {
+	if (!res || typeof res !== 'object' || !res.entries || typeof res.entries !== 'object') {
+		return res
+	}
+
+	const entries = {}
+	for (const [path, item] of Object.entries(res.entries)) {
+		if (item && typeof item === 'object' && item.data !== undefined) {
+			entries[path] = {
+				...item,
+				data: decodeArrayBufferPayload(item.data),
+			}
+		}
+		else {
+			entries[path] = item
+		}
+	}
+	return {
+		...res,
+		entries,
+	}
+}
+
 function fillReadArrayBuffer(res, arrayBuffer, offset = 0) {
 	if (!res || typeof res !== 'object' || !arrayBuffer || res[ARRAY_BUFFER_BASE64_KEY] === undefined) {
 		return res
@@ -460,7 +483,7 @@ class FileSystemManager {
 	 * https://developers.weixin.qq.com/miniprogram/dev/api/file/FileSystemManager.readZipEntry.html
 	 */
 	readZipEntry(opts) {
-		return invokeFileAPI('FileSystemManager.readZipEntry', opts)
+		return invokeFileAPI('FileSystemManager.readZipEntry', opts, { transform: normalizeReadZipEntryResult })
 	}
 
 	/**

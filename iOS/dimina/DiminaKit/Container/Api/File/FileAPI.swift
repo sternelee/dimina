@@ -17,6 +17,13 @@ public class FileAPI: DMPContainerApi {
         let path: String
     }
 
+    private struct ZipEntryRequest {
+        let path: String
+        let encoding: String
+        let position: Int
+        let length: Int?
+    }
+
     private static var openFiles: [String: OpenFile] = [:]
 
     @BridgeMethod(SAVE_FILE_TO_DISK)
@@ -295,7 +302,7 @@ public class FileAPI: DMPContainerApi {
 
     private static func root(env: DMPBridgeEnv, user: Bool) -> String {
         let path = user ? DMPSandboxManager.appStoreResourceDirectoryPath(appId: env.appId) : DMPSandboxManager.appTmpResourceDirectoryPath(appId: env.appId)
-        try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(atPath: path, withIntermediateDirectories: true, attributes: nil)
         return path
     }
 
@@ -393,10 +400,9 @@ public class FileAPI: DMPContainerApi {
         let data = try Data(contentsOf: try resolve(env: env, path: map.getString(key: "filePath") ?? ""))
         let position = map.getInt(key: "position") ?? 0
         let length = map.getInt(key: "length") ?? (data.count - position)
-        let slice = data.subdata(in: min(position, data.count)..<min(position + length, data.count))
+        let slice = slice(data, position: position, length: length)
         if let encoding = map.getString(key: "encoding"), !encoding.isEmpty {
-            if encoding.lowercased() == "base64" { return slice.base64EncodedString() }
-            return String(data: slice, encoding: .utf8) ?? ""
+            return decode(data: slice, encoding: encoding)
         }
         return bufferPayload(slice)
     }
@@ -538,17 +544,76 @@ public class FileAPI: DMPContainerApi {
         let map = param.getMap()
         let archive = try Archive(url: resolve(env: env, path: map.getString(key: "filePath") ?? ""), accessMode: .read)
         var entries: [String: Any] = [:]
-        for entry in archive {
-            guard entry.type == .file else { continue }
+        let requests = zipEntryRequests(param: param, archive: archive)
+        for request in requests {
+            guard let entry = archive[request.path], entry.type == .file else {
+                entries[request.path] = ["errMsg": "\(PREFIX)readZipEntry:fail no such entry \(request.path)"]
+                continue
+            }
             var data = Data()
             _ = try archive.extract(entry) { data.append($0) }
-            entries[entry.path] = bufferPayload(data)
+            let sliced = slice(data, position: request.position, length: request.length)
+            let entryData: Any = request.encoding.isEmpty ? bufferPayload(sliced) : decode(data: sliced, encoding: request.encoding)
+            entries[request.path] = [
+                "data": entryData,
+                "errMsg": "\(PREFIX)readZipEntry:ok"
+            ]
         }
         return ["entries": entries]
     }
 
     private static func readCompressedFileSync(param: DMPBridgeParam, env: DMPBridgeEnv) throws -> [String: Any] {
-        return bufferPayload(try Data(contentsOf: resolve(env: env, path: param.getMap().getString(key: "filePath") ?? "")))
+        let map = param.getMap()
+        let algorithm = (map.getString(key: "compressionAlgorithm") ?? "").lowercased()
+        if algorithm != "br" {
+            throw FileError.message("unsupported compressionAlgorithm \(algorithm)")
+        }
+        _ = try resolve(env: env, path: map.getString(key: "filePath") ?? "")
+        throw FileError.message("brotli decompress fail")
+    }
+
+    private static func zipEntryRequests(param: DMPBridgeParam, archive: Archive) -> [ZipEntryRequest] {
+        let map = param.getMap()
+        if let rawEntries = map.get("entries") as? [[String: Any]] {
+            return rawEntries.compactMap { item in
+                guard let path = item["path"] as? String, !path.isEmpty else { return nil }
+                return ZipEntryRequest(
+                    path: path,
+                    encoding: item["encoding"] as? String ?? "",
+                    position: intValue(item["position"]) ?? 0,
+                    length: intValue(item["length"])
+                )
+            }
+        }
+        if let rawEntries = map.get("entries") as? [String] {
+            return rawEntries.map { ZipEntryRequest(path: $0, encoding: "", position: 0, length: nil) }
+        }
+        let encoding = map.getString(key: "encoding") ?? ""
+        return archive.filter { $0.type == .file }.map { ZipEntryRequest(path: $0.path, encoding: encoding, position: 0, length: nil) }
+    }
+
+    private static func slice(_ data: Data, position: Int, length: Int?) -> Data {
+        let start = min(max(position, 0), data.count)
+        let end = min(start + max(length ?? data.count - start, 0), data.count)
+        return data.subdata(in: start..<end)
+    }
+
+    private static func decode(data: Data, encoding: String) -> String {
+        switch encoding.lowercased() {
+        case "base64":
+            return data.base64EncodedString()
+        case "hex":
+            return data.map { String(format: "%02x", $0) }.joined()
+        default:
+            return String(data: data, encoding: .utf8) ?? ""
+        }
+    }
+
+    private static func intValue(_ value: Any?) -> Int? {
+        if let value = value as? Int { return value }
+        if let value = value as? NSNumber { return value.intValue }
+        if let value = value as? String { return Int(value) }
+        return nil
     }
 }
 

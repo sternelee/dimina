@@ -1,4 +1,6 @@
 import fs from '@ohos.file.fs';
+import cryptoFramework from '@ohos.security.cryptoFramework';
+import { util } from '@kit.ArkTS';
 import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
 import { DMPBridgeCallback } from './DMPTSUtil';
 import { DMPMap } from '../Utils/DMPMap';
@@ -19,6 +21,13 @@ const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz012345
 interface OpenedFile {
   file: fs.File;
   path: string;
+}
+
+interface ZipEntryRequest {
+  path: string;
+  encoding: string;
+  position: number;
+  length?: number;
 }
 
 export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
@@ -214,11 +223,21 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   getFileInfo(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.getFileInfo', callback, () => {
+    const apiName = 'FileSystemManager.getFileInfo';
+    try {
       const path = this.resolve(data.getString('filePath') ?? '');
       const stat = fs.statSync(path);
-      return new DMPMap({ size: stat.size, digest: '' });
-    });
+      const algorithm = (data.getString('digestAlgorithm') ?? 'md5').toLowerCase();
+      this.digestFile(path, algorithm).then((digest: string) => {
+        const result = new DMPMap({ size: stat.size, digest });
+        result.set('errMsg', `${apiName}:ok`);
+        this.invokeSuccessCallback(callback, result);
+      }).catch((err: Error) => {
+        this.invokeFailureCallback(callback, null, `${apiName}:fail ${err.message ?? err}`);
+      });
+    } catch (err) {
+      this.invokeFailureCallback(callback, null, `${apiName}:fail ${(err as Error).message ?? err}`);
+    }
   }
 
   getSavedFileList(_data: DMPMap, callback: DMPBridgeCallback) {
@@ -275,8 +294,12 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   readCompressedFileSync(data: DMPMap): object {
-    const bytes = this.readFileBytes(this.resolve(data.getString('filePath') ?? ''));
-    return { [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(bytes, bytes.byteLength) };
+    const algorithm = (data.getString('compressionAlgorithm') ?? '').toLowerCase();
+    if (algorithm !== 'br') {
+      throw new Error(`unsupported compressionAlgorithm ${algorithm}`);
+    }
+    this.resolve(data.getString('filePath') ?? '');
+    throw new Error('brotli decompress fail');
   }
 
   readdir(data: DMPMap, callback: DMPBridgeCallback) {
@@ -306,8 +329,35 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     return { [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(buffer, bytesRead) };
   }
 
-  readZipEntry(_data: DMPMap, callback: DMPBridgeCallback) {
-    this.invokeFailureCallback(callback, null, 'FileSystemManager.readZipEntry:fail not implemented');
+  readZipEntry(data: DMPMap, callback: DMPBridgeCallback) {
+    const apiName = 'FileSystemManager.readZipEntry';
+    let targetPath = '';
+    try {
+      const zipPath = this.resolve(data.getString('filePath') ?? '');
+      targetPath = `${this.tempRoot()}/zip-entry-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      fs.mkdirSync(targetPath, true);
+      DMPUnzipManager.unzipFileAtPath(zipPath, targetPath, (_path, succeeded, error) => {
+        if (!succeeded) {
+          this.invokeFailureCallback(callback, null, `${apiName}:fail ${error?.message ?? ''}`);
+          return;
+        }
+
+        try {
+          const result = new DMPMap({ entries: this.readZipEntries(data, targetPath) });
+          result.set('errMsg', `${apiName}:ok`);
+          this.invokeSuccessCallback(callback, result);
+        } catch (err) {
+          this.invokeFailureCallback(callback, null, `${apiName}:fail ${(err as Error).message ?? err}`);
+        } finally {
+          this.deleteRecursive(targetPath);
+        }
+      });
+    } catch (err) {
+      if (targetPath) {
+        this.deleteRecursive(targetPath);
+      }
+      this.invokeFailureCallback(callback, null, `${apiName}:fail ${(err as Error).message ?? err}`);
+    }
   }
 
   removeSavedFile(data: DMPMap, callback: DMPBridgeCallback) {
@@ -333,7 +383,12 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   rmdirSync(data: DMPMap): void {
-    fs.rmdirSync(this.resolve(data.getString('dirPath') ?? ''));
+    const path = this.resolve(data.getString('dirPath') ?? '');
+    if (data.getBoolean('recursive')) {
+      this.deleteRecursive(path);
+    } else {
+      fs.rmdirSync(path);
+    }
   }
 
   saveFile(data: DMPMap, callback: DMPBridgeCallback) {
@@ -398,7 +453,8 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
 
   writeSync(data: DMPMap): object {
     const opened = this.opened(data);
-    const bytes = this.dataBytes(data.get('arrayBuffer') ? data : new DMPMap({ data: data.get('data') }), data.get('arrayBuffer') ? 'arrayBuffer' : 'data');
+    const allBytes = this.dataBytes(data.get('arrayBuffer') ? data : new DMPMap({ data: data.get('data') }), data.get('arrayBuffer') ? 'arrayBuffer' : 'data');
+    const bytes = this.sliceArrayBuffer(allBytes, data.getNumber('offset') ?? 0, data.getNumber('length'));
     fs.writeSync(opened.file.fd, bytes, { offset: data.getNumber('position') ?? undefined, length: bytes.byteLength });
     return { bytesWritten: bytes.byteLength };
   }
@@ -411,8 +467,10 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   writeFileSync(data: DMPMap): void {
-    const file = fs.openSync(this.resolve(data.getString('filePath') ?? ''), fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+    const path = this.resolve(data.getString('filePath') ?? '');
+    const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
     const bytes = this.dataBytes(data);
+    fs.truncateSync(path, 0);
     fs.writeSync(file.fd, bytes);
     fs.closeSync(file);
   }
@@ -521,6 +579,86 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     return buffer;
   }
 
+  private async digestFile(path: string, algorithm: string): Promise<string> {
+    const buffer = this.readFileBytes(path);
+    const md = cryptoFramework.createMd(algorithm === 'sha1' ? 'SHA1' : 'MD5');
+    await md.update({ data: new Uint8Array(buffer) });
+    const result = await md.digest();
+    return this.bytesToHex(result.data);
+  }
+
+  private readZipEntries(data: DMPMap, rootPath: string): object {
+    const entries: { [key: string]: object } = {};
+    const requests = this.zipEntryRequests(data, rootPath);
+    requests.forEach((request: ZipEntryRequest) => {
+      const item: { [key: string]: object | string } = {};
+      const entryPath = `${rootPath}/${request.path}`;
+      if (request.path.includes('..') || request.path.startsWith('/') || !fs.accessSync(entryPath) || fs.statSync(entryPath).isDirectory()) {
+        item['errMsg'] = `FileSystemManager.readZipEntry:fail no such entry ${request.path}`;
+      } else {
+        const bytes = this.sliceArrayBuffer(this.readFileBytes(entryPath), request.position, request.length);
+        item['data'] = request.encoding ? this.decodeBytes(bytes, request.encoding) : { [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(bytes, bytes.byteLength) };
+        item['errMsg'] = 'FileSystemManager.readZipEntry:ok';
+      }
+      entries[request.path] = item;
+    });
+    return entries;
+  }
+
+  private zipEntryRequests(data: DMPMap, rootPath: string): ZipEntryRequest[] {
+    const rawEntries = data.get('entries');
+    if (Array.isArray(rawEntries)) {
+      return rawEntries.map((item: object | string): ZipEntryRequest => {
+        if (typeof item === 'string') {
+          return { path: item, encoding: '', position: 0 };
+        }
+        const map = new DMPMap(item as { [key: string]: any });
+        return {
+          path: map.getString('path') ?? '',
+          encoding: map.getString('encoding') ?? '',
+          position: map.getNumber('position') ?? 0,
+          length: map.getNumber('length'),
+        };
+      }).filter((item: ZipEntryRequest): boolean => item.path.length > 0);
+    }
+
+    const encoding = data.getString('encoding') ?? '';
+    return this.listFilesRecursive(rootPath)
+      .map((path: string): ZipEntryRequest => ({
+        path: path.replace(rootPath, '').replace(/^\/+/, ''),
+        encoding,
+        position: 0,
+      }));
+  }
+
+  private listFilesRecursive(path: string): string[] {
+    const files: string[] = [];
+    if (!fs.accessSync(path)) {
+      return files;
+    }
+    fs.listFileSync(path).forEach((name: string) => {
+      const child = `${path}/${name}`;
+      if (fs.statSync(child).isDirectory()) {
+        files.push(...this.listFilesRecursive(child));
+      } else {
+        files.push(child);
+      }
+    });
+    return files;
+  }
+
+  private deleteRecursive(path: string): void {
+    if (!fs.accessSync(path)) {
+      return;
+    }
+    if (fs.statSync(path).isDirectory()) {
+      fs.listFileSync(path).forEach((name: string) => this.deleteRecursive(`${path}/${name}`));
+      fs.rmdirSync(path);
+    } else {
+      fs.unlinkSync(path);
+    }
+  }
+
   private savedFiles(): object[] {
     const savedPath = `${this.userRoot()}/saved`;
     if (!fs.accessSync(savedPath)) {
@@ -572,6 +710,31 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
         result += BASE64_CHARS[(bytes[i] & 3) << 4];
         result += '==';
       }
+    }
+    return result;
+  }
+
+  private sliceArrayBuffer(buffer: ArrayBuffer, position: number = 0, length?: number): ArrayBuffer {
+    const start = Math.min(Math.max(position, 0), buffer.byteLength);
+    const end = length === undefined ? buffer.byteLength : Math.min(start + Math.max(length, 0), buffer.byteLength);
+    return buffer.slice(start, end);
+  }
+
+  private decodeBytes(buffer: ArrayBuffer, encoding: string): string {
+    if (encoding.toLowerCase() === 'base64') {
+      return this.arrayBufferToBase64(buffer, buffer.byteLength);
+    }
+    if (encoding.toLowerCase() === 'hex') {
+      return this.bytesToHex(new Uint8Array(buffer));
+    }
+    const decoder = util.TextDecoder.create('utf-8');
+    return decoder.decodeToString(new Uint8Array(buffer));
+  }
+
+  private bytesToHex(bytes: Uint8Array): string {
+    let result = '';
+    for (let i = 0; i < bytes.length; i++) {
+      result += bytes[i].toString(16).padStart(2, '0');
     }
     return result;
   }

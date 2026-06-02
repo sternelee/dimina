@@ -9,16 +9,11 @@ import com.didi.dimina.engine.qjs.JSValue
 import com.didi.dimina.ui.container.DiminaActivity
 import org.json.JSONArray
 import org.json.JSONObject
-import java.io.ByteArrayInputStream
-import java.io.ByteArrayOutputStream
 import java.io.File
-import java.io.FileInputStream
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.UUID
-import java.util.zip.GZIPInputStream
-import java.util.zip.InflaterInputStream
 import java.util.zip.ZipFile
 
 class FileApi : BaseApiHandler() {
@@ -483,35 +478,74 @@ class FileApi : BaseApiHandler() {
 
     private fun readZipEntry(activity: DiminaActivity, appId: String, params: JSONObject): JSONObject {
         val zipFile = resolve(activity, appId, params.optString("filePath"))
-        val entries = params.optJSONArray("entries")
         val result = JSONObject()
         ZipFile(zipFile).use { zip ->
-            val names = if (entries != null) {
-                (0 until entries.length()).map { entries.getString(it) }
-            } else {
-                zip.entries().asSequence().filter { !it.isDirectory }.map { it.name }.toList()
-            }
-            names.forEach { name ->
-                val entry = zip.getEntry(name)
+            val requests = zipEntryRequests(params, zip)
+            requests.forEach { request ->
+                val item = JSONObject()
+                val entry = zip.getEntry(request.path)
                 if (entry != null && !entry.isDirectory) {
                     val bytes = zip.getInputStream(entry).use { it.readBytes() }
-                    result.put(name, bufferPayload(bytes))
+                    val data = sliceBytes(bytes, request.position, request.length)
+                    item.put("data", if (request.encoding.isBlank()) bufferPayload(data) else decodeBytes(data, request.encoding))
+                    item.put("errMsg", "${PREFIX}readZipEntry:ok")
+                } else {
+                    item.put("errMsg", "${PREFIX}readZipEntry:fail no such entry ${request.path}")
                 }
+                result.put(request.path, item)
             }
         }
         return JSONObject().put("entries", result)
     }
 
-    private fun readCompressedFileSync(activity: DiminaActivity, appId: String, params: JSONObject): JSONObject {
-        val file = resolve(activity, appId, params.optString("filePath"))
-        val bytes = file.readBytes()
-        val algorithm = params.optString("compressionAlgorithm", "gzip").lowercase()
-        val input = when (algorithm) {
-            "deflate" -> InflaterInputStream(ByteArrayInputStream(bytes))
-            else -> GZIPInputStream(ByteArrayInputStream(bytes))
+    private data class ZipEntryRequest(
+        val path: String,
+        val encoding: String,
+        val position: Int,
+        val length: Int?,
+    )
+
+    private fun zipEntryRequests(params: JSONObject, zip: ZipFile): List<ZipEntryRequest> {
+        val entries = params.opt("entries")
+        if (entries is JSONArray) {
+            return (0 until entries.length()).map { index ->
+                val item = entries.get(index)
+                if (item is JSONObject) {
+                    ZipEntryRequest(
+                        path = item.optString("path"),
+                        encoding = item.optString("encoding", ""),
+                        position = item.optInt("position", 0),
+                        length = if (item.has("length")) item.optInt("length") else null,
+                    )
+                } else {
+                    ZipEntryRequest(item.toString(), "", 0, null)
+                }
+            }.filter { it.path.isNotBlank() }
         }
-        val out = ByteArrayOutputStream()
-        input.use { it.copyTo(out) }
-        return bufferPayload(out.toByteArray())
+
+        val encoding = params.optString("encoding", "")
+        return zip.entries().asSequence()
+            .filter { !it.isDirectory }
+            .map { ZipEntryRequest(it.name, encoding, 0, null) }
+            .toList()
+    }
+
+    private fun sliceBytes(bytes: ByteArray, position: Int, length: Int?): ByteArray {
+        val start = position.coerceAtLeast(0).coerceAtMost(bytes.size)
+        val end = if (length == null || length < 0) {
+            bytes.size
+        } else {
+            (start + length).coerceAtMost(bytes.size)
+        }
+        return bytes.copyOfRange(start, end)
+    }
+
+    private fun readCompressedFileSync(activity: DiminaActivity, appId: String, params: JSONObject): JSONObject {
+        resolve(activity, appId, params.optString("filePath"))
+        val algorithm = params.optString("compressionAlgorithm", "").lowercase()
+        when (algorithm) {
+            "br" -> throw IllegalArgumentException("brotli decompress fail")
+            else -> throw IllegalArgumentException("unsupported compressionAlgorithm $algorithm")
+        }
     }
 }
