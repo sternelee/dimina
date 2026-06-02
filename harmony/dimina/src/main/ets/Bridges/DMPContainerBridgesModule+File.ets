@@ -1,6 +1,7 @@
 import fs from '@ohos.file.fs';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import { util } from '@kit.ArkTS';
+import { brotliDecompress } from 'libdimina.so';
 import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
 import { DMPBridgeCallback } from './DMPTSUtil';
 import { DMPMap } from '../Utils/DMPMap';
@@ -18,16 +19,28 @@ const FILE_DATA_BASE64_KEY = '__diminaFileDataBase64';
 const FILE_DATA_TYPE_KEY = '__diminaFileDataType';
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
 
-interface OpenedFile {
+class OpenedFile {
   file: fs.File;
   path: string;
+
+  constructor(file: fs.File, path: string) {
+    this.file = file;
+    this.path = path;
+  }
 }
 
-interface ZipEntryRequest {
+class ZipEntryRequest {
   path: string;
   encoding: string;
   position: number;
   length?: number;
+
+  constructor(path: string, encoding: string, position: number, length?: number) {
+    this.path = path;
+    this.encoding = encoding;
+    this.position = position;
+    this.length = length;
+  }
 }
 
 export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
@@ -36,8 +49,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   constructor(app: DMPApp);
   constructor(app: WorkerAppData);
   constructor(app: DMPApp | WorkerAppData) {
-    super(app);
-    this.bindAliases();
+    super(app as DMPApp);
   }
 
   getExportMethods(): string[] {
@@ -91,58 +103,139 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     ];
   }
 
-  private bindAliases(): void {
-    const aliases: Record<string, string> = {
-      'FileSystemManager.access': 'access',
-      'FileSystemManager.accessSync': 'accessSync',
-      'FileSystemManager.appendFile': 'appendFile',
-      'FileSystemManager.appendFileSync': 'appendFileSync',
-      'FileSystemManager.close': 'close',
-      'FileSystemManager.closeSync': 'closeSync',
-      'FileSystemManager.copyFile': 'copyFile',
-      'FileSystemManager.copyFileSync': 'copyFileSync',
-      'FileSystemManager.fstat': 'fstat',
-      'FileSystemManager.fstatSync': 'fstatSync',
-      'FileSystemManager.ftruncate': 'ftruncate',
-      'FileSystemManager.ftruncateSync': 'ftruncateSync',
-      'FileSystemManager.getFileInfo': 'getFileInfo',
-      'FileSystemManager.getSavedFileList': 'getSavedFileList',
-      'FileSystemManager.mkdir': 'mkdir',
-      'FileSystemManager.mkdirSync': 'mkdirSync',
-      'FileSystemManager.open': 'open',
-      'FileSystemManager.openSync': 'openSync',
-      'FileSystemManager.read': 'read',
-      'FileSystemManager.readSync': 'readSync',
-      'FileSystemManager.readCompressedFile': 'readCompressedFile',
-      'FileSystemManager.readCompressedFileSync': 'readCompressedFileSync',
-      'FileSystemManager.readdir': 'readdir',
-      'FileSystemManager.readdirSync': 'readdirSync',
-      'FileSystemManager.readFile': 'readFile',
-      'FileSystemManager.readFileSync': 'readFileSync',
-      'FileSystemManager.readZipEntry': 'readZipEntry',
-      'FileSystemManager.removeSavedFile': 'removeSavedFile',
-      'FileSystemManager.rename': 'rename',
-      'FileSystemManager.renameSync': 'renameSync',
-      'FileSystemManager.rmdir': 'rmdir',
-      'FileSystemManager.rmdirSync': 'rmdirSync',
-      'FileSystemManager.saveFile': 'saveFile',
-      'FileSystemManager.saveFileSync': 'saveFileSync',
-      'FileSystemManager.stat': 'stat',
-      'FileSystemManager.statSync': 'statSync',
-      'FileSystemManager.truncate': 'truncate',
-      'FileSystemManager.truncateSync': 'truncateSync',
-      'FileSystemManager.unlink': 'unlink',
-      'FileSystemManager.unlinkSync': 'unlinkSync',
-      'FileSystemManager.unzip': 'unzip',
-      'FileSystemManager.write': 'write',
-      'FileSystemManager.writeSync': 'writeSync',
-      'FileSystemManager.writeFile': 'writeFile',
-      'FileSystemManager.writeFileSync': 'writeFileSync',
-    };
-    Object.keys(aliases).forEach((apiName: string) => {
-      const methodName = aliases[apiName];
-      (this as Record<string, Function>)[apiName] = (this as Record<string, Function>)[methodName].bind(this);
-    });
+  dispatchFileSystemManager(methodName: string, params: DMPMap | number | string | boolean | object, callback: DMPBridgeCallback): DMPMap | number | string | boolean | object {
+    const data = this.mapParam(params);
+    const pathData = this.mapOrStringParam(params);
+    switch (methodName) {
+      case 'FileSystemManager.access':
+        this.access(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.accessSync':
+        this.accessSync(pathData);
+        return new DMPMap();
+      case 'FileSystemManager.appendFile':
+        this.appendFile(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.appendFileSync':
+        this.appendFileSync(data);
+        return new DMPMap();
+      case 'FileSystemManager.close':
+        this.close(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.closeSync':
+        this.closeSync(pathData);
+        return new DMPMap();
+      case 'FileSystemManager.copyFile':
+        this.copyFile(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.copyFileSync':
+        this.copyFileSync(data);
+        return new DMPMap();
+      case 'FileSystemManager.fstat':
+        this.fstat(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.fstatSync':
+        return this.fstatSync(data);
+      case 'FileSystemManager.ftruncate':
+        this.ftruncate(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.ftruncateSync':
+        this.ftruncateSync(data);
+        return new DMPMap();
+      case 'FileSystemManager.getFileInfo':
+        this.getFileInfo(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.getSavedFileList':
+        this.getSavedFileList(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.mkdir':
+        this.mkdir(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.mkdirSync':
+        this.mkdirSync(data);
+        return new DMPMap();
+      case 'FileSystemManager.open':
+        this.open(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.openSync':
+        return this.openSync(data);
+      case 'FileSystemManager.read':
+        this.read(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.readSync':
+        return this.readSync(data);
+      case 'FileSystemManager.readCompressedFile':
+        this.readCompressedFile(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.readCompressedFileSync':
+        return this.readCompressedFileSync(data);
+      case 'FileSystemManager.readdir':
+        this.readdir(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.readdirSync':
+        return this.readdirSync(pathData);
+      case 'FileSystemManager.readFile':
+        this.readFile(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.readFileSync':
+        return this.readFileSync(data);
+      case 'FileSystemManager.readZipEntry':
+        this.readZipEntry(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.removeSavedFile':
+        this.removeSavedFile(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.rename':
+        this.rename(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.renameSync':
+        this.renameSync(data);
+        return new DMPMap();
+      case 'FileSystemManager.rmdir':
+        this.rmdir(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.rmdirSync':
+        this.rmdirSync(data);
+        return new DMPMap();
+      case 'FileSystemManager.saveFile':
+        this.saveFile(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.saveFileSync':
+        return this.saveFileSync(data);
+      case 'FileSystemManager.stat':
+        this.stat(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.statSync':
+        return this.statSync(data);
+      case 'FileSystemManager.truncate':
+        this.truncate(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.truncateSync':
+        this.truncateSync(data);
+        return new DMPMap();
+      case 'FileSystemManager.unlink':
+        this.unlink(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.unlinkSync':
+        this.unlinkSync(pathData);
+        return new DMPMap();
+      case 'FileSystemManager.unzip':
+        this.unzip(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.write':
+        this.write(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.writeSync':
+        return this.writeSync(data);
+      case 'FileSystemManager.writeFile':
+        this.writeFile(data, callback);
+        return new DMPMap();
+      case 'FileSystemManager.writeFileSync':
+        this.writeFileSync(data);
+        return new DMPMap();
+      default:
+        throw new Error(`Bridge not implemented ${methodName}`);
+    }
   }
 
   saveFileToDisk(_data: DMPMap, callback: DMPBridgeCallback) {
@@ -204,10 +297,10 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   fstat(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.fstat', callback, () => new DMPMap({ stats: this.fstatSync(data) }));
+    this.callAsync('FileSystemManager.fstat', callback, () => this.resultMap('stats', this.fstatSync(data)));
   }
 
-  fstatSync(data: DMPMap): object {
+  fstatSync(data: DMPMap): DMPMap {
     return this.statObject(this.opened(data).path);
   }
 
@@ -229,7 +322,9 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
       const stat = fs.statSync(path);
       const algorithm = (data.getString('digestAlgorithm') ?? 'md5').toLowerCase();
       this.digestFile(path, algorithm).then((digest: string) => {
-        const result = new DMPMap({ size: stat.size, digest });
+        const result = new DMPMap();
+        result.set('size', stat.size);
+        result.set('digest', digest);
         result.set('errMsg', `${apiName}:ok`);
         this.invokeSuccessCallback(callback, result);
       }).catch((err: Error) => {
@@ -241,7 +336,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   getSavedFileList(_data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.getSavedFileList', callback, () => new DMPMap({ fileList: this.savedFiles() }));
+    this.callAsync('FileSystemManager.getSavedFileList', callback, () => this.resultMap('fileList', this.savedFiles()));
   }
 
   mkdir(data: DMPMap, callback: DMPBridgeCallback) {
@@ -256,7 +351,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   open(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.open', callback, () => new DMPMap({ fd: this.openSync(data) }));
+    this.callAsync('FileSystemManager.open', callback, () => this.resultMap('fd', this.openSync(data)));
   }
 
   openSync(data: DMPMap): string {
@@ -271,39 +366,41 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
       fs.truncateSync(path, 0);
     }
     const fd = `${Date.now()}_${Math.random()}`;
-    DMPContainerBridgesModuleFile.openedFiles.set(fd, { file, path });
+    DMPContainerBridgesModuleFile.openedFiles.set(fd, new OpenedFile(file, path));
     return fd;
   }
 
   read(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.read', callback, () => DMPMap.createFromObject(this.readSync(data)));
+    this.callAsync('FileSystemManager.read', callback, () => this.readSync(data));
   }
 
-  readSync(data: DMPMap): object {
+  readSync(data: DMPMap): DMPMap {
     const opened = this.opened(data);
     const stat = fs.statSync(opened.path);
     const length = data.getNumber('length') ?? data.getNumber('arrayBufferLength') ?? stat.size;
     const position = data.getNumber('position') ?? 0;
     const buffer = new ArrayBuffer(length);
     const bytesRead = fs.readSync(opened.file.fd, buffer, { offset: position, length });
-    return { bytesRead, [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(buffer, bytesRead) };
+    const result = this.arrayBufferPayload(buffer, bytesRead);
+    result.set('bytesRead', bytesRead);
+    return result;
   }
 
   readCompressedFile(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.readCompressedFile', callback, () => new DMPMap({ data: this.readCompressedFileSync(data) }));
+    this.callAsync('FileSystemManager.readCompressedFile', callback, () => this.resultMap('data', this.readCompressedFileSync(data)));
   }
 
-  readCompressedFileSync(data: DMPMap): object {
+  readCompressedFileSync(data: DMPMap): DMPMap {
     const algorithm = (data.getString('compressionAlgorithm') ?? '').toLowerCase();
     if (algorithm !== 'br') {
       throw new Error(`unsupported compressionAlgorithm ${algorithm}`);
     }
-    this.resolve(data.getString('filePath') ?? '');
-    throw new Error('brotli decompress fail');
+    const bytes: ArrayBuffer = brotliDecompress(this.readFileBytes(this.resolve(data.getString('filePath') ?? '')));
+    return this.arrayBufferPayload(bytes, bytes.byteLength);
   }
 
   readdir(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.readdir', callback, () => new DMPMap({ files: this.readdirSync(data) }));
+    this.callAsync('FileSystemManager.readdir', callback, () => this.resultMap('files', this.readdirSync(data)));
   }
 
   readdirSync(data: DMPMap | string): string[] {
@@ -311,10 +408,10 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   readFile(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.readFile', callback, () => new DMPMap({ data: this.readFileSync(data) }));
+    this.callAsync('FileSystemManager.readFile', callback, () => this.resultMap('data', this.readFileSync(data)));
   }
 
-  readFileSync(data: DMPMap): string | object {
+  readFileSync(data: DMPMap): string | DMPMap {
     const path = this.resolve(data.getString('filePath') ?? '');
     const stat = fs.statSync(path);
     const position = data.getNumber('position') ?? 0;
@@ -326,7 +423,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
     const bytesRead = fs.readSync(file.fd, buffer, { offset: position, length });
     fs.closeSync(file);
-    return { [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(buffer, bytesRead) };
+    return this.arrayBufferPayload(buffer, bytesRead);
   }
 
   readZipEntry(data: DMPMap, callback: DMPBridgeCallback) {
@@ -343,7 +440,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
         }
 
         try {
-          const result = new DMPMap({ entries: this.readZipEntries(data, targetPath) });
+          const result = this.resultMap('entries', this.readZipEntries(data, targetPath));
           result.set('errMsg', `${apiName}:ok`);
           this.invokeSuccessCallback(callback, result);
         } catch (err) {
@@ -392,7 +489,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   saveFile(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.saveFile', callback, () => new DMPMap({ savedFilePath: this.saveFileSync(data) }));
+    this.callAsync('FileSystemManager.saveFile', callback, () => this.resultMap('savedFilePath', this.saveFileSync(data)));
   }
 
   saveFileSync(data: DMPMap): string {
@@ -403,10 +500,10 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   stat(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.stat', callback, () => new DMPMap({ stats: this.statSync(data) }));
+    this.callAsync('FileSystemManager.stat', callback, () => this.resultMap('stats', this.statSync(data)));
   }
 
-  statSync(data: DMPMap): object {
+  statSync(data: DMPMap): DMPMap {
     const path = this.resolve(data.getString('path') ?? data.getString('args') ?? '');
     return this.statObject(path);
   }
@@ -448,15 +545,16 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   write(data: DMPMap, callback: DMPBridgeCallback) {
-    this.callAsync('FileSystemManager.write', callback, () => DMPMap.createFromObject(this.writeSync(data)));
+    this.callAsync('FileSystemManager.write', callback, () => this.writeSync(data));
   }
 
-  writeSync(data: DMPMap): object {
+  writeSync(data: DMPMap): DMPMap {
     const opened = this.opened(data);
-    const allBytes = this.dataBytes(data.get('arrayBuffer') ? data : new DMPMap({ data: data.get('data') }), data.get('arrayBuffer') ? 'arrayBuffer' : 'data');
+    const dataKey = data.get('arrayBuffer') ? 'arrayBuffer' : 'data';
+    const allBytes = this.dataBytes(data, dataKey);
     const bytes = this.sliceArrayBuffer(allBytes, data.getNumber('offset') ?? 0, data.getNumber('length'));
     fs.writeSync(opened.file.fd, bytes, { offset: data.getNumber('position') ?? undefined, length: bytes.byteLength });
-    return { bytesWritten: bytes.byteLength };
+    return this.resultMap('bytesWritten', bytes.byteLength);
   }
 
   writeFile(data: DMPMap, callback: DMPBridgeCallback) {
@@ -483,6 +581,35 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     } catch (err) {
       this.invokeFailureCallback(callback, null, `${name}:fail ${(err as Error).message ?? err}`);
     }
+  }
+
+  private mapParam(params: DMPMap | number | string | boolean | object): DMPMap {
+    if (params instanceof DMPMap) {
+      return params;
+    }
+    if (typeof params === 'object') {
+      return DMPMap.createFromObject(params as Object);
+    }
+    return new DMPMap();
+  }
+
+  private mapOrStringParam(params: DMPMap | number | string | boolean | object): DMPMap | string {
+    if (typeof params === 'string') {
+      return params;
+    }
+    return this.mapParam(params);
+  }
+
+  private resultMap(key: string, value: Object | string | number | boolean): DMPMap {
+    const result = new DMPMap();
+    result.set(key, value);
+    return result;
+  }
+
+  private arrayBufferPayload(buffer: ArrayBuffer, length: number): DMPMap {
+    const result = new DMPMap();
+    result.set(ARRAY_BUFFER_BASE64_KEY, this.arrayBufferToBase64(buffer, length));
+    return result;
   }
 
   private userRoot(): string {
@@ -549,23 +676,26 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     return opened;
   }
 
-  private statObject(path: string): object {
+  private statObject(path: string): DMPMap {
     const stat = fs.statSync(path);
     const isDirectory = stat.isDirectory();
-    return {
-      mode: isDirectory ? 'directory' : 'file',
-      size: isDirectory ? 0 : stat.size,
-      lastAccessedTime: Math.floor(stat.atime / 1000),
-      lastModifiedTime: Math.floor(stat.mtime / 1000),
-      isDirectory,
-      isFile: stat.isFile()
-    };
+    const result = new DMPMap();
+    result.set('mode', isDirectory ? 'directory' : 'file');
+    result.set('size', isDirectory ? 0 : stat.size);
+    result.set('lastAccessedTime', Math.floor(stat.atime / 1000));
+    result.set('lastModifiedTime', Math.floor(stat.mtime / 1000));
+    result.set('isDirectory', isDirectory);
+    result.set('isFile', stat.isFile());
+    return result;
   }
 
   private dataBytes(data: DMPMap, key: string = 'data'): ArrayBuffer {
-    const value = data.get(key);
-    if (value instanceof Object && value[FILE_DATA_TYPE_KEY] === 'base64') {
-      return this.base64ToArrayBuffer(value[FILE_DATA_BASE64_KEY]);
+    const value: Object | string | number | boolean | undefined = data.get(key);
+    if (value instanceof Object) {
+      const encoded = DMPMap.createFromObject(value as Object);
+      if (encoded.getString(FILE_DATA_TYPE_KEY) === 'base64') {
+        return this.base64ToArrayBuffer(encoded.getString(FILE_DATA_BASE64_KEY) ?? '');
+      }
     }
     return this.stringToArrayBuffer(String(value ?? ''));
   }
@@ -587,48 +717,44 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     return this.bytesToHex(result.data);
   }
 
-  private readZipEntries(data: DMPMap, rootPath: string): object {
-    const entries: { [key: string]: object } = {};
+  private readZipEntries(data: DMPMap, rootPath: string): DMPMap {
+    const entries = new DMPMap();
     const requests = this.zipEntryRequests(data, rootPath);
     requests.forEach((request: ZipEntryRequest) => {
-      const item: { [key: string]: object | string } = {};
+      const item = new DMPMap();
       const entryPath = `${rootPath}/${request.path}`;
       if (request.path.includes('..') || request.path.startsWith('/') || !fs.accessSync(entryPath) || fs.statSync(entryPath).isDirectory()) {
-        item['errMsg'] = `FileSystemManager.readZipEntry:fail no such entry ${request.path}`;
+        item.set('errMsg', `FileSystemManager.readZipEntry:fail no such entry ${request.path}`);
       } else {
         const bytes = this.sliceArrayBuffer(this.readFileBytes(entryPath), request.position, request.length);
-        item['data'] = request.encoding ? this.decodeBytes(bytes, request.encoding) : { [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(bytes, bytes.byteLength) };
-        item['errMsg'] = 'FileSystemManager.readZipEntry:ok';
+        item.set('data', request.encoding ? this.decodeBytes(bytes, request.encoding) : this.arrayBufferPayload(bytes, bytes.byteLength));
+        item.set('errMsg', 'FileSystemManager.readZipEntry:ok');
       }
-      entries[request.path] = item;
+      entries.set(request.path, item);
     });
     return entries;
   }
 
   private zipEntryRequests(data: DMPMap, rootPath: string): ZipEntryRequest[] {
-    const rawEntries = data.get('entries');
-    if (Array.isArray(rawEntries)) {
-      return rawEntries.map((item: object | string): ZipEntryRequest => {
+    const rawEntries = data.getArray<Object | string>('entries');
+    if (rawEntries) {
+      return rawEntries.map((item: Object | string): ZipEntryRequest => {
         if (typeof item === 'string') {
-          return { path: item, encoding: '', position: 0 };
+          return new ZipEntryRequest(item, '', 0);
         }
-        const map = new DMPMap(item as { [key: string]: any });
-        return {
-          path: map.getString('path') ?? '',
-          encoding: map.getString('encoding') ?? '',
-          position: map.getNumber('position') ?? 0,
-          length: map.getNumber('length'),
-        };
+        const map = DMPMap.createFromObject(item);
+        return new ZipEntryRequest(
+          map.getString('path') ?? '',
+          map.getString('encoding') ?? '',
+          map.getNumber('position') ?? 0,
+          map.getNumber('length')
+        );
       }).filter((item: ZipEntryRequest): boolean => item.path.length > 0);
     }
 
     const encoding = data.getString('encoding') ?? '';
     return this.listFilesRecursive(rootPath)
-      .map((path: string): ZipEntryRequest => ({
-        path: path.replace(rootPath, '').replace(/^\/+/, ''),
-        encoding,
-        position: 0,
-      }));
+      .map((path: string): ZipEntryRequest => new ZipEntryRequest(path.replace(rootPath, '').replace(/^\/+/, ''), encoding, 0));
   }
 
   private listFilesRecursive(path: string): string[] {
@@ -659,15 +785,19 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     }
   }
 
-  private savedFiles(): object[] {
+  private savedFiles(): DMPMap[] {
     const savedPath = `${this.userRoot()}/saved`;
     if (!fs.accessSync(savedPath)) {
       return [];
     }
-    return fs.listFileSync(savedPath).map((name: string): object => {
+    return fs.listFileSync(savedPath).map((name: string): DMPMap => {
       const path = `${savedPath}/${name}`;
       const stat = fs.statSync(path);
-      return { filePath: this.userPath(path), size: stat.size, createTime: Math.floor(stat.mtime / 1000) };
+      const item = new DMPMap();
+      item.set('filePath', this.userPath(path));
+      item.set('size', stat.size);
+      item.set('createTime', Math.floor(stat.mtime / 1000));
+      return item;
     });
   }
 
@@ -695,19 +825,19 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     let i = 0;
     const count = Math.min(length, bytes.length);
     for (; i + 2 < count; i += 3) {
-      result += BASE64_CHARS[bytes[i] >> 2];
-      result += BASE64_CHARS[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
-      result += BASE64_CHARS[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
-      result += BASE64_CHARS[bytes[i + 2] & 63];
+      result += BASE64_CHARS.charAt(bytes[i] >> 2);
+      result += BASE64_CHARS.charAt(((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4));
+      result += BASE64_CHARS.charAt(((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6));
+      result += BASE64_CHARS.charAt(bytes[i + 2] & 63);
     }
     if (i < count) {
-      result += BASE64_CHARS[bytes[i] >> 2];
+      result += BASE64_CHARS.charAt(bytes[i] >> 2);
       if (i + 1 < count) {
-        result += BASE64_CHARS[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
-        result += BASE64_CHARS[(bytes[i + 1] & 15) << 2];
+        result += BASE64_CHARS.charAt(((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4));
+        result += BASE64_CHARS.charAt((bytes[i + 1] & 15) << 2);
         result += '=';
       } else {
-        result += BASE64_CHARS[(bytes[i] & 3) << 4];
+        result += BASE64_CHARS.charAt((bytes[i] & 3) << 4);
         result += '==';
       }
     }

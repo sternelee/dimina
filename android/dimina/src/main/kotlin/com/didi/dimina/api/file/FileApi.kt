@@ -7,8 +7,11 @@ import com.didi.dimina.api.BaseApiHandler
 import com.didi.dimina.api.SyncResult
 import com.didi.dimina.engine.qjs.JSValue
 import com.didi.dimina.ui.container.DiminaActivity
+import org.brotli.dec.BrotliInputStream
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.RandomAccessFile
@@ -541,11 +544,20 @@ class FileApi : BaseApiHandler() {
     }
 
     private fun readCompressedFileSync(activity: DiminaActivity, appId: String, params: JSONObject): JSONObject {
-        resolve(activity, appId, params.optString("filePath"))
         val algorithm = params.optString("compressionAlgorithm", "").lowercase()
-        when (algorithm) {
-            "br" -> throw IllegalArgumentException("brotli decompress fail")
-            else -> throw IllegalArgumentException("unsupported compressionAlgorithm $algorithm")
+        if (algorithm != "br") {
+            throw IllegalArgumentException("unsupported compressionAlgorithm $algorithm")
+        }
+
+        val file = resolve(activity, appId, params.optString("filePath"))
+        return try {
+            BrotliInputStream(ByteArrayInputStream(readBytes(file))).use { input ->
+                val output = ByteArrayOutputStream()
+                input.copyTo(output)
+                bufferPayload(output.toByteArray())
+            }
+        } catch (error: Exception) {
+            throw IllegalArgumentException("brotli decompress fail", error)
         }
     }
 }

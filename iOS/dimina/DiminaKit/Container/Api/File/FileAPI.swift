@@ -1,5 +1,6 @@
 import Foundation
 import CommonCrypto
+import Compression
 import ZIPFoundation
 
 public class FileAPI: DMPContainerApi {
@@ -568,8 +569,67 @@ public class FileAPI: DMPContainerApi {
         if algorithm != "br" {
             throw FileError.message("unsupported compressionAlgorithm \(algorithm)")
         }
-        _ = try resolve(env: env, path: map.getString(key: "filePath") ?? "")
-        throw FileError.message("brotli decompress fail")
+        let data = try Data(contentsOf: resolve(env: env, path: map.getString(key: "filePath") ?? ""))
+        return bufferPayload(try decompressBrotli(data))
+    }
+
+    private static func decompressBrotli(_ data: Data) throws -> Data {
+        guard !data.isEmpty else {
+            throw FileError.message("brotli decompress fail")
+        }
+
+        let scratch = UnsafeMutablePointer<UInt8>.allocate(capacity: 1)
+        defer { scratch.deallocate() }
+        var stream = compression_stream(
+            dst_ptr: scratch,
+            dst_size: 0,
+            src_ptr: UnsafePointer(scratch),
+            src_size: 0,
+            state: nil
+        )
+        guard compression_stream_init(&stream, COMPRESSION_STREAM_DECODE, COMPRESSION_BROTLI) != COMPRESSION_STATUS_ERROR else {
+            throw FileError.message("brotli decompress fail")
+        }
+        defer { compression_stream_destroy(&stream) }
+
+        let chunkSize = 64 * 1024
+        var output = Data()
+        let status = data.withUnsafeBytes { rawBuffer -> compression_status in
+            guard let input = rawBuffer.bindMemory(to: UInt8.self).baseAddress else {
+                return COMPRESSION_STATUS_ERROR
+            }
+
+            let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: chunkSize)
+            defer { buffer.deallocate() }
+
+            stream.src_ptr = input
+            stream.src_size = data.count
+
+            while true {
+                stream.dst_ptr = buffer
+                stream.dst_size = chunkSize
+
+                let status = compression_stream_process(&stream, Int32(COMPRESSION_STREAM_FINALIZE.rawValue))
+                let written = chunkSize - stream.dst_size
+                if written > 0 {
+                    output.append(buffer, count: written)
+                }
+
+                switch status {
+                case COMPRESSION_STATUS_OK:
+                    continue
+                case COMPRESSION_STATUS_END:
+                    return status
+                default:
+                    return COMPRESSION_STATUS_ERROR
+                }
+            }
+        }
+
+        guard status == COMPRESSION_STATUS_END else {
+            throw FileError.message("brotli decompress fail")
+        }
+        return output
     }
 
     private static func zipEntryRequests(param: DMPBridgeParam, archive: Archive) -> [ZipEntryRequest] {

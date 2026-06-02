@@ -97,6 +97,30 @@ describe('file api service adapter', () => {
 		expect(bytes(result.data)).toEqual([104, 105])
 	})
 
+	it('transforms promise readCompressedFile results', async () => {
+		vi.mocked(invokeAPI).mockResolvedValueOnce({
+			data: { __diminaArrayBufferBase64: 'aGk=' },
+		})
+
+		const result = await getFileSystemManager().readCompressedFile({
+			filePath: 'difile://usr/a.br',
+			compressionAlgorithm: 'br',
+		})
+
+		expect(bytes(result.data)).toEqual([104, 105])
+	})
+
+	it('decodes binary readCompressedFileSync results back into ArrayBuffer', () => {
+		vi.mocked(invokeAPI).mockReturnValueOnce({ __diminaArrayBufferBase64: 'aGk=' })
+
+		const result = getFileSystemManager().readCompressedFileSync({
+			filePath: 'difile://usr/a.br',
+			compressionAlgorithm: 'br',
+		})
+
+		expect(bytes(result)).toEqual([104, 105])
+	})
+
 	it('decodes binary readZipEntry item data back into ArrayBuffer', async () => {
 		vi.mocked(invokeAPI).mockResolvedValueOnce({
 			entries: {

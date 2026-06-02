@@ -65,6 +65,7 @@ dependencies {
     implementation(libs.androidx.material3)
     implementation(libs.androidx.webkit)
     implementation(libs.androidx.compose.material.icons.core)
+    implementation(libs.brotli.dec)
     implementation(libs.kotlinx.serialization.json)
     implementation(libs.mmkv)
     implementation (libs.okhttp)

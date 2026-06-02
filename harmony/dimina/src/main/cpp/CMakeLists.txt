@@ -11,6 +11,7 @@ set(NATIVERENDER_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 include(FetchContent)
 
 option(DIMINA_UPDATE_QUICKJS_ON_BUILD "Update QuickJS from origin/master before each native build" ON)
+option(DIMINA_UPDATE_BROTLI_ON_BUILD "Update Brotli from origin/master before each native build" ON)
 
 # Download QuickJS from GitHub
 FetchContent_Declare(
@@ -20,6 +21,41 @@ FetchContent_Declare(
     GIT_SHALLOW TRUE
 )
 FetchContent_MakeAvailable(quickjs)
+
+# Brotli decoder used by FileSystemManager.readCompressedFile({ compressionAlgorithm: "br" }).
+FetchContent_Declare(
+    brotli
+    GIT_REPOSITORY https://github.com/google/brotli.git
+    GIT_TAG master
+    GIT_SHALLOW TRUE
+)
+FetchContent_GetProperties(brotli)
+if(NOT brotli_POPULATED)
+    FetchContent_Populate(brotli)
+endif()
+
+file(GLOB BROTLI_COMMON_SOURCES
+    ${brotli_SOURCE_DIR}/c/common/*.c
+)
+file(GLOB BROTLI_DEC_SOURCES
+    ${brotli_SOURCE_DIR}/c/dec/*.c
+)
+add_library(brotlicommon STATIC ${BROTLI_COMMON_SOURCES})
+add_library(brotlidec STATIC ${BROTLI_DEC_SOURCES})
+target_include_directories(brotlicommon PUBLIC ${brotli_SOURCE_DIR}/c/include)
+target_include_directories(brotlidec PUBLIC ${brotli_SOURCE_DIR}/c/include)
+target_link_libraries(brotlidec PUBLIC brotlicommon)
+
+if(DIMINA_UPDATE_BROTLI_ON_BUILD)
+    find_package(Git REQUIRED)
+    add_custom_target(update_brotli_latest
+        COMMAND ${GIT_EXECUTABLE} fetch --depth=1 origin master
+        COMMAND ${GIT_EXECUTABLE} reset --hard FETCH_HEAD
+        WORKING_DIRECTORY ${brotli_SOURCE_DIR}
+        COMMENT "Updating Brotli to latest origin/master"
+    )
+    add_dependencies(brotlicommon update_brotli_latest)
+endif()
 
 # Handle the VERSION file to prevent conflicts with C++ standard <version> header
 # on case-insensitive filesystems (macOS). QuickJS ships a plain-text VERSION file
@@ -90,6 +126,7 @@ endif()
 
 # Link necessary libraries
 target_link_libraries(dimina PUBLIC libace_napi.z.so libhilog_ndk.z.so libuv.so)
+target_link_libraries(dimina PUBLIC brotlidec brotlicommon)
 
 # Additional target properties for Release mode
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

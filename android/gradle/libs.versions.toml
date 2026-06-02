@@ -11,6 +11,7 @@ lifecycleRuntimeKtx = "2.9.4"
 activityCompose = "1.10.1"
 composeBom = "2025.10.01"
 appcompat = "1.7.1"
+brotli = "0.1.2"
 material = "1.12.0"
 materialIconsCore = "1.7.8"
 mmkv = "2.2.4"
@@ -36,6 +37,7 @@ androidx-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit
 androidx-material3 = { group = "androidx.compose.material3", name = "material3" }
 androidx-compose-material-icons-core = { module = "androidx.compose.material:material-icons-core", version.ref = "materialIconsCore" }
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
+brotli-dec = { module = "org.brotli:dec", version.ref = "brotli" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerializationJson" }
 landscapist-coil = { module = "com.github.skydoves:landscapist-coil", version.ref = "landscapistCoil" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
