@@ -7,10 +7,8 @@ import { invokeAPI } from '@/api/common'
  * 环境变量
  * https://developers.weixin.qq.com/miniprogram/dev/api/base/wx.env.html
  */
-export function env() {
-	return {
-		USER_DATA_PATH: 'difile://',
-	}
+export const env = {
+	USER_DATA_PATH: 'difile://usr',
 }
 
 // JS 层内置支持的API列表

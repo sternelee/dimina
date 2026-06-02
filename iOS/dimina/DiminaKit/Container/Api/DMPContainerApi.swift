@@ -70,6 +70,7 @@ public class DMPContainerApi: NSObject {
         _ = UpdateAPI(app: app)
         _ = NetworkAPI(app: app)
         _ = StorageAPI(app: app)
+        _ = FileAPI(app: app)
         _ = ClipboardAPI(app: app)
         _ = ContactAPI(app: app)
         _ = KeyboardAPI(app: app)

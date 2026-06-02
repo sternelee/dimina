@@ -1,0 +1,597 @@
+import fs from '@ohos.file.fs';
+import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
+import { DMPBridgeCallback } from './DMPTSUtil';
+import { DMPMap } from '../Utils/DMPMap';
+import { DMPContextUtils } from '../Utils/DMPContextUtils';
+import { DMPFileUrlConvertor } from '../Bundle/Util/DMPFileUrlConvertor';
+import { DMPApp } from '../DApp/DMPApp';
+import { WorkerAppData } from '../Service/DMPSendableObjects';
+import { DMPUnzipManager } from '../Bundle/Util/DMPUnzipManager';
+
+const VIRTUAL_PREFIX = 'difile://';
+const USER_PREFIX = 'usr';
+const TEMP_PREFIX = 'tmp';
+const ARRAY_BUFFER_BASE64_KEY = '__diminaArrayBufferBase64';
+const FILE_DATA_BASE64_KEY = '__diminaFileDataBase64';
+const FILE_DATA_TYPE_KEY = '__diminaFileDataType';
+const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+interface OpenedFile {
+  file: fs.File;
+  path: string;
+}
+
+export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
+  private static openedFiles: Map<string, OpenedFile> = new Map();
+
+  constructor(app: DMPApp);
+  constructor(app: WorkerAppData);
+  constructor(app: DMPApp | WorkerAppData) {
+    super(app);
+    this.bindAliases();
+  }
+
+  getExportMethods(): string[] {
+    return [
+      'saveFileToDisk',
+      'FileSystemManager.access',
+      'FileSystemManager.accessSync',
+      'FileSystemManager.appendFile',
+      'FileSystemManager.appendFileSync',
+      'FileSystemManager.close',
+      'FileSystemManager.closeSync',
+      'FileSystemManager.copyFile',
+      'FileSystemManager.copyFileSync',
+      'FileSystemManager.fstat',
+      'FileSystemManager.fstatSync',
+      'FileSystemManager.ftruncate',
+      'FileSystemManager.ftruncateSync',
+      'FileSystemManager.getFileInfo',
+      'FileSystemManager.getSavedFileList',
+      'FileSystemManager.mkdir',
+      'FileSystemManager.mkdirSync',
+      'FileSystemManager.open',
+      'FileSystemManager.openSync',
+      'FileSystemManager.read',
+      'FileSystemManager.readSync',
+      'FileSystemManager.readCompressedFile',
+      'FileSystemManager.readCompressedFileSync',
+      'FileSystemManager.readdir',
+      'FileSystemManager.readdirSync',
+      'FileSystemManager.readFile',
+      'FileSystemManager.readFileSync',
+      'FileSystemManager.readZipEntry',
+      'FileSystemManager.removeSavedFile',
+      'FileSystemManager.rename',
+      'FileSystemManager.renameSync',
+      'FileSystemManager.rmdir',
+      'FileSystemManager.rmdirSync',
+      'FileSystemManager.saveFile',
+      'FileSystemManager.saveFileSync',
+      'FileSystemManager.stat',
+      'FileSystemManager.statSync',
+      'FileSystemManager.truncate',
+      'FileSystemManager.truncateSync',
+      'FileSystemManager.unlink',
+      'FileSystemManager.unlinkSync',
+      'FileSystemManager.unzip',
+      'FileSystemManager.write',
+      'FileSystemManager.writeSync',
+      'FileSystemManager.writeFile',
+      'FileSystemManager.writeFileSync',
+    ];
+  }
+
+  private bindAliases(): void {
+    const aliases: Record<string, string> = {
+      'FileSystemManager.access': 'access',
+      'FileSystemManager.accessSync': 'accessSync',
+      'FileSystemManager.appendFile': 'appendFile',
+      'FileSystemManager.appendFileSync': 'appendFileSync',
+      'FileSystemManager.close': 'close',
+      'FileSystemManager.closeSync': 'closeSync',
+      'FileSystemManager.copyFile': 'copyFile',
+      'FileSystemManager.copyFileSync': 'copyFileSync',
+      'FileSystemManager.fstat': 'fstat',
+      'FileSystemManager.fstatSync': 'fstatSync',
+      'FileSystemManager.ftruncate': 'ftruncate',
+      'FileSystemManager.ftruncateSync': 'ftruncateSync',
+      'FileSystemManager.getFileInfo': 'getFileInfo',
+      'FileSystemManager.getSavedFileList': 'getSavedFileList',
+      'FileSystemManager.mkdir': 'mkdir',
+      'FileSystemManager.mkdirSync': 'mkdirSync',
+      'FileSystemManager.open': 'open',
+      'FileSystemManager.openSync': 'openSync',
+      'FileSystemManager.read': 'read',
+      'FileSystemManager.readSync': 'readSync',
+      'FileSystemManager.readCompressedFile': 'readCompressedFile',
+      'FileSystemManager.readCompressedFileSync': 'readCompressedFileSync',
+      'FileSystemManager.readdir': 'readdir',
+      'FileSystemManager.readdirSync': 'readdirSync',
+      'FileSystemManager.readFile': 'readFile',
+      'FileSystemManager.readFileSync': 'readFileSync',
+      'FileSystemManager.readZipEntry': 'readZipEntry',
+      'FileSystemManager.removeSavedFile': 'removeSavedFile',
+      'FileSystemManager.rename': 'rename',
+      'FileSystemManager.renameSync': 'renameSync',
+      'FileSystemManager.rmdir': 'rmdir',
+      'FileSystemManager.rmdirSync': 'rmdirSync',
+      'FileSystemManager.saveFile': 'saveFile',
+      'FileSystemManager.saveFileSync': 'saveFileSync',
+      'FileSystemManager.stat': 'stat',
+      'FileSystemManager.statSync': 'statSync',
+      'FileSystemManager.truncate': 'truncate',
+      'FileSystemManager.truncateSync': 'truncateSync',
+      'FileSystemManager.unlink': 'unlink',
+      'FileSystemManager.unlinkSync': 'unlinkSync',
+      'FileSystemManager.unzip': 'unzip',
+      'FileSystemManager.write': 'write',
+      'FileSystemManager.writeSync': 'writeSync',
+      'FileSystemManager.writeFile': 'writeFile',
+      'FileSystemManager.writeFileSync': 'writeFileSync',
+    };
+    Object.keys(aliases).forEach((apiName: string) => {
+      const methodName = aliases[apiName];
+      (this as Record<string, Function>)[apiName] = (this as Record<string, Function>)[methodName].bind(this);
+    });
+  }
+
+  saveFileToDisk(_data: DMPMap, callback: DMPBridgeCallback) {
+    this.invokeFailureCallback(callback, null, 'saveFileToDisk:fail not supported on this platform');
+  }
+
+  access(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.access', callback, () => {
+      this.ensureExists(this.pathParam(data));
+      return new DMPMap();
+    });
+  }
+
+  accessSync(data: DMPMap | string): void {
+    this.ensureExists(this.stringParam(data, 'path'));
+  }
+
+  appendFile(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.appendFile', callback, () => {
+      this.appendFileSync(data);
+      return new DMPMap();
+    });
+  }
+
+  appendFileSync(data: DMPMap): void {
+    const path = this.resolve(data.getString('filePath') ?? '');
+    const file = fs.openSync(path, fs.OpenMode.READ_WRITE);
+    const stat = fs.statSync(path);
+    fs.writeSync(file.fd, this.dataBytes(data), { offset: stat.size });
+    fs.closeSync(file);
+  }
+
+  close(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.close', callback, () => {
+      this.closeSync(data);
+      return new DMPMap();
+    });
+  }
+
+  closeSync(data: DMPMap | string): void {
+    const fd = this.stringParam(data, 'fd');
+    const opened = DMPContainerBridgesModuleFile.openedFiles.get(fd);
+    if (!opened) {
+      throw new Error('bad file descriptor');
+    }
+    fs.closeSync(opened.file);
+    DMPContainerBridgesModuleFile.openedFiles.delete(fd);
+  }
+
+  copyFile(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.copyFile', callback, () => {
+      this.copyFileSync(data);
+      return new DMPMap();
+    });
+  }
+
+  copyFileSync(data: DMPMap): void {
+    fs.copyFileSync(this.resolve(data.getString('srcPath') ?? ''), this.resolve(data.getString('destPath') ?? ''));
+  }
+
+  fstat(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.fstat', callback, () => new DMPMap({ stats: this.fstatSync(data) }));
+  }
+
+  fstatSync(data: DMPMap): object {
+    return this.statObject(this.opened(data).path);
+  }
+
+  ftruncate(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.ftruncate', callback, () => {
+      this.ftruncateSync(data);
+      return new DMPMap();
+    });
+  }
+
+  ftruncateSync(data: DMPMap): void {
+    fs.truncateSync(this.opened(data).path, data.getNumber('length') ?? 0);
+  }
+
+  getFileInfo(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.getFileInfo', callback, () => {
+      const path = this.resolve(data.getString('filePath') ?? '');
+      const stat = fs.statSync(path);
+      return new DMPMap({ size: stat.size, digest: '' });
+    });
+  }
+
+  getSavedFileList(_data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.getSavedFileList', callback, () => new DMPMap({ fileList: this.savedFiles() }));
+  }
+
+  mkdir(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.mkdir', callback, () => {
+      this.mkdirSync(data);
+      return new DMPMap();
+    });
+  }
+
+  mkdirSync(data: DMPMap): void {
+    fs.mkdirSync(this.resolve(data.getString('dirPath') ?? ''), data.getBoolean('recursive') ?? false);
+  }
+
+  open(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.open', callback, () => new DMPMap({ fd: this.openSync(data) }));
+  }
+
+  openSync(data: DMPMap): string {
+    const path = this.resolve(data.getString('filePath') ?? '');
+    const flag = data.getString('flag') ?? 'r';
+    let mode = fs.OpenMode.READ_ONLY;
+    if (flag !== 'r') {
+      mode = fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE;
+    }
+    const file = fs.openSync(path, mode);
+    if (flag === 'w' || flag === 'w+') {
+      fs.truncateSync(path, 0);
+    }
+    const fd = `${Date.now()}_${Math.random()}`;
+    DMPContainerBridgesModuleFile.openedFiles.set(fd, { file, path });
+    return fd;
+  }
+
+  read(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.read', callback, () => DMPMap.createFromObject(this.readSync(data)));
+  }
+
+  readSync(data: DMPMap): object {
+    const opened = this.opened(data);
+    const stat = fs.statSync(opened.path);
+    const length = data.getNumber('length') ?? data.getNumber('arrayBufferLength') ?? stat.size;
+    const position = data.getNumber('position') ?? 0;
+    const buffer = new ArrayBuffer(length);
+    const bytesRead = fs.readSync(opened.file.fd, buffer, { offset: position, length });
+    return { bytesRead, [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(buffer, bytesRead) };
+  }
+
+  readCompressedFile(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.readCompressedFile', callback, () => new DMPMap({ data: this.readCompressedFileSync(data) }));
+  }
+
+  readCompressedFileSync(data: DMPMap): object {
+    const bytes = this.readFileBytes(this.resolve(data.getString('filePath') ?? ''));
+    return { [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(bytes, bytes.byteLength) };
+  }
+
+  readdir(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.readdir', callback, () => new DMPMap({ files: this.readdirSync(data) }));
+  }
+
+  readdirSync(data: DMPMap | string): string[] {
+    return fs.listFileSync(this.resolve(this.stringParam(data, 'dirPath')));
+  }
+
+  readFile(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.readFile', callback, () => new DMPMap({ data: this.readFileSync(data) }));
+  }
+
+  readFileSync(data: DMPMap): string | object {
+    const path = this.resolve(data.getString('filePath') ?? '');
+    const stat = fs.statSync(path);
+    const position = data.getNumber('position') ?? 0;
+    const length = data.getNumber('length') ?? stat.size - position;
+    if (data.getString('encoding')) {
+      return fs.readTextSync(path, { offset: position, length });
+    }
+    const buffer = new ArrayBuffer(length);
+    const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
+    const bytesRead = fs.readSync(file.fd, buffer, { offset: position, length });
+    fs.closeSync(file);
+    return { [ARRAY_BUFFER_BASE64_KEY]: this.arrayBufferToBase64(buffer, bytesRead) };
+  }
+
+  readZipEntry(_data: DMPMap, callback: DMPBridgeCallback) {
+    this.invokeFailureCallback(callback, null, 'FileSystemManager.readZipEntry:fail not implemented');
+  }
+
+  removeSavedFile(data: DMPMap, callback: DMPBridgeCallback) {
+    this.unlink(data, callback);
+  }
+
+  rename(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.rename', callback, () => {
+      this.renameSync(data);
+      return new DMPMap();
+    });
+  }
+
+  renameSync(data: DMPMap): void {
+    fs.moveFileSync(this.resolve(data.getString('oldPath') ?? ''), this.resolve(data.getString('newPath') ?? ''), 0);
+  }
+
+  rmdir(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.rmdir', callback, () => {
+      this.rmdirSync(data);
+      return new DMPMap();
+    });
+  }
+
+  rmdirSync(data: DMPMap): void {
+    fs.rmdirSync(this.resolve(data.getString('dirPath') ?? ''));
+  }
+
+  saveFile(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.saveFile', callback, () => new DMPMap({ savedFilePath: this.saveFileSync(data) }));
+  }
+
+  saveFileSync(data: DMPMap): string {
+    const temp = this.resolve(data.getString('tempFilePath') ?? '');
+    const dest = this.resolve(data.getString('filePath') ?? `${VIRTUAL_PREFIX}${USER_PREFIX}/saved/${Date.now()}_${this.nameFromPath(temp)}`);
+    fs.moveFileSync(temp, dest, 0);
+    return this.userPath(dest);
+  }
+
+  stat(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.stat', callback, () => new DMPMap({ stats: this.statSync(data) }));
+  }
+
+  statSync(data: DMPMap): object {
+    const path = this.resolve(data.getString('path') ?? data.getString('args') ?? '');
+    return this.statObject(path);
+  }
+
+  truncate(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.truncate', callback, () => {
+      this.truncateSync(data);
+      return new DMPMap();
+    });
+  }
+
+  truncateSync(data: DMPMap): void {
+    fs.truncateSync(this.resolve(data.getString('filePath') ?? ''), data.getNumber('length') ?? 0);
+  }
+
+  unlink(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.unlink', callback, () => {
+      this.unlinkSync(data);
+      return new DMPMap();
+    });
+  }
+
+  unlinkSync(data: DMPMap | string): void {
+    fs.unlinkSync(this.resolve(this.stringParam(data, 'filePath')));
+  }
+
+  unzip(data: DMPMap, callback: DMPBridgeCallback) {
+    const zipPath = this.resolve(data.getString('zipFilePath') ?? '');
+    const targetPath = this.resolve(data.getString('targetPath') ?? '');
+    DMPUnzipManager.unzipFileAtPath(zipPath, targetPath, (_path, succeeded, error) => {
+      if (succeeded) {
+        const result = new DMPMap();
+        result.set('errMsg', 'FileSystemManager.unzip:ok');
+        this.invokeSuccessCallback(callback, result);
+      } else {
+        this.invokeFailureCallback(callback, null, `FileSystemManager.unzip:fail ${error?.message ?? ''}`);
+      }
+    });
+  }
+
+  write(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.write', callback, () => DMPMap.createFromObject(this.writeSync(data)));
+  }
+
+  writeSync(data: DMPMap): object {
+    const opened = this.opened(data);
+    const bytes = this.dataBytes(data.get('arrayBuffer') ? data : new DMPMap({ data: data.get('data') }), data.get('arrayBuffer') ? 'arrayBuffer' : 'data');
+    fs.writeSync(opened.file.fd, bytes, { offset: data.getNumber('position') ?? undefined, length: bytes.byteLength });
+    return { bytesWritten: bytes.byteLength };
+  }
+
+  writeFile(data: DMPMap, callback: DMPBridgeCallback) {
+    this.callAsync('FileSystemManager.writeFile', callback, () => {
+      this.writeFileSync(data);
+      return new DMPMap();
+    });
+  }
+
+  writeFileSync(data: DMPMap): void {
+    const file = fs.openSync(this.resolve(data.getString('filePath') ?? ''), fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
+    const bytes = this.dataBytes(data);
+    fs.writeSync(file.fd, bytes);
+    fs.closeSync(file);
+  }
+
+  private callAsync(name: string, callback: DMPBridgeCallback, block: () => DMPMap): void {
+    try {
+      const result = block();
+      result.set('errMsg', `${name}:ok`);
+      this.invokeSuccessCallback(callback, result);
+    } catch (err) {
+      this.invokeFailureCallback(callback, null, `${name}:fail ${(err as Error).message ?? err}`);
+    }
+  }
+
+  private userRoot(): string {
+    const context = DMPContextUtils.getUIAbilityContext();
+    const path = `${context.filesDir}/dimina-file-system/${this.currentAppId()}/${USER_PREFIX}`;
+    fs.mkdirSync(path, true);
+    return path;
+  }
+
+  private currentAppId(): string {
+    return this.appData.appId || this.app?.appConfig?.appId || 'default';
+  }
+
+  private tempRoot(): string {
+    const context = DMPContextUtils.getUIAbilityContext();
+    fs.mkdirSync(context.cacheDir, true);
+    return context.cacheDir;
+  }
+
+  private resolve(rawPath: string): string {
+    if (!rawPath) {
+      throw new Error('missing file path');
+    }
+    let path = rawPath;
+    if (rawPath.startsWith(VIRTUAL_PREFIX)) {
+      const relative = rawPath.replace(VIRTUAL_PREFIX, '').replace(/^\/+/, '');
+      if (relative === USER_PREFIX || relative.startsWith(`${USER_PREFIX}/`)) {
+        path = `${this.userRoot()}/${relative.replace(USER_PREFIX, '').replace(/^\/+/, '')}`;
+      } else if (relative === TEMP_PREFIX || relative.startsWith(`${TEMP_PREFIX}/`)) {
+        path = `${this.tempRoot()}/${relative.replace(TEMP_PREFIX, '').replace(/^\/+/, '')}`;
+      } else {
+        path = DMPFileUrlConvertor.localPathFromVPath(rawPath);
+      }
+    }
+    if (!path.startsWith(this.userRoot()) && !path.startsWith(this.tempRoot())) {
+      throw new Error(`permission denied, open ${rawPath}`);
+    }
+    return path;
+  }
+
+  private stringParam(data: DMPMap | string, key: string): string {
+    if (typeof data === 'string') {
+      return data;
+    }
+    return data.getString(key) ?? data.getString('path') ?? data.getString('filePath') ?? data.getString('dirPath') ?? data.getString('args') ?? '';
+  }
+
+  private pathParam(data: DMPMap): string {
+    return this.stringParam(data, 'path');
+  }
+
+  private ensureExists(path: string): void {
+    if (!fs.accessSync(this.resolve(path))) {
+      throw new Error(`no such file or directory ${path}`);
+    }
+  }
+
+  private opened(data: DMPMap): OpenedFile {
+    const fd = data.getString('fd') ?? '';
+    const opened = DMPContainerBridgesModuleFile.openedFiles.get(fd);
+    if (!opened) {
+      throw new Error('bad file descriptor');
+    }
+    return opened;
+  }
+
+  private statObject(path: string): object {
+    const stat = fs.statSync(path);
+    const isDirectory = stat.isDirectory();
+    return {
+      mode: isDirectory ? 'directory' : 'file',
+      size: isDirectory ? 0 : stat.size,
+      lastAccessedTime: Math.floor(stat.atime / 1000),
+      lastModifiedTime: Math.floor(stat.mtime / 1000),
+      isDirectory,
+      isFile: stat.isFile()
+    };
+  }
+
+  private dataBytes(data: DMPMap, key: string = 'data'): ArrayBuffer {
+    const value = data.get(key);
+    if (value instanceof Object && value[FILE_DATA_TYPE_KEY] === 'base64') {
+      return this.base64ToArrayBuffer(value[FILE_DATA_BASE64_KEY]);
+    }
+    return this.stringToArrayBuffer(String(value ?? ''));
+  }
+
+  private readFileBytes(path: string): ArrayBuffer {
+    const stat = fs.statSync(path);
+    const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
+    const buffer = new ArrayBuffer(stat.size);
+    fs.readSync(file.fd, buffer);
+    fs.closeSync(file);
+    return buffer;
+  }
+
+  private savedFiles(): object[] {
+    const savedPath = `${this.userRoot()}/saved`;
+    if (!fs.accessSync(savedPath)) {
+      return [];
+    }
+    return fs.listFileSync(savedPath).map((name: string): object => {
+      const path = `${savedPath}/${name}`;
+      const stat = fs.statSync(path);
+      return { filePath: this.userPath(path), size: stat.size, createTime: Math.floor(stat.mtime / 1000) };
+    });
+  }
+
+  private userPath(path: string): string {
+    return `${VIRTUAL_PREFIX}${USER_PREFIX}/${path.replace(this.userRoot(), '').replace(/^\/+/, '')}`;
+  }
+
+  private nameFromPath(path: string): string {
+    const parts = path.split('/');
+    return parts[parts.length - 1] || 'file';
+  }
+
+  private stringToArrayBuffer(text: string): ArrayBuffer {
+    const buffer = new ArrayBuffer(text.length);
+    const view = new Uint8Array(buffer);
+    for (let i = 0; i < text.length; i++) {
+      view[i] = text.charCodeAt(i) & 0xff;
+    }
+    return buffer;
+  }
+
+  private arrayBufferToBase64(buffer: ArrayBuffer, length: number): string {
+    const bytes = new Uint8Array(buffer);
+    let result = '';
+    let i = 0;
+    const count = Math.min(length, bytes.length);
+    for (; i + 2 < count; i += 3) {
+      result += BASE64_CHARS[bytes[i] >> 2];
+      result += BASE64_CHARS[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+      result += BASE64_CHARS[((bytes[i + 1] & 15) << 2) | (bytes[i + 2] >> 6)];
+      result += BASE64_CHARS[bytes[i + 2] & 63];
+    }
+    if (i < count) {
+      result += BASE64_CHARS[bytes[i] >> 2];
+      if (i + 1 < count) {
+        result += BASE64_CHARS[((bytes[i] & 3) << 4) | (bytes[i + 1] >> 4)];
+        result += BASE64_CHARS[(bytes[i + 1] & 15) << 2];
+        result += '=';
+      } else {
+        result += BASE64_CHARS[(bytes[i] & 3) << 4];
+        result += '==';
+      }
+    }
+    return result;
+  }
+
+  private base64ToArrayBuffer(base64: string): ArrayBuffer {
+    const clean = (base64 ?? '').replace(/[\r\n\s]/g, '');
+    const padding = clean.endsWith('==') ? 2 : clean.endsWith('=') ? 1 : 0;
+    const length = clean.length * 3 / 4 - padding;
+    const buffer = new ArrayBuffer(length);
+    const out = new Uint8Array(buffer);
+    let index = 0;
+    for (let i = 0; i < clean.length; i += 4) {
+      const c1 = BASE64_CHARS.indexOf(clean[i]);
+      const c2 = BASE64_CHARS.indexOf(clean[i + 1]);
+      const c3 = clean[i + 2] === '=' ? 0 : BASE64_CHARS.indexOf(clean[i + 2]);
+      const c4 = clean[i + 3] === '=' ? 0 : BASE64_CHARS.indexOf(clean[i + 3]);
+      if (index < length) out[index++] = (c1 << 2) | (c2 >> 4);
+      if (index < length) out[index++] = ((c2 & 15) << 4) | (c3 >> 2);
+      if (index < length) out[index++] = ((c3 & 3) << 6) | c4;
+    }
+    return buffer;
+  }
+}

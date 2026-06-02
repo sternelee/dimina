@@ -144,6 +144,11 @@ public class DMPFileUtil {
     }
 
     public static func vPathFromSandboxPath(sandboxPath: String, appId: String) -> String {
+        let storeDirectory: String = DMPSandboxManager.appStoreResourceDirectoryPath(appId: appId)
+        if sandboxPath.hasPrefix(storeDirectory) {
+            let relativePath: String = sandboxPath.replacingOccurrences(of: storeDirectory, with: "")
+            return "\(DMPFileURLScheme)://usr\(relativePath)"
+        }
         let resourceDirectory: String = DMPSandboxManager.appTmpResourceDirectoryPath(appId: appId)
         let relativePath: String = sandboxPath.replacingOccurrences(of: resourceDirectory, with: "")
         let vPath: String = "\(DMPFileURLScheme)://\(relativePath)"
@@ -155,9 +160,14 @@ public class DMPFileUtil {
             return nil
         }
 
+        let host = components.host ?? ""
         let path: String = components.path
+        if host == "usr" {
+            return (DMPSandboxManager.appStoreResourceDirectoryPath(appId: appId) as NSString)
+                .appendingPathComponent(String(path.dropFirst()))
+        }
         let resourceDirectory: String = DMPSandboxManager.appTmpResourceDirectoryPath(appId: appId)
-        let sandboxPath: String = (resourceDirectory as NSString).appendingPathComponent(components.host ?? "") + path
+        let sandboxPath: String = (resourceDirectory as NSString).appendingPathComponent(host) + path
         return sandboxPath
     }
 

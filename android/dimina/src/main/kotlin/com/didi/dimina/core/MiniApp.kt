@@ -12,6 +12,7 @@ import com.didi.dimina.api.base.AppEventApi
 import com.didi.dimina.api.base.BaseAPI
 import com.didi.dimina.api.base.SystemApi
 import com.didi.dimina.api.base.UpdateApi
+import com.didi.dimina.api.file.FileApi
 import com.didi.dimina.api.device.ClipboardApi
 import com.didi.dimina.api.device.ContactApi
 import com.didi.dimina.api.device.KeyboardApi
@@ -213,6 +214,9 @@ class MiniApp private constructor() {
 
         // storage
         StorageApi().registerWith(apiRegistry)
+
+        // file
+        FileApi().registerWith(apiRegistry)
     }
 
     /**
