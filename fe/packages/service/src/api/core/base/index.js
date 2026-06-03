@@ -1,9 +1,6 @@
 import { invokeAPI } from '@/api/common'
 
 /**
- * 文件系统
- * https://developers.weixin.qq.com/miniprogram/dev/framework/ability/file-system.html
- *
  * 环境变量
  * https://developers.weixin.qq.com/miniprogram/dev/api/base/wx.env.html
  */
