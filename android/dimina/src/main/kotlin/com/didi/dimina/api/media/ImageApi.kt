@@ -132,10 +132,11 @@ class ImageApi : BaseApiHandler() {
                     val tempFiles = JSONArray()
 
                     imagePaths.take(count).forEach { path ->
+                        val file = File(PathUtils.pathToReal(activity, path, appId))
                         tempFilePaths.put(path)
                         tempFiles.put(JSONObject().apply {
                             put("path", path)
-                            put("size", File(path).length())
+                            put("size", file.length())
                         })
                     }
                     val result = JSONObject().apply {

@@ -1376,6 +1376,7 @@ class DiminaActivity : ComponentActivity() {
                                     DiminaWebView(
                                         onInitReady = { webView -> onTabWebViewReady(tabIndex, webView) },
                                         onPageCompleted = { onTabPageReady(tabIndex) },
+                                        appId = miniProgram.appId,
                                         onNativeOverlayReady = { overlay ->
                                             onTabNativeOverlayReady(tabIndex, overlay)
                                         },
@@ -1392,6 +1393,7 @@ class DiminaActivity : ComponentActivity() {
                             DiminaWebView(
                                 onInitReady = { webView -> onWebViewReady(webView) },
                                 onPageCompleted = { onPageReady() },
+                                appId = miniProgram.appId,
                                 onNativeOverlayReady = { overlay -> onNativeOverlayReady(overlay) },
                             )
                         }
