@@ -643,11 +643,3 @@ export function getFileSystemManager() {
 	}
 	return fileSystemManagerInstance
 }
-
-/**
- * 保存文件系统的文件到用户磁盘，仅 PC 端支持。移动端 native 侧统一返回 unsupported。
- * https://developers.weixin.qq.com/miniprogram/dev/api/file/wx.saveFileToDisk.html
- */
-export function saveFileToDisk(opts) {
-	return invokeFileAPI('saveFileToDisk', opts || {})
-}
