@@ -264,7 +264,8 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     const path = this.resolve(data.getString('filePath') ?? '');
     const file = fs.openSync(path, fs.OpenMode.READ_WRITE);
     const stat = fs.statSync(path);
-    fs.writeSync(file.fd, this.dataBytes(data), { offset: stat.size });
+    const bytes = this.dataBytes(data);
+    fs.writeSync(file.fd, bytes, { offset: stat.size, length: bytes.byteLength });
     fs.closeSync(file);
   }
 
@@ -416,14 +417,11 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     const stat = fs.statSync(path);
     const position = data.getNumber('position') ?? 0;
     const length = data.getNumber('length') ?? stat.size - position;
+    const bytes = this.sliceArrayBuffer(this.readFileBytes(path), position, length);
     if (data.getString('encoding')) {
-      return fs.readTextSync(path, { offset: position, length });
+      return this.decodeBytes(bytes, data.getString('encoding') ?? '');
     }
-    const buffer = new ArrayBuffer(length);
-    const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
-    const bytesRead = fs.readSync(file.fd, buffer, { offset: position, length });
-    fs.closeSync(file);
-    return this.arrayBufferPayload(buffer, bytesRead);
+    return this.arrayBufferPayload(bytes, bytes.byteLength);
   }
 
   readZipEntry(data: DMPMap, callback: DMPBridgeCallback) {
@@ -569,7 +567,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     const file = fs.openSync(path, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
     const bytes = this.dataBytes(data);
     fs.truncateSync(path, 0);
-    fs.writeSync(file.fd, bytes);
+    fs.writeSync(file.fd, bytes, { length: bytes.byteLength });
     fs.closeSync(file);
   }
 
@@ -615,7 +613,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   private userRoot(): string {
     const context = DMPContextUtils.getUIAbilityContext();
     const path = `${context.filesDir}/dimina-file-system/${this.currentAppId()}/${USER_PREFIX}`;
-    fs.mkdirSync(path, true);
+    this.ensureDirectory(path);
     return path;
   }
 
@@ -625,26 +623,34 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
 
   private tempRoot(): string {
     const context = DMPContextUtils.getUIAbilityContext();
-    fs.mkdirSync(context.cacheDir, true);
+    this.ensureDirectory(context.cacheDir);
     return context.cacheDir;
+  }
+
+  private ensureDirectory(path: string): void {
+    if (!fs.accessSync(path)) {
+      fs.mkdirSync(path, true);
+    }
   }
 
   private resolve(rawPath: string): string {
     if (!rawPath) {
       throw new Error('missing file path');
     }
+    const userRoot = this.userRoot();
+    const tempRoot = this.tempRoot();
     let path = rawPath;
     if (rawPath.startsWith(VIRTUAL_PREFIX)) {
       const relative = rawPath.replace(VIRTUAL_PREFIX, '').replace(/^\/+/, '');
       if (relative === USER_PREFIX || relative.startsWith(`${USER_PREFIX}/`)) {
-        path = `${this.userRoot()}/${relative.replace(USER_PREFIX, '').replace(/^\/+/, '')}`;
+        path = `${userRoot}/${relative.replace(USER_PREFIX, '').replace(/^\/+/, '')}`;
       } else if (relative === TEMP_PREFIX || relative.startsWith(`${TEMP_PREFIX}/`)) {
-        path = `${this.tempRoot()}/${relative.replace(TEMP_PREFIX, '').replace(/^\/+/, '')}`;
+        path = `${tempRoot}/${relative.replace(TEMP_PREFIX, '').replace(/^\/+/, '')}`;
       } else {
         path = DMPFileUrlConvertor.localPathFromVPath(rawPath);
       }
     }
-    if (!path.startsWith(this.userRoot()) && !path.startsWith(this.tempRoot())) {
+    if (!path.startsWith(userRoot) && !path.startsWith(tempRoot)) {
       throw new Error(`permission denied, open ${rawPath}`);
     }
     return path;
@@ -704,7 +710,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     const stat = fs.statSync(path);
     const file = fs.openSync(path, fs.OpenMode.READ_ONLY);
     const buffer = new ArrayBuffer(stat.size);
-    fs.readSync(file.fd, buffer);
+    fs.readSync(file.fd, buffer, { length: stat.size });
     fs.closeSync(file);
     return buffer;
   }
@@ -811,12 +817,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   private stringToArrayBuffer(text: string): ArrayBuffer {
-    const buffer = new ArrayBuffer(text.length);
-    const view = new Uint8Array(buffer);
-    for (let i = 0; i < text.length; i++) {
-      view[i] = text.charCodeAt(i) & 0xff;
-    }
-    return buffer;
+    return new util.TextEncoder().encodeInto(text).buffer;
   }
 
   private arrayBufferToBase64(buffer: ArrayBuffer, length: number): string {
