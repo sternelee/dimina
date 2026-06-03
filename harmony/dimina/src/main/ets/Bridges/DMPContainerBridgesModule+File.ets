@@ -492,7 +492,14 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
 
   saveFileSync(data: DMPMap): string {
     const temp = this.resolve(data.getString('tempFilePath') ?? '');
-    const dest = this.resolve(data.getString('filePath') ?? `${VIRTUAL_PREFIX}${USER_PREFIX}/saved/${Date.now()}_${this.nameFromPath(temp)}`);
+    if (!fs.accessSync(temp)) {
+      throw new Error(`no such file or directory ${data.getString('tempFilePath') ?? ''}`);
+    }
+    const targetPath = data.getString('filePath') ?? `${VIRTUAL_PREFIX}${USER_PREFIX}/saved/${Date.now()}_${this.nameFromPath(temp)}`;
+    const dest = this.resolve(targetPath);
+    if (!data.getString('filePath')) {
+      this.ensureParentDirectory(dest);
+    }
     fs.moveFileSync(temp, dest, 0);
     return this.userPath(dest);
   }
@@ -630,6 +637,13 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   private ensureDirectory(path: string): void {
     if (!fs.accessSync(path)) {
       fs.mkdirSync(path, true);
+    }
+  }
+
+  private ensureParentDirectory(path: string): void {
+    const index = path.lastIndexOf('/');
+    if (index > 0) {
+      this.ensureDirectory(path.substring(0, index));
     }
   }
 
