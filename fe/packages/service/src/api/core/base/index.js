@@ -1,4 +1,6 @@
 import { invokeAPI } from '@/api/common'
+import { fileSystemManagerAPINames } from '@/api/core/file'
+import { updateManagerAPINames } from '@/api/core/base/update/api-names'
 
 /**
  * 环境变量
@@ -13,11 +15,11 @@ const builtInAPIs = new Set([
 	'nextTick',
 	'getUpdateManager',
 	'UpdateManager',
-	'UpdateManager.applyUpdate',
-	'UpdateManager.onCheckForUpdate',
-	'UpdateManager.onUpdateFailed',
-	'UpdateManager.onUpdateReady',
-	'getPerformance'
+	...updateManagerAPINames.map(name => `UpdateManager.${name}`),
+	'getPerformance',
+	'getFileSystemManager',
+	'FileSystemManager',
+	...fileSystemManagerAPINames.map(name => `FileSystemManager.${name}`),
 ])
 	
 /**

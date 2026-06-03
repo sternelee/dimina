@@ -631,6 +631,10 @@ class FileSystemManager {
 	}
 }
 
+export const fileSystemManagerAPINames = Object
+	.getOwnPropertyNames(FileSystemManager.prototype)
+	.filter(name => name !== 'constructor')
+
 let fileSystemManagerInstance = null
 
 /**

@@ -5,8 +5,8 @@ vi.mock('@/api/common', () => ({
 }))
 
 import { invokeAPI } from '@/api/common'
-import { env } from '../src/api/core/base/index.js'
-import { getFileSystemManager, saveFileToDisk } from '../src/api/core/file/index.js'
+import { canIUse, env } from '../src/api/core/base/index.js'
+import { getFileSystemManager } from '../src/api/core/file/index.js'
 
 function bytes(buffer) {
 	return Array.from(new Uint8Array(buffer))
@@ -23,6 +23,14 @@ describe('file api service adapter', () => {
 
 	it('returns a singleton FileSystemManager', () => {
 		expect(getFileSystemManager()).toBe(getFileSystemManager())
+	})
+
+	it('marks FileSystemManager schemas as available in canIUse', () => {
+		expect(canIUse('getFileSystemManager')).toBe(true)
+		expect(canIUse('FileSystemManager')).toBe(true)
+		expect(canIUse('FileSystemManager.writeFileSync')).toBe(true)
+		expect(canIUse('FileSystemManager.readFileSync')).toBe(true)
+		expect(canIUse('FileSystemManager.saveFile')).toBe(true)
 	})
 
 	it('encodes ArrayBuffer payloads before forwarding writes to native', () => {
@@ -140,12 +148,4 @@ describe('file api service adapter', () => {
 		expect(result.entries['a.txt'].errMsg).toBe('FileSystemManager.readZipEntry:ok')
 	})
 
-	it('forwards saveFileToDisk as a top-level file API', () => {
-		vi.mocked(invokeAPI).mockReturnValueOnce('bridge-result')
-
-		const result = saveFileToDisk({ filePath: 'difile://usr/a.txt' })
-
-		expect(result).toBe('bridge-result')
-		expect(invokeAPI).toHaveBeenCalledWith('saveFileToDisk', { filePath: 'difile://usr/a.txt' })
-	})
 })
