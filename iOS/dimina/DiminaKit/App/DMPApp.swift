@@ -130,7 +130,7 @@ public class DMPApp {
         render = DMPRender(app: self)
         
         // Pre-warm WebView pool to improve first page opening speed
-        DMPWebViewPool.shared.warmUp()
+        DMPWebViewPool.shared.warmUp(appId: appId)
     }
 
     public func loadBundle() async {
