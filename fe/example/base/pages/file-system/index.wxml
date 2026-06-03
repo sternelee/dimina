@@ -33,14 +33,6 @@
     </view>
   </view>
 
-  <view class="section">
-    <view class="section-title">保存到用户磁盘</view>
-    <view class="desc">仅 PC 端支持，调用前会先把上方文本写入本地用户文件。</view>
-    <button type="primary" bindtap="saveToDisk">saveFileToDisk</button>
-    <view class="path">{{userFilePath}}</view>
-    <view class="desc">当前环境：{{saveFileToDiskText}}</view>
-  </view>
-
   <view class="result {{resultType}}">
     <view class="result-title">{{resultTitle}}</view>
     <view class="result-detail">{{resultDetail}}</view>

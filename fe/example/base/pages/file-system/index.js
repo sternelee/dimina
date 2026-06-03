@@ -43,18 +43,14 @@ Page({
     savedFiles: ['暂无缓存文件'],
     resultTitle: '等待操作',
     resultDetail: '请点击下方按钮运行文件系统示例。',
-    resultType: 'info',
-    saveFileToDiskText: '未暴露 wx.saveFileToDisk'
+    resultType: 'info'
   },
 
   onLoad() {
     console.log('wx.env', wx.env)
     this.setData({
       userDataPath: getUserDataPath(),
-      userFilePath: getUserFilePath(),
-      saveFileToDiskText: typeof wx.saveFileToDisk === 'function'
-        ? '已暴露 wx.saveFileToDisk'
-        : '未暴露 wx.saveFileToDisk'
+      userFilePath: getUserFilePath()
     })
     this.refreshUserFiles(false)
     this.refreshSavedFiles(false)
@@ -249,33 +245,6 @@ Page({
     }
     catch (error) {
       this.showResult('缓存文件删除失败', formatError(error), 'error')
-    }
-  },
-
-  saveToDisk() {
-    if (typeof wx.saveFileToDisk !== 'function') {
-      this.showResult('saveFileToDisk 不可用', '当前环境没有暴露 wx.saveFileToDisk。', 'error')
-      return
-    }
-
-    try {
-      const filePath = getUserFilePath()
-      this.getFs().writeFileSync(filePath, this.data.userContent, 'utf8')
-      wx.saveFileToDisk({
-        filePath,
-        success: res => {
-          this.showResult('已发起保存到磁盘', formatError(res) || filePath, 'success')
-        },
-        fail: error => {
-          this.showResult('保存到磁盘失败', formatError(error), 'error')
-        },
-        complete: () => {
-          this.refreshUserFiles(false)
-        }
-      })
-    }
-    catch (error) {
-      this.showResult('保存到磁盘前写入失败', formatError(error), 'error')
     }
   }
 })
