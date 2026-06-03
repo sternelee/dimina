@@ -11,7 +11,7 @@
       <button bindtap="refreshUserFiles">列目录</button>
       <button type="warn" bindtap="removeUserFile">删除</button>
     </view>
-    <view class="content-box">{{readContent || '未读取文件内容'}}</view>
+    <view class="content-box">{{readContentText}}</view>
     <view class="file-list">
       <view class="file-item" wx:for="{{userFiles}}" wx:key="*this">{{item}}</view>
     </view>
@@ -20,16 +20,16 @@
   <view class="section">
     <view class="section-title">临时文件和缓存文件</view>
     <button type="primary" bindtap="chooseTempFile">选择图片生成临时文件</button>
-    <view class="path">{{tempFilePath || '暂无临时文件'}}</view>
-    <image wx:if="{{tempFilePath}}" class="preview" mode="aspectFit" src="{{tempFilePath}}" />
+    <view class="path">{{tempFilePathText}}</view>
+    <image wx:if="{{hasTempFile}}" class="preview" mode="aspectFit" src="{{tempFilePath}}" />
     <view class="btn-row">
       <button bindtap="saveTempFile">保存为缓存文件</button>
       <button bindtap="refreshSavedFiles">缓存列表</button>
     </view>
     <button type="warn" bindtap="removeSavedFile">删除当前缓存文件</button>
-    <view class="path">{{savedFilePath || '暂无缓存文件'}}</view>
+    <view class="path">{{savedFilePathText}}</view>
     <view class="file-list">
-      <view class="file-item" wx:for="{{savedFiles}}" wx:key="filePath">{{item.filePath}} ({{item.size}}B)</view>
+      <view class="file-item" wx:for="{{savedFiles}}" wx:key="*this">{{item}}</view>
     </view>
   </view>
 
@@ -38,7 +38,7 @@
     <view class="desc">仅 PC 端支持，调用前会先把上方文本写入本地用户文件。</view>
     <button type="primary" bindtap="saveToDisk">saveFileToDisk</button>
     <view class="path">{{userFilePath}}</view>
-    <view class="desc">当前环境：{{canSaveFileToDisk ? '已暴露 wx.saveFileToDisk' : '未暴露 wx.saveFileToDisk'}}</view>
+    <view class="desc">当前环境：{{saveFileToDiskText}}</view>
   </view>
 
   <view class="result {{resultType}}">

@@ -2,7 +2,7 @@ const userFileName = 'dimina-file-system-demo.txt'
 const defaultUserDataPath = 'difile://usr'
 
 function getUserDataPath() {
-  return wx.env.USER_DATA_PATH
+  return wx.env && wx.env.USER_DATA_PATH ? wx.env.USER_DATA_PATH : defaultUserDataPath
 }
 
 function getUserFilePath() {
@@ -33,14 +33,18 @@ Page({
     userFilePath: '',
     userContent: 'hello, dimina file system',
     readContent: '',
+    readContentText: '未读取文件内容',
     userFiles: ['未读取'],
     tempFilePath: '',
+    tempFilePathText: '暂无临时文件',
+    hasTempFile: false,
     savedFilePath: '',
-    savedFiles: [],
+    savedFilePathText: '暂无缓存文件',
+    savedFiles: ['暂无缓存文件'],
     resultTitle: '等待操作',
     resultDetail: '请点击下方按钮运行文件系统示例。',
     resultType: 'info',
-    canSaveFileToDisk: false
+    saveFileToDiskText: '未暴露 wx.saveFileToDisk'
   },
 
   onLoad() {
@@ -48,7 +52,9 @@ Page({
     this.setData({
       userDataPath: getUserDataPath(),
       userFilePath: getUserFilePath(),
-      canSaveFileToDisk: typeof wx.saveFileToDisk === 'function'
+      saveFileToDiskText: typeof wx.saveFileToDisk === 'function'
+        ? '已暴露 wx.saveFileToDisk'
+        : '未暴露 wx.saveFileToDisk'
     })
     this.refreshUserFiles(false)
     this.refreshSavedFiles(false)
@@ -96,6 +102,7 @@ Page({
       const content = this.getFs().readFileSync(filePath, 'utf8')
       this.setData({
         readContent: content,
+        readContentText: content || '文件内容为空',
         userFilePath: filePath
       })
       this.showResult('本地用户文件读取成功', content, 'success')
@@ -133,7 +140,8 @@ Page({
       const filePath = getUserFilePath()
       this.getFs().unlinkSync(filePath)
       this.setData({
-        readContent: ''
+        readContent: '',
+        readContentText: '未读取文件内容'
       })
       this.refreshUserFiles(false)
       this.showResult('本地用户文件删除成功', filePath, 'success')
@@ -149,7 +157,9 @@ Page({
       success: res => {
         const tempFilePath = res.tempFilePaths[0]
         this.setData({
-          tempFilePath
+          tempFilePath,
+          tempFilePathText: tempFilePath,
+          hasTempFile: true
         })
         this.showResult('临时文件已生成', tempFilePath, 'success')
       },
@@ -170,7 +180,8 @@ Page({
         tempFilePath: this.data.tempFilePath,
         success: res => {
           this.setData({
-            savedFilePath: res.savedFilePath
+            savedFilePath: res.savedFilePath,
+            savedFilePathText: res.savedFilePath
           })
           this.refreshSavedFiles(false)
           this.showResult('临时文件已保存为缓存文件', res.savedFilePath, 'success')
@@ -189,11 +200,14 @@ Page({
     try {
       this.getFs().getSavedFileList({
         success: res => {
+          const fileList = res.fileList || []
           this.setData({
-            savedFiles: res.fileList || []
+            savedFiles: fileList.length > 0
+              ? fileList.map(item => `${item.filePath} (${item.size}B)`)
+              : ['暂无缓存文件']
           })
           if (showMessage) {
-            this.showResult('缓存文件列表读取成功', `共 ${res.fileList ? res.fileList.length : 0} 个文件`, 'success')
+            this.showResult('缓存文件列表读取成功', `共 ${fileList.length} 个文件`, 'success')
           }
         },
         fail: error => {
@@ -222,7 +236,8 @@ Page({
         success: () => {
           const filePath = this.data.savedFilePath
           this.setData({
-            savedFilePath: ''
+            savedFilePath: '',
+            savedFilePathText: '暂无缓存文件'
           })
           this.refreshSavedFiles(false)
           this.showResult('缓存文件删除成功', filePath, 'success')
