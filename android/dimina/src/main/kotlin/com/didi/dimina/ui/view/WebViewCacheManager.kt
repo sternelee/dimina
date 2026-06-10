@@ -478,6 +478,19 @@ object WebViewCacheManager : ComponentCallbacks2 {
 // 文件级别的TAG常量，用于日志记录
 private const val WEBVIEW_TAG = "WebViewAssetLoader"
 
+internal fun resolveWebResourceMimeType(
+    extension: String,
+    lookup: (String) -> String? = { normalizedExtension ->
+        MimeTypeMap.getSingleton().getMimeTypeFromExtension(normalizedExtension)
+    }
+): String {
+    val normalizedExtension = extension.lowercase()
+    return when (normalizedExtension) {
+        "js" -> "text/javascript"
+        else -> lookup(normalizedExtension) ?: "application/octet-stream"
+    }
+}
+
 private class DiminaPathHandler(
     private val filesDir: File,
     private val currentJsVersion: Int
@@ -510,9 +523,7 @@ private class DiminaPathHandler(
             return null
         }
 
-        val mimeType = MimeTypeMap.getSingleton()
-            .getMimeTypeFromExtension(targetCanonical.extension)
-            ?: "application/octet-stream"
+        val mimeType = resolveWebResourceMimeType(targetCanonical.extension)
         return WebResourceResponse(mimeType, "UTF-8", targetCanonical.inputStream())
     }
 }
@@ -573,9 +584,7 @@ private fun handleVirtualFileRequest(context: Context, uri: android.net.Uri, app
             return null
         }
 
-        val mimeType = MimeTypeMap.getSingleton()
-            .getMimeTypeFromExtension(targetFile.extension.lowercase())
-            ?: "application/octet-stream"
+        val mimeType = resolveWebResourceMimeType(targetFile.extension)
         WebResourceResponse(mimeType, "UTF-8", targetFile.inputStream())
     } catch (e: Exception) {
         LogUtils.e(WEBVIEW_TAG, "Failed to intercept virtual file: ${uri}", e)
