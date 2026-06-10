@@ -19,6 +19,7 @@ okhttp = "5.2.1"
 orgJson = "20250107"
 uiTooling = "1.8.2"
 webkit = "1.15.0"
+zxingAndroidEmbedded = "4.3.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -46,6 +47,7 @@ okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
 org-json = { module = "org.json:json", version.ref = "orgJson" }
 ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "uiTooling" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
+zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxingAndroidEmbedded" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -83,6 +83,7 @@ import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.didi.dimina.Dimina
+import com.didi.dimina.api.device.ScanCodeOptions
 import com.didi.dimina.bean.AppConfig
 import com.didi.dimina.bean.BridgeOptions
 import com.didi.dimina.bean.MergedPageConfig
@@ -105,6 +106,7 @@ import com.didi.dimina.ui.view.DiminaWebView
 import com.didi.dimina.ui.view.MediaPickerRoot
 import com.didi.dimina.ui.view.MediaType
 import com.didi.dimina.ui.view.NativeComponentHost
+import com.didi.dimina.ui.view.ScanCodeLauncher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -172,6 +174,7 @@ class DiminaActivity : ComponentActivity() {
 
     // Contact picker for handling contact-related operations
     private lateinit var contactPicker: ContactPicker
+    private lateinit var scanCodeLauncher: ScanCodeLauncher
 
     private var imageChooseCallback: ((List<String>) -> Unit)? = null
     
@@ -250,6 +253,10 @@ class DiminaActivity : ComponentActivity() {
 
     fun handleChooseContact(callback: (Boolean, JSONObject) -> Unit) {
         contactPicker.handleChooseContact(callback)
+    }
+
+    fun handleScanCode(options: ScanCodeOptions, callback: (Boolean, JSONObject) -> Unit) {
+        scanCodeLauncher.launch(options, callback)
     }
 
     private fun openSystemGallery(type: MediaType, maxCount: Int) {
@@ -331,6 +338,7 @@ class DiminaActivity : ComponentActivity() {
 
         // Initialize the ContactPicker
         contactPicker = ContactPicker(this)
+        scanCodeLauncher = ScanCodeLauncher(this)
 
         setContent {
             DiminaAndroidTheme {

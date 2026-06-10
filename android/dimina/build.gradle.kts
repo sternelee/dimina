@@ -71,6 +71,7 @@ dependencies {
     implementation (libs.okhttp)
     implementation(libs.landscapist.coil)
     implementation (libs.ui.tooling)
+    implementation(libs.zxing.android.embedded)
     testImplementation(libs.junit)
     testImplementation(libs.org.json)
     androidTestImplementation(libs.androidx.junit)
