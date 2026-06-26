@@ -397,6 +397,38 @@ function serializeCanvasArgs(args) {
 	return Array.from(args).map(arg => serializeCanvasArg(arg))
 }
 
+const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
+const BASE64_LOOKUP = new Uint8Array(128)
+for (let i = 0; i < BASE64_CHARS.length; i++) {
+	BASE64_LOOKUP[BASE64_CHARS.charCodeAt(i)] = i
+}
+
+function base64ToUint8ClampedArray(base64) {
+	let end = base64.length
+	while (end > 0 && base64[end - 1] === '=') end--
+	const byteLen = (end * 3 / 4) | 0
+	const bytes = new Uint8ClampedArray(byteLen)
+	let j = 0
+	for (let i = 0; i < end; i += 4) {
+		const a = BASE64_LOOKUP[base64.charCodeAt(i)]
+		const b = BASE64_LOOKUP[base64.charCodeAt(i + 1)]
+		const c = BASE64_LOOKUP[base64.charCodeAt(i + 2)]
+		const d = BASE64_LOOKUP[base64.charCodeAt(i + 3)]
+		bytes[j++] = (a << 2) | (b >> 4)
+		if (j < byteLen) bytes[j++] = ((b & 0xF) << 4) | (c >> 2)
+		if (j < byteLen) bytes[j++] = ((c & 0x3) << 6) | d
+	}
+	return bytes
+}
+
+function deserializeImageData(res) {
+	return {
+		width: res.width,
+		height: res.height,
+		data: base64ToUint8ClampedArray(res.data),
+	}
+}
+
 function makeResourceId(prefix = 'canvas_resource') {
 	return `${prefix}_${uuid()}`
 }
@@ -518,6 +550,16 @@ class CanvasRenderingContext2DProxy {
 				return true
 			},
 		})
+	}
+
+	getImageData(x, y, w, h) {
+		return this.canvas.getImageData({
+			contextId: this.contextId, x, y, width: w, height: h,
+		})
+	}
+
+	toDataURL(type, quality) {
+		return this.canvas.toDataURL(type, quality)
 	}
 
 	call(method, args) {
@@ -745,6 +787,45 @@ export class CanvasNode {
 		sendCanvasMessage(this.bridgeId, 'canvasNodeCancelAnimationFrame', {
 			nodeId: this.nodeId,
 			requestId,
+		})
+	}
+
+	getImageData({ contextId, x, y, width, height }) {
+		return new Promise((resolve, reject) => {
+			const callbackId = callback.store((res) => {
+				try {
+					if (res.width && res.height && res.data) {
+						resolve(deserializeImageData(res))
+					} else {
+						reject(new Error('getImageData: invalid format'))
+					}
+				} catch (error) {
+					reject(error)
+				}
+			})
+			this.enqueueOperation({
+				op: 'getImageData',
+				contextId,
+				x,
+				y,
+				width,
+				height,
+				callback: callbackId,
+			})
+		})
+	}
+
+	toDataURL(type = 'image/png', quality) {
+		return new Promise((resolve) => {
+			const callbackId = callback.store((dataURL) => {
+				resolve(dataURL)
+			})
+			this.enqueueOperation({
+				op: 'toDataURL',
+				mimeType: type,
+				quality,
+				callback: callbackId,
+			})
 		})
 	}
 
