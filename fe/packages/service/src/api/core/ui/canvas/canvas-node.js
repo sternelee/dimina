@@ -397,38 +397,6 @@ function serializeCanvasArgs(args) {
 	return Array.from(args).map(arg => serializeCanvasArg(arg))
 }
 
-const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-const BASE64_LOOKUP = new Uint8Array(128)
-for (let i = 0; i < BASE64_CHARS.length; i++) {
-	BASE64_LOOKUP[BASE64_CHARS.charCodeAt(i)] = i
-}
-
-function base64ToUint8ClampedArray(base64) {
-	let end = base64.length
-	while (end > 0 && base64[end - 1] === '=') end--
-	const byteLen = (end * 3 / 4) | 0
-	const bytes = new Uint8ClampedArray(byteLen)
-	let j = 0
-	for (let i = 0; i < end; i += 4) {
-		const a = BASE64_LOOKUP[base64.charCodeAt(i)]
-		const b = BASE64_LOOKUP[base64.charCodeAt(i + 1)]
-		const c = BASE64_LOOKUP[base64.charCodeAt(i + 2)]
-		const d = BASE64_LOOKUP[base64.charCodeAt(i + 3)]
-		bytes[j++] = (a << 2) | (b >> 4)
-		if (j < byteLen) bytes[j++] = ((b & 0xF) << 4) | (c >> 2)
-		if (j < byteLen) bytes[j++] = ((c & 0x3) << 6) | d
-	}
-	return bytes
-}
-
-function deserializeImageData(res) {
-	return {
-		width: res.width,
-		height: res.height,
-		data: base64ToUint8ClampedArray(res.data),
-	}
-}
-
 function makeResourceId(prefix = 'canvas_resource') {
 	return `${prefix}_${uuid()}`
 }
@@ -515,71 +483,88 @@ class CanvasImage {
 }
 
 class CanvasRenderingContext2DProxy {
-	constructor(canvas, contextId) {
-		this.canvas = canvas
-		this.contextId = contextId
-		this.state = {
-			fillStyle: '#000000',
-			strokeStyle: '#000000',
-			font: '10px sans-serif',
-			globalAlpha: 1,
-			lineWidth: 1,
-		}
+    constructor(canvas, contextId) {
+        this.canvas = canvas;
+        this.contextId = contextId;
+        this.state = {
+            fillStyle: "#000000",
+            strokeStyle: "#000000",
+            font: "10px sans-serif",
+            globalAlpha: 1,
+            lineWidth: 1,
+        };
 
-		return new Proxy(this, {
-			get(target, prop) {
-				if (prop in target) {
-					return target[prop]
-				}
-				if (prop in target.state) {
-					return target.state[prop]
-				}
-				if (typeof prop === 'symbol') {
-					return undefined
-				}
-				return (...args) => target.call(prop, args)
-			},
-			set(target, prop, value) {
-				target.state[prop] = value
-				target.canvas.enqueueOperation({
-					op: 'contextSetProperty',
-					contextId,
-					prop,
-					value: serializeCanvasArg(value),
-				})
-				return true
-			},
-		})
-	}
+        return new Proxy(this, {
+            get(target, prop) {
+                if (prop in target) {
+                    return target[prop];
+                }
+                if (prop in target.state) {
+                    return target.state[prop];
+                }
+                if (typeof prop === "symbol") {
+                    return undefined;
+                }
+                return (...args) => target.call(prop, args);
+            },
+            set(target, prop, value) {
+                target.state[prop] = value;
+                target.canvas.enqueueOperation({
+                    op: "contextSetProperty",
+                    contextId,
+                    prop,
+                    value: serializeCanvasArg(value),
+                });
+                return true;
+            },
+        });
+    }
 
-	getImageData(x, y, w, h) {
-		return this.canvas.getImageData({
-			contextId: this.contextId, x, y, width: w, height: h,
-		})
-	}
+    async getImageData(x, y, w, h) {
+        const result = await this.canvas.getImageData({
+            contextId: this.contextId,
+            x,
+            y,
+            width: w,
+            height: h,
+        });
+        return result;
+    }
 
-	toDataURL(type, quality) {
-		return this.canvas.toDataURL(type, quality)
-	}
+    toDataURL(type, quality) {
+        return this.canvas.toDataURL(type, quality);
+    }
 
-	call(method, args) {
-		if (method === 'measureText') {
-			return { width: String(args[0] ?? '').length * 10 }
-		}
+    call(method, args) {
+        if (method === "measureText") {
+            return { width: String(args[0] ?? "").length * 10 };
+        }
 
-		const resultId = CANVAS_2D_RESOURCE_METHODS.has(method) ? makeResourceId() : undefined
-		this.canvas.enqueueOperation({
-			op: 'contextCall',
-			contextId: this.contextId,
-			method,
-			args: serializeCanvasArgs(args),
-			resultId,
-		})
+        if (method === "createImageData") {
+            const w = args[0];
+            const h = args[1];
+            return {
+                width: w,
+                height: h,
+                data: new Uint8ClampedArray(w * h * 4),
+            };
+        }
 
-		if (resultId) {
-			return new CanvasResource(this.canvas, resultId)
-		}
-	}
+        const resultId = CANVAS_2D_RESOURCE_METHODS.has(method)
+            ? makeResourceId()
+            : undefined;
+        this.canvas.enqueueOperation({
+            op: "contextCall",
+            contextId: this.contextId,
+            method,
+            args: serializeCanvasArgs(args),
+            resultId,
+        });
+
+        if (resultId) {
+            return new CanvasResource(this.canvas, resultId);
+        }
+    }
 }
 
 class WebGLRenderingContextProxy {
@@ -793,15 +778,7 @@ export class CanvasNode {
 	getImageData({ contextId, x, y, width, height }) {
 		return new Promise((resolve, reject) => {
 			const callbackId = callback.store((res) => {
-				try {
-					if (res.width && res.height && res.data) {
-						resolve(deserializeImageData(res))
-					} else {
-						reject(new Error('getImageData: invalid format'))
-					}
-				} catch (error) {
-					reject(error)
-				}
+                resolve(res);
 			})
 			this.enqueueOperation({
 				op: 'getImageData',
