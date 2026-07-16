@@ -72,6 +72,38 @@ function addStyleHostToken(element, styleScopeId) {
 	element.setAttribute(STYLE_HOST_ATTRIBUTE, [...tokens].join(' '))
 }
 
+function normalizeEventAttributes(attrs = {}) {
+	const eventAttr = {}
+	for (const [attrName, handler] of Object.entries(attrs)) {
+		const match = attrName.match(/^(capture-)?(bind|catch)(?::)?(.+)$/)
+		if (!match || handler === undefined || handler === null || handler === '') {
+			continue
+		}
+
+		const [, capture, listenerType, eventType] = match
+		const bindingType = capture
+			? (listenerType === 'catch' ? 'captureCatch' : 'captureBind')
+			: listenerType
+		eventAttr[eventType] = eventAttr[eventType] || {}
+		eventAttr[eventType][bindingType] = handler
+	}
+	return eventAttr
+}
+
+function orderEventBindingRecords(records = []) {
+	const remaining = [...records]
+	const ordered = []
+	while (remaining.length > 0) {
+		// 多个 Vue 组件可能共用一个根 DOM。若 A.owner === B.target，
+		// A 在 B 的组件内部，冒泡时应先于 B 执行。
+		const innerIndex = remaining.findIndex(candidate => !remaining.some(other => (
+			other !== candidate && other.owner === candidate.target
+		)))
+		ordered.push(...remaining.splice(innerIndex >= 0 ? innerIndex : 0, 1))
+	}
+	return ordered
+}
+
 function isElementNode(node) {
 	return node?.nodeType === 1 && typeof node.setAttribute === 'function'
 }
@@ -795,6 +827,44 @@ class Runtime {
 		this.instance.delete(moduleId)
 	}
 
+	collectCustomEventPath(root, targetModuleId) {
+		const eventPath = []
+		let element = root
+		while (element) {
+			for (const record of orderEventBindingRecords(element._ddEventBindings)) {
+				const moduleId = this.moduleIds.get(record.owner)
+				const nodeModuleId = this.moduleIds.get(record.target)
+				if (!moduleId) {
+					continue
+				}
+
+				const isComponentHost = record.nodeType === 'component'
+				// Vue 会把组件宿主与组件内部的单根节点折叠到同一 DOM
+				// 元素上。事件从宿主节点开始，不应反向进入目标组件自身的内部根节点。
+				if (element === root && !isComponentHost && moduleId === targetModuleId) {
+					continue
+				}
+				// 目标组件宿主的绑定已通过 mC 传入 service，这里只保留祖先路径。
+				if (isComponentHost && nodeModuleId === targetModuleId) {
+					continue
+				}
+
+				eventPath.push({
+					moduleId,
+					nodeModuleId,
+					isComponentHost,
+					eventAttr: record.eventAttr,
+					targetInfo: {
+						id: element.id,
+						dataset: { ...element.dataset, ...element._ds },
+					},
+				})
+			}
+			element = element.parentElement
+		}
+		return eventPath
+	}
+
 	createComponent(path, bridgeId, usingComponents, depthChain = []) {
 		if (!usingComponents || Object.keys(usingComponents).length === 0) {
 			return
@@ -879,12 +949,7 @@ class Runtime {
 					}
 					provide('externalClasses', externalClasses)
 
-					const eventAttr = {}
-					for (const attrName in attrs) {
-						if (attrName.startsWith('bind') || attrName.startsWith('catch')) {
-							eventAttr[attrName.replace(/^(?:bind:|bind|catch:|catch)/, '')] = attrs[attrName]
-						}
-					}
+					const eventAttr = normalizeEventAttributes(attrs)
 
 					const initialProperties = normalizeCurrentProperties()
 					const propertyNames = Object.keys(module.propertySchemas || {}).filter(name => hasVNodeProp(vueInstance.vnode.props, name))
@@ -943,6 +1008,7 @@ class Runtime {
 						nextTick(() => {
 							// 从 DOM 元素读取属性绑定信息
 							const propBindings = instance.$el?._propBindings
+							const eventPath = that.collectCustomEventPath(instance.$el, moduleId)
 
 							message.send({
 								type: 'mR',
@@ -951,6 +1017,7 @@ class Runtime {
 									bridgeId,
 									moduleId,
 									propBindings, // 传递从指令中读取的绑定信息
+									eventPath,
 								},
 							})
 						})

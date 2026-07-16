@@ -65,6 +65,62 @@ function parseExternalClass(el, instance, vnode) {
 	}
 }
 
+function collectEventBindings(props = {}) {
+	const eventBindings = {}
+	for (const [attrName, handler] of Object.entries(props || {})) {
+		const match = attrName.match(/^(capture-)?(bind|catch)(?::)?(.+)$/)
+		if (!match || handler === undefined || handler === null || handler === '') {
+			continue
+		}
+
+		const [, capture, listenerType, eventType] = match
+		const bindingType = capture
+			? (listenerType === 'catch' ? 'captureCatch' : 'captureBind')
+			: listenerType
+		eventBindings[eventType] = eventBindings[eventType] || {}
+		eventBindings[eventType][bindingType] = handler
+	}
+	return eventBindings
+}
+
+function getEventBindingRecord(el, binding, vnode) {
+	const target = vnode.component?.proxy
+	return el._ddEventBindings?.find(record => (
+		record.owner === binding.instance
+		&& record.target === target
+		&& record.nodeType === binding.value
+	))
+}
+
+function mountEventBindingRecord(el, binding, vnode) {
+	const record = {
+		owner: binding.instance,
+		target: vnode.component?.proxy,
+		nodeType: binding.value,
+		eventAttr: collectEventBindings(vnode.props),
+	}
+	el._ddEventBindings = el._ddEventBindings || []
+	el._ddEventBindings.push(record)
+}
+
+function updateEventBindingRecord(el, binding, vnode) {
+	const record = getEventBindingRecord(el, binding, vnode)
+	if (record) {
+		record.eventAttr = collectEventBindings(vnode.props)
+	}
+}
+
+function removeEventBindingRecord(el, binding, vnode) {
+	const record = getEventBindingRecord(el, binding, vnode)
+	if (!record) {
+		return
+	}
+	const index = el._ddEventBindings.indexOf(record)
+	if (index >= 0) {
+		el._ddEventBindings.splice(index, 1)
+	}
+}
+
 function Components(app) {
 	app.directive('c-style', {
 		mounted(el, binding) {
@@ -107,6 +163,18 @@ function Components(app) {
 			// 将属性绑定信息存储在 DOM 元素上，供 render 层使用
 			// 使用动态绑定，Vue 会自动将 HTML 实体解码后的 JSON 解析为对象
 			el._propBindings = binding.value || {}
+		},
+	})
+
+	app.directive('c-event-node', {
+		mounted(el, binding, vnode) {
+			mountEventBindingRecord(el, binding, vnode)
+		},
+		updated(el, binding, vnode) {
+			updateEventBindingRecord(el, binding, vnode)
+		},
+		beforeUnmount(el, binding, vnode) {
+			removeEventBindingRecord(el, binding, vnode)
 		},
 	})
 

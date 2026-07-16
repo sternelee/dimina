@@ -1402,6 +1402,17 @@ function getProps(attrs, tag, components) {
 	const attrsList = []
 	// 用于记录属性绑定关系：{ 子组件属性名: 父组件数据路径 }
 	const propBindings = {}
+	const hasEventBindings = Object.keys(attrs).some(name => /^(?:capture-)?(?:bind|catch)(?::)?.+/.test(name))
+
+	if (hasEventBindings) {
+		// exparser 的自定义事件沿 WXML 节点树派发，而 Vue 没有对应的
+		// ShadowRoot/slot 路径。在真实 DOM 节点上保留事件绑定和节点类型，
+		// render 层才能为 service 层重建 composed/capture 路径。
+		attrsList.push({
+			name: 'v-c-event-node',
+			value: components && components[tag] ? "'component'" : "'node'",
+		})
+	}
 
 	Object.entries(attrs).forEach(([name, value]) => {
 		if (name.endsWith(':if')) {

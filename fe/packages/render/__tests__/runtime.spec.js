@@ -50,6 +50,68 @@ describe('runtime template components', () => {
 		delete globalThis.cancelAnimationFrame
 	})
 
+	it('reconstructs collapsed component roots in exparser bubble order', () => {
+		const page = {}
+		const parent = {}
+		const target = {}
+		const basicNode = {}
+		runtime.moduleIds = new WeakMap([
+			[page, 'page-id'],
+			[parent, 'parent-id'],
+			[target, 'target-id'],
+		])
+
+		const parentRoot = document.createElement('div')
+		parentRoot.id = 'parent-root'
+		const targetRoot = document.createElement('div')
+		targetRoot.id = 'target-root'
+		parentRoot.append(targetRoot)
+		document.body.append(parentRoot)
+		targetRoot._ddEventBindings = [
+			{
+				owner: target,
+				target: basicNode,
+				nodeType: 'node',
+				eventAttr: { custom: { bind: 'targetInternal' } },
+			},
+			{
+				owner: page,
+				target,
+				nodeType: 'component',
+				eventAttr: { custom: { bind: 'targetHost' } },
+			},
+		]
+		// 故意按宿主 -> 内部节点存放，收集时仍应按内 -> 外排序。
+		parentRoot._ddEventBindings = [
+			{
+				owner: page,
+				target: parent,
+				nodeType: 'component',
+				eventAttr: { custom: { bind: 'parentHost' } },
+			},
+			{
+				owner: parent,
+				target: basicNode,
+				nodeType: 'node',
+				eventAttr: { custom: { bind: 'parentInternal' } },
+			},
+		]
+
+		expect(runtime.collectCustomEventPath(targetRoot, 'target-id')).toEqual([
+			expect.objectContaining({
+				moduleId: 'parent-id',
+				isComponentHost: false,
+				eventAttr: { custom: { bind: 'parentInternal' } },
+			}),
+			expect.objectContaining({
+				moduleId: 'page-id',
+				nodeModuleId: 'parent-id',
+				isComponentHost: true,
+				eventAttr: { custom: { bind: 'parentHost' } },
+			}),
+		])
+	})
+
 	it('uses the actual owner when a template reuses a component definition from another tree', async () => {
 		const loader = (await import('../src/core/loader.js')).default
 		const message = (await import('../src/core/message.js')).default

@@ -163,7 +163,7 @@ export function filterInvokeObserver(changedKey, observers, data, ctx) {
 	}
 }
 
-export function resolveEventHandler(eventAttr = {}, type = '') {
+export function resolveEventBinding(eventAttr = {}, type = '') {
 	const normalizedType = type.trim()
 	if (!normalizedType) {
 		return
@@ -179,9 +179,25 @@ export function resolveEventHandler(eventAttr = {}, type = '') {
 
 	for (const candidate of candidates) {
 		if (candidate && eventAttr[candidate] !== undefined) {
-			return eventAttr[candidate]
+			const binding = eventAttr[candidate]
+			if (typeof binding === 'string') {
+				return { bind: binding }
+			}
+			if (binding && typeof binding === 'object') {
+				return binding
+			}
 		}
 	}
+}
+
+export function resolveEventHandler(eventAttr = {}, type = '', { capture = false } = {}) {
+	const binding = resolveEventBinding(eventAttr, type)
+	if (!binding) {
+		return
+	}
+	return capture
+		? (binding.captureCatch ?? binding.captureBind)
+		: (binding.catch ?? binding.bind)
 }
 
 export function invokeBehaviorObservers(ctx, changedKeys) {

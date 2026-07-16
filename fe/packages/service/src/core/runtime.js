@@ -212,11 +212,15 @@ class Runtime {
 	}
 
 	moduleReady(opts) {
-		const { bridgeId, moduleId, propBindings } = opts
+		const { bridgeId, moduleId, propBindings, eventPath } = opts
 		const instance = this.instances[bridgeId]?.[moduleId]
 
 		if (!instance) {
 			return
+		}
+
+		if (Array.isArray(eventPath)) {
+			instance.__eventPath__ = eventPath
 		}
 		
 		// 如果有属性绑定信息，注册到父组件

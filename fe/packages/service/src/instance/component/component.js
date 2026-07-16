@@ -6,7 +6,7 @@ import runtime from '../../core/runtime'
 import { applyDataUpdates, invokeDataObservers, invokePropertyChanges } from '../../core/data-update'
 import { invokeSafely, invokeSafelyAll } from '../../core/safe-callback'
 import { beginUpdateBatch, createUpdateCallback, endUpdateBatch, enqueueUpdate } from '../../core/update-queue'
-import { addComputedData, deepEqual, isChildComponent, matchComponent, resolveEventHandler, syncUpdateChildrenProps } from '../../core/utils'
+import { addComputedData, deepEqual, isChildComponent, matchComponent, resolveEventBinding, syncUpdateChildrenProps } from '../../core/utils'
 
 // 组件生命周期
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
@@ -49,6 +49,7 @@ export class Component {
 		this.__id__ = this.opts.moduleId
 		this.__info__ = module.moduleInfo
 		this.__eventAttr__ = opts.eventAttr
+		this.__eventPath__ = null
 		this.__pageId__ = opts.pageId
 		this.__parentId__ = opts.parentId
 		this.__isCustomTabBar__ = opts.isCustomTabBar === true
@@ -816,42 +817,188 @@ export class Component {
 			return
 		}
 		const type = methodName.trim()
-		const eventHandler = resolveEventHandler(this.__eventAttr__, type)
-		if (eventHandler) {
-			await runtime.triggerEvent({
+		if (!type) {
+			return
+		}
+
+		const normalizedOptions = {
+			bubbles: options.bubbles === true,
+			composed: options.composed === true,
+			capturePhase: options.capturePhase === true,
+		}
+		const target = {
+			id: this.id,
+			dataset: this.dataset || {},
+		}
+		let stopped = false
+		let defaultPrevented = false
+		const event = {
+			type,
+			timeStamp: Date.now(),
+			detail,
+			bubbles: normalizedOptions.bubbles,
+			composed: normalizedOptions.composed,
+			currentTarget: null,
+			target,
+			preventDefault() {
+				defaultPrevented = true
+			},
+			stopPropagation() {
+				stopped = true
+			},
+		}
+		Object.defineProperty(event, 'defaultPrevented', {
+			enumerable: true,
+			get: () => defaultPrevented,
+		})
+
+		const eventPath = Component.prototype.getCustomEventPath.call(this, normalizedOptions.composed)
+		const dispatch = async (node, capture) => {
+			const binding = resolveEventBinding(node.eventAttr, type)
+			if (!binding) {
+				return
+			}
+
+			const methodName = capture
+				? (binding.captureCatch ?? binding.captureBind)
+				: (binding.catch ?? binding.bind)
+			if (!methodName) {
+				return
+			}
+
+			event.currentTarget = node.currentTarget
+			const result = await runtime.triggerEvent({
 				bridgeId: this.bridgeId,
-				moduleId: this.__pageId__,
-				methodName: eventHandler,
-				event: {
-					type,
-					detail,
-					currentTarget: {
-						id: this.id,
-						dataset: this.dataset,
-					},
-					target: {
-						id: this.id,
-						dataset: this.dataset,
-					},
-				},
+				moduleId: node.moduleId,
+				methodName,
+				event,
 			})
+			const isCatch = capture ? Boolean(binding.captureCatch) : Boolean(binding.catch)
+			if (isCatch) {
+				event.stopPropagation()
+			}
+			if (result === false) {
+				event.preventDefault()
+				event.stopPropagation()
+			}
 		}
 
-		// 事件是否冒泡
-		if (options.bubbles) {
-			// 当前组件的上一级自定义组件
-			const parentInstance = runtime.instances[this.bridgeId][this.__parentId__]
-			await parentInstance?.triggerEvent(methodName, detail)
+		// exparser 的捕获阶段与 bubbles 无关：只要显式开启 capturePhase，
+		// 就先按根 -> 目标的顺序执行 capture-bind/capture-catch。
+		if (normalizedOptions.capturePhase) {
+			for (let i = eventPath.length - 1; i >= 0 && !stopped; i--) {
+				await dispatch(eventPath[i], true)
+			}
 		}
 
-		// 事件是否可以穿越组件边界，为false时，事件将只能在引用组件的节点树上触发，不进入其他任何组件内部
-		if (options.composed) {
-			// TODO:当前组件的上一级自定义组件的内部
+		if (stopped) {
+			return
 		}
 
-		if (options.capturePhase) {
-			// TODO:事件是否拥有捕获阶段
+		// 普通阶段始终检查目标节点；bubbles 只控制是否继续走祖先节点。
+		const bubblePath = normalizedOptions.bubbles ? eventPath : eventPath.slice(0, 1)
+		for (const node of bubblePath) {
+			await dispatch(node, false)
+			if (stopped) {
+				break
+			}
 		}
+	}
+
+	getCustomEventPath(composed) {
+		const eventPath = [{
+			moduleId: this.__pageId__,
+			eventAttr: this.__eventAttr__ || {},
+			currentTarget: {
+				id: this.id,
+				dataset: this.dataset || {},
+			},
+		}]
+
+		if (Array.isArray(this.__eventPath__)) {
+			const renderPath = this.__eventPath__.filter(node => node?.moduleId).map((node) => {
+				const hostInstance = node.isComponentHost && node.nodeModuleId
+					? runtime.instances[this.bridgeId]?.[node.nodeModuleId]
+					: null
+				return {
+					moduleId: node.moduleId,
+					nodeModuleId: node.nodeModuleId,
+					isComponentHost: node.isComponentHost === true,
+					eventAttr: node.eventAttr || {},
+					currentTarget: {
+						id: hostInstance?.id ?? node.targetInfo?.id,
+						dataset: hostInstance?.dataset || node.targetInfo?.dataset || {},
+					},
+				}
+			})
+
+			// Vue 不会把组件指令传透到 Fragment 根节点。对多根组件，
+			// renderPath 仍能记录内部普通节点，但可能缺少组件宿主；
+			// 用 service 已有的物理组件链补齐，并插入到该组件内部节点之后。
+			const instances = runtime.instances[this.bridgeId] || {}
+			const visited = new Set([this.__id__])
+			let insertionCursor = 0
+			let parent = instances[this.__parentId__]
+			while (parent?.__isComponent__ && !visited.has(parent.__id__)) {
+				visited.add(parent.__id__)
+				const hostIndex = renderPath.findIndex(node => (
+					node.isComponentHost && node.nodeModuleId === parent.__id__
+				))
+				if (hostIndex >= 0) {
+					insertionCursor = Math.max(insertionCursor, hostIndex + 1)
+				}
+				else if (Object.keys(parent.__eventAttr__ || {}).length > 0) {
+					let lastInternalIndex = -1
+					for (let i = 0; i < renderPath.length; i++) {
+						if (renderPath[i].moduleId === parent.__id__) {
+							lastInternalIndex = i
+						}
+					}
+					const insertAt = Math.max(insertionCursor, lastInternalIndex + 1)
+					renderPath.splice(insertAt, 0, {
+						moduleId: parent.__pageId__,
+						nodeModuleId: parent.__id__,
+						isComponentHost: true,
+						eventAttr: parent.__eventAttr__,
+						currentTarget: {
+							id: parent.id,
+							dataset: parent.dataset || {},
+						},
+					})
+					insertionCursor = insertAt + 1
+				}
+				parent = instances[parent.__parentId__]
+			}
+
+			for (const node of renderPath) {
+				if (composed || node.moduleId === this.__pageId__) {
+					eventPath.push(node)
+				}
+			}
+			return eventPath
+		}
+
+		// 旧 render 层或单元测试没有提供 WXML 节点路径时，仍可以沿组件
+		// 实例树派发。这条兼容路径不能表示组件内部普通节点，但保留了
+		// 组件宿主的 composed 边界语义。
+		const instances = runtime.instances[this.bridgeId] || {}
+		const visited = new Set([this.__id__])
+		let parent = instances[this.__parentId__]
+		while (parent?.__isComponent__ && !visited.has(parent.__id__)) {
+			visited.add(parent.__id__)
+			if (composed || parent.__pageId__ === this.__pageId__) {
+				eventPath.push({
+					moduleId: parent.__pageId__,
+					eventAttr: parent.__eventAttr__ || {},
+					currentTarget: {
+						id: parent.id,
+						dataset: parent.dataset || {},
+					},
+				})
+			}
+			parent = instances[parent.__parentId__]
+		}
+		return eventPath
 	}
 
 	pageReady() {
