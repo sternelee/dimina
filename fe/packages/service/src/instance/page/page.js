@@ -216,6 +216,22 @@ export class Page {
 		invokeSafely(this, this.onPageScroll, [{ scrollTop }], 'onPageScroll')
 	}
 
+	pagePullDownRefresh() {
+		invokeSafely(this, this.onPullDownRefresh, [], 'onPullDownRefresh')
+	}
+
+	pageReachBottom() {
+		invokeSafely(this, this.onReachBottom, [], 'onReachBottom')
+	}
+
+	pageShareAppMessage(options = {}) {
+		return invokeSafely(this, this.onShareAppMessage, [options], 'onShareAppMessage')
+	}
+
+	pageTabItemTap(item = {}) {
+		invokeSafely(this, this.onTabItemTap, [item], 'onTabItemTap')
+	}
+
 	pageResize(size) {
 		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.resize, [size], 'page resize lifetime')
 		invokeSafely(this, this.onResize, [size], 'onResize')

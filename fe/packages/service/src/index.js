@@ -168,16 +168,28 @@ class Service {
 			runtime.pageHide(msg)
 		})
 
-		this.message.on('pagePullDownRefresh', () => {
-			// TODO:触发下拉刷新时执行
+		this.message.on('pagePullDownRefresh', (msg) => {
+			runtime.pagePullDownRefresh(msg)
 		})
 
-		this.message.on('pageReachBottom', () => {
-			// TODO:页面触底时执行
+		this.message.on('pageReachBottom', (msg) => {
+			runtime.pageReachBottom(msg)
 		})
 
-		this.message.on('pageShareAppMessage', () => {
-			// TODO:页面被用户分享时执行
+		this.message.on('pageShareAppMessage', (msg) => {
+			const result = runtime.pageShareAppMessage(msg)
+			if (msg?.success) {
+				this.message.send({
+					type: 'triggerCallback',
+					target: 'container',
+					body: {
+						bridgeId: msg.bridgeId,
+						id: msg.success,
+						args: [result],
+						data: result,
+					},
+				})
+			}
 		})
 
 		this.message.on('pageScroll', (msg) => {
@@ -188,22 +200,16 @@ class Service {
 		this.message.on('pageResize', (msg) => {
 			// 页面尺寸变化时执行
 			runtime.pageResize(msg)
-
-			// TODO: 调用组件 pageLifetimes.resize
 		})
 
-		this.message.on('onTabItemTap', () => {
-			// TODO:tab 点击时执行
-			// console.log(item.index)
-			// console.log(item.pagePath)
-			// console.log(item.text)
+		this.message.on('onTabItemTap', (msg) => {
+			runtime.pageTabItemTap(msg)
 		})
 
 		// 组件所在页面路由动画完成时执行
 		this.message.on('pageRouteDone', (msg) => {
 			const { bridgeId } = msg
 
-			// TODO: 调用组件 pageLifetimes.routeDone
 			runtime.componentRouteDone({ bridgeId })
 		})
 

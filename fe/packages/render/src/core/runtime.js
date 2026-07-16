@@ -493,6 +493,9 @@ class Runtime {
 		this.initializedModules = new Set()
 		this.preInitUpdates = new Map()
 		this.intersectionObservers = new Map()
+		this.mediaQueryObservers = new Map()
+		this.componentAnimations = new Map()
+		this.performanceObservers = new Map()
 		this.canvasNodes = new Map()
 		this.canvasResources = new Map()
 		this.canvasRafIds = new Map()
@@ -520,6 +523,19 @@ class Runtime {
 			}
 			this.intersectionObservers.clear()
 		}
+		for (const { mediaQueryList, listener } of this.mediaQueryObservers.values()) {
+			mediaQueryList.removeEventListener?.('change', listener)
+			mediaQueryList.removeListener?.(listener)
+		}
+		this.mediaQueryObservers.clear()
+		for (const animations of this.componentAnimations.values()) {
+			animations.forEach(animation => animation.cancel())
+		}
+		this.componentAnimations.clear()
+		for (const observer of this.performanceObservers.values()) {
+			observer.disconnect()
+		}
+		this.performanceObservers.clear()
 	}
 
 	syncReactiveState(state, nextState = {}) {
@@ -2316,8 +2332,145 @@ class Runtime {
 		}
 	}
 
-	addPerformanceObserver() {
-		// TODO: 性能观察对象
+	addMediaQueryObserver({ bridgeId, params }) {
+		const { condition = {}, success } = params
+		const mediaFeatures = {
+			minWidth: 'min-width',
+			maxWidth: 'max-width',
+			width: 'width',
+			minHeight: 'min-height',
+			maxHeight: 'max-height',
+			height: 'height',
+		}
+		const clauses = []
+		for (const [key, feature] of Object.entries(mediaFeatures)) {
+			if (Number.isFinite(condition[key]) && condition[key] >= 0) {
+				clauses.push(`(${feature}: ${condition[key]}px)`)
+			}
+		}
+		if (condition.orientation) {
+			clauses.push(`(orientation: ${condition.orientation})`)
+		}
+
+		const mediaQueryList = window.matchMedia(clauses.join(' and ') || 'all')
+		const observerId = uuid()
+		const listener = event => this.triggerCallback(bridgeId, success, {
+			observerId,
+			matches: event.matches,
+		})
+		if (mediaQueryList.addEventListener) {
+			mediaQueryList.addEventListener('change', listener)
+		}
+		else {
+			mediaQueryList.addListener?.(listener)
+		}
+		this.mediaQueryObservers.set(observerId, { mediaQueryList, listener })
+		this.triggerCallback(bridgeId, success, {
+			observerId,
+			matches: mediaQueryList.matches,
+		})
+	}
+
+	removeMediaQueryObserver({ params: { observerId } }) {
+		const observer = this.mediaQueryObservers.get(observerId)
+		if (!observer) {
+			return
+		}
+		if (observer.mediaQueryList.removeEventListener) {
+			observer.mediaQueryList.removeEventListener('change', observer.listener)
+		}
+		else {
+			observer.mediaQueryList.removeListener?.(observer.listener)
+		}
+		this.mediaQueryObservers.delete(observerId)
+	}
+
+	async componentAnimate({ bridgeId, params }) {
+		const { moduleId, selector, keyframes = [], duration = 0, success } = params
+		const root = await this.waitForEl(this.instance.get(moduleId))
+		const elements = root?.querySelectorAll?.(selector) || []
+		const animationKey = `${moduleId}:${selector}`
+		const previousAnimations = this.componentAnimations.get(animationKey)
+		previousAnimations?.forEach(animation => animation.cancel())
+
+		const normalizedKeyframes = Array.from(keyframes, (keyframe) => {
+			const normalized = { ...keyframe }
+			if (normalized.ease && !normalized.easing) {
+				normalized.easing = normalized.ease
+				delete normalized.ease
+			}
+			return normalized
+		})
+		const animations = Array.from(elements, element => element.animate(normalizedKeyframes, {
+			duration: Math.max(Number(duration) || 0, 0),
+			fill: 'forwards',
+		}))
+		const animationSet = new Set(animations)
+		this.componentAnimations.set(animationKey, animationSet)
+		await Promise.allSettled(animations.map(animation => animation.finished))
+		if (this.componentAnimations.get(animationKey) === animationSet) {
+			this.componentAnimations.delete(animationKey)
+		}
+		this.triggerCallback(bridgeId, success)
+	}
+
+	async componentClearAnimation({ bridgeId, params }) {
+		const { moduleId, selector, options = {}, success } = params
+		const animationKey = `${moduleId}:${selector}`
+		const animations = this.componentAnimations.get(animationKey) || []
+		for (const animation of animations) {
+			if (options.final) {
+				try {
+					animation.finish()
+					animation.commitStyles?.()
+				}
+				catch {
+					// An idle or scroll-driven animation cannot always be finished.
+				}
+			}
+			animation.cancel()
+		}
+		this.componentAnimations.delete(animationKey)
+		this.triggerCallback(bridgeId, success)
+	}
+
+	addPerformanceObserver({ bridgeId, params }) {
+		const { entryTypes = [], success } = params
+		const observerId = uuid()
+		if (typeof PerformanceObserver === 'undefined') {
+			this.triggerCallback(bridgeId, success, { observerId, unsupported: true })
+			return
+		}
+
+		const supportedTypes = new Set(PerformanceObserver.supportedEntryTypes || [])
+		const normalizedTypes = entryTypes.filter(type => supportedTypes.size === 0 || supportedTypes.has(type))
+		const observer = new PerformanceObserver((list) => {
+			const entries = list.getEntries().map(entry => (
+				typeof entry.toJSON === 'function'
+					? entry.toJSON()
+					: {
+						name: entry.name,
+						entryType: entry.entryType,
+						startTime: entry.startTime,
+						duration: entry.duration,
+					}
+			))
+			this.triggerCallback(bridgeId, success, {
+				observerId,
+				data: { entryList: JSON.stringify(entries) },
+			})
+		})
+		if (normalizedTypes.length > 0) {
+			observer.observe({ entryTypes: normalizedTypes })
+		}
+		this.performanceObservers.set(observerId, observer)
+		this.triggerCallback(bridgeId, success, { observerId })
+	}
+
+	removePerformanceObserver({ params: { observerId } }) {
+		const observer = this.performanceObservers.get(observerId)
+		observer?.disconnect()
+		this.performanceObservers.delete(observerId)
 	}
 }
 

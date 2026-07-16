@@ -1,6 +1,8 @@
 import { cloneDeep, isFunction, normalizePropertyDefinition, resolvePropertyValue } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import { createIntersectionObserver } from '../../api/core/wxml/intersection-observer'
+import { createMediaQueryObserver } from '../../api/core/wxml/media-query-observer'
+import { invokeAPI } from '../../api/common'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
 import { applyDataUpdates, invokeDataObservers, invokePropertyChanges } from '../../core/data-update'
@@ -770,10 +772,10 @@ export class Component {
 	}
 
 	/**
-	 * TODO: 创建一个 MediaQueryObserver 对象
+	 * 创建一个 MediaQueryObserver 对象，选择器范围限定在当前组件。
 	 */
-	createMediaQueryObserver() {
-		console.warn('[service] 暂不支持 createMediaQueryObserver')
+	createMediaQueryObserver(options) {
+		return createMediaQueryObserver(this, options)
 	}
 
 	/**
@@ -792,17 +794,37 @@ export class Component {
 	}
 
 	/**
-	 * TODO: 执行关键帧动画
+	 * 执行关键帧动画。
 	 */
-	animate() {
-		console.warn('[service] 暂不支持 animate')
+	animate(selector, keyframes, duration, timeline, callback) {
+		if (isFunction(timeline)) {
+			callback = timeline
+			timeline = undefined
+		}
+		invokeAPI('componentAnimate', {
+			moduleId: this.__id__,
+			selector,
+			keyframes,
+			duration,
+			timeline,
+			success: callback,
+		}, 'render')
 	}
 
 	/**
-	 * TODO: 清除关键帧动画
+	 * 清除关键帧动画。
 	 */
-	clearAnimation() {
-		console.warn('[service] 暂不支持 clearAnimation')
+	clearAnimation(selector, options, callback) {
+		if (isFunction(options)) {
+			callback = options
+			options = {}
+		}
+		invokeAPI('componentClearAnimation', {
+			moduleId: this.__id__,
+			selector,
+			options: options || {},
+			success: callback,
+		}, 'render')
 	}
 
 	/**
@@ -1020,6 +1042,32 @@ export class Component {
 		if (!this.__isComponent__) {
 			const { scrollTop } = opts
 			invokeSafely(this, this.onPageScroll, [{ scrollTop }], 'onPageScroll')
+		}
+	}
+
+	pagePullDownRefresh() {
+		if (!this.__isComponent__) {
+			invokeSafely(this, this.onPullDownRefresh, [], 'onPullDownRefresh')
+		}
+	}
+
+	pageReachBottom() {
+		if (!this.__isComponent__) {
+			invokeSafely(this, this.onReachBottom, [], 'onReachBottom')
+		}
+	}
+
+	pageShareAppMessage(options = {}) {
+		if (!this.__isComponent__) {
+			return invokeSafely(this, this.onShareAppMessage, [options], 'onShareAppMessage')
+		}
+
+		return undefined
+	}
+
+	pageTabItemTap(item = {}) {
+		if (!this.__isComponent__) {
+			invokeSafely(this, this.onTabItemTap, [item], 'onTabItemTap')
 		}
 	}
 

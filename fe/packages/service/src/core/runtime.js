@@ -572,6 +572,22 @@ class Runtime {
 		instance.pageScrollTop({ scrollTop })
 	}
 
+	pagePullDownRefresh({ bridgeId }) {
+		this.getPageInstance(bridgeId)?.pagePullDownRefresh()
+	}
+
+	pageReachBottom({ bridgeId }) {
+		this.getPageInstance(bridgeId)?.pageReachBottom()
+	}
+
+	pageShareAppMessage({ bridgeId, ...options }) {
+		return this.getPageInstance(bridgeId)?.pageShareAppMessage(options)
+	}
+
+	pageTabItemTap({ bridgeId, ...item }) {
+		this.getPageInstance(bridgeId)?.pageTabItemTap(item)
+	}
+
 	pageResize(opts) {
 		const { bridgeId, size } = opts
 		const instances = this.instances[bridgeId]
