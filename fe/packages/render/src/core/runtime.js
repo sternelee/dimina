@@ -8,6 +8,7 @@ import {
 	createElementVNode,
 	createTextVNode,
 	createVNode,
+	cloneVNode,
 	Fragment,
 	getCurrentInstance,
 	h,
@@ -35,6 +36,145 @@ import {
 import loader from './loader'
 import message from './message'
 import { createMiniProgramSlots } from './slots'
+
+const COMPONENT_HOST_ATTRIBUTE = 'data-dd-component-host'
+const STYLE_ISOLATION_ATTRIBUTE = 'data-dd-style-isolation'
+const STYLE_HOST_ATTRIBUTE = 'data-dd-style-host'
+
+function normalizeStyleIsolation(value) {
+	if (value === 'shared') {
+		return 'shared'
+	}
+	if (value === 'apply-shared') {
+		return 'apply-shared'
+	}
+	return 'isolated'
+}
+
+function acceptsGlobalStyles(styleIsolation) {
+	return styleIsolation === 'apply-shared' || styleIsolation === 'shared'
+}
+
+function markComponentHost(vnode, styleIsolation, styleScopeId) {
+	if (!vnode || typeof vnode !== 'object') {
+		return vnode
+	}
+	return cloneVNode(vnode, {
+		[COMPONENT_HOST_ATTRIBUTE]: '',
+		[STYLE_ISOLATION_ATTRIBUTE]: styleIsolation,
+		[STYLE_HOST_ATTRIBUTE]: styleScopeId,
+	})
+}
+
+function addStyleHostToken(element, styleScopeId) {
+	const tokens = new Set((element.getAttribute(STYLE_HOST_ATTRIBUTE) || '').split(/\s+/).filter(Boolean))
+	tokens.add(styleScopeId)
+	element.setAttribute(STYLE_HOST_ATTRIBUTE, [...tokens].join(' '))
+}
+
+function isElementNode(node) {
+	return node?.nodeType === 1 && typeof node.setAttribute === 'function'
+}
+
+function applyStyleScopeAttributes(root, scopeIds, inheritedAccess, pageScopeId) {
+	if (!isElementNode(root)) {
+		return
+	}
+
+	const visit = (element, canReceiveInheritedStyles) => {
+		const isComponentHost = element.hasAttribute(COMPONENT_HOST_ATTRIBUTE)
+		const hostAcceptsGlobalStyles = isComponentHost
+			&& acceptsGlobalStyles(normalizeStyleIsolation(element.getAttribute(STYLE_ISOLATION_ATTRIBUTE)))
+		const isPageOwnedNode = pageScopeId && element.hasAttribute(pageScopeId)
+		const receivesGlobalStyles = canReceiveInheritedStyles || hostAcceptsGlobalStyles || isPageOwnedNode
+		if (receivesGlobalStyles) {
+			for (const scopeId of scopeIds) {
+				element.setAttribute(scopeId, '')
+			}
+		}
+		const childAccess = isComponentHost ? hostAcceptsGlobalStyles : receivesGlobalStyles
+		for (const child of element.children) {
+			visit(child, childAccess)
+		}
+	}
+
+	visit(root, inheritedAccess)
+}
+
+function canReceiveStylesFromParent(node, ownerRoot, pageScopeId) {
+	let current = node.parentElement
+	while (current) {
+		if (current.hasAttribute(COMPONENT_HOST_ATTRIBUTE)) {
+			return acceptsGlobalStyles(
+				normalizeStyleIsolation(current.getAttribute(STYLE_ISOLATION_ATTRIBUTE)),
+			)
+		}
+		if (pageScopeId && current.hasAttribute(pageScopeId)) {
+			return true
+		}
+		if (current === ownerRoot) {
+			return true
+		}
+		current = current.parentElement
+	}
+	return false
+}
+
+function observeStyleScopeRoot(root, scopeIds, pageScopeId) {
+	if (!isElementNode(root) || scopeIds.length === 0) {
+		return null
+	}
+	applyStyleScopeAttributes(root, scopeIds, true, pageScopeId)
+
+	const observer = new MutationObserver((records) => {
+		for (const record of records) {
+			for (const node of record.addedNodes) {
+				if (!isElementNode(node)) {
+					continue
+				}
+				applyStyleScopeAttributes(
+					node,
+					scopeIds,
+					canReceiveStylesFromParent(node, root, pageScopeId),
+					pageScopeId,
+				)
+			}
+		}
+	})
+	observer.observe(root, { childList: true, subtree: true })
+	return observer
+}
+
+function collectVNodeRootElements(vnode, result = []) {
+	if (!vnode) {
+		return result
+	}
+	if (Array.isArray(vnode)) {
+		for (const child of vnode) collectVNodeRootElements(child, result)
+		return result
+	}
+	if (vnode.component?.subTree) {
+		return collectVNodeRootElements(vnode.component.subTree, result)
+	}
+	if (vnode.suspense?.activeBranch) {
+		return collectVNodeRootElements(vnode.suspense.activeBranch, result)
+	}
+	if (vnode.type === Fragment) {
+		return collectVNodeRootElements(vnode.children, result)
+	}
+	if (isElementNode(vnode.el) && !result.includes(vnode.el)) {
+		result.push(vnode.el)
+	}
+	return result
+}
+
+function installStyleScopeSync(roots, scopeIds, pageScopeId) {
+	const normalizedScopeIds = [...new Set(scopeIds.filter(Boolean))]
+	const observers = roots
+		.map(root => observeStyleScopeRoot(root, normalizedScopeIds, pageScopeId))
+		.filter(Boolean)
+	return () => observers.forEach(observer => observer.disconnect())
+}
 
 function hasVNodeProp(vnodeProps, name) {
 	if (!vnodeProps) return false
@@ -449,16 +589,28 @@ class Runtime {
 	makeOptions(opts) {
 		const { path, bridgeId, pageId } = opts
 		const pageModule = loader.getModuleByPath(path)
-		const { id, usingComponents, tplComponents, customTabBar } = pageModule.moduleInfo
+		const {
+			id,
+			appStyleScopeId,
+			sharedStyleScopeIds = [],
+			usingComponents,
+			tplComponents,
+			customTabBar,
+		} = pageModule.moduleInfo
 		const pageRender = pageModule.moduleInfo.render
 		const customTabBarComponentName = customTabBar?.componentName
 		const hasCustomTabBar = typeof customTabBarComponentName === 'string'
 			&& Object.prototype.hasOwnProperty.call(usingComponents || {}, customTabBarComponentName)
 		this.pageId = pageId
-		const components = this.createComponent(path, bridgeId, usingComponents)
 		const that = this
 		const rootCom = 'dd-page'
 		const sId = `data-v-${id}`
+		const globalStyleScopeIds = [
+			appStyleScopeId ? `data-v-${appStyleScopeId}` : null,
+			sId,
+			...sharedStyleScopeIds.map(scopeId => `data-v-${scopeId}`),
+		].filter(Boolean)
+		const components = this.createComponent(path, bridgeId, usingComponents)
 		return {
 			id,
 			tplComponents,
@@ -486,6 +638,7 @@ class Runtime {
 						__scopeId: sId,
 						async setup(_props, { expose }) {
 							expose()
+							const vueInstance = getCurrentInstance()
 							provide('bridgeId', bridgeId)
 							provide('path', path)
 							provide(path, {
@@ -495,9 +648,10 @@ class Runtime {
 								id: that.pageId,
 								sId,
 							})
-							const instance = getCurrentInstance().proxy
+							const instance = vueInstance.proxy
 							instance.__page__ = true
 							that.setModuleInstance(that.pageId, instance)
+							let stopStyleScopeSync = () => {}
 
 							let ticking = false
 							const handleScroll = () => {
@@ -519,6 +673,11 @@ class Runtime {
 							}
 
 							onMounted(() => {
+								stopStyleScopeSync = installStyleScopeSync(
+									collectVNodeRootElements(vueInstance.subTree),
+									globalStyleScopeIds,
+									sId,
+								)
 								window.addEventListener('scroll', handleScroll, { passive: true })
 								nextTick(() => {
 									message.send({
@@ -533,6 +692,7 @@ class Runtime {
 							})
 
 							onUnmounted(() => {
+								stopStyleScopeSync()
 								window.removeEventListener('scroll', handleScroll)
 							})
 
@@ -658,6 +818,7 @@ class Runtime {
 			const { id, usingComponents: subUsing, customTabBar } = module.moduleInfo
 			const subComponents = this.createComponent(componentPath, bridgeId, subUsing, newDepthChain)
 			const sId = `data-v-${id}`
+			const styleIsolation = normalizeStyleIsolation(module.moduleInfo.styleIsolation)
 
 			// setup -> beforeCreate -> beforeMount
 			components[`dd-${componentName}`] = {
@@ -668,12 +829,16 @@ class Runtime {
 				async setup(props, { attrs, expose }) {
 					const parentInfo = inject('info')
 					const parentPath = inject('path')
+					const vueInstance = getCurrentInstance()
+					// External classes belong to the component that lexically declared the
+					// child vnode. Slots can change the nearest Vue parent, so prefer the
+					// vnode scope over the injected render-parent scope.
+					const externalClassScopeId = vueInstance.vnode.scopeId || parentInfo.sId
 
 					expose({
 						props,
-						sId: parentInfo.sId,
+						sId: externalClassScopeId,
 					})
-					const vueInstance = getCurrentInstance()
 					const vueParentId = that.getParentModuleId(vueInstance)
 					const parentId = vueParentId || parentInfo.id
 					const pageInfo = inject(path, null)
@@ -761,6 +926,12 @@ class Runtime {
 					that._pendingSetups.set(moduleId, new Promise(r => (_resolvePending = r)))
 
 					onMounted(() => {
+						const roots = collectVNodeRootElements(vueInstance.subTree)
+						for (const root of roots) {
+							root.setAttribute(COMPONENT_HOST_ATTRIBUTE, '')
+							root.setAttribute(STYLE_ISOLATION_ATTRIBUTE, styleIsolation)
+							addStyleHostToken(root, id)
+						}
 						message.send({
 							type: 'mA',
 							target: 'service',
@@ -866,7 +1037,9 @@ class Runtime {
 					that.applyInitialData(moduleId, data, initData)
 					return data
 				},
-				render: module.moduleInfo.render,
+				render(...args) {
+					return markComponentHost(module.moduleInfo.render.apply(this, args), styleIsolation, id)
+				},
 			}
 		}
 		return components

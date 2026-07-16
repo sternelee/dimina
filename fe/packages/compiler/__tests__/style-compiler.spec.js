@@ -2,9 +2,10 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, removeBaseComponentScope, resolveStyleImportPath } from '../src/core/style-compiler'
-import { getComponent, getPages, storeInfo } from '../src/env.js'
+import { ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, resolveStyleImportPath } from '../src/core/style-compiler'
+import { getAppStyleScopeId, getComponent, getPages, storeInfo } from '../src/env.js'
 import { compileSS } from '../src/core/style-compiler.js'
+import { compileML } from '../src/core/view-compiler.js'
 
 describe('ensureImportSemicolons', () => {
 	it('should add semicolons to @import statements that do not have them', () => {
@@ -87,142 +88,6 @@ body {
 
 	it('should handle empty input', () => {
 		expect(ensureImportSemicolons('')).toEqual('')
-	})
-})
-
-describe('removeBaseComponentScope', () => {
-	const moduleId = '7a7a37b1'
-
-	it('应该移除基础组件选择器的 scoped 属性', async () => {
-		const input = `.dd-input[data-v-${moduleId}] { color: red; }`
-		const expected = `.dd-input { color: red; }`
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该处理多个基础组件选择器', async () => {
-		const input = `
-.dd-input[data-v-${moduleId}] { color: red; }
-.dd-button[data-v-${moduleId}] { padding: 10px; }
-.dd-view[data-v-${moduleId}] { display: block; }
-		`.trim()
-		
-		const expected = `
-.dd-input { color: red; }
-.dd-button { padding: 10px; }
-.dd-view { display: block; }
-		`.trim()
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该保留非基础组件选择器的 scoped 属性', async () => {
-		const input = `
-.dd-input[data-v-${moduleId}] { color: red; }
-.custom-class[data-v-${moduleId}] { color: blue; }
-		`.trim()
-		
-		const expected = `
-.dd-input { color: red; }
-.custom-class[data-v-${moduleId}] { color: blue; }
-		`.trim()
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该处理复合选择器', async () => {
-		const input = `.dd-input.active[data-v-${moduleId}] { color: red; }`
-		const expected = `.dd-input.active { color: red; }`
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该处理后代选择器', async () => {
-		const input = `.container .dd-input[data-v-${moduleId}] { color: red; }`
-		const expected = `.container .dd-input { color: red; }`
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该处理伪类选择器', async () => {
-		const input = `.dd-input:focus[data-v-${moduleId}] { border-color: blue; }`
-		const expected = `.dd-input:focus { border-color: blue; }`
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该处理多个类名的组合', async () => {
-		const input = `
-.dd-input[data-v-${moduleId}].dd-button[data-v-${moduleId}] { color: red; }
-		`.trim()
-		
-		const expected = `
-.dd-input.dd-button { color: red; }
-		`.trim()
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该处理没有 scoped 属性的基础组件', async () => {
-		const input = `.dd-input { color: red; }`
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(input)
-	})
-
-	it('当 moduleId 为空时应该返回原始 CSS', async () => {
-		const input = `.dd-input[data-v-${moduleId}] { color: red; }`
-		
-		const result = await removeBaseComponentScope(input, '')
-		expect(result).toEqual(input)
-	})
-
-	it('当 moduleId 为 null 时应该返回原始 CSS', async () => {
-		const input = `.dd-input[data-v-${moduleId}] { color: red; }`
-		
-		const result = await removeBaseComponentScope(input, null)
-		expect(result).toEqual(input)
-	})
-
-	it('应该处理混合的基础组件和自定义选择器', async () => {
-		const input = `
-.dd-input[data-v-${moduleId}] { color: red; }
-.custom-wrapper .dd-button[data-v-${moduleId}] { padding: 10px; }
-.custom-class[data-v-${moduleId}] { margin: 5px; }
-.dd-view[data-v-${moduleId}] .child { display: flex; }
-		`.trim()
-		
-		const expected = `
-.dd-input { color: red; }
-.custom-wrapper .dd-button { padding: 10px; }
-.custom-class[data-v-${moduleId}] { margin: 5px; }
-.dd-view .child { display: flex; }
-		`.trim()
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
-	})
-
-	it('应该处理所有白名单中的基础组件', async () => {
-		const components = ['input', 'button', 'view', 'text', 'image', 'checkbox', 'radio']
-		
-		const input = components
-			.map(tag => `.dd-${tag}[data-v-${moduleId}] { color: red; }`)
-			.join('\n')
-		
-		const expected = components
-			.map(tag => `.dd-${tag} { color: red; }`)
-			.join('\n')
-		
-		const result = await removeBaseComponentScope(input, moduleId)
-		expect(result).toEqual(expected)
 	})
 })
 
@@ -373,5 +238,124 @@ describe('style compiler regressions', () => {
 		expect(compA.id).not.toBe(compB.id)
 		expect(outputCss).toContain(`data-v-${compA.id}`)
 		expect(outputCss).toContain(`data-v-${compB.id}`)
+	})
+
+	it('aligns isolated, apply-shared, shared, and legacy addGlobalClass styles', async () => {
+		prepareBaseProject({
+			usingComponents: {
+				isolated: '/components/isolated',
+				'applied-json': '/components/applied-json',
+				'shared-script': '/components/shared-script',
+				'legacy-script': '/components/legacy-script',
+			},
+		})
+		writeProjectFile('pages/home/index.wxss', 'view .page-target { color: black; }')
+
+		writeProjectFile('components/isolated.json', JSON.stringify({ component: true }))
+		writeProjectFile('components/isolated.wxss', '.isolated-style { color: red; }')
+		writeProjectFile('components/applied-json.json', JSON.stringify({
+			component: true,
+			styleIsolation: 'apply-shared',
+		}))
+		writeProjectFile('components/applied-json.wxss', '.applied-style { color: blue; }')
+		writeProjectFile('components/shared-script.json', JSON.stringify({ component: true }))
+		writeProjectFile('components/shared-script.js', "Component({ options: { styleIsolation: 'shared' } })")
+		writeProjectFile('components/shared-script.wxss', ':host { display: block; } .shared-style { color: green; }')
+		writeProjectFile('components/legacy-script.json', JSON.stringify({ component: true }))
+		writeProjectFile('components/legacy-script.js', 'Component({ options: { addGlobalClass: true } })')
+		writeProjectFile('components/legacy-script.wxss', '.legacy-style { color: purple; }')
+
+		storeInfo(tempDir)
+		const pages = getPages()
+		await compileSS(pages.mainPages, null, { completedTasks: 0 })
+
+		const page = pages.mainPages[0]
+		const isolated = getComponent('/components/isolated')
+		const applied = getComponent('/components/applied-json')
+		const shared = getComponent('/components/shared-script')
+		const legacy = getComponent('/components/legacy-script')
+		const outputCss = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.css'), 'utf-8')
+
+		expect(isolated.styleIsolation).toBe('isolated')
+		expect(applied.styleIsolation).toBe('apply-shared')
+		expect(shared.styleIsolation).toBe('shared')
+		expect(legacy.styleIsolation).toBe('apply-shared')
+		expect(page.sharedStyleScopeIds).toEqual([shared.id])
+		expect(outputCss).toContain(`.dd-view .page-target[data-v-${page.id}]`)
+		expect(outputCss).toContain(`.isolated-style[data-v-${isolated.id}]`)
+		expect(outputCss).toContain(`.applied-style[data-v-${applied.id}]`)
+		expect(outputCss).toContain(`.shared-style[data-v-${shared.id}]`)
+		expect(outputCss).toContain(`[data-dd-style-host~=${shared.id}][data-v-${shared.id}]`)
+		expect(outputCss).toContain(`.legacy-style[data-v-${legacy.id}]`)
+	})
+
+	it('emits deterministic style metadata and keeps JSON precedence across nested shared components', async () => {
+		prepareBaseProject({
+			usingComponents: {
+				conflict: '/components/conflict',
+				nested: '/components/nested',
+				'shared-ts': '/components/shared-ts',
+				invalid: '/components/invalid',
+			},
+		})
+
+		writeProjectFile('components/conflict.json', JSON.stringify({
+			component: true,
+			styleIsolation: 'apply-shared',
+		}))
+		writeProjectFile('components/conflict.js', "Component({ options: { styleIsolation: 'shared' } })")
+		writeProjectFile('components/conflict.wxml', '<view>conflict</view>')
+
+		writeProjectFile('components/shared-ts.json', JSON.stringify({ component: true }))
+		writeProjectFile('components/shared-ts.ts', "Component({ options: { styleIsolation: 'shared' } })")
+		writeProjectFile('components/shared-ts.wxml', '<view>shared</view>')
+
+		writeProjectFile('components/nested.json', JSON.stringify({
+			component: true,
+			usingComponents: {
+				shared: '/components/shared-ts',
+			},
+		}))
+		writeProjectFile('components/nested.wxml', '<shared />')
+
+		writeProjectFile('components/invalid.json', JSON.stringify({
+			component: true,
+			styleIsolation: 'unsupported-mode',
+		}))
+		writeProjectFile('components/invalid.wxml', '<view>invalid</view>')
+
+		storeInfo(tempDir)
+		const pages = getPages()
+		const page = pages.mainPages[0]
+		const conflict = getComponent('/components/conflict')
+		const shared = getComponent('/components/shared-ts')
+		const invalid = getComponent('/components/invalid')
+
+		expect(conflict.styleIsolation).toBe('apply-shared')
+		expect(shared.styleIsolation).toBe('shared')
+		expect(invalid.styleIsolation).toBe('isolated')
+		expect(page.appStyleScopeId).toBe(getAppStyleScopeId())
+		// The same shared component is reachable both directly and through nested.
+		expect(page.sharedStyleScopeIds).toEqual([shared.id])
+
+		await compileML(pages.mainPages, null, { completedTasks: 0 })
+		const output = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.js'), 'utf-8')
+		expect(output).toMatch(new RegExp(`path:\\s*["']pages/home/index["'][\\s\\S]{0,240}appStyleScopeId:\\s*["']${page.appStyleScopeId}["']`))
+		expect(output).toMatch(new RegExp(`sharedStyleScopeIds:\\s*\\[["']${shared.id}["']\\]`))
+		expect(output).toMatch(/path:\s*["']\/components\/conflict["'][\s\S]{0,240}styleIsolation:\s*["']apply-shared["']/)
+		expect(output).toMatch(/path:\s*["']\/components\/shared-ts["'][\s\S]{0,240}styleIsolation:\s*["']shared["']/)
+		expect(output).toMatch(/path:\s*["']\/components\/invalid["'][\s\S]{0,240}styleIsolation:\s*["']isolated["']/)
+	})
+
+	it('scopes app styles so isolated components do not receive them implicitly', async () => {
+		prepareBaseProject()
+		writeProjectFile('app.wxss', 'page .global-target { color: red; }')
+
+		storeInfo(tempDir)
+		const appStyleScopeId = getAppStyleScopeId()
+		await compileSS([{ path: 'app', id: appStyleScopeId }], null, { completedTasks: 0 })
+
+		const outputCss = fs.readFileSync(path.join(outputDir, 'main/app.css'), 'utf-8')
+		expect(outputCss).toContain(`.dd-page .global-target[data-v-${appStyleScopeId}]`)
 	})
 })

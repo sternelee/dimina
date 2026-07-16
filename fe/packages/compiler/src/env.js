@@ -2,6 +2,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { parseSync } from 'oxc-parser'
+import { walk } from 'oxc-walker'
 import { resolveMiniProgramPath, toMiniProgramModuleId } from './common/path-utils.js'
 import { isObjectEmpty, uuid } from './common/utils.js'
 import { NpmResolver } from './common/npm-resolver.js'
@@ -18,6 +20,11 @@ const DEFAULT_VIEW_SCRIPT_EXTS = ['.wxs']
 const DEFAULT_VIEW_SCRIPT_TAGS = ['wxs', 'dds']
 // 微信自定义 tabBar 的规范入口只在编译适配层解析；运行时通过产物元数据识别。
 const CUSTOM_TAB_BAR_COMPONENT_PATH = '/custom-tab-bar/index'
+const STYLE_ISOLATION_VALUES = new Set([
+	'isolated',
+	'apply-shared',
+	'shared',
+])
 
 // 保留扩展名：所有内置类型 + 逻辑(.js/.ts) + 配置(.json)。自定义项不得占用，
 // 否则会跨角色串编（如 template:['js'] 会把页面逻辑文件当成模板解析）。
@@ -394,6 +401,7 @@ function storeComponentConfig(pageJsonContent, pageFilePath) {
 		
 		const cUsing = cContent.usingComponents || {}
 		const isComponent = cContent.component || false
+		const styleIsolation = resolveComponentStyleIsolation(cContent, componentFilePath)
 		const cComponents = Object.keys(cUsing).reduce((acc, key) => {
 			acc[key] = getModuleId(cUsing[key], componentFilePath)
 			return acc
@@ -403,6 +411,7 @@ function storeComponentConfig(pageJsonContent, pageFilePath) {
 			id: uuid(moduleId),
 			path: moduleId,
 			component: isComponent,
+			styleIsolation,
 			usingComponents: cComponents,
 		}
 
@@ -411,6 +420,84 @@ function storeComponentConfig(pageJsonContent, pageFilePath) {
 			storeComponentConfig(configInfo.componentInfo[moduleId], componentFilePath)
 		}
 	}
+}
+
+function getStaticProperty(objectExpression, propertyName) {
+	if (objectExpression?.type !== 'ObjectExpression') {
+		return undefined
+	}
+	return objectExpression.properties?.find((property) => {
+		if (property.type !== 'Property' || property.computed) {
+			return false
+		}
+		return property.key?.name === propertyName || property.key?.value === propertyName
+	})?.value
+}
+
+function normalizeStyleIsolation(value) {
+	return STYLE_ISOLATION_VALUES.has(value) ? value : undefined
+}
+
+/**
+ * styleIsolation can be declared either in component.json or in
+ * Component({ options }). The style compiler must know it before service
+ * runtime starts, so only statically-declared literal options participate.
+ * addGlobalClass is the legacy equivalent of apply-shared.
+ */
+function resolveComponentStyleIsolation(componentConfig, componentJsonPath) {
+	const jsonValue = normalizeStyleIsolation(componentConfig?.styleIsolation)
+	if (jsonValue) {
+		return jsonValue
+	}
+
+	const basePath = componentJsonPath.replace(/\.json$/i, '')
+	const scriptPath = ['.js', '.ts']
+		.map(ext => `${basePath}${ext}`)
+		.find(candidate => fs.existsSync(candidate))
+	if (!scriptPath) {
+		return 'isolated'
+	}
+
+	try {
+		const source = getContentByPath(scriptPath)
+		const { program } = parseSync(scriptPath, source, {
+			sourceType: 'unambiguous',
+		})
+		let extractedValue
+		walk(program, {
+			enter(expression) {
+				if (extractedValue) {
+					return
+				}
+				if (
+					expression?.type !== 'CallExpression'
+					|| expression.callee?.type !== 'Identifier'
+					|| expression.callee.name !== 'Component'
+				) {
+					return
+				}
+				const definition = expression.arguments?.[0]
+				const options = getStaticProperty(definition, 'options')
+				const styleIsolation = getStaticProperty(options, 'styleIsolation')?.value
+				const normalized = normalizeStyleIsolation(styleIsolation)
+				if (normalized) {
+					extractedValue = normalized
+					return
+				}
+				if (getStaticProperty(options, 'addGlobalClass')?.value === true) {
+					extractedValue = 'apply-shared'
+				}
+			},
+		})
+		if (extractedValue) {
+			return extractedValue
+		}
+	}
+	catch (error) {
+		console.warn(`[env] 无法解析组件样式隔离配置 ${scriptPath}: ${error.message}`)
+	}
+
+	return 'isolated'
 }
 
 /**
@@ -515,6 +602,8 @@ function getPages() {
 		return {
 			id: uuid(path),
 			path,
+			appStyleScopeId: getAppStyleScopeId(),
+			sharedStyleScopeIds: collectSharedStyleScopeIds(mergedComponents),
 			usingComponents: mergedComponents,
 			customTabBar: pageInfo[path]?.customTabBar,
 		}
@@ -535,6 +624,8 @@ function getPages() {
 				return {
 					id: uuid(fullPath),
 					path: fullPath,
+					appStyleScopeId: getAppStyleScopeId(),
+					sharedStyleScopeIds: collectSharedStyleScopeIds(mergedComponents),
 					usingComponents: mergedComponents,
 					customTabBar: pageInfo[fullPath]?.customTabBar,
 				}
@@ -547,10 +638,40 @@ function getPages() {
 	}
 }
 
+function collectSharedStyleScopeIds(usingComponents) {
+	const result = []
+	const visited = new Set()
+	const visit = (componentPath) => {
+		if (visited.has(componentPath)) {
+			return
+		}
+		visited.add(componentPath)
+		const component = configInfo.componentInfo[componentPath]
+		if (!component) {
+			return
+		}
+		if (component.styleIsolation === 'shared') {
+			result.push(component.id)
+		}
+		for (const childPath of Object.values(component.usingComponents || {})) {
+			visit(childPath)
+		}
+	}
+	for (const componentPath of Object.values(usingComponents || {})) {
+		visit(componentPath)
+	}
+	return result
+}
+
+function getAppStyleScopeId() {
+	return uuid('app')
+}
+
 export {
 	getAppConfigInfo,
 	getAppId,
 	getAppName,
+	getAppStyleScopeId,
 	getComponent,
 	getContentByPath,
 	getNpmResolver,

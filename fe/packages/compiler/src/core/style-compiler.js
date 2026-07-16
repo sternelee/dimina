@@ -226,14 +226,11 @@ async function enhanceCSS(module) {
 		scoped: !!moduleId,
 	}).code
 
-	// 移除基础组件选择器的 scoped 属性
-	const cleanedCode = await removeBaseComponentScope(scopedCode, moduleId)
-
 	// 统一后处理：autoprefixer + 压缩
 	const res = await postcss([
 		autoprefixer({ overrideBrowserslist: ['cover 99.5%'] }), 
 		cssnano()
-	]).process(cleanedCode, { from: undefined })
+	]).process(scopedCode, { from: undefined })
 
 	// 处理导入的样式
 	const importCss = (await Promise.all(promises))
@@ -299,39 +296,6 @@ function normalizeRootStyleImports(source, workPath = getWorkPath()) {
 }
 
 /**
- * 移除基础组件选择器的 scoped 属性
- * @param {string} css - 包含 scoped 属性的 CSS
- * @param {string} moduleId - 模块 ID
- * @returns {Promise<string>} - 清理后的 CSS
- */
-async function removeBaseComponentScope(css, moduleId) {
-	if (!moduleId) return css
-
-	const ast = postcss.parse(css)
-	const scopeAttrName = `data-v-${moduleId}`
-
-	ast.walkRules((rule) => {
-		// 检查选择器是否包含基础组件类名
-		const hasBaseComponent = tagWhiteList.some(tag => 
-			rule.selector.includes(`.dd-${tag}`)
-		)
-
-		if (hasBaseComponent && rule.selector.includes(scopeAttrName)) {
-			// 移除 scoped 属性选择器
-			rule.selector = selectorParser((selectors) => {
-				selectors.walkAttributes((attr) => {
-					if (attr.attribute === scopeAttrName) {
-						attr.remove()
-					}
-				})
-			}).processSync(rule.selector)
-		}
-	})
-
-	return ast.toResult().css
-}
-
-/**
  * Ensures that all @import statements in CSS end with semicolons
  * @param {string} css - The CSS content to process
  * @returns {string} - The processed CSS with semicolons added to @import statements as needed
@@ -351,16 +315,13 @@ function ensureImportSemicolons(css) {
  * @returns {string} - 转换后的选择器
  */
 function processHostSelector(selector, moduleId) {
-	// 处理不同的 :host 选择器模式
+	const hostSelector = `[data-dd-style-host~="${moduleId}"]`
+
 	return selector
-		// :host 单独使用，选择组件根节点
-		.replace(/^:host$/, `[data-v-${moduleId}]`)
 		// :host(.class) 选择带有特定类的组件根节点
-		.replace(/:host\(([^)]+)\)/g, `[data-v-${moduleId}]$1`)
-		// :host 后跟其他选择器，如 :host .child
-		.replace(/:host\s+/g, `[data-v-${moduleId}] `)
-		// :host 作为复合选择器的一部分，如 :host.active
-		.replace(/:host(?=\.|#|:)/g, `[data-v-${moduleId}]`)
+		.replace(/:host\(([^)]+)\)/g, `${hostSelector}$1`)
+		// 宿主标记与 data-v 样式作用域分离，避免 shared 作用域扩散后 :host 误命中页面节点。
+		.replace(/:host(?![\w-])/g, hostSelector)
 }
 
-export { compileSS, ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, processHostSelector, removeBaseComponentScope, resolveStyleImportPath }
+export { compileSS, ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, processHostSelector, resolveStyleImportPath }

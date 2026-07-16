@@ -1621,20 +1621,26 @@ export class MiniApp {
 
 	getMenuButtonBoundingClientRect() {
 		const rect = this.el.querySelector('.dimina-mini-app-navigation__actions').getBoundingClientRect()
+		const appRect = this.el.getBoundingClientRect()
 		const statusBar = this.parent.parent.root.querySelector('.iphone__status-bar')
 		const statusBarHeight = statusBar?.getBoundingClientRect().height || 20
 		// 对齐到小程序导航栏的几何模型：
 		// navbar 总高约等于 statusBarHeight + 40px，胶囊在内容区内垂直居中
 		const normalizedTop = statusBarHeight + 4
 		const normalizedBottom = normalizedTop + rect.height
+		// getBoundingClientRect() 返回的是宿主页面坐标，而小程序 API 约定返回
+		// 当前小程序视口坐标。容器不在页面原点时必须扣除自身偏移，否则
+		// navbar 会用宿主坐标计算中心区域，把标题推到屏幕边缘。
+		const normalizedLeft = rect.left - appRect.left
+		const normalizedRight = rect.right - appRect.left
 		return {
 			top: normalizedTop,
-			right: rect.right,
+			right: normalizedRight,
 			bottom: normalizedBottom,
-			left: rect.left,
+			left: normalizedLeft,
 			width: rect.width,
 			height: rect.height,
-			x: rect.x,
+			x: normalizedLeft,
 			y: normalizedTop,
 		}
 	}

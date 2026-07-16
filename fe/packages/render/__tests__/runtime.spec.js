@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JSDOM } from 'jsdom'
-import { createApp, h, nextTick, provide, Suspense } from 'vue'
+import { createApp, h, nextTick, provide, resolveComponent, resolveDirective, Suspense, withDirectives } from 'vue'
 import { createMiniProgramSlots } from '../src/core/slots'
 
 const groupA = [
@@ -183,6 +183,80 @@ describe('runtime template components', () => {
 		app.unmount()
 	})
 
+	it('keeps external classes on the lexical component scope through a slot', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		window.DiminaRenderBridge = {
+			publish: vi.fn((payload) => {
+				const sent = JSON.parse(payload)
+				if (sent.type !== 'mC') {
+					return
+				}
+				window.DiminaRenderBridge.onMessage({
+					type: sent.body.moduleId,
+					body: { data: {} },
+				})
+			}),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockImplementation((path) => {
+			if (path !== '/shared/image') {
+				return undefined
+			}
+			return {
+				moduleInfo: {
+					id: 'image-component-scope',
+					usingComponents: {},
+					render() {
+						const captureScope = resolveDirective('capture-external-class-scope')
+						return withDirectives(h('div', { class: 'external-image' }, 'image'), [[captureScope]])
+					},
+				},
+				propertySchemas: {},
+				props: {},
+			}
+		})
+
+		const components = runtime.createComponent('/components/grid-item', 'bridge-external-class', {
+			image: '/shared/image',
+		})
+		const SlottedImage = components['dd-image']
+		const app = createApp({
+			setup() {
+				// Simulates grid-item content rendered below a badge slot. The nearest
+				// render parent has another scope, while the vnode keeps grid-item's scope.
+				provide('info', { id: 'badge-id', sId: 'data-v-badge-scope' })
+				provide('path', '/components/badge')
+				provide('/components/badge', { id: 'badge-id' })
+				provide('/components/grid-item', { id: 'grid-item-id' })
+				return () => h(Suspense, null, {
+					default: () => {
+						const child = h(SlottedImage)
+						child.scopeId = 'data-v-grid-item-scope'
+						child.slotScopeIds = ['data-v-badge-scope-s']
+						return child
+					},
+				})
+			},
+		})
+		app.directive('capture-external-class-scope', {
+			mounted(el, binding) {
+				el.setAttribute('data-external-class-scope', binding.instance.sId)
+			},
+		})
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+
+		await vi.waitFor(() => expect(root.textContent).toBe('image'))
+		const image = root.querySelector('.external-image')
+		expect(image.getAttribute('data-external-class-scope')).toBe('data-v-grid-item-scope')
+		expect(image.getAttribute('data-external-class-scope')).not.toBe('data-v-badge-scope')
+
+		app.unmount()
+	})
+
 	it('mounts the compiled custom tabBar as a sibling of the tab page', async () => {
 		const loader = (await import('../src/core/loader.js')).default
 		const message = (await import('../src/core/message.js')).default
@@ -254,6 +328,178 @@ describe('runtime template components', () => {
 		expect(root.querySelector('.custom-tab-bar')).not.toBeNull()
 		expect(createdMessages).toHaveLength(1)
 		expect(createdMessages[0].isCustomTabBar).toBe(true)
+
+		app.unmount()
+	})
+
+	it('applies page and app styles only inside apply-shared components', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		window.DiminaRenderBridge = {
+			invoke: vi.fn(),
+			publish: vi.fn((payload) => {
+				const sent = JSON.parse(payload)
+				if (sent.type !== 'mC') {
+					return
+				}
+				window.DiminaRenderBridge.onMessage({
+					type: sent.body.moduleId,
+					body: { data: {} },
+				})
+			}),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockImplementation((path) => {
+			if (path === 'pages/style/index') {
+				return {
+					moduleInfo: {
+						id: 'page-style-scope',
+						appStyleScopeId: 'app-style-scope',
+						sharedStyleScopeIds: ['shared-component-scope'],
+						usingComponents: {
+							applied: '/components/applied',
+							shared: '/components/shared',
+							isolated: '/components/isolated',
+						},
+						tplComponents: {},
+						render() {
+							const Applied = resolveComponent('dd-applied')
+							const Shared = resolveComponent('dd-shared')
+							const Isolated = resolveComponent('dd-isolated')
+							return h('main', { class: 'style-page' }, [
+								h(Applied),
+								h(Shared),
+								h(Isolated),
+							])
+						},
+					},
+				}
+			}
+			if (path === '/components/applied') {
+				return {
+					moduleInfo: {
+						id: 'applied-style-scope',
+						styleIsolation: 'apply-shared',
+						usingComponents: {},
+						render() {
+							return h('section', { class: 'applied-host' }, [
+								h('div', { class: 'applied-inner' }, 'applied'),
+							])
+						},
+					},
+					propertySchemas: {},
+					props: {},
+				}
+			}
+			if (path === '/components/shared') {
+				return {
+					moduleInfo: {
+						id: 'shared-component-scope',
+						styleIsolation: 'shared',
+						usingComponents: {},
+						render() {
+							return h('section', { class: 'shared-host' }, [
+								h('div', { class: 'shared-inner' }, 'shared'),
+							])
+						},
+					},
+					propertySchemas: {},
+					props: {},
+				}
+			}
+			if (path === '/components/isolated') {
+				return {
+					moduleInfo: {
+						id: 'isolated-style-scope',
+						styleIsolation: 'isolated',
+						usingComponents: {},
+						render() {
+							return h('section', { class: 'isolated-host' }, [
+								h('div', { class: 'isolated-inner' }, 'isolated'),
+							])
+						},
+					},
+					propertySchemas: {},
+					props: {},
+				}
+			}
+		})
+
+		const options = runtime.makeOptions({
+			path: 'pages/style/index',
+			bridgeId: 'bridge-style-isolation',
+			pageId: 'page-style-isolation',
+		})
+		const app = createApp(options.app)
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+		window.DiminaRenderBridge.onMessage({
+			type: 'page-style-isolation',
+			body: { data: {} },
+		})
+
+		await vi.waitFor(() => expect(root.textContent).toBe('appliedsharedisolated'))
+		const page = root.querySelector('.style-page')
+		const appliedHost = root.querySelector('.applied-host')
+		const appliedInner = root.querySelector('.applied-inner')
+		const sharedHost = root.querySelector('.shared-host')
+		const sharedInner = root.querySelector('.shared-inner')
+		const isolatedHost = root.querySelector('.isolated-host')
+		const isolatedInner = root.querySelector('.isolated-inner')
+		await vi.waitFor(() => expect(appliedInner.hasAttribute('data-v-app-style-scope')).toBe(true))
+		expect(appliedHost.getAttribute('data-dd-style-isolation')).toBe('apply-shared')
+		expect(appliedHost.getAttribute('data-dd-style-host')).toBe('applied-style-scope')
+		expect(appliedInner.hasAttribute('data-dd-style-host')).toBe(false)
+		expect(page.hasAttribute('data-dd-style-host')).toBe(false)
+		expect([page, appliedHost, appliedInner, sharedHost, sharedInner, isolatedHost].map(element => ({
+			className: element.className,
+			app: element.hasAttribute('data-v-app-style-scope'),
+			page: element.hasAttribute('data-v-page-style-scope'),
+			shared: element.hasAttribute('data-v-shared-component-scope'),
+		}))).toEqual([
+			{ className: 'style-page dd-page', app: true, page: true, shared: true },
+			{ className: 'applied-host', app: true, page: true, shared: true },
+			{ className: 'applied-inner', app: true, page: true, shared: true },
+			{ className: 'shared-host', app: true, page: true, shared: true },
+			{ className: 'shared-inner', app: true, page: true, shared: true },
+			{ className: 'isolated-host', app: true, page: true, shared: true },
+		])
+		expect(appliedHost.getAttribute('data-dd-style-isolation')).toBe('apply-shared')
+		expect(sharedHost.getAttribute('data-dd-style-isolation')).toBe('shared')
+		expect(sharedHost.getAttribute('data-dd-style-host')).toBe('shared-component-scope')
+		expect(sharedInner.hasAttribute('data-dd-style-host')).toBe(false)
+		expect(isolatedHost.getAttribute('data-dd-style-isolation')).toBe('isolated')
+		expect(isolatedInner.hasAttribute('data-v-app-style-scope')).toBe(false)
+		expect(isolatedInner.hasAttribute('data-v-page-style-scope')).toBe(false)
+		expect(isolatedInner.hasAttribute('data-v-shared-component-scope')).toBe(false)
+
+		const dynamicApplied = document.createElement('div')
+		appliedInner.append(dynamicApplied)
+		const dynamicIsolated = document.createElement('div')
+		isolatedInner.append(dynamicIsolated)
+		await vi.waitFor(() => expect(dynamicApplied.hasAttribute('data-v-page-style-scope')).toBe(true))
+		expect(dynamicApplied.hasAttribute('data-v-app-style-scope')).toBe(true)
+		expect(dynamicIsolated.hasAttribute('data-v-app-style-scope')).toBe(false)
+		expect(dynamicIsolated.hasAttribute('data-v-page-style-scope')).toBe(false)
+
+		const nestedAppliedHost = document.createElement('section')
+		nestedAppliedHost.setAttribute('data-dd-component-host', '')
+		nestedAppliedHost.setAttribute('data-dd-style-isolation', 'apply-shared')
+		const nestedAppliedInner = document.createElement('div')
+		nestedAppliedHost.append(nestedAppliedInner)
+		isolatedInner.append(nestedAppliedHost)
+		await vi.waitFor(() => expect(nestedAppliedInner.hasAttribute('data-v-app-style-scope')).toBe(true))
+
+		const nestedIsolatedHost = document.createElement('section')
+		nestedIsolatedHost.setAttribute('data-dd-component-host', '')
+		nestedIsolatedHost.setAttribute('data-dd-style-isolation', 'isolated')
+		const nestedIsolatedInner = document.createElement('div')
+		nestedIsolatedHost.append(nestedIsolatedInner)
+		appliedInner.append(nestedIsolatedHost)
+		await vi.waitFor(() => expect(nestedIsolatedHost.hasAttribute('data-v-app-style-scope')).toBe(true))
+		expect(nestedIsolatedInner.hasAttribute('data-v-app-style-scope')).toBe(false)
 
 		app.unmount()
 	})

@@ -1,4 +1,8 @@
+/** @vitest-environment jsdom */
+
 import { describe, expect, it } from 'vitest'
+import { createApp, h, nextTick, provide, resolveDirective, withDirectives } from 'vue'
+import { Components } from '../index.js'
 import { replaceExternalClassTokens } from '../src/common/utils'
 
 describe('replaceExternalClassTokens', () => {
@@ -30,5 +34,43 @@ describe('replaceExternalClassTokens', () => {
 		const result = replaceExternalClassTokens(className, 't-class-image', replacement)
 
 		expect(result).toBe('foo baz t-class-image bar')
+	})
+
+	it('applies the lexical caller scope together with external class tokens', async () => {
+		const ExternalImage = {
+			props: {
+				tClassImage: String,
+			},
+			setup(props, { expose }) {
+				provide('externalClasses', ['t-class-image'])
+				expose({
+					props,
+					sId: 'data-v-grid-item-scope',
+				})
+			},
+			render() {
+				const externalClass = resolveDirective('c-class')
+				return withDirectives(
+					h('div', { class: 't-image t-class-image' }),
+					[[externalClass]],
+				)
+			},
+		}
+		const root = document.createElement('div')
+		document.body.append(root)
+		const app = createApp(ExternalImage, {
+			tClassImage: 't-grid-item__image t-grid-item__image--middle t-class-image',
+		})
+		app.use(Components)
+		app.mount(root)
+		await nextTick()
+
+		const image = root.querySelector('.t-image')
+		expect(image.classList.contains('t-grid-item__image')).toBe(true)
+		expect(image.classList.contains('t-grid-item__image--middle')).toBe(true)
+		expect(image.hasAttribute('data-v-grid-item-scope')).toBe(true)
+
+		app.unmount()
+		root.remove()
 	})
 })

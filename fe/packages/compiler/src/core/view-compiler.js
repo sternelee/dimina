@@ -548,6 +548,9 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 	const code = `Module({
 		path: '${module.path}',
 		id: '${module.id}',
+		appStyleScopeId: ${JSON.stringify(module.appStyleScopeId || null)},
+		sharedStyleScopeIds: ${JSON.stringify(module.sharedStyleScopeIds || [])},
+		styleIsolation: ${JSON.stringify(module.styleIsolation || 'isolated')},
 		render: ${transCode},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
 		customTabBar: ${JSON.stringify(module.customTabBar || null)},
@@ -829,6 +832,9 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 	const code = `Module({
 		path: '${module.path}',
 		id: '${module.id}',
+		appStyleScopeId: ${JSON.stringify(module.appStyleScopeId || null)},
+		sharedStyleScopeIds: ${JSON.stringify(module.sharedStyleScopeIds || [])},
+		styleIsolation: ${JSON.stringify(module.styleIsolation || 'isolated')},
 		render: ${transCode},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
 		customTabBar: ${JSON.stringify(module.customTabBar || null)},

@@ -7,7 +7,7 @@ import { artCode } from './common/utils.js'
 import { workerPool } from './common/worker-pool.js'
 import { NpmBuilder } from './common/npm-builder.js'
 import { compileConfig } from './core/index.js'
-import { getAppConfigInfo, getAppId, getAppName, getPages, getTargetPath, getWorkPath, storeInfo } from './env.js'
+import { getAppConfigInfo, getAppId, getAppName, getAppStyleScopeId, getPages, getTargetPath, getWorkPath, storeInfo } from './env.js'
 
 let isPrinted = false
 
@@ -92,7 +92,7 @@ export default async function build(targetPath, workPath, useAppIdDir = true, op
 									// 主包添加 app 样式
 									pages.mainPages.unshift({
 										path: 'app',
-										id: '',
+										id: getAppStyleScopeId(),
 									})
 									return runCompileInWorker('style', ctx, task, { sourcemap })
 								},
