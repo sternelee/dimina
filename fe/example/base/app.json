@@ -38,6 +38,7 @@
 		"pages/ext-bridge/index",
 		"pages/canvas/index",
 		"pages/video/index",
+		"pages/web-view/index",
 		"pages/web-gl/index"
 	],
 	"subPackages": [
