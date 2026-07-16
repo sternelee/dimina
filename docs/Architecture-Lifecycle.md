@@ -1,64 +1,102 @@
-# 生命周期说明
+# 生命周期与就绪时序
 
-星河小程序生命周期与微信有一定的时序差异，详情见下图。
+[文档中心](./README.md) · [架构图](./Architecture-Diagram.md) · [实现细节](./Architecture-Details.md)
 
-## 生命周期流程图
+Dimina 的生命周期跨越 service、render 和 container 三个执行环境。本文记录当前实现中对业务最重要的顺序与就绪边界；父子组件或同级组件之间没有在本文声明的顺序，不应作为业务依赖。
+
+## 1. App 生命周期
+
+| 场景 | 调用 |
+| --- | --- |
+| 冷启动并创建 App 实例 | `App.onLaunch(options)` → `App.onShow(options)` |
+| 宿主切到前台 | `App.onShow(options)` |
+| 宿主切到后台 | `App.onHide()` |
+
+App 实例在同一小程序逻辑运行时中只创建一次。页面切换不会重新触发 `onLaunch`；只有逻辑运行时被销毁并重建后才会再次创建 App。
+
+## 2. 首次打开页面
 
 ```mermaid
-graph TD
-    subgraph "星河小程序生命周期顺序"
-        direction TB
-        B1["page onLoad"] --> B2["parent component created"]
-        B2 --> B3["parent component attached"]
-        B3 --> B4["child component created"]
-        B4 --> B5["child component attached"]
-        B5 --> B6["parent component show (pageLifetimes.show)"]
-        B6 --> B7["child component show (pageLifetimes.show)"]
-        B7 --> B8["page onShow"]
-        B8 --> B9["parent component ready"]
-        B9 --> B10["child component ready"]
-        B10 --> B11["page onReady"]
-    end
-    
-    subgraph "微信小程序生命周期顺序"
-        direction TB
-        A1["child component created"] --> A2["parent component created"]
-        A2 --> A3["parent component attached"]
-        A3 --> A4["child component attached"]
-        A4 --> A5["page onLoad"]
-        A5 --> A6["parent component show (pageLifetimes.show)"]
-        A6 --> A7["child component show (pageLifetimes.show)"]
-        A7 --> A8["page onShow"]
-        A8 --> A9["child component ready"]
-        A9 --> A10["parent component ready"]
-        A10 --> A11["page onReady"]
-    end
-    
-    %% 页面生命周期 - 浅蓝色
-    style A5 fill:#e1f5fe
-    style A8 fill:#e1f5fe
-    style A11 fill:#e1f5fe
-    style B1 fill:#e1f5fe
-    style B8 fill:#e1f5fe
-    style B11 fill:#e1f5fe
-    
-    %% Parent 组件生命周期 - 浅绿色
-    style A2 fill:#e8f5e8
-    style A3 fill:#e8f5e8
-    style A6 fill:#e8f5e8
-    style A10 fill:#e8f5e8
-    style B2 fill:#e8f5e8
-    style B4 fill:#e8f5e8
-    style B6 fill:#e8f5e8
-    style B9 fill:#e8f5e8
-    
-    %% Child 组件生命周期 - 浅橙色
-    style A1 fill:#fff3e0
-    style A4 fill:#fff3e0
-    style A7 fill:#fff3e0
-    style A9 fill:#fff3e0
-    style B3 fill:#fff3e0
-    style B5 fill:#fff3e0
-    style B7 fill:#fff3e0
-    style B10 fill:#fff3e0
+sequenceDiagram
+    participant C as Container
+    participant S as Service
+    participant R as Render
+
+    C->>S: resourceLoaded(pagePath, query)
+    S->>S: 创建 Page 实例
+    S->>S: created / attached / onLoad
+    S->>R: firstRender + 页面初始数据
+
+    R->>R: 创建 Vue 页面与自定义组件
+    R->>S: mC：创建组件实例
+    S->>S: component created / attached
+
+    C->>S: pageShow
+    S->>S: component pageLifetimes.show
+    S->>S: Page.onShow
+
+    R->>S: mR：组件视图已挂载
+    S->>S: component ready
+    R->>S: pageReady：页面根视图已挂载
+    S->>S: 等待已初始化组件全部 ready
+    S->>S: Page.onReady
 ```
+
+`pageShow` 由容器的页面可见状态驱动，它与 render 的挂载过程属于不同消息链路。因此应只依赖以下稳定边界：
+
+- `onLoad`：页面实例已创建，可以读取路由参数、初始化状态并调用 `setData()`；此时不能假设 DOM 已存在。
+- `onShow`：页面已经进入前台，但不保证第一次渲染完成。
+- 组件 `ready`：该组件的 render 实例已挂载。
+- `onReady`：页面根视图已挂载，并且当前已初始化的自定义组件都已执行 `ready`。
+
+## 3. 页面与组件顺序
+
+当前页面初始化分为两个阶段：
+
+1. service 先创建 Page 实例，依次完成页面的 `created`、`attached` 和 `onLoad`，再把初始数据交给 render。
+2. render 根据页面模板创建自定义组件；每个组件在 service 中执行 `created`、`attached`，挂载完成后执行 `ready`。
+
+页面 `onReady` 使用就绪屏障：render 报告页面根节点挂载完成后，service 仍会等待已初始化组件全部 `ready`，再调用页面 `onReady`。这样可以避免页面测量早于组件真实挂载。
+
+不要依赖父组件和子组件之间的精确 `created` / `attached` / `ready` 排序。条件渲染、异步组件数据和后续新增节点都会改变组件创建批次；需要跨组件协作时，应使用 properties、observer、事件或 relations 等明确机制。
+
+## 4. `setData()` 的时机
+
+| 调用位置 | 行为 |
+| --- | --- |
+| `onLoad` / 初始化生命周期 | 数据先写入 service 状态；视图模块就绪后再同步到 render |
+| 页面已就绪 | 更新进入队列，经 container 转发到 render |
+| 带回调的初始化更新 | 回调会暂存，等对应模块就绪并完成更新后执行 |
+
+`setData()` 表示发起一次跨线程状态更新，不代表下一行代码执行时 DOM 已更新。需要读取布局时，应使用 `setData(data, callback)`、`onReady`，或选择器 API 的回调结果，而不是固定延时。
+
+## 5. 显示、隐藏与销毁
+
+```mermaid
+stateDiagram-v2
+    [*] --> Loading: 创建页面
+    Loading --> Visible: pageShow
+    Visible --> Hidden: pageHide
+    Hidden --> Visible: pageShow
+    Visible --> Destroyed: pageUnload
+    Hidden --> Destroyed: pageUnload
+    Destroyed --> [*]
+```
+
+| 容器事件 | 页面回调 | 组件回调 |
+| --- | --- | --- |
+| `pageShow` | `Page.onShow` | `pageLifetimes.show` |
+| `pageHide` | `Page.onHide` | `pageLifetimes.hide` |
+| `pageUnload` | `Page.onUnload` | `detached`，并清理实例记录 |
+
+页面从后台返回前台时会再次触发 `onShow`，但不会再次触发 `onLoad` 或 `onReady`。重新创建页面实例后，才会重新经历完整初始化流程。
+
+## 6. 编写与排查建议
+
+- 在 `onLoad` 中处理路由参数、请求和初始状态；在 `onReady` 中处理首次 DOM 测量或依赖组件布局的逻辑。
+- 不要用 `setTimeout`、连续 `nextTick` 或固定 animation frame 模拟跨 service/render 的就绪信号。
+- 排查时分别记录 container、service 和 render 的事件，并携带 `bridgeId`、`moduleId`、页面路径和消息类型。
+- 至少验证首次进入、返回后再次显示、销毁后重进、快速切换以及条件组件出现/消失等路径。
+- 生命周期兼容目标以微信小程序语义为基准，但具体支持范围仍应结合当前实现和测试确认。
+
+有关消息通道与页面容器的说明，继续阅读[实现细节](./Architecture-Details.md#3-两类消息通道)。
