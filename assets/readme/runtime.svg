@@ -2,6 +2,18 @@
   <title id="title">Dimina 编译与运行时链路</title>
   <desc id="desc">小程序源码由 DMCC 编译成运行时资源包，交给 Android、iOS、Harmony 与 Web 容器加载；容器内部通过消息通道连接逻辑层、视图层和原生能力。</desc>
 
+  <style>
+    @media (prefers-reduced-motion: no-preference) {
+      .animated-arrow {
+        stroke-dasharray: 5 5;
+        animation: arrow-flow 0.75s linear infinite;
+      }
+    }
+    @keyframes arrow-flow {
+      to { stroke-dashoffset: -10; }
+    }
+  </style>
+
   <defs>
     <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0">
       <stop offset="0" stop-color="#0070F3"/>
@@ -28,14 +40,14 @@
       <text x="138.5" y="21" text-anchor="middle" fill="#666666" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" font-weight="700">JS/TS</text>
     </g>
 
-    <path d="M272 170 H316" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path class="animated-arrow" d="M272 170 H316" fill="none" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
     <rect x="326" y="116" width="172" height="108" rx="18" fill="#FFFFFF" stroke="#EAEAEA"/>
     <rect x="343" y="148" width="44" height="44" rx="11" fill="#000000"/>
     <text x="365" y="176" text-anchor="middle" fill="#FFFFFF" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="800">&lt;/&gt;</text>
     <text x="397" y="166" fill="#000000" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="19" font-weight="800">DMCC</text>
     <text x="397" y="187" fill="#666666" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">COMPILER</text>
 
-    <path d="M498 170 H542" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path class="animated-arrow" d="M498 170 H542" fill="none" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
     <rect id="runtime-bundle-card" x="552" y="116" width="220" height="108" rx="18" fill="#FFFFFF" stroke="#EAEAEA"/>
     <path d="M578 145 H622 L636 159 V199 H578Z" fill="#E6F0FF" stroke="#99C2FF"/>
     <path d="M622 145 V159 H636" fill="none" stroke="#99C2FF"/>
@@ -43,9 +55,7 @@
     <text id="runtime-bundle-label" x="654" y="166" fill="#000000" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="16" font-weight="700">运行时资源包</text>
     <text x="654" y="188" fill="#666666" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11">RUNTIME BUNDLE</text>
 
-    <path d="M772 170 H792" stroke="#0070F3" stroke-width="2.5"/>
-    <path d="M792 141 V199" stroke="#B4B4B4" stroke-width="2"/>
-    <path d="M792 141 H814 M792 199 H814" stroke="#B4B4B4" stroke-width="2" marker-end="url(#arrow)"/>
+    <path class="animated-arrow" d="M772 170 H814" fill="none" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
 
     <g transform="translate(824 113)">
       <rect width="146" height="52" rx="13" fill="#FFFFFF" stroke="#EAEAEA"/>
@@ -85,8 +95,8 @@
       <text x="18" y="96" fill="#888888" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="13">生命周期 · API · 状态</text>
     </g>
 
-    <path d="M373 372 H410" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
-    <path d="M410 392 H373" stroke="#888888" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path class="animated-arrow" d="M373 372 H410" fill="none" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path class="animated-arrow" d="M410 392 H373" fill="none" stroke="#888888" stroke-width="2.5" marker-end="url(#arrow)"/>
 
     <g transform="translate(420 316)">
       <rect width="282" height="112" rx="16" fill="#FFFFFF" stroke="#EAEAEA"/>
@@ -96,8 +106,8 @@
       <text x="18" y="96" fill="#888888" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="13">连接逻辑、视图与原生能力</text>
     </g>
 
-    <path d="M711 372 H748" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
-    <path d="M748 392 H711" stroke="#888888" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path class="animated-arrow" d="M711 372 H748" fill="none" stroke="#0070F3" stroke-width="2.5" marker-end="url(#arrow)"/>
+    <path class="animated-arrow" d="M748 392 H711" fill="none" stroke="#888888" stroke-width="2.5" marker-end="url(#arrow)"/>
 
     <g transform="translate(758 316)">
       <rect width="360" height="112" rx="16" fill="#FFFFFF" stroke="#EAEAEA"/>
