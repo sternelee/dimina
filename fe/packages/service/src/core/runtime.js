@@ -365,10 +365,7 @@ class Runtime {
 			return
 		}
 
-		if (!state.shown) {
-			this.pageShow(opts)
-		}
-		if (!state.shown || state.ready) {
+		if (state.hidden || !state.shown || state.ready) {
 			return
 		}
 		

@@ -153,12 +153,12 @@ export class Page {
 
 	async #invokeInitLifecycle() {
 		this.__info__.behaviorLifetimes?.created?.forEach(method => method.call(this))
-		await this.created?.()
+		this.created?.()
 		this.__info__.behaviorLifetimes?.attached?.forEach(method => method.call(this))
-		await this.attached?.()
+		this.attached?.()
 
 		// 页面创建时执行
-		await this.onLoad?.(this.opts.query || {})
+		this.onLoad?.(this.opts.query || {})
 		this.initd = true
 	}
 

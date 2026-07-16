@@ -874,7 +874,7 @@ export class Component {
 	 */
 	async componentCreated() {
 		this.__info__.behaviorLifetimes?.created?.forEach(method => method.call(this))
-		await this.created?.()
+		this.created?.()
 	}
 
 	/**
@@ -882,7 +882,7 @@ export class Component {
 	 */
 	async componentAttached() {
 		this.__info__.behaviorLifetimes?.attached?.forEach(method => method.call(this))
-		await this.attached?.()
+		this.attached?.()
 		
 		// 建立组件间关系
 		this.#checkAndLinkRelations()

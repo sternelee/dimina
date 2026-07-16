@@ -83,6 +83,72 @@ describe('Skyline/exparser lifecycle ordering', () => {
 		expect(calls).toEqual(['page:onShow'])
 	})
 
+	it('does not reshow a hidden page when render acknowledges pageReady', () => {
+		const calls = []
+		const bridgeId = 'bridge-hidden-ready'
+		const page = {
+			__id__: 'page-1',
+			__type__: PageModule.type,
+			initd: true,
+			pageShow: () => calls.push('page:onShow'),
+			pageHide: () => calls.push('page:onHide'),
+			pageReady: () => calls.push('page:onReady'),
+		}
+		runtime.instances[bridgeId] = { [page.__id__]: page }
+
+		runtime.pageShow({ bridgeId })
+		runtime.pageHide({ bridgeId })
+		runtime.pageReady({ bridgeId, moduleId: page.__id__ })
+
+		expect(calls).toEqual(['page:onShow', 'page:onHide'])
+		expect(runtime.getPageState(bridgeId)).toMatchObject({
+			hidden: true,
+			pendingReady: true,
+			ready: false,
+			shown: false,
+		})
+
+		runtime.pageShow({ bridgeId })
+		expect(calls).toEqual([
+			'page:onShow',
+			'page:onHide',
+			'page:onShow',
+			'page:onReady',
+		])
+	})
+
+	it('does not wait for a promise returned by page onLoad', async () => {
+		let releaseOnLoad
+		let initSettled = false
+		const pageModule = new PageModule({
+			onLoad() {
+				return new Promise((resolve) => {
+					releaseOnLoad = resolve
+				})
+			},
+		}, {
+			path: 'pages/async-lifecycle/index',
+			usingComponents: {},
+		})
+		const page = new Page(pageModule, {
+			bridgeId: 'bridge-async-page',
+			moduleId: 'page-1',
+			path: 'pages/async-lifecycle/index',
+			query: {},
+		})
+
+		const initPromise = page.init().then(() => {
+			initSettled = true
+		})
+		await Promise.resolve()
+		await Promise.resolve()
+
+		expect(initSettled).toBe(true)
+		expect(page.initd).toBe(true)
+		releaseOnLoad()
+		await initPromise
+	})
+
 	it('runs custom component created, initial property observer, attached and ready in order', async () => {
 		const calls = []
 		const bridgeId = 'bridge-component-lifecycle'
@@ -135,6 +201,43 @@ describe('Skyline/exparser lifecycle ordering', () => {
 			'component:attached',
 			'component:ready',
 		])
+	})
+
+	it('does not wait for promises returned by component created and attached', async () => {
+		const pendingLifecycles = []
+		const module = new ComponentModule({
+			lifetimes: {
+				created() {
+					return new Promise(resolve => pendingLifecycles.push(resolve))
+				},
+				attached() {
+					return new Promise(resolve => pendingLifecycles.push(resolve))
+				},
+			},
+			methods: {},
+		}, {
+			component: true,
+			path: 'components/async-lifecycle/index',
+			usingComponents: {},
+		})
+		const component = new Component(module, {
+			bridgeId: 'bridge-async-component',
+			moduleId: 'component-1',
+			path: 'components/async-lifecycle/index',
+			pageId: 'page-1',
+			parentId: 'page-1',
+			properties: {},
+			propertyNames: [],
+			eventAttr: {},
+			targetInfo: {},
+		})
+
+		await component.init()
+		await component.componentAttached()
+
+		expect(component.initd).toBe(true)
+		expect(pendingLifecycles).toHaveLength(2)
+		pendingLifecycles.forEach(resolve => resolve())
 	})
 
 	it('queues child attached until its parent attaches and keeps child ready before parent ready', async () => {

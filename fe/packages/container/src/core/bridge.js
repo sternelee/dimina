@@ -93,6 +93,10 @@ export class Bridge {
 					return
 				}
 			}
+			else if (type === 'renderResourceLoadFailed') {
+				this.renderResource = false
+				transMsg.type = 'resourceLoadFailed'
+			}
 			this.jscore.postMessage(transMsg)
 		}
 		else if (target === 'container') {

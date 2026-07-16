@@ -427,7 +427,7 @@ export class MiniApp {
 		const logo = this.el.querySelector('.dimina-mini-app__logo-img-url')
 
 		this.updateActionColorStyle('black')
-		name.innerHTML = this.appInfo.name
+		name.textContent = this.appInfo.name
 		logo.src = this.appInfo.logo
 		launchScreen.style.display = 'block'
 	}
@@ -495,75 +495,87 @@ export class MiniApp {
 
 		// 防抖处理
 		if (!this.webviewAnimaEnd) {
+			onFail?.({ errMsg: 'navigateTo:fail busy' })
+			onComplete?.()
 			return
 		}
 		this.webviewAnimaEnd = false
 
-		const pageConfig = this.appConfig.modules[pagePath]
-		const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
-		// 更新状态栏颜色模式
-		this.updateTargetPageColorStyle(mergeConfig)
+		try {
+			const pageConfig = this.appConfig.modules[pagePath]
+			const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
+			// 更新状态栏颜色模式
+			this.updateTargetPageColorStyle(mergeConfig)
 
-		// 创建新的入口页面的 bridge
-		const bridge = await this.createBridge({
-			pagePath,
-			query,
-			scene: this.appInfo.scene,
-			jscore: this.jscore,
-			isRoot: false,
-			root: pageConfig?.root || 'main',
-			appId: this.appInfo.appId,
-			pages: this.appConfig.app.pages,
-			configInfo: mergeConfig,
-		})
+			// 创建新的入口页面的 bridge
+			const bridge = await this.createBridge({
+				pagePath,
+				query,
+				scene: this.appInfo.scene,
+				jscore: this.jscore,
+				isRoot: false,
+				root: pageConfig?.root || 'main',
+				appId: this.appInfo.appId,
+				pages: this.appConfig.app.pages,
+				configInfo: mergeConfig,
+			})
 
-		// 获取前一个bridge
-		const preBridge = this.bridgeList[this.bridgeList.length - 1]
-		const preWebview = preBridge.webview
+			// 获取前一个bridge
+			const preBridge = this.bridgeList[this.bridgeList.length - 1]
+			const preWebview = preBridge.webview
 
-		this.bridgeList.push(bridge)
+			this.bridgeList.push(bridge)
 
-		// 触发新页面的初始化逻辑
-		bridge.start()
-		this._syncHash()
+			// 触发新页面的初始化逻辑
+			bridge.start()
+			this._syncHash()
 
-		// 上一个页面推出
-		preWebview.el.classList.remove('dimina-native-view--instage')
-		preWebview.el.classList.add('dimina-native-view--slide-out')
-		preWebview.el.classList.add('dimina-native-view--linear-anima')
-		preBridge?.pageHide()
+			// 上一个页面推出
+			preWebview.el.classList.remove('dimina-native-view--instage')
+			preWebview.el.classList.add('dimina-native-view--slide-out')
+			preWebview.el.classList.add('dimina-native-view--linear-anima')
+			preBridge?.pageHide()
 
-		this._setTabBarVisible(false)
+			this._setTabBarVisible(false)
 
-		// 新页面推入
-		bridge.webview.el.style.zIndex = this.bridgeList.length + 1
-		bridge.webview.el.classList.add('dimina-native-view--enter-anima')
-		bridge.webview.el.classList.add('dimina-native-view--instage')
-		await waitTransitionEnd(bridge.webview.el, 'transform')
+			// 新页面推入
+			bridge.webview.el.style.zIndex = this.bridgeList.length + 1
+			bridge.webview.el.classList.add('dimina-native-view--enter-anima')
+			bridge.webview.el.classList.add('dimina-native-view--instage')
+			await waitTransitionEnd(bridge.webview.el, 'transform')
 
-		// 页面进入后移出动画相关class
-		this.webviewAnimaEnd = true
-		preWebview.el.classList.remove('dimina-native-view--linear-anima')
-		bridge.webview.el.classList.remove('dimina-native-view--before-enter')
-		bridge.webview.el.classList.remove('dimina-native-view--enter-anima')
-		bridge.webview.el.classList.remove('dimina-native-view--instage')
+			// 页面进入后移出动画相关class
+			preWebview.el.classList.remove('dimina-native-view--linear-anima')
+			bridge.webview.el.classList.remove('dimina-native-view--before-enter')
+			bridge.webview.el.classList.remove('dimina-native-view--enter-anima')
+			bridge.webview.el.classList.remove('dimina-native-view--instage')
 
-		onSuccess?.({ errMsg: 'navigateTo:ok' })
-		onComplete?.()
+			onSuccess?.({ errMsg: 'navigateTo:ok' })
+		}
+		catch (error) {
+			onFail?.({ errMsg: `navigateTo:fail ${error.message}` })
+		}
+		finally {
+			this.webviewAnimaEnd = true
+			onComplete?.()
+		}
 	}
 
 	reLaunch(opts) {
+		const { url, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
 		// 防抖处理
 		if (!this.webviewAnimaEnd) {
+			onFail?.({ errMsg: 'reLaunch:fail busy' })
+			onComplete?.()
 			return
 		}
 		this.webviewAnimaEnd = false
 
-		const { url, success, fail, complete } = opts
 		const { query, pagePath } = queryPath(url)
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
 
 		try {
 			// 检查页面路径是否存在
@@ -664,95 +676,118 @@ export class MiniApp {
 
 		// 防抖处理
 		if (!this.webviewAnimaEnd) {
+			onFail?.({ errMsg: 'redirectTo:fail busy' })
+			onComplete?.()
 			return
 		}
 		this.webviewAnimaEnd = false
 
-		// 获取当前 bridge
-		const curBridge = this.bridgeList[this.bridgeList.length - 1]
-		const prevPath = this._normalizePagePath(curBridge.opts.pagePath)
-		const pageConfig = this.appConfig.modules[pagePath]
-		const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
+		try {
+			// 获取当前 bridge
+			const curBridge = this.bridgeList[this.bridgeList.length - 1]
+			const prevPath = this._normalizePagePath(curBridge.opts.pagePath)
+			const pageConfig = this.appConfig.modules[pagePath]
+			const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
 
-		this.updateTargetPageColorStyle(mergeConfig)
-		// 更新 bridge
-		curBridge.destroy()
-		curBridge.opts = {
-			...curBridge.opts,
-			pagePath,
-			query,
-			configInfo: mergeConfig,
-		}
-		curBridge.resetStatus()
-		curBridge.start()
-		this._syncHash()
-
-		// redirectTo 的目标按规范不能是 tab 页：若被替换的是当前 tab 页，需从 pool 中移除并隐藏 TabBar
-		if (this.tabBarBridges.get(prevPath) === curBridge) {
-			this.tabBarBridges.delete(prevPath)
-			if (this.currentTabPath === prevPath) {
-				this.currentTabPath = null
+			this.updateTargetPageColorStyle(mergeConfig)
+			// 更新 bridge
+			curBridge.destroy()
+			curBridge.opts = {
+				...curBridge.opts,
+				pagePath,
+				query,
+				configInfo: mergeConfig,
 			}
-		}
-		this._setBridgeTabBarInset(curBridge, false)
-		this._setTabBarVisible(false)
+			curBridge.resetStatus()
+			curBridge.start()
+			this._syncHash()
 
-		this.webviewAnimaEnd = true
-		onSuccess?.({ errMsg: 'redirectTo:ok' })
-		onComplete?.()
+			// redirectTo 的目标按规范不能是 tab 页：若被替换的是当前 tab 页，需从 pool 中移除并隐藏 TabBar
+			if (this.tabBarBridges.get(prevPath) === curBridge) {
+				this.tabBarBridges.delete(prevPath)
+				if (this.currentTabPath === prevPath) {
+					this.currentTabPath = null
+				}
+			}
+			this._setBridgeTabBarInset(curBridge, false)
+			this._setTabBarVisible(false)
+
+			onSuccess?.({ errMsg: 'redirectTo:ok' })
+		}
+		catch (error) {
+			onFail?.({ errMsg: `redirectTo:fail ${error.message}` })
+		}
+		finally {
+			this.webviewAnimaEnd = true
+			onComplete?.()
+		}
 	}
 
-	async navigateBack() {
+	async navigateBack(opts = {}) {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
 		if (this.bridgeList.length < 2) {
+			onFail?.({ errMsg: 'navigateBack:fail cannot navigate back at first page' })
+			onComplete?.()
 			return
 		}
 
 		if (!this.webviewAnimaEnd) {
+			onFail?.({ errMsg: 'navigateBack:fail busy' })
+			onComplete?.()
 			return
 		}
 
 		this.webviewAnimaEnd = false
 
-		const currentBridge = this.bridgeList.pop()
-		const preBridge = this.bridgeList[this.bridgeList.length - 1]
+		try {
+			const currentBridge = this.bridgeList.pop()
+			const preBridge = this.bridgeList[this.bridgeList.length - 1]
 
-		const pageConfig = this.appConfig.modules[preBridge.opts.pagePath]
-		const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
+			const pageConfig = this.appConfig.modules[preBridge.opts.pagePath]
+			const mergeConfig = mergePageConfig(this.appConfig.app, pageConfig)
 
-		// 更新状态栏颜色模式
-		this.updateTargetPageColorStyle(mergeConfig)
+			// 更新状态栏颜色模式
+			this.updateTargetPageColorStyle(mergeConfig)
 
-		// 当前页面推出
-		currentBridge.webview.el.classList.add('dimina-native-view--before-enter')
-		currentBridge.webview.el.classList.add('dimina-native-view--enter-anima')
+			// 当前页面推出
+			currentBridge.webview.el.classList.add('dimina-native-view--before-enter')
+			currentBridge.webview.el.classList.add('dimina-native-view--enter-anima')
 
-		// 触发当前页面的生命周期函数
-		currentBridge?.destroy()
+			// 触发当前页面的生命周期函数
+			currentBridge.destroy()
 
-		// 上一个页面推入
-		preBridge.webview.el.classList.remove('dimina-native-view--slide-out')
-		preBridge.webview.el.classList.add('dimina-native-view--instage')
-		preBridge.webview.el.classList.add('dimina-native-view--enter-anima')
+			// 上一个页面推入
+			preBridge.webview.el.classList.remove('dimina-native-view--slide-out')
+			preBridge.webview.el.classList.add('dimina-native-view--instage')
+			preBridge.webview.el.classList.add('dimina-native-view--enter-anima')
 
-		// 触发上一个页面的生命周期函数
-		preBridge?.pageShow()
-		this._syncHash()
+			// 触发上一个页面的生命周期函数
+			preBridge.pageShow()
+			this._syncHash()
 
-		// 后退到 tab 页：恢复 TabBar 可见 + 选中态
-		if (this._isTabBarPage(preBridge.opts.pagePath)) {
-			const path = this._normalizePagePath(preBridge.opts.pagePath)
-			this.currentTabPath = path
-			this._setTabBarVisible(true)
-			this._updateTabBarSelection(path)
+			// 后退到 tab 页：恢复 TabBar 可见 + 选中态
+			if (this._isTabBarPage(preBridge.opts.pagePath)) {
+				const path = this._normalizePagePath(preBridge.opts.pagePath)
+				this.currentTabPath = path
+				this._setTabBarVisible(true)
+				this._updateTabBarSelection(path)
+			}
+
+			await waitTransitionEnd(preBridge.webview.el, 'transform')
+
+			// 页面进入后移出动画相关class
+			preBridge.webview.el.classList.remove('dimina-native-view--enter-anima')
+			preBridge.webview.el.classList.remove('dimina-native-view--instage')
+			currentBridge.webview.el.parentNode.removeChild(currentBridge.webview.el)
+			onSuccess?.({ errMsg: 'navigateBack:ok' })
 		}
-
-		await waitTransitionEnd(preBridge.webview.el, 'transform')
-		this.webviewAnimaEnd = true
-
-		// 页面进入后移出动画相关class
-		preBridge.webview.el.classList.remove('dimina-native-view--enter-anima')
-		preBridge.webview.el.classList.remove('dimina-native-view--instage')
-		currentBridge.webview.el.parentNode.removeChild(currentBridge.webview.el)
+		catch (error) {
+			onFail?.({ errMsg: `navigateBack:fail ${error.message}` })
+		}
+		finally {
+			this.webviewAnimaEnd = true
+			onComplete?.()
+		}
 	}
 
 	/**

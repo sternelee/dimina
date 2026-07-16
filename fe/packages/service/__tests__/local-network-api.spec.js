@@ -101,4 +101,12 @@ describe('local network socket service adapters', () => {
 		expect(invokeAPI).toHaveBeenNthCalledWith(1, 'canIUse', 'UDPSocket.bind')
 		expect(invokeAPI).toHaveBeenNthCalledWith(2, 'canIUse', 'TCPSocket.connect')
 	})
+
+	it('returns false when the host has no synchronous capability result', () => {
+		vi.mocked(invokeAPI).mockReturnValue(undefined)
+
+		expect(canIUse('createUDPSocket')).toBe(false)
+		expect(canIUse('createTCPSocket')).toBe(false)
+		expect(canIUse('unknown.schema')).toBe(false)
+	})
 })

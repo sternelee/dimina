@@ -41,10 +41,10 @@ export function canIUse(schema) {
 		return true
 	}
 	try {
-		if (nativeBackedFactorySchemas[schema]) {
-			return invokeAPI('canIUse', nativeBackedFactorySchemas[schema])
-		}
-		return invokeAPI('canIUse', schema)
+		const nativeSchema = Object.hasOwn(nativeBackedFactorySchemas, schema)
+			? nativeBackedFactorySchemas[schema]
+			: schema
+		return invokeAPI('canIUse', nativeSchema) === true
 	} catch (error) {
 		console.warn(`[canIUse] check ${schema} error:`, error)
 		return false

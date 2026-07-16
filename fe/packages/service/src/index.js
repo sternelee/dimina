@@ -55,6 +55,10 @@ class Service {
 			callback.invoke(id, args)
 		})
 
+		this.message.on('resourceLoadFailed', ({ bridgeId, pagePath, errors = [] }) => {
+			console.error(`[service] resourceLoadFailed: bridgeId: ${bridgeId}, pagePath: ${pagePath}, errors: ${errors.join('; ')}`)
+		})
+
 		this.onAppMsg()
 		this.onModuleMsg()
 	}
