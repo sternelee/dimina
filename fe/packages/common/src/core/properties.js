@@ -62,8 +62,16 @@ export function normalizePropertyDefinition(definition) {
 }
 
 function isExparserArray(value) {
-	// oxlint-disable-next-line unicorn/no-instanceof-builtins -- exparser 使用 instanceof Array，跨 realm 时与 Array.isArray 的语义不同。
-	return value instanceof Array
+	// Dimina 的 service/container/render 分属不同 realm。数组经过桥接后仍是数组，
+	// 但不一定满足当前 render realm 的 `instanceof Array`。
+	// Array.isArray 同时保留 exparser 对 Array 子类的主类型接收语义。
+	return Array.isArray(value)
+}
+
+function isPlainArray(value) {
+	// optionalTypes 的 Array 匹配比主类型严格：普通数组可命中，Array 子类不可命中。
+	// 通过构造器名称兼容跨 realm 的原生 Array 构造器身份不同问题。
+	return Array.isArray(value) && value?.constructor?.name === Array.name
 }
 
 /**
@@ -74,7 +82,7 @@ export function matchesPropertyType(type, value) {
 	if (type === Number) return Number.isFinite(value)
 	if (type === Boolean) return typeof value === 'boolean'
 	if (type === Object) return value !== null && value?.constructor === Object
-	if (type === Array) return value !== null && value?.constructor === Array
+	if (type === Array) return isPlainArray(value)
 	return value !== undefined
 }
 

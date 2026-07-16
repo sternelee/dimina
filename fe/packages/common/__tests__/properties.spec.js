@@ -1,3 +1,4 @@
+import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
 import { matchesPropertyType, normalizePropertyDefinition, normalizePropertyValues, resolvePropertyValue } from '../src/core/properties'
 
@@ -58,6 +59,15 @@ describe('mini-program property semantics', () => {
 		expect(matchesPropertyType(Array, [])).toBe(true)
 		expect(matchesPropertyType(Array, arraySubclass)).toBe(false)
 		expect(resolvePropertyValue(normalizePropertyDefinition(Array), arraySubclass)).toBe(arraySubclass)
+	})
+
+	it('accepts native arrays passed from another JavaScript realm', () => {
+		const foreignArray = runInNewContext('[{ title: "首页" }]')
+
+		expect(Array.isArray(foreignArray)).toBe(true)
+		expect(foreignArray.constructor).not.toBe(Array)
+		expect(matchesPropertyType(Array, foreignArray)).toBe(true)
+		expect(resolvePropertyValue(normalizePropertyDefinition(Array), foreignArray)).toBe(foreignArray)
 	})
 
 	it('distinguishes absent properties from explicitly passed undefined', () => {
