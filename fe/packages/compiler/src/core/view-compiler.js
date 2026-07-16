@@ -258,12 +258,26 @@ async function compileML(pages, root, progress) {
 			const amdFormat = `modDefine('${key}', function(require, module, exports) {
 		${value}
 		});`
-			const { code: minifiedCode } = await transform(amdFormat, {
-				minify: true,
-				target: ['es2020'],
-				platform: 'browser',
-			})
-			mergeRender += minifiedCode
+			try {
+				const { code: minifiedCode } = await transform(amdFormat, {
+					minify: true,
+					target: ['es2020'],
+					platform: 'browser',
+				})
+				mergeRender += minifiedCode
+			}
+			catch (error) {
+				const location = error.errors?.[0]?.location
+				const sourceLines = amdFormat.split('\n')
+				const sourceHint = location?.line
+					? sourceLines
+						.slice(Math.max(0, location.line - 3), location.line + 2)
+						.map((line, index) => `${Math.max(1, location.line - 2) + index}: ${line.trim()}`)
+						.join('\n')
+					: ''
+				error.message = `视图模块 ${key} 转换失败: ${error.message}${sourceHint}`
+				throw error
+			}
 		}
 
 		// 单个页面编译完成后清理 scriptRes，释放内存
@@ -1018,7 +1032,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 		const src = $(elem).attr('src')
 		// 将目标文件除了 <template/> <wxs/> 外的整个代码引入，相当于是拷贝到 include 位置
 		if (src) {
-			const includeFullPath = getAbsolutePath(workPath, path, src)
+			const includeFullPath = resolveTemplateDependencyPath(workPath, path, src)
 			// 计算被包含文件的路径（去掉扩展名），用于 wxs 路径解析
 			let includePath = includeFullPath.replace(workPath, '').replace(buildExtStripRegex(getTemplateExts()), '')
 			const includeDiagnosticSource = includeFullPath.startsWith(workPath)
@@ -1088,7 +1102,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 	importNodes.each((_, elem) => {
 		const src = $(elem).attr('src')
 		if (src) {
-			const importFullPath = getAbsolutePath(workPath, path, src)
+			const importFullPath = resolveTemplateDependencyPath(workPath, path, src)
 			let importPath = importFullPath.replace(workPath, '').replace(buildExtStripRegex(getTemplateExts()), '')
 			const importDiagnosticSource = importFullPath.startsWith(workPath)
 				? importFullPath.slice(workPath.length)
@@ -1111,7 +1125,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 				transTagTemplate(
 					$$,
 					templateModule,
-					path,
+					importPath,
 					components,
 					componentPlaceholder,
 				)
@@ -1711,6 +1725,30 @@ function getViewPath(workPath, src) {
 			return indexMlFullPath
 		}
 	}
+}
+
+/**
+ * 解析 import/include 的模板文件路径。
+ * 微信允许省略 .wxml；显式扩展名保持原样，无扩展名时按当前模板类型优先级补全。
+ */
+function resolveTemplateDependencyPath(workPath, ownerPath, src) {
+	const resolvedPath = getAbsolutePath(workPath, ownerPath, src)
+	if (fs.existsSync(resolvedPath) && fs.statSync(resolvedPath).isFile()) {
+		return resolvedPath
+	}
+
+	if (path.extname(resolvedPath)) {
+		return resolvedPath
+	}
+
+	for (const ext of getTemplateExts()) {
+		const candidate = `${resolvedPath}${ext}`
+		if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+			return candidate
+		}
+	}
+
+	return resolvedPath
 }
 
 /**
