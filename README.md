@@ -107,7 +107,7 @@ Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-
 
 - Bug 与功能建议： [Issues](https://github.com/didi/dimina/issues)
 - 方案讨论与提案： [Discussions](https://github.com/didi/dimina/discussions)
-- 提交代码前： [Contribution Guidelines](./CONTRIBUTING.md)
+- 提交代码前： [贡献指南](./CONTRIBUTING.md)
 
 <details>
   <summary>加入微信交流群</summary>

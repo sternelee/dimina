@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/didi/dimina/blob/HEAD/LICENSE"><img src="https://img.shields.io/badge/License-Apache%202.0-6E56CF" alt="Apache 2.0 License"></a>
   <a href="#platform-runtimes"><img src="https://img.shields.io/badge/Platforms-Android%20%7C%20iOS%20%7C%20Harmony%20%7C%20Web-0070F3" alt="Android, iOS, Harmony and Web"></a>
-  <a href="https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING.md"><img src="https://img.shields.io/badge/PRs-Welcome-0D9488" alt="Pull requests welcome"></a>
+  <a href="https://github.com/didi/dimina/blob/HEAD/CONTRIBUTING_EN.md"><img src="https://img.shields.io/badge/PRs-Welcome-0D9488" alt="Pull requests welcome"></a>
 </p>
 
 <p align="center">
@@ -107,7 +107,7 @@ Dimina is designed in accordance with the [Mini App Standard White Paper](https:
 
 - Bugs and feature requests: [Issues](https://github.com/didi/dimina/issues)
 - Design discussions and proposals: [Discussions](https://github.com/didi/dimina/discussions)
-- Before submitting code: [Contribution Guidelines](./CONTRIBUTING.md)
+- Before submitting code: [Contribution Guidelines](./CONTRIBUTING_EN.md)
 
 <details>
   <summary>Join the WeChat community</summary>
