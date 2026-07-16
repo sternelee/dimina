@@ -385,33 +385,31 @@ describe('mergeBehaviors 行为合并逻辑', () => {
 	})
 })
 
-describe('观察者函数 oldVal 参数测试', () => {
-	it('应该将 oldVal 参数传递给单个字段观察器', () => {
+describe('观察者函数参数测试', () => {
+	it('单字段数据观察器只接收当前值', () => {
 		const observer = vi.fn()
 		const observers = {
 			'numberA': observer,
 		}
 		const data = { numberA: 10 }
-		const oldVal = 5
 		const ctx = {}
 
-		filterInvokeObserver('numberA', observers, data, ctx, oldVal)
+		filterInvokeObserver('numberA', observers, data, ctx)
 
-		expect(observer).toHaveBeenCalledWith(10, 5)
+		expect(observer).toHaveBeenCalledWith(10)
 	})
 
-	it('应该将 oldVal 参数传递给完全匹配的字段观察器', () => {
+	it('嵌套字段数据观察器只接收当前值', () => {
 		const observer = vi.fn()
 		const observers = {
 			'user.name': observer,
 		}
 		const data = { user: { name: 'John' } }
-		const oldVal = 'Jane'
 		const ctx = {}
 
-		filterInvokeObserver('user.name', observers, data, ctx, oldVal)
+		filterInvokeObserver('user.name', observers, data, ctx)
 
-		expect(observer).toHaveBeenCalledWith('John', 'Jane')
+		expect(observer).toHaveBeenCalledWith('John')
 	})
 
 	it('多字段观察器不应该接收 oldVal 参数', () => {
@@ -420,10 +418,9 @@ describe('观察者函数 oldVal 参数测试', () => {
 			'numberA, numberB': observer,
 		}
 		const data = { numberA: 10, numberB: 20 }
-		const oldVal = 5
 		const ctx = {}
 
-		filterInvokeObserver('numberA', observers, data, ctx, oldVal)
+		filterInvokeObserver('numberA', observers, data, ctx)
 
 		expect(observer).toHaveBeenCalledWith(10, 20)
 		expect(observer).not.toHaveBeenCalledWith(10, 20, 5)
@@ -522,5 +519,41 @@ describe('syncUpdateChildrenProps', () => {
 		expect(child.data.show).toBe(true)
 		expect(child.__pendingSyncedProps__).toEqual({ show: true })
 		expect(syncedChildren).toEqual([{ child, data: { show: true } }])
+	})
+
+	it('deep-copies reference properties between parent and child instances', () => {
+		const child = {
+			__id__: 'child-reference',
+			__parentId__: 'parent-reference',
+			__pendingSyncedProps__: {},
+			__info__: { properties: { item: {} } },
+			data: {},
+			tO(data) {
+				Object.assign(this.data, data)
+			},
+		}
+		const parent = {
+			__id__: 'parent-reference',
+			data: { item: { value: 1 } },
+			__childPropsBindings__: {
+				'child-reference': {
+					item: {
+						expression: 'item',
+						dependencies: ['item'],
+						isSimple: true,
+					},
+				},
+			},
+		}
+
+		syncUpdateChildrenProps(parent, {
+			[parent.__id__]: parent,
+			[child.__id__]: child,
+		}, { item: parent.data.item })
+
+		expect(child.data.item).toEqual({ value: 1 })
+		expect(child.data.item).not.toBe(parent.data.item)
+		parent.data.item.value = 2
+		expect(child.data.item.value).toBe(1)
 	})
 })

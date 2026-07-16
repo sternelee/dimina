@@ -111,13 +111,16 @@ modDefine('pages/index/index', function (require, module, exports) {
 
 ```text
 Page / Component.setData()
-  → service 生成更新消息
+  → service 严格解析 key 并深拷贝写入逻辑数据
+  → behavior observer、组件 observer 按注册顺序执行
+  → service 生成不可变的 JSON 视图快照
   → container 通过 publish 转发
   → render 更新响应式状态
   → Vue 计算并更新必要的 DOM
+  → render 在 nextTick 后确认回调
 ```
 
-初始化阶段的 `setData()` 回调会等到视图侧对应模块就绪后再刷新，避免业务回调早于真实渲染状态。
+同一逻辑任务内的更新按模块批量传输，路径数组保留转义字段与数组下标的准确含义。数据 observer 引发的嵌套 `setData()` 会加入当前事务并继续按注册顺序排空；property observer 在数据 observer 阶段之后正序执行。初始化阶段的 `setData()` 回调会等到视图侧对应模块就绪后再刷新，避免业务回调早于真实渲染状态。
 
 ### 3.2 用户事件
 

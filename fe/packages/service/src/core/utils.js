@@ -1,4 +1,5 @@
-import { camelCaseToUnderscore, deepEqual, get, isFunction, isNil, isString, normalizePropertyDefinition, toCamelCase } from '@dimina/common'
+import { camelCaseToUnderscore, cloneDeep, deepEqual, get, isFunction, isNil, normalizePropertyDefinition, toCamelCase } from '@dimina/common'
+import { invokeDataObservers, invokePropertyChanges, parseDataPath } from './data-update'
 
 const queue = []
 let isFlushing = false
@@ -157,67 +158,10 @@ function convertToStringType(type) {
  * @param {object} observers 组件定义的 observers 对象
  * @param {object} data 更新后的完整数据
  * @param {object} ctx 组件实例（this）
- * @param {object} oldValues 各 key 的旧值 { key: oldVal }
  */
-export function invokeObserversOnce(changedKeys, observers, data, ctx, oldValues) {
-	const triggered = new Set()
-
-	for (const changedKey of changedKeys) {
-		for (const observerKey in observers) {
-			if (triggered.has(observerKey)) {
-				continue
-			}
-
-			const keys = observerKey.split(',').map(k => k.trim())
-
-			// 简单字段匹配 / 组合字段匹配
-			if (keys.includes(changedKey)) {
-				triggered.add(observerKey)
-				const observerFn = observers[observerKey]
-				const args = keys.map(key => get(data, key))
-				if (keys.length === 1) {
-					observerFn.call(ctx, ...args, oldValues[changedKey])
-				} else {
-					observerFn.call(ctx, ...args)
-				}
-				continue
-			}
-
-			// 通配符 **
-			if (observerKey === '**') {
-				triggered.add(observerKey)
-				observers[observerKey].call(ctx, data)
-				continue
-			}
-
-			// 子字段路径匹配（如 'a.b' 监听 'a.b.c' 的变化，或 'a.**'）
-			const observerKeyParts = observerKey.split('.')
-			const changedKeyParts = changedKey.split('.')
-			let matched = true
-			for (let i = 0; i < observerKeyParts.length; i++) {
-				if (observerKeyParts[i] === '**' || changedKeyParts[i] === undefined) {
-					break
-				} else if (observerKeyParts[i] !== changedKeyParts[i]) {
-					matched = false
-					break
-				}
-			}
-			if (matched && observerKeyParts.length > 1) {
-				triggered.add(observerKey)
-				let targetData = data
-				for (const part of observerKeyParts) {
-					if (part !== '**') {
-						targetData = targetData?.[part]
-					}
-				}
-				if (observerKey === changedKey) {
-					observers[observerKey].call(ctx, targetData, oldValues[changedKey])
-				} else {
-					observers[observerKey].call(ctx, targetData)
-				}
-			}
-		}
-	}
+export function invokeObserversOnce(changedKeys, observers, data, ctx) {
+	const changedPaths = changedKeys.map(parseDataPath).filter(Boolean)
+	invokeDataObservers(ctx || {}, changedPaths, data, { observers })
 }
 
 /**
@@ -227,80 +171,11 @@ export function invokeObserversOnce(changedKeys, observers, data, ctx, oldValues
  * @param {*} observers
  * @param {*} data
  * @param {*} ctx
- * @param {*} oldVal
  */
-export function filterInvokeObserver(changedKey, observers, data, ctx, oldVal) {
-	for (const observerKey in observers) {
-		const observerFn = observers[observerKey]
-
-		// 处理简单字段匹配和组合字段匹配
-		const keys = observerKey.split(',').map(k => k.trim())
-
-		if (keys.includes(changedKey)) {
-			const args = keys.map(key => get(data, key))
-			// 对于单个字段的观察器，如果正好是变化的字段，添加 oldVal 参数
-			if (keys.length === 1 && keys[0] === changedKey) {
-				observerFn.call(ctx, ...args, oldVal)
-			} else {
-				observerFn.call(ctx, ...args)
-			}
-			continue
-		}
-
-		// 处理通配符 ** 匹配
-		if (observerKey === '**') {
-			observerFn.call(ctx, data)
-			continue
-		}
-
-		// 处理子字段匹配
-		const observerKeyParts = observerKey.split('.')
-		const changedKeyParts = changedKey.split('.')
-		let matched = true
-		for (let i = 0; i < observerKeyParts.length; i++) {
-			if (observerKeyParts[i] === '**' || changedKeyParts[i] === undefined) {
-				break
-			}
-			else if (observerKeyParts[i] !== changedKeyParts[i]) {
-				matched = false
-				break
-			}
-		}
-		if (matched) {
-			let targetData = data
-			for (const part of observerKeyParts) {
-				if (part !== '**') {
-					targetData = targetData[part]
-				}
-			}
-			// 对于完全匹配的字段，添加 oldVal 参数
-			if (observerKey === changedKey) {
-				observerFn.call(ctx, targetData, oldVal)
-			} else {
-				observerFn.call(ctx, targetData)
-			}
-			continue
-		}
-
-		// 处理数组字段匹配
-		const arrayMatch = observerKey.match(/^(.+)\[(\d+)\]$/)
-		if (arrayMatch) {
-			const arrayKey = arrayMatch[1]
-			const index = Number.parseInt(arrayMatch[2], 10)
-			if (arrayKey === changedKey.split('[')[0] && data[arrayKey] && data[arrayKey][index] !== undefined) {
-				observerFn.call(ctx, data[arrayKey][index])
-				continue
-			}
-		}
-
-		// 处理包含子字段的匹配，如 some.subfield
-		if (changedKey.startsWith(observerKey)) {
-			const targetData = observerKey.split('.').reduce((acc, key) => acc && acc[key], data)
-			if (targetData !== undefined) {
-				observerFn.call(ctx, targetData)
-				continue
-			}
-		}
+export function filterInvokeObserver(changedKey, observers, data, ctx) {
+	const changedPath = parseDataPath(changedKey)
+	if (changedPath) {
+		invokeDataObservers(ctx || {}, [changedPath], data, { observers })
 	}
 }
 
@@ -325,24 +200,17 @@ export function resolveEventHandler(eventAttr = {}, type = '') {
 	}
 }
 
-export function invokeBehaviorObservers(ctx, changedKeys, oldValues) {
+export function invokeBehaviorObservers(ctx, changedKeys) {
 	const info = ctx.__info__ || {}
 	if (!info.behaviorObservers) {
 		return
 	}
 
-	for (const observerKey in info.behaviorObservers) {
-		const observers = info.behaviorObservers[observerKey]
-		if (!Array.isArray(observers) || observers.length === 0) {
-			continue
-		}
-
-		for (const changedKey of changedKeys) {
-			observers.forEach((observer) => {
-				filterInvokeObserver(changedKey, { [observerKey]: observer }, ctx.data, ctx, oldValues[changedKey])
-			})
-		}
-	}
+	const changedPaths = changedKeys.map(parseDataPath).filter(Boolean)
+	invokeDataObservers(ctx, changedPaths, ctx.data, {
+		behaviorObserverList: info.behaviorObserverList,
+		behaviorObservers: info.behaviorObservers,
+	})
 }
 
 export function invokePropertyObservers(ctx, changedKeys, oldValues) {
@@ -350,26 +218,16 @@ export function invokePropertyObservers(ctx, changedKeys, oldValues) {
 }
 
 export function collectPropertyObservers(ctx, changedKeys, oldValues) {
-	const propertyObserversToExecute = []
-
-	for (const prop of changedKeys) {
-		const observer = ctx.__info__.properties?.[prop]?.observer
-		const val = ctx.data[prop]
-		const oldVal = oldValues[prop]
-
-		if (isString(observer)) {
-			propertyObserversToExecute.push(() => ctx[observer]?.(val, oldVal))
-		}
-		else if (isFunction(observer)) {
-			propertyObserversToExecute.push(() => observer.call(ctx, val, oldVal))
-		}
-	}
-
-	return propertyObserversToExecute
+	return changedKeys.map(prop => ({
+		propertyName: prop,
+		oldValue: oldValues[prop],
+		path: [prop],
+		value: ctx.data[prop],
+	}))
 }
 
 export function runPropertyObservers(ctx, changedKeys, oldValues) {
-	collectPropertyObservers(ctx, changedKeys, oldValues).reverse().forEach(run => run())
+	invokePropertyChanges(ctx, collectPropertyObservers(ctx, changedKeys, oldValues))
 }
 
 /**
@@ -485,12 +343,17 @@ export function mergeBehaviors(obj, behaviors) {
 		// 规则: 不覆盖, 按顺序执行 (被引用的 > 引用者 > 靠前的 > 靠后的)
 		if (behavior.observers) {
 			target.behaviorObservers = target.behaviorObservers || {}
+			target.behaviorObserverList = target.behaviorObserverList || []
 			
 			for (const observerKey in behavior.observers) {
 				if (!target.behaviorObservers[observerKey]) {
 					target.behaviorObservers[observerKey] = []
 				}
 				target.behaviorObservers[observerKey].push(behavior.observers[observerKey])
+				target.behaviorObserverList.push({
+					key: observerKey,
+					observer: behavior.observers[observerKey],
+				})
 			}
 		}
 
@@ -725,7 +588,9 @@ export function syncUpdateChildrenProps(parent, allInstances, changedData) {
 			// 检查依赖是否变化
 			if (hasDependencyChanged(bindingInfo, changedData)) {
 				// 重新计算表达式的值
-				const newValue = evaluateExpression(bindingInfo, parent.data)
+				// exparser deep-copies template expression results before assigning
+				// component properties, so parent and child never share an object.
+				const newValue = cloneDeep(evaluateExpression(bindingInfo, parent.data))
 				updateData[propName] = newValue
 			}
 		}

@@ -214,6 +214,33 @@ describe('runtime template components', () => {
 		expect(gl.shaderSource).toHaveBeenCalledWith(shader, 'void main() {}')
 		expect(gl.compileShader).toHaveBeenCalledWith(shader)
 	})
+
+	it('applies service path arrays without re-parsing escaped setData keys', () => {
+		const moduleId = 'module-path-array'
+		const data = {}
+		runtime.setupData.set(moduleId, data)
+		runtime.initializedModules.add(moduleId)
+
+		runtime.updateModule({
+			moduleId,
+			data: {
+				'a\\.b.value': 1,
+				'list[1].name': 'second',
+			},
+			changes: [
+				{ path: ['a.b', 'value'], value: 1 },
+				{ path: ['list', 1, 'name'], value: 'second' },
+			],
+		})
+
+		expect(data).toEqual({
+			'a.b': { value: 1 },
+			list: [undefined, { name: 'second' }],
+		})
+
+		runtime.setupData.delete(moduleId)
+		runtime.initializedModules.delete(moduleId)
+	})
 })
 
 describe('mini-program dynamic slots', () => {

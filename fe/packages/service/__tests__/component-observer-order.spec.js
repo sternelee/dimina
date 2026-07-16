@@ -78,7 +78,7 @@ describe('Component.tO observer ordering', () => {
 		expect(component.data._animatedObserved).toBe(true)
 	})
 
-	it('executes initial property observers once on componentReadied', async () => {
+	it('executes initial property observers after created and only once', async () => {
 		const observeSrc = vi.fn(function observeSrc(src) {
 			this.data.loading = !!src
 		})
@@ -111,15 +111,14 @@ describe('Component.tO observer ordering', () => {
 		})
 
 		await component.init()
-		expect(observeSrc).not.toHaveBeenCalled()
-
-		component.componentReadied()
-
 		expect(observeSrc).toHaveBeenCalledTimes(1)
 		expect(component.data.loading).toBe(true)
+
+		component.componentReadied()
+		expect(observeSrc).toHaveBeenCalledTimes(1)
 	})
 
-	it('defers initial property observers to componentReadied for relation components', async () => {
+	it('executes initial property observers before attached for relation components', async () => {
 		const observeActive = vi.fn(function observeActive(val) {
 			this.data._observedActive = val
 		})
@@ -154,14 +153,11 @@ describe('Component.tO observer ordering', () => {
 		})
 
 		await component.init()
-		expect(observeActive).not.toHaveBeenCalled()
-
-		component.componentReadied()
 		expect(observeActive).toHaveBeenCalledTimes(1)
 		expect(component.data._observedActive).toBe(0)
 	})
 
-	it('executes property observers in reverse batch order after raw observers', () => {
+	it('executes property observers in assignment order after data observers', () => {
 		const calls = []
 		const instance = {
 			data: {
@@ -201,12 +197,12 @@ describe('Component.tO observer ordering', () => {
 
 		expect(calls).toEqual([
 			'observers:show',
+			'observeShow:fade',
 			'observeClass:top',
-			'observeShow:top',
 		])
 	})
 
-	it('runs later changed props before earlier props in reverse batch order', () => {
+	it('skips identical assignments and preserves changed-property order', () => {
 		const calls = []
 		const instance = {
 			data: {
@@ -245,9 +241,8 @@ describe('Component.tO observer ordering', () => {
 
 		expect(calls).toEqual([
 			'type:array',
-			'defaultDate:1',
 		])
-		expect(instance.data.currentDate).toBe(1)
+		expect(instance.data.currentDate).toEqual([1])
 	})
 
 	it('skips duplicate observer execution but keeps data in sync for identical render replay after parent sync', () => {
@@ -317,6 +312,6 @@ describe('Component.tO observer ordering', () => {
 		})
 
 		expect(instance.data.visible).toBe(true)
-		expect(instance.watchVisible).toHaveBeenCalledWith(true, false)
+		expect(instance.watchVisible).toHaveBeenCalledWith(true, false, ['visible'])
 	})
 })

@@ -1,10 +1,11 @@
-import { cloneDeep, isFunction, isString, normalizePropertyDefinition, resolvePropertyValue, set } from '@dimina/common'
+import { cloneDeep, isFunction, normalizePropertyDefinition, resolvePropertyValue } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import { createIntersectionObserver } from '../../api/core/wxml/intersection-observer'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
+import { applyDataUpdates, invokeDataObservers, invokePropertyChanges } from '../../core/data-update'
 import { beginUpdateBatch, createUpdateCallback, endUpdateBatch, enqueueUpdate } from '../../core/update-queue'
-import { addComputedData, deepEqual, filterData, filterInvokeObserver, invokeBehaviorObservers, invokeObserversOnce, invokePropertyObservers, isChildComponent, matchComponent, resolveEventHandler, runPropertyObservers, syncUpdateChildrenProps } from '../../core/utils'
+import { addComputedData, deepEqual, isChildComponent, matchComponent, resolveEventHandler, syncUpdateChildrenProps } from '../../core/utils'
 
 // 组件生命周期
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
@@ -57,6 +58,7 @@ export class Component {
 		// 初始化 groupSetData 相关属性
 		this.__groupSetDataMode__ = false // 是否处于批量更新模式
 		this.__groupSetDataBuffer__ = {} // 批量更新数据缓存
+		this.__groupSetDataChanges__ = [] // 批量更新路径缓存
 		this.__groupSetDataCallbacks__ = [] // 批量更新回调缓存
 		this.__pendingInitSetDataCallbacks__ = [] // 初始化期间 setData 回调缓存
 	
@@ -65,6 +67,8 @@ export class Component {
 		this.__childPropsBindings__ = {}
 		this.__pendingSyncedProps__ = {}
 		this.__initialPropertyObserversInvoked__ = false
+		this.__initialPropertyNames__ = new Set(opts.propertyNames || Object.keys(opts.properties || {}))
+		this.__initialPropertyChanges__ = []
 		this.__propertySchemas__ = Object.fromEntries(
 			Object.entries(this.__info__.properties || {}).map(([name, definition]) => [name, normalizePropertyDefinition(definition)]),
 		)
@@ -74,9 +78,19 @@ export class Component {
 		if (this.__isComponent__) {
 			const initialProperties = this.opts.properties || {}
 			for (const [key, schema] of Object.entries(this.__propertySchemas__)) {
-				this.data[key] = resolvePropertyValue(schema, initialProperties[key], {
+				const absentValue = resolvePropertyValue(schema, undefined, { absent: true })
+				const value = resolvePropertyValue(schema, initialProperties[key], {
 					absent: !Object.prototype.hasOwnProperty.call(initialProperties, key),
 				})
+				this.data[key] = value
+				if (this.__initialPropertyNames__.has(key)) {
+					this.__initialPropertyChanges__.push({
+						propertyName: key,
+						oldValue: absentValue,
+						path: [key],
+						value,
+					})
+				}
 			}
 		}
 
@@ -186,7 +200,12 @@ export class Component {
 		const relations = this.__info__.relations
 		if (!relations) return
 
-		const allInstances = Object.values(runtime.instances[this.bridgeId] || {})
+		const allInstances = Object.values(runtime.instances[this.bridgeId] || {}).filter(instance => (
+			instance === this
+			|| !instance.__isComponent__
+			|| instance.__componentAttached__
+			|| instance.__componentAttaching__
+		))
 		
 		for (const [relationPath, relationConfig] of Object.entries(relations)) {
 			const { type, target } = relationConfig
@@ -392,49 +411,46 @@ export class Component {
 	 * @param {*} data
 	 */
 	setData(data, callback) {
-		const fData = filterData(data)
-		
-		// 更新数据并收集旧值（用于触发 observers）
-		const oldValues = {}
-		for (const key in fData) {
-			oldValues[key] = this.data[key]
-			set(this.data, key, fData[key])
+		const update = applyDataUpdates(this, data, callback)
+		if (!update) {
+			return
 		}
-
-		// 触发 observers（微信小程序规范：setData 后应触发对应的 observers，一次 setData 每个监听器最多触发一次）
-		if (this.__info__.observers) {
-			invokeObserversOnce(Object.keys(fData), this.__info__.observers, this.data, this, oldValues)
-		}
-		invokeBehaviorObservers(this, Object.keys(fData), oldValues)
-		invokePropertyObservers(this, Object.keys(fData), oldValues)
 
 		if (!this.initd) {
-			if (isFunction(callback)) {
-				this.__pendingInitSetDataCallbacks__.push(callback)
-			}
+			this.__pendingInitSetDataCallbacks__.push(...update.callbacks)
+			invokePropertyChanges(this, update.propertyChanges)
 			return
 		}
 
 		// 如果处于 groupSetData 模式，将数据缓存起来
 		if (this.__groupSetDataMode__) {
 			// 合并到缓存中
-			for (const key in fData) {
-				this.__groupSetDataBuffer__[key] = fData[key]
+			for (const key of Object.keys(update.changedData)) {
+				this.__groupSetDataBuffer__[key] = update.changedData[key]
 			}
-			if (isFunction(callback)) {
-				this.__groupSetDataCallbacks__.push(callback)
-			}
+			this.__groupSetDataChanges__.push(...update.changes)
+			this.__groupSetDataCallbacks__.push(...update.callbacks)
+			invokePropertyChanges(this, update.propertyChanges)
 			return
 		}
 
 		// 同步更新子组件的 properties，确保与微信小程序时序一致
-		const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
+		const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], update.changedData)
 
-		enqueueUpdate(this.bridgeId, this.__id__, fData, createUpdateCallback(this, callback))
+		enqueueUpdate(
+			this.bridgeId,
+			this.__id__,
+			update.changedData,
+			createUpdateCallback(this, update.callbacks),
+			update.changes,
+		)
 
 		syncedChildren.forEach(({ child, data }) => {
 			enqueueUpdate(this.bridgeId, child.__id__, data)
 		})
+
+		// exparser runs property observers after the data observer/update phase.
+		invokePropertyChanges(this, update.propertyChanges)
 	}
 
 	/**
@@ -483,19 +499,11 @@ export class Component {
 			return
 		}
 
-		const propertyObserversToExecute = []
-		for (const prop of Object.keys(this.__info__.properties)) {
-			const observer = this.__info__.properties[prop]?.observer
-			const val = this.data[prop]
-			if (isString(observer)) {
-				propertyObserversToExecute.push(() => this[observer]?.(val, undefined))
-			}
-			else if (isFunction(observer)) {
-				propertyObserversToExecute.push(() => observer.call(this, val, undefined))
-			}
+		const changedPaths = this.__initialPropertyChanges__.map(change => change.path)
+		if (changedPaths.length > 0) {
+			invokeDataObservers(this, changedPaths)
+			invokePropertyChanges(this, this.__initialPropertyChanges__)
 		}
-
-		propertyObserversToExecute.forEach(run => run())
 		this.__initialPropertyObserversInvoked__ = true
 	}
 
@@ -503,13 +511,12 @@ export class Component {
 		if (this.__isComponent__) {
 			// 组件实例创建时调用 componentCreated
 			await this.componentCreated()
-			// Fixme: 组件已挂载到DOM (componentAttached)
-			await this.componentAttached()
+			this.#invokeInitialPropertyObservers()
 		}
 		else {
 			// 使用 Component 构造器创建的页面生命周期
 			await this.componentCreated()
-			// Fixme: 组件已挂载到DOM (componentAttached)
+			// Component 构造的页面根实例在页面节点树创建阶段进入 attached。
 			await this.componentAttached()
 
 			await this.onLoad?.(this.opts.query || {})
@@ -543,28 +550,20 @@ export class Component {
 			return
 		}
 
-		// 收集需要执行的观察者函数
-		const observersToExecute = []
-		const oldValues = {}
+		const propertyChanges = []
+		const changedPaths = []
 		// 保存旧值并更新数据，收集观察者
 		for (const [prop, val] of Object.entries(nextData)) {
 			// 保存旧值
 			const oldVal = this.data[prop]
-			oldValues[prop] = oldVal
-
 			// 更新数据
 			this.data[prop] = val
-
-			// 收集 observers
-			if (this.__info__.observers) {
-				observersToExecute.push(() => filterInvokeObserver(prop, this.__info__.observers, this.data, this, oldVal))
-			}
-			
+			changedPaths.push([prop])
+			propertyChanges.push({ propertyName: prop, oldValue: oldVal, path: [prop], value: val })
 		}
-		
-		observersToExecute.forEach(run => run())
-		invokeBehaviorObservers(this, Object.keys(nextData), Object.fromEntries(Object.keys(nextData).map(prop => [prop, undefined])))
-		runPropertyObservers(this, Object.keys(nextData), oldValues)
+
+		invokeDataObservers(this, changedPaths)
+		invokePropertyChanges(this, propertyChanges)
 	}
 
 	normalizePropertyValues(data) {
@@ -689,6 +688,7 @@ export class Component {
 		
 		// 存储批量更新的数据
 		this.__groupSetDataBuffer__ = {}
+		this.__groupSetDataChanges__ = []
 		this.__groupSetDataCallbacks__ = []
 		
 		try {
@@ -704,12 +704,14 @@ export class Component {
 			if (this.__groupSetDataBuffer__ && Object.keys(this.__groupSetDataBuffer__).length > 0) {
 				const bufferedData = this.__groupSetDataBuffer__
 				const bufferedCallbacks = this.__groupSetDataCallbacks__
+				const bufferedChanges = this.__groupSetDataChanges__
 				this.__groupSetDataBuffer__ = {}
+				this.__groupSetDataChanges__ = []
 				this.__groupSetDataCallbacks__ = []
 				const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], bufferedData)
 				
 				// 发送合并后的数据更新
-				enqueueUpdate(this.bridgeId, this.__id__, bufferedData, createUpdateCallback(this, bufferedCallbacks))
+				enqueueUpdate(this.bridgeId, this.__id__, bufferedData, createUpdateCallback(this, bufferedCallbacks), bufferedChanges)
 
 				syncedChildren.forEach(({ child, data }) => {
 					enqueueUpdate(this.bridgeId, child.__id__, data)
@@ -717,6 +719,7 @@ export class Component {
 			}
 			else {
 				this.__groupSetDataBuffer__ = {}
+				this.__groupSetDataChanges__ = []
 				this.__groupSetDataCallbacks__ = []
 			}
 			endUpdateBatch(this.bridgeId)
@@ -889,7 +892,6 @@ export class Component {
 	 * 在组件在视图层布局完成后执行
 	 */
 	componentReadied() {
-		this.#invokeInitialPropertyObservers()
 		this.__info__.behaviorLifetimes?.ready?.forEach(method => method.call(this))
 		this.ready?.()
 	}

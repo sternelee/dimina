@@ -11,6 +11,20 @@ class Runtime {
 	constructor() {
 		this.app = null
 		this.instances = {}
+		this.pageStates = new Map()
+	}
+
+	getPageState(bridgeId) {
+		if (!this.pageStates.has(bridgeId)) {
+			this.pageStates.set(bridgeId, {
+				hidden: false,
+				pendingReady: false,
+				pendingShow: false,
+				ready: false,
+				shown: false,
+			})
+		}
+		return this.pageStates.get(bridgeId)
 	}
 
 	queuePendingEvent(instance, payload) {
@@ -92,7 +106,7 @@ class Runtime {
 	 * @param {*} opts
 	 */
 	createInstance(opts) {
-		const { bridgeId, moduleId, path, query, eventAttr, pageId, parentId, properties, targetInfo, stackId } = opts
+		const { bridgeId, moduleId, path, query, eventAttr, pageId, parentId, properties, propertyNames, targetInfo, stackId } = opts
 
 		const module = loader.getModuleByPath(path)
 		if (!module) {
@@ -114,13 +128,18 @@ class Runtime {
 				pageId,
 				parentId,
 				properties,
+				propertyNames,
 				targetInfo,
 			})
 			this.instances[bridgeId][moduleId] = component
 			if (!module.isComponent) {
 				router.push(component, stackId)
 			}
-			component.init()
+			component.init().then(() => {
+				if (!module.isComponent && !this.getPageState(bridgeId).hidden) {
+					this.pageShow({ bridgeId, moduleId })
+				}
+			})
 			
 			return component
 		}
@@ -133,7 +152,11 @@ class Runtime {
 			})
 			this.instances[bridgeId][moduleId] = page
 			router.push(page, stackId)
-			page.init()
+			page.init().then(() => {
+				if (!this.getPageState(bridgeId).hidden) {
+					this.pageShow({ bridgeId, moduleId })
+				}
+			})
 			return page
 		}
 		else {
@@ -141,9 +164,54 @@ class Runtime {
 		}
 	}
 
+	async moduleAttached(opts) {
+		const { bridgeId, moduleId } = opts
+		const instance = this.instances[bridgeId]?.[moduleId]
+		if (!instance || instance.__type__ !== ComponentModule.type || !instance.__isComponent__) {
+			return
+		}
+		if (instance.__componentAttached__) {
+			return instance.__attachPromise__
+		}
+
+		const parent = this.instances[bridgeId]?.[instance.__parentId__]
+		if (parent?.__isComponent__ && !parent.__componentAttached__) {
+			instance.__componentAttachPending__ = true
+			return
+		}
+		if (instance.__attachPromise__) {
+			return instance.__attachPromise__
+		}
+
+		instance.__componentAttachPending__ = false
+		instance.__componentAttaching__ = true
+		instance.__attachPromise__ = Promise.resolve(instance.componentAttached()).then(async () => {
+			instance.__componentAttaching__ = false
+			instance.__componentAttached__ = true
+			if (this.getPageState(bridgeId).shown && !instance.__pageShown__) {
+				instance.__pageShown__ = true
+				instance.pageShow()
+			}
+
+			const children = Object.values(this.instances[bridgeId] || {}).filter(child => (
+				child?.__parentId__ === moduleId && child.__componentAttachPending__
+			))
+			for (const child of children) {
+				await this.moduleAttached({ bridgeId, moduleId: child.__id__ })
+			}
+
+			if (instance.__pendingReadyOpts__) {
+				const pendingReadyOpts = instance.__pendingReadyOpts__
+				delete instance.__pendingReadyOpts__
+				this.moduleReady(pendingReadyOpts)
+			}
+		})
+		return instance.__attachPromise__
+	}
+
 	moduleReady(opts) {
 		const { bridgeId, moduleId, propBindings } = opts
-		const instance = this.instances[bridgeId][moduleId]
+		const instance = this.instances[bridgeId]?.[moduleId]
 
 		if (!instance) {
 			return
@@ -162,6 +230,23 @@ class Runtime {
 		}
 
 		if (instance.__type__ === ComponentModule.type) {
+			if (instance.__isComponent__ && !instance.__componentAttached__) {
+				instance.__pendingReadyOpts__ = opts
+				return
+			}
+			if (instance.__componentReadied__) {
+				return
+			}
+			const pendingChildren = Object.values(this.instances[bridgeId] || {}).some(child => (
+				child?.__isComponent__
+				&& child.__componentAttached__
+				&& !child.__componentReadied__
+				&& this.isDescendantInstance(child, instance, bridgeId)
+			))
+			if (pendingChildren) {
+				instance.__pendingReadyOpts__ = opts
+				return
+			}
 			// 调用组件的 ready 生命周期
 			instance.componentReadied()
 			// 标记组件已准备就绪
@@ -174,35 +259,75 @@ class Runtime {
 			if (pageInstance) {
 				this.checkAndCallPageReady(bridgeId, pageInstance.__id__)
 			}
+
+			let parent = this.instances[bridgeId]?.[instance.__parentId__]
+			while (parent?.__isComponent__) {
+				if (parent.__pendingReadyOpts__) {
+					const pendingReadyOpts = parent.__pendingReadyOpts__
+					delete parent.__pendingReadyOpts__
+					this.moduleReady(pendingReadyOpts)
+				}
+				parent = this.instances[bridgeId]?.[parent.__parentId__]
+			}
 		}
+	}
+
+	isDescendantInstance(candidate, ancestor, bridgeId) {
+		let current = candidate
+		while (current?.__parentId__) {
+			if (current.__parentId__ === ancestor.__id__) {
+				return true
+			}
+			current = this.instances[bridgeId]?.[current.__parentId__]
+		}
+		return false
 	}
 
 	moduleUnmounted(opts) {
 		const { bridgeId, moduleId } = opts
-		const instance = this.instances[bridgeId][moduleId]
+		const instance = this.instances[bridgeId]?.[moduleId]
 
 		if (!instance) {
 			return
 		}
 
 		if (instance.__type__ === ComponentModule.type) {
-			instance.componentDetached()
+			if ((!instance.__isComponent__ || instance.__componentAttached__) && !instance.__componentDetached__) {
+				instance.componentDetached()
+				instance.__componentDetached__ = true
+			}
 		}
 		delete this.instances[bridgeId][moduleId]
 	}
 
 	pageShow(opts) {
 		const { bridgeId } = opts
+		const state = this.getPageState(bridgeId)
+		state.hidden = false
+		state.pendingShow = true
 		const instances = this.instances[bridgeId]
 
 		// 首次进入时模块可能不存在
 		if (!instances) {
 			return
 		}
+		const pageInstance = this.getPageInstance(bridgeId)
+		if (!pageInstance?.initd) {
+			return
+		}
+		if (state.shown) {
+			state.pendingShow = false
+			return
+		}
+		state.shown = true
+		state.pendingShow = false
 
 		const pageInstances = []
 
-		Object.values(instances).forEach((instance) => {
+		const orderedInstances = Object.values(instances)
+			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+
+		orderedInstances.forEach((instance) => {
 			if (!instance) {
 				return
 			}
@@ -213,7 +338,8 @@ class Runtime {
 				if (!instance.__isComponent__) {
 					pageInstances.push(instance)
 				}
-				else {
+				else if (instance.__componentAttached__ && !instance.__pageShown__) {
+					instance.__pageShown__ = true
 					instance.pageShow()
 				}
 			}
@@ -223,18 +349,28 @@ class Runtime {
 		pageInstances.forEach((instance) => {
 			instance.pageShow()
 		})
+
+		if (state.pendingReady) {
+			this.pageReady({ ...opts, moduleId: pageInstance.__id__ })
+		}
 	}
 
 	pageReady(opts) {
 		const { bridgeId, moduleId } = opts
-		const instance = this.instances[bridgeId][moduleId]
+		const state = this.getPageState(bridgeId)
+		state.pendingReady = true
+		const instance = this.instances[bridgeId]?.[moduleId]
 
 		if (!instance) {
 			return
 		}
 
-		// 先调用 pageShow
-		this.pageShow(opts)
+		if (!state.shown) {
+			this.pageShow(opts)
+		}
+		if (!state.shown || state.ready) {
+			return
+		}
 		
 		// 标记页面准备就绪，但延迟调用 onReady
 		// 等待所有组件的 ready 执行完毕后再调用
@@ -267,8 +403,9 @@ class Runtime {
 	}
 
 	checkAndCallPageReady(bridgeId, moduleId) {
-		const instance = this.instances[bridgeId][moduleId]
-		if (!instance || !instance.__pageReadyPending__) {
+		const state = this.getPageState(bridgeId)
+		const instance = this.instances[bridgeId]?.[moduleId]
+		if (!instance || !instance.__pageReadyPending__ || !state.shown || state.ready) {
 			return
 		}
 
@@ -276,6 +413,8 @@ class Runtime {
 		if (!instances) {
 			// 没有组件，直接调用页面 onReady
 			instance.__pageReadyPending__ = false
+			state.pendingReady = false
+			state.ready = true
 			instance.pageReady()
 			return
 		}
@@ -292,17 +431,32 @@ class Runtime {
 		if (pendingComponents.length === 0) {
 			// 所有组件都已准备就绪，调用页面 onReady
 			instance.__pageReadyPending__ = false
+			state.pendingReady = false
+			state.ready = true
 			instance.pageReady()
 		}
 	}
 
 	pageHide(opts) {
 		const { bridgeId } = opts
+		const state = this.getPageState(bridgeId)
+		state.hidden = true
+		state.pendingShow = false
+		if (!state.shown) {
+			return
+		}
+		state.shown = false
 		const instances = this.instances[bridgeId]
+		if (!instances) {
+			return
+		}
 
 		const pageInstances = []
 
-		Object.values(instances).forEach((instance) => {
+		const orderedInstances = Object.values(instances)
+			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+
+		orderedInstances.forEach((instance) => {
 			if (!instance) {
 				return
 			}
@@ -313,7 +467,8 @@ class Runtime {
 				if (!instance.__isComponent__) {
 					pageInstances.push(instance)
 				}
-				else {
+				else if (instance.__componentAttached__ && instance.__pageShown__) {
+					instance.__pageShown__ = false
 					instance.pageHide()
 				}
 			}
@@ -336,12 +491,25 @@ class Runtime {
 			return
 		}
 
-		Object.values(instances).forEach((instance) => {
+		const instanceList = Object.values(instances)
+		const customComponents = instanceList
+			.filter(instance => instance?.__type__ === ComponentModule.type && instance.__isComponent__)
+			.sort((left, right) => this.getInstanceDepth(right, bridgeId) - this.getInstanceDepth(left, bridgeId))
+
+		customComponents.forEach((instance) => {
+			if (instance.__componentAttached__ && !instance.__componentDetached__) {
+				instance.componentDetached()
+				instance.__componentDetached__ = true
+			}
+		})
+
+		instanceList.forEach((instance) => {
 			if (!instance) {
 				return
 			}
-			if (instance.__type__ === ComponentModule.type) {
+			if (instance.__type__ === ComponentModule.type && !instance.__isComponent__ && !instance.__componentDetached__) {
 				instance.componentDetached()
+				instance.__componentDetached__ = true
 			}
 			instance.pageUnload()
 		})
@@ -349,11 +517,22 @@ class Runtime {
 		router.pop()
 
 		delete this.instances[bridgeId]
+		this.pageStates.delete(bridgeId)
+	}
+
+	getInstanceDepth(instance, bridgeId) {
+		let depth = 0
+		let current = instance
+		while (current?.__parentId__) {
+			depth++
+			current = this.instances[bridgeId]?.[current.__parentId__]
+		}
+		return depth
 	}
 
 	pageScroll(opts) {
 		const { bridgeId, moduleId, scrollTop } = opts
-		const instance = this.instances[bridgeId][moduleId]
+		const instance = this.instances[bridgeId]?.[moduleId]
 
 		if (!instance) {
 			return
@@ -369,27 +548,33 @@ class Runtime {
 			return
 		}
 
-		Object.values(instances).forEach((instance) => {
+		const pageInstances = []
+		const orderedInstances = Object.values(instances)
+			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+
+		orderedInstances.forEach((instance) => {
 			if (!instance) {
 				return
 			}
 			if (instance.__type__ === PageModule.type) {
-				instance.pageResize(size)
+				pageInstances.push(instance)
 			}
 			else if (instance.__type__ === ComponentModule.type) {
 				if (!instance.__isComponent__) {
-					instance.pageResize(size)
+					pageInstances.push(instance)
 				}
-				else {
+				else if (instance.__componentAttached__) {
 					instance.pageResize(size)
 				}
 			}
 		})
+
+		pageInstances.forEach(instance => instance.pageResize(size))
 	}
 
 	componentError(opts) {
 		const { bridgeId, moduleId } = opts
-		const instance = this.instances[bridgeId][moduleId]
+		const instance = this.instances[bridgeId]?.[moduleId]
 
 		if (!instance) {
 			return
@@ -408,11 +593,13 @@ class Runtime {
 			return
 		}
 
-		Object.values(instances).forEach((instance) => {
-			if (instance?.__type__ === ComponentModule.type) {
-				instance.componentRouteDone()
-			}
-		})
+		Object.values(instances)
+			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+			.forEach((instance) => {
+				if (instance?.__type__ === ComponentModule.type && (!instance.__isComponent__ || instance.__componentAttached__)) {
+					instance.componentRouteDone()
+				}
+			})
 	}
 
 	/**

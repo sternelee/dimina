@@ -26,23 +26,25 @@ sequenceDiagram
     S->>S: 创建 Page 实例
     S->>S: created / attached / onLoad
     S->>R: firstRender + 页面初始数据
+    S->>S: 保证首次 Page.onShow（与容器 pageShow 去重）
 
     R->>R: 创建 Vue 页面与自定义组件
     R->>S: mC：创建组件实例
-    S->>S: component created / attached
+    S->>S: component created
+    R->>S: mA：组件节点已 mounted
+    S->>S: component attached（父组件优先）
 
-    C->>S: pageShow
-    S->>S: component pageLifetimes.show
-    S->>S: Page.onShow
+    C->>S: pageShow（可能先到或重复到达）
+    S->>S: 排队或去重
 
-    R->>S: mR：组件视图已挂载
+    R->>S: mR：组件首轮视图更新完成
     S->>S: component ready
     R->>S: pageReady：页面根视图已挂载
     S->>S: 等待已初始化组件全部 ready
     S->>S: Page.onReady
 ```
 
-`pageShow` 由容器的页面可见状态驱动，它与 render 的挂载过程属于不同消息链路。因此应只依赖以下稳定边界：
+`pageShow` 由容器的页面可见状态驱动，它与 render 的挂载过程属于不同消息链路。service 会暂存早到事件、补齐首次显示并对重复事件去重，保证 `onLoad` → `onShow` → `onReady`。因此可以依赖以下稳定边界：
 
 - `onLoad`：页面实例已创建，可以读取路由参数、初始化状态并调用 `setData()`；此时不能假设 DOM 已存在。
 - `onShow`：页面已经进入前台，但不保证第一次渲染完成。
@@ -54,11 +56,11 @@ sequenceDiagram
 当前页面初始化分为两个阶段：
 
 1. service 先创建 Page 实例，依次完成页面的 `created`、`attached` 和 `onLoad`，再把初始数据交给 render。
-2. render 根据页面模板创建自定义组件；每个组件在 service 中执行 `created`、`attached`，挂载完成后执行 `ready`。
+2. render 根据页面模板创建自定义组件；service 建立实例后执行 `created`，render 节点 mounted 后通过 `mA` 触发 `attached`，首轮视图更新完成后通过 `mR` 触发 `ready`。
 
 页面 `onReady` 使用就绪屏障：render 报告页面根节点挂载完成后，service 仍会等待已初始化组件全部 `ready`，再调用页面 `onReady`。这样可以避免页面测量早于组件真实挂载。
 
-不要依赖父组件和子组件之间的精确 `created` / `attached` / `ready` 排序。条件渲染、异步组件数据和后续新增节点都会改变组件创建批次；需要跨组件协作时，应使用 properties、observer、事件或 relations 等明确机制。
+父子组件同时进入节点树时，`attached` 按父组件到子组件的顺序执行；尚未 attached 的子组件会等待父组件。`ready` 由各自的视图完成信号驱动，页面 `onReady` 则统一等待当前已初始化组件。跨组件业务协作仍应使用 properties、observer、事件或 relations 等明确机制。
 
 ## 4. `setData()` 的时机
 
@@ -69,6 +71,8 @@ sequenceDiagram
 | 带回调的初始化更新 | 回调会暂存，等对应模块就绪并完成更新后执行 |
 
 `setData()` 表示发起一次跨线程状态更新，不代表下一行代码执行时 DOM 已更新。需要读取布局时，应使用 `setData(data, callback)`、`onReady`，或选择器 API 的回调结果，而不是固定延时。
+
+路径解析与数据传递采用小程序语义：方括号只接受数字下标，点号和方括号可通过反斜杠转义为字段名；逻辑层在调用时深拷贝引用值，传给 render 的数据则在入队时生成 JSON 快照。调用后继续修改原对象不会污染逻辑数据或待发送的视图更新。
 
 ## 5. 显示、隐藏与销毁
 

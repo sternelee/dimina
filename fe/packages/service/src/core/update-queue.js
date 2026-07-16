@@ -1,4 +1,5 @@
 import { callback as callbackRegistry, isFunction } from '@dimina/common'
+import { parseDataPath } from './data-update'
 import message from './message'
 
 const queues = new Map()
@@ -43,15 +44,31 @@ export function endUpdateBatch(bridgeId) {
 	}
 }
 
-export function enqueueUpdate(bridgeId, moduleId, data, callbackId) {
+function snapshotUpdate(data, changes = []) {
+	const normalizedChanges = changes.length > 0
+		? changes
+		: Object.entries(data).flatMap(([key, value]) => {
+			const path = parseDataPath(key)
+			return path ? [{ path, value }] : []
+		})
+	const snapshot = JSON.parse(JSON.stringify({ data, changes: normalizedChanges }))
+	return {
+		data: snapshot.data || {},
+		changes: (snapshot.changes || []).filter(change => Object.prototype.hasOwnProperty.call(change, 'value')),
+	}
+}
+
+export function enqueueUpdate(bridgeId, moduleId, data, callbackId, changes = []) {
 	const queue = getQueue(bridgeId)
 	const update = queue.byModuleId.get(moduleId)
+	const snapshot = snapshotUpdate(data, changes)
 
 	if (update) {
-		Object.assign(update.data, data)
+		Object.assign(update.data, snapshot.data)
+		update.changes.push(...snapshot.changes)
 	}
 	else {
-		const nextUpdate = { moduleId, data: { ...data } }
+		const nextUpdate = { moduleId, data: snapshot.data, changes: snapshot.changes }
 		queue.byModuleId.set(moduleId, nextUpdate)
 		queue.updates.push(nextUpdate)
 	}

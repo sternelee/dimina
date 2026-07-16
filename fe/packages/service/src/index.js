@@ -116,6 +116,11 @@ class Service {
 			runtime.createInstance(msg)
 		})
 
+		this.message.on('mA', (msg) => {
+			// 组件真实进入视图节点树后执行 attached。
+			runtime.moduleAttached(msg)
+		})
+
 		this.message.on('mR', (msg) => {
 			// 在组件在视图层布局完成后执行
 			runtime.moduleReady(msg)

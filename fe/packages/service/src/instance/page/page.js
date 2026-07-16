@@ -1,9 +1,10 @@
-import { cloneDeep, isFunction, set } from '@dimina/common'
+import { cloneDeep, isFunction } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
+import { applyDataUpdates } from '../../core/data-update'
 import { createUpdateCallback, enqueueUpdate } from '../../core/update-queue'
-import { addComputedData, filterData, invokeBehaviorObservers, invokeObserversOnce, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
+import { addComputedData, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
 
 // https://developers.weixin.qq.com/miniprogram/dev/reference/api/Page.html
 // const lifecycleMethods = ['onLoad', 'onShow', 'onReady', 'onHide', 'onUnload',
@@ -58,32 +59,26 @@ export class Page {
 	}
 
 	setData(data, callback) {
-		const fData = filterData(data)
-		const oldValues = {}
-		const info = this.__info__ || {}
-		
-		// 更新数据
-		for (const key in fData) {
-			oldValues[key] = this.data[key]
-			set(this.data, key, fData[key])
+		const update = applyDataUpdates(this, data, callback)
+		if (!update) {
+			return
 		}
-
-		if (info.observers) {
-			invokeObserversOnce(Object.keys(fData), info.observers, this.data, this, oldValues)
-		}
-		invokeBehaviorObservers(this, Object.keys(fData), oldValues)
 
 		if (!this.initd) {
-			if (isFunction(callback)) {
-				this.__pendingInitSetDataCallbacks__.push(callback)
-			}
+			this.__pendingInitSetDataCallbacks__.push(...update.callbacks)
 			return
 		}
 
 		// 同步更新子组件的 properties，确保与微信小程序时序一致
-		const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], fData)
+		const syncedChildren = syncUpdateChildrenProps(this, runtime.instances[this.bridgeId], update.changedData)
 
-		enqueueUpdate(this.bridgeId, this.__id__, fData, createUpdateCallback(this, callback))
+		enqueueUpdate(
+			this.bridgeId,
+			this.__id__,
+			update.changedData,
+			createUpdateCallback(this, update.callbacks),
+			update.changes,
+		)
 
 		syncedChildren.forEach(({ child, data }) => {
 			enqueueUpdate(this.bridgeId, child.__id__, data)

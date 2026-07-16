@@ -338,8 +338,16 @@ class Runtime {
 
 		const pendingUpdate = this.preInitUpdates.get(moduleId)
 		if (pendingUpdate) {
-			for (const [key, value] of Object.entries(pendingUpdate)) {
-				set(data, key, value)
+			const pendingData = pendingUpdate.data || pendingUpdate
+			if ((pendingUpdate.changes || []).length > 0) {
+				for (const change of pendingUpdate.changes) {
+					set(data, change.path, change.value)
+				}
+			}
+			else {
+				for (const [key, value] of Object.entries(pendingData)) {
+					set(data, key, value)
+				}
 			}
 			this.preInitUpdates.delete(moduleId)
 		}
@@ -469,9 +477,10 @@ class Runtime {
 					}
 
 					const initialProperties = normalizeCurrentProperties()
+					const propertyNames = Object.keys(module.propertySchemas || {}).filter(name => hasVNodeProp(vueInstance.vnode.props, name))
 
 					message.send({
-						type: 'mC', // createInstance + componentAttached
+						type: 'mC', // createInstance + componentCreated
 						target: 'service',
 						body: {
 							bridgeId,
@@ -486,6 +495,7 @@ class Runtime {
 								class: attrs.class,
 							},
 							properties: initialProperties,
+							propertyNames,
 							propBindings: null, // 初始化时为 null，稍后从 DOM 元素读取
 						},
 					})
@@ -504,6 +514,14 @@ class Runtime {
 					that._pendingSetups.set(moduleId, new Promise(r => (_resolvePending = r)))
 
 					onMounted(() => {
+						message.send({
+							type: 'mA',
+							target: 'service',
+							body: {
+								bridgeId,
+								moduleId,
+							},
+						})
 						nextTick(() => {
 							// 从 DOM 元素读取属性绑定信息
 							const propBindings = instance.$el?._propBindings
@@ -608,7 +626,7 @@ class Runtime {
 	}
 
 	updateModule(opts) {
-		const { moduleId, data } = opts
+		const { moduleId, data, changes = [] } = opts
 		const setupData = this.setupData.get(moduleId)
 
 		if (setupData) {
@@ -616,16 +634,27 @@ class Runtime {
 			const newKeys = {}
 
 			if (!this.initializedModules.has(moduleId)) {
-				const pendingUpdate = this.preInitUpdates.get(moduleId) || {}
-				Object.assign(pendingUpdate, data)
+				const pendingUpdate = this.preInitUpdates.get(moduleId) || { data: {}, changes: [] }
+				Object.assign(pendingUpdate.data, data)
+				pendingUpdate.changes.push(...changes)
 				this.preInitUpdates.set(moduleId, pendingUpdate)
 			}
-			for (const key in data) {
-				if (!Object.prototype.hasOwnProperty.call(setupData, key)) {
-					hasNewReactiveKey = true
-					newKeys[key] = data[key]
+			if (changes.length === 0) {
+				for (const key in data) {
+					if (!Object.prototype.hasOwnProperty.call(setupData, key)) {
+						hasNewReactiveKey = true
+						newKeys[key] = data[key]
+					}
+					set(setupData, key, data[key])
 				}
-				set(setupData, key, data[key])
+			}
+			for (const change of changes) {
+				const rootKey = change.path[0]
+				if (!Object.prototype.hasOwnProperty.call(setupData, rootKey)) {
+					hasNewReactiveKey = true
+				}
+				set(setupData, change.path, change.value)
+				newKeys[rootKey] = setupData[rootKey]
 			}
 			if (hasNewReactiveKey) {
 				this.refreshProxyAccess(moduleId, newKeys)
