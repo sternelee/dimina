@@ -145,6 +145,8 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 状态说明：`✓` 表示该平台已有对应实现；`✗` 表示当前未提供。能力入口存在但目标平台未实现时，仍按不支持处理。
 
+蓝牙能力还要求宿主声明系统权限。仓库示例已经补齐 Android 蓝牙/定位权限、iOS 蓝牙用途说明和 HarmonyOS `ohos.permission.ACCESS_BLUETOOTH`；集成 SDK 的宿主应用需要提供等价配置。
+
 | 分类          | API 名称                         | Android | iOS | Harmony | Web |
 | ------------- | -------------------------------- | ------- | --- | ------- | --- |
 | 基础          | env                              | ✓       | ✓   | ✓       | ✓   |
@@ -156,6 +158,35 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 |               | getSystemInfoSync                | ✓       | ✓   | ✓       | ✗   |
 |               | getSystemInfoAsync               | ✓       | ✓   | ✓       | ✓   |
 |               | getSystemInfo                    | ✓       | ✓   | ✓       | ✗   |
+| 设备 - 蓝牙   | openBluetoothAdapter             | ✓       | ✓   | ✓       | ✗   |
+|               | closeBluetoothAdapter            | ✓       | ✓   | ✓       | ✗   |
+|               | getBluetoothAdapterState         | ✓       | ✓   | ✓       | ✗   |
+|               | startBluetoothDevicesDiscovery   | ✓       | ✓   | ✓       | ✗   |
+|               | stopBluetoothDevicesDiscovery    | ✓       | ✓   | ✓       | ✗   |
+|               | getBluetoothDevices              | ✓       | ✓   | ✓       | ✗   |
+|               | getConnectedBluetoothDevices     | ✓       | ✓   | ✓       | ✗   |
+|               | onBluetoothAdapterStateChange    | ✓       | ✓   | ✓       | ✗   |
+|               | offBluetoothAdapterStateChange   | ✓       | ✓   | ✓       | ✗   |
+|               | onBluetoothDeviceFound           | ✓       | ✓   | ✓       | ✗   |
+|               | offBluetoothDeviceFound          | ✓       | ✓   | ✓       | ✗   |
+| 设备 - 低功耗蓝牙 | createBLEConnection             | ✓       | ✓   | ✓       | ✗   |
+|               | closeBLEConnection              | ✓       | ✓   | ✓       | ✗   |
+|               | getBLEDeviceServices            | ✓       | ✓   | ✓       | ✗   |
+|               | getBLEDeviceCharacteristics     | ✓       | ✓   | ✓       | ✗   |
+|               | readBLECharacteristicValue      | ✓       | ✓   | ✓       | ✗   |
+|               | writeBLECharacteristicValue     | ✓       | ✓   | ✓       | ✗   |
+|               | notifyBLECharacteristicValueChange | ✓    | ✓   | ✓       | ✗   |
+|               | getBLEDeviceRSSI                | ✓       | ✓   | ✓       | ✗   |
+|               | setBLEMTU                       | ✓       | ✗   | ✓       | ✗   |
+|               | getBLEMTU                       | ✓       | ✓   | ✓       | ✗   |
+|               | onBLEConnectionStateChange      | ✓       | ✓   | ✓       | ✗   |
+|               | offBLEConnectionStateChange     | ✓       | ✓   | ✓       | ✗   |
+|               | onBLECharacteristicValueChange | ✓       | ✓   | ✓       | ✗   |
+|               | offBLECharacteristicValueChange | ✓      | ✓   | ✓       | ✗   |
+|               | onBLEMTUChange                  | ✓       | ✓   | ✓       | ✗   |
+|               | offBLEMTUChange                 | ✓       | ✓   | ✓       | ✗   |
+|               | isBluetoothDevicePaired         | ✓       | ✗   | ✗       | ✗   |
+|               | makeBluetoothPair               | ✓       | ✗   | ✗       | ✗   |
 | 路由          | reLaunch                         | ✓       | ✓   | ✓       | ✓   |
 |               | redirectTo                       | ✓       | ✓   | ✓       | ✓   |
 |               | navigateTo                       | ✓       | ✓   | ✓       | ✓   |

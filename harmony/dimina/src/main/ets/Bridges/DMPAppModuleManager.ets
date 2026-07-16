@@ -46,6 +46,7 @@ export class DMPAppModuleManager extends DMPModuleManager {
   private extModules: Map<string, DMPExtModuleHandler> = new Map();
   /** 懒创建的 Ext Bridge 模块实例 */
   private extBridgeModule: DMPContainerBridgesModuleExt | null = null;
+  private bluetoothModule: DMPContainerBridgesModuleBluetooth;
 
   registerExtModule(moduleName: string, handler: DMPExtModuleHandler): void {
     this.extModules.set(moduleName, handler);
@@ -68,7 +69,8 @@ export class DMPAppModuleManager extends DMPModuleManager {
 
     this.registerModule(new DMPContainerBridgesModuleMisc(app))
     this.registerModule(new DMPContainerBridgesModuleActionSheet(app))
-    this.registerModule(new DMPContainerBridgesModuleBluetooth(app))
+    this.bluetoothModule = new DMPContainerBridgesModuleBluetooth(app)
+    this.registerModule(this.bluetoothModule)
     this.registerModule(new DMPContainerBridgesModuleComponentAPI(app))
     this.registerModule(new DMPContainerBridgesModulePopUp(app))
     this.registerModule(new DMPContainerBridgesModuleDom(app))
@@ -104,8 +106,12 @@ export class DMPAppModuleManager extends DMPModuleManager {
     this.registerModule(new DMPContainerBridgesModuleTabBar(app))
     this.registerModule(new DMPContainerBridgesModuleCanvas(app))
   }
-}
 
+  dispose(): void {
+    this.bluetoothModule.dispose();
+    this.extBridgeModule?.cancelAllSubscriptions();
+  }
+}
 
 
 

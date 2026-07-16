@@ -1,11 +1,13 @@
 package com.didi.dimina.ui.container
 
+import android.Manifest
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
 import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -15,6 +17,7 @@ import android.view.animation.AccelerateDecelerateInterpolator
 import android.webkit.WebView
 import android.widget.FrameLayout
 import androidx.activity.ComponentActivity
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.core.LinearEasing
@@ -79,6 +82,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import androidx.core.graphics.toColorInt
+import androidx.core.content.ContextCompat
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
@@ -177,6 +181,17 @@ class DiminaActivity : ComponentActivity() {
     private lateinit var scanCodeLauncher: ScanCodeLauncher
 
     private var imageChooseCallback: ((List<String>) -> Unit)? = null
+    private val bluetoothPermissionCallbacks = mutableListOf<(Boolean) -> Unit>()
+    private var bluetoothPermissionRequestInFlight = false
+    private val bluetoothPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result.values.all { it }
+        bluetoothPermissionRequestInFlight = false
+        val callbacks = bluetoothPermissionCallbacks.toList()
+        bluetoothPermissionCallbacks.clear()
+        callbacks.forEach { it(granted) }
+    }
     
     private var adjustBottom = 0.0
     private var updateCheckStarted = false
@@ -257,6 +272,22 @@ class DiminaActivity : ComponentActivity() {
 
     fun handleScanCode(options: ScanCodeOptions, callback: (Boolean, JSONObject) -> Unit) {
         scanCodeLauncher.launch(options, callback)
+    }
+
+    fun handleBluetoothPermission(callback: (Boolean) -> Unit) {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
+            callback(true)
+            return
+        }
+        bluetoothPermissionCallbacks.add(callback)
+        if (bluetoothPermissionRequestInFlight) return
+        bluetoothPermissionRequestInFlight = true
+        bluetoothPermissionLauncher.launch(permissions)
     }
 
     private fun openSystemGallery(type: MediaType, maxCount: Int) {

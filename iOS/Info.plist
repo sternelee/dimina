@@ -20,6 +20,10 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Dimina NSCameraUsageDescription</string>
+	<key>NSBluetoothAlwaysUsageDescription</key>
+	<string>Dimina uses Bluetooth to discover and connect to nearby devices.</string>
+	<key>NSBluetoothPeripheralUsageDescription</key>
+	<string>Dimina uses Bluetooth to communicate with nearby devices.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Dimina NSMicrophoneUsageDescription</string>
 	<key>NSPhotoLibraryUsageDescription</key>

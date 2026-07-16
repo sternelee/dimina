@@ -315,7 +315,7 @@ export class DMPApp {
 
   destroyEngine() {
     // 销毁前取消所有 extOnBridge 订阅，防止内存泄漏
-    this._appModuleManager.getExtBridgeModule()?.cancelAllSubscriptions();
+    this._appModuleManager.dispose();
     this._service.destroy()
     this.engineStatus.setStatus(EngineStatus.STOP)
   }
