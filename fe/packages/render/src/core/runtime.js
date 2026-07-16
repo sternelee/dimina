@@ -489,6 +489,7 @@ class Runtime {
 		this.pageId = null
 		this.instance = new Map()
 		this.moduleIds = new WeakMap()
+		this.moduleRootIds = new WeakMap()
 		this.setupData = new Map()
 		this.initializedModules = new Set()
 		this.preInitUpdates = new Map()
@@ -843,6 +844,46 @@ class Runtime {
 		this.instance.delete(moduleId)
 	}
 
+	registerModuleRoots(moduleId, roots) {
+		for (const root of roots) {
+			const moduleIds = this.moduleRootIds.get(root) || []
+			if (!moduleIds.includes(moduleId)) {
+				moduleIds.push(moduleId)
+				this.moduleRootIds.set(root, moduleIds)
+			}
+		}
+	}
+
+	unregisterModuleRoots(moduleId, roots) {
+		for (const root of roots) {
+			const moduleIds = this.moduleRootIds.get(root)
+			if (!moduleIds) {
+				continue
+			}
+			const nextModuleIds = moduleIds.filter(id => id !== moduleId)
+			if (nextModuleIds.length > 0) {
+				this.moduleRootIds.set(root, nextModuleIds)
+			}
+			else {
+				this.moduleRootIds.delete(root)
+			}
+		}
+	}
+
+	getRenderParentModuleId(roots, moduleId) {
+		for (const root of roots) {
+			let element = root.parentElement
+			while (element) {
+				const moduleIds = this.moduleRootIds.get(element) || []
+				const parentId = moduleIds.findLast(id => id !== moduleId)
+				if (parentId) {
+					return parentId
+				}
+				element = element.parentElement
+			}
+		}
+	}
+
 	collectCustomEventPath(root, targetModuleId) {
 		const eventPath = []
 		let element = root
@@ -1008,20 +1049,26 @@ class Runtime {
 
 					onMounted(() => {
 						const roots = collectVNodeRootElements(vueInstance.subTree)
+						that.registerModuleRoots(moduleId, roots)
 						for (const root of roots) {
 							root.setAttribute(COMPONENT_HOST_ATTRIBUTE, '')
 							root.setAttribute(STYLE_ISOLATION_ATTRIBUTE, styleIsolation)
 							addStyleHostToken(root, id)
 						}
-						message.send({
-							type: 'mA',
-							target: 'service',
-							body: {
-								bridgeId,
-								moduleId,
-							},
-						})
 						nextTick(() => {
+							// Slot content keeps its lexical Vue parent, while mini-program
+							// relations follow the rendered component tree. Resolve the
+							// physical parent after every mounted hook has registered roots.
+							const renderParentId = that.getRenderParentModuleId(roots, moduleId)
+							message.send({
+								type: 'mA',
+								target: 'service',
+								body: {
+									bridgeId,
+									moduleId,
+									parentId: renderParentId || parentId,
+								},
+							})
 							// 从 DOM 元素读取属性绑定信息
 							const propBindings = instance.$el?._propBindings
 							const eventPath = that.collectCustomEventPath(instance.$el, moduleId)
@@ -1053,6 +1100,8 @@ class Runtime {
 					})
 
 					onUnmounted(() => {
+						const roots = collectVNodeRootElements(vueInstance.subTree)
+						that.unregisterModuleRoots(moduleId, roots)
 						message.send({
 							type: 'mU',
 							target: 'service',

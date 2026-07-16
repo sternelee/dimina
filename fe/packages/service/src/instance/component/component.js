@@ -240,9 +240,7 @@ export class Component {
 			})
 
 			// 根据关系类型过滤组件
-			const relatedComponents = matchingComponents.filter(instance => {
-				return this.#checkRelationType(instance, type) || this.#checkImplicitRelation(instance, type)
-			})
+			const relatedComponents = matchingComponents.filter(instance => this.#checkRelationType(instance, type))
 
 			// 建立关系连接
 			for (const relatedComponent of relatedComponents) {
@@ -287,31 +285,10 @@ export class Component {
 				matches = targetInstance.is === resolvedPath || targetInstance.is.endsWith(`/${resolvedPath}`)
 			}
 			
-			const direct = this.#checkRelationType(targetInstance, type)
-			const implicit = this.#checkImplicitRelation(targetInstance, type)
-
-			if (matches && (direct || implicit)) {
+			if (matches && this.#checkRelationType(targetInstance, type)) {
 				this.#linkRelation(relationPath, targetInstance, relationConfig)
 			}
 		}
-	}
-
-	#checkImplicitRelation(targetInstance, relationType) {
-		if (relationType !== 'descendant' && relationType !== 'ancestor') {
-			return false
-		}
-
-		const reverseRelationType = relationType === 'descendant' ? 'ancestor' : 'descendant'
-		const targetRelations = targetInstance.__info__?.relations
-		if (!targetRelations) {
-			return false
-		}
-
-		return Object.entries(targetRelations).some(([relationPath, relationConfig]) => {
-			const resolvedPath = targetInstance.__relationPaths__?.get(relationPath)
-			return relationConfig.type === reverseRelationType
-				&& (this.is === resolvedPath || this.is.endsWith(`/${resolvedPath}`))
-		})
 	}
 
 	/**

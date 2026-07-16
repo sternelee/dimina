@@ -112,6 +112,19 @@ describe('runtime template components', () => {
 		])
 	})
 
+	it('resolves a slotted component parent from the rendered element tree', () => {
+		const parentRoot = document.createElement('div')
+		const childRoot = document.createElement('div')
+		parentRoot.append(childRoot)
+		document.body.append(parentRoot)
+
+		runtime.moduleRootIds = new WeakMap()
+		runtime.registerModuleRoots('child-id', [childRoot])
+		runtime.registerModuleRoots('parent-id', [parentRoot])
+
+		expect(runtime.getRenderParentModuleId([childRoot], 'child-id')).toBe('parent-id')
+	})
+
 	it('uses the actual owner when a template reuses a component definition from another tree', async () => {
 		const loader = (await import('../src/core/loader.js')).default
 		const message = (await import('../src/core/message.js')).default

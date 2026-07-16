@@ -166,13 +166,16 @@ class Runtime {
 	}
 
 	moduleAttached(opts) {
-		const { bridgeId, moduleId } = opts
+		const { bridgeId, moduleId, parentId } = opts
 		const instance = this.instances[bridgeId]?.[moduleId]
 		if (!instance || instance.__type__ !== ComponentModule.type || !instance.__isComponent__) {
 			return
 		}
 		if (instance.__componentAttached__ || instance.__componentAttaching__) {
 			return
+		}
+		if (parentId && this.instances[bridgeId]?.[parentId]) {
+			instance.__parentId__ = parentId
 		}
 
 		const parent = this.instances[bridgeId]?.[instance.__parentId__]

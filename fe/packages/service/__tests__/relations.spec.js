@@ -201,6 +201,68 @@ describe('组件间关系测试', () => {
 		expect(descendantComponent.ancestor).toBe(ancestorComponent)
 	})
 
+	test('多个同类祖先只连接各自渲染树中的后代', async () => {
+		const bridgeId = 'test-bridge-isolated-relations'
+		const parentModule = new ComponentModule({
+			lifetimes: {
+				created() {
+					this.children = []
+				},
+			},
+			relations: {
+				'./tab-panel': {
+					type: 'descendant',
+					linked(target) {
+						this.children.push(target)
+					},
+				},
+			},
+			methods: {},
+		}, {
+			component: true,
+			path: 'tabs',
+			usingComponents: {},
+		})
+		const childModule = new ComponentModule({
+			relations: {
+				'./tabs': { type: 'ancestor' },
+			},
+			methods: {},
+		}, {
+			component: true,
+			path: 'tab-panel',
+			usingComponents: {},
+		})
+		const create = (module, moduleId, path) => new Component(module, {
+			bridgeId,
+			moduleId,
+			path,
+			pageId: 'page-1',
+			parentId: 'page-1',
+			eventAttr: {},
+			properties: {},
+			targetInfo: {},
+		})
+		const parent1 = create(parentModule, 'tabs-1', 'tabs')
+		const parent2 = create(parentModule, 'tabs-2', 'tabs')
+		const child1 = create(childModule, 'panel-1', 'tab-panel')
+		const child2 = create(childModule, 'panel-2', 'tab-panel')
+		runtime.instances[bridgeId] = {
+			[parent1.__id__]: parent1,
+			[parent2.__id__]: parent2,
+			[child1.__id__]: child1,
+			[child2.__id__]: child2,
+		}
+		for (const instance of [parent1, parent2, child1, child2]) instance.init()
+		await runtime.moduleAttached({ bridgeId, moduleId: parent1.__id__ })
+		await runtime.moduleAttached({ bridgeId, moduleId: parent2.__id__ })
+		await runtime.moduleAttached({ bridgeId, moduleId: child1.__id__, parentId: parent1.__id__ })
+		await runtime.moduleAttached({ bridgeId, moduleId: child2.__id__, parentId: parent2.__id__ })
+
+		expect(parent1.children).toEqual([child1])
+		expect(parent2.children).toEqual([child2])
+	})
+
 	test('组件 detached 时移除关系', async () => {
 		const bridgeId = 'test-bridge-3'
 		const detachCalls = []
