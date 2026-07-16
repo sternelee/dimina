@@ -192,6 +192,17 @@ class DiminaActivity : ComponentActivity() {
         bluetoothPermissionCallbacks.clear()
         callbacks.forEach { it(granted) }
     }
+    private val nearbyWifiPermissionCallbacks = mutableListOf<(Boolean) -> Unit>()
+    private var nearbyWifiPermissionRequestInFlight = false
+    private val nearbyWifiPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val granted = result.values.all { it }
+        nearbyWifiPermissionRequestInFlight = false
+        val callbacks = nearbyWifiPermissionCallbacks.toList()
+        nearbyWifiPermissionCallbacks.clear()
+        callbacks.forEach { it(granted) }
+    }
     
     private var adjustBottom = 0.0
     private var updateCheckStarted = false
@@ -288,6 +299,22 @@ class DiminaActivity : ComponentActivity() {
         if (bluetoothPermissionRequestInFlight) return
         bluetoothPermissionRequestInFlight = true
         bluetoothPermissionLauncher.launch(permissions)
+    }
+
+    fun handleNearbyWifiPermission(callback: (Boolean) -> Unit) {
+        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES, Manifest.permission.ACCESS_FINE_LOCATION)
+        } else {
+            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        }
+        if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
+            callback(true)
+            return
+        }
+        nearbyWifiPermissionCallbacks.add(callback)
+        if (nearbyWifiPermissionRequestInFlight) return
+        nearbyWifiPermissionRequestInFlight = true
+        nearbyWifiPermissionLauncher.launch(permissions)
     }
 
     private fun openSystemGallery(type: MediaType, maxCount: Int) {

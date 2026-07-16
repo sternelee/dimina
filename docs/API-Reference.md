@@ -147,6 +147,8 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 蓝牙能力还要求宿主声明系统权限。仓库示例已经补齐 Android 蓝牙/定位权限、iOS 蓝牙用途说明和 HarmonyOS `ohos.permission.ACCESS_BLUETOOTH`；集成 SDK 的宿主应用需要提供等价配置。
 
+局域网能力要求宿主允许网络和局域网访问。Android 宿主需要声明 `INTERNET`，使用多播发现时还需要 `CHANGE_WIFI_MULTICAST_STATE`；调用 `TCPSocket.bindWifi` 还需要申请 `ACCESS_FINE_LOCATION`，Android 13 及以上同时需要 `NEARBY_WIFI_DEVICES`。iOS 宿主需要提供 `NSLocalNetworkUsageDescription`，使用 mDNS 时还必须在 `NSBonjourServices` 中列出业务实际使用的服务类型；HarmonyOS 宿主需要声明 `ohos.permission.INTERNET`。`TCPSocket.bindWifi` 是微信仅在 Android 提供的能力。
+
 | 分类          | API 名称                         | Android | iOS | Harmony | Web |
 | ------------- | -------------------------------- | ------- | --- | ------- | --- |
 | 基础          | env                              | ✓       | ✓   | ✓       | ✓   |
@@ -210,6 +212,46 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 | 网络          | request                          | ✓       | ✓   | ✓       | ✓   |
 |               | downloadFile                     | ✓       | ✓   | ✓       | ✗   |
 |               | uploadFile                       | ✓       | ✓   | ✓       | ✗   |
+| 网络 - mDNS 局域网发现 | startLocalServiceDiscovery      | ✓       | ✓   | ✓       | ✗   |
+|               | stopLocalServiceDiscovery         | ✓       | ✓   | ✓       | ✗   |
+|               | onLocalServiceDiscoveryStop       | ✓       | ✓   | ✓       | ✗   |
+|               | offLocalServiceDiscoveryStop      | ✓       | ✓   | ✓       | ✗   |
+|               | onLocalServiceFound               | ✓       | ✓   | ✓       | ✗   |
+|               | offLocalServiceFound              | ✓       | ✓   | ✓       | ✗   |
+|               | onLocalServiceLost                | ✓       | ✓   | ✓       | ✗   |
+|               | offLocalServiceLost               | ✓       | ✓   | ✓       | ✗   |
+|               | onLocalServiceResolveFail         | ✓       | ✓   | ✓       | ✗   |
+|               | offLocalServiceResolveFail        | ✓       | ✓   | ✓       | ✗   |
+| 网络 - UDP    | createUDPSocket                   | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.bind                    | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.close                   | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.connect                 | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.send                    | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.write                   | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.setTTL                  | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.onClose                 | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.offClose                | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.onError                 | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.offError                | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.onListening             | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.offListening            | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.onMessage               | ✓       | ✓   | ✓       | ✗   |
+|               | UDPSocket.offMessage              | ✓       | ✓   | ✓       | ✗   |
+| 网络 - TCP 客户端 | createTCPSocket                | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.bindWifi                | ✓       | ✗   | ✗       | ✗   |
+|               | TCPSocket.close                   | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.connect                 | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.write                   | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.onBindWifi              | ✓       | ✗   | ✗       | ✗   |
+|               | TCPSocket.offBindWifi             | ✓       | ✗   | ✗       | ✗   |
+|               | TCPSocket.onClose                 | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.offClose                | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.onConnect               | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.offConnect              | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.onError                 | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.offError                | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.onMessage               | ✓       | ✓   | ✓       | ✗   |
+|               | TCPSocket.offMessage              | ✓       | ✓   | ✓       | ✗   |
 | 数据缓存      | setStorageSync                   | ✓       | ✓   | ✓       | ✗   |
 |               | getStorageSync                   | ✓       | ✓   | ✓       | ✗   |
 |               | removeStorageSync                | ✓       | ✓   | ✓       | ✗   |
@@ -242,6 +284,7 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 - 该表是当前确认的兼容性基线。service 中存在某个 API 入口，不代表四个平台都已完成容器实现。
 - `getUpdateManager` 只负责更新状态通知和重启入口，包下载、校验和动态下发流程请参考[小程序包更新说明](./MiniProgram-Update.md)。
+- HarmonyOS 系统 socket 的绑定接口本身是异步的；`UDPSocket.bind()` 未指定端口时会先选定并同步返回一个临时端口，最终绑定成功以 `onListening` 为准，端口冲突等失败通过 `onError` 返回。Android 与 iOS 会直接返回内核实际绑定的端口。
 
 ## 第三方扩展 Bridge
 

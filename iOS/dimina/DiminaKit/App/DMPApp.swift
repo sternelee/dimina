@@ -207,6 +207,7 @@ public class DMPApp {
         isDestroyed = true
         print("app destroy")
         BluetoothAPIManager.shared.clearApp(appId)
+        LocalNetworkAPIManager.shared.clearApp(appId)
 
         let serviceToDestroy = service
         let containerToDestroy = container

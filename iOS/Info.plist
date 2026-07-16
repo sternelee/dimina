@@ -26,6 +26,8 @@
 	<string>Dimina uses Bluetooth to communicate with nearby devices.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Dimina NSMicrophoneUsageDescription</string>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Dimina uses the local network to discover and communicate with nearby services and devices.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Dimina NSPhotoLibraryUsageDescription</string>
 	<key>UIApplicationSceneManifest</key>

@@ -22,6 +22,7 @@ import com.didi.dimina.api.device.ScanApi
 import com.didi.dimina.api.device.VibrateAPI
 import com.didi.dimina.api.media.ImageApi
 import com.didi.dimina.api.media.VideoApi
+import com.didi.dimina.api.network.LocalNetworkApi
 import com.didi.dimina.api.route.RouteApi
 import com.didi.dimina.api.storage.StorageApi
 import com.didi.dimina.api.ui.InteractionApi
@@ -51,6 +52,7 @@ class MiniApp private constructor() {
 
     private val apiRegistry = ApiRegistry()
     private val bluetoothApi = BluetoothApi()
+    private val localNetworkApi = LocalNetworkApi()
 
     // Map to store JsCore instances for each MiniProgram
     private val jsCoreMap = mutableMapOf<String, JsCore>()
@@ -214,6 +216,7 @@ class MiniApp private constructor() {
 
         // network
         com.didi.dimina.api.network.NetworkApi().registerWith(apiRegistry)
+        localNetworkApi.registerWith(apiRegistry)
 
         // storage
         StorageApi().registerWith(apiRegistry)
@@ -371,6 +374,7 @@ class MiniApp private constructor() {
         // 清理第三方扩展的持续订阅
         apiRegistry.clearExtSubscriptions()
         bluetoothApi.clearApp(appId)
+        localNetworkApi.clearApp(appId)
 
         // Clear JsCore for this appId
         jsCoreMap[appId]?.let { jsCore ->

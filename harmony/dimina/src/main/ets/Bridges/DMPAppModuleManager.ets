@@ -36,6 +36,7 @@ import { DMPContainerBridgesModuleVideo } from './DMPContainerBridgesModule+Vide
 import { DMPContainerBridgesModuleTabBar } from './DMPContainerBridgesModule+TabBar';
 import { DMPContainerBridgesModuleFile } from './DMPContainerBridgesModule+File';
 import { DMPContainerBridgesModuleCanvas } from './DMPContainerBridgesModule+Canvas';
+import { DMPContainerBridgesModuleLocalNetwork } from './Network/DMPContainerBridgesModule+LocalNetwork';
 
 
 export class DMPAppModuleManager extends DMPModuleManager {
@@ -47,6 +48,7 @@ export class DMPAppModuleManager extends DMPModuleManager {
   /** 懒创建的 Ext Bridge 模块实例 */
   private extBridgeModule: DMPContainerBridgesModuleExt | null = null;
   private bluetoothModule: DMPContainerBridgesModuleBluetooth;
+  private localNetworkModule: DMPContainerBridgesModuleLocalNetwork;
 
   registerExtModule(moduleName: string, handler: DMPExtModuleHandler): void {
     this.extModules.set(moduleName, handler);
@@ -84,6 +86,8 @@ export class DMPAppModuleManager extends DMPModuleManager {
     this.registerModule(new DMPContainerBridgesModuleShare(app))
     this.registerModule(new DMPContainerBridgesModuleCamera(app))
     this.registerModule(new DMPContainerBridgesModuleNetwork(app))
+    this.localNetworkModule = new DMPContainerBridgesModuleLocalNetwork(app)
+    this.registerModule(this.localNetworkModule)
     this.registerModule(new DMPContainerBridgesModuleStorage(app))
     this.registerModule(new DMPContainerBridgesModuleFile(app))
 
@@ -109,10 +113,10 @@ export class DMPAppModuleManager extends DMPModuleManager {
 
   dispose(): void {
     this.bluetoothModule.dispose();
+    this.localNetworkModule.dispose();
     this.extBridgeModule?.cancelAllSubscriptions();
   }
 }
-
 
 
 

@@ -69,6 +69,7 @@ public class DMPContainerApi: NSObject {
         _ = SystemAPI(app: app)
         _ = UpdateAPI(app: app)
         _ = NetworkAPI(app: app)
+        _ = LocalNetworkAPI(app: app)
         _ = StorageAPI(app: app)
         _ = FileAPI(app: app)
         _ = ClipboardAPI(app: app)
