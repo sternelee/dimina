@@ -192,6 +192,10 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 |               | getSystemInfoSync                | ✓       | ✓   | ✓       | ✗   |
 |               | getSystemInfoAsync               | ✓       | ✓   | ✓       | ✓   |
 |               | getSystemInfo                    | ✓       | ✓   | ✓       | ✗   |
+|               | getAppBaseInfo                   | ✓       | ✓   | ✓       | ✓   |
+|               | getDeviceInfo                    | ✓       | ✓   | ✓       | ✓   |
+|               | onThemeChange                    | ✓       | ✓   | ✓       | ✓   |
+|               | offThemeChange                   | ✓       | ✓   | ✓       | ✓   |
 | 设备 - 蓝牙   | openBluetoothAdapter             | ✓       | ✓   | ✓       | ✗   |
 |               | closeBluetoothAdapter            | ✓       | ✓   | ✓       | ✗   |
 |               | getBluetoothAdapterState         | ✓       | ✓   | ✓       | ✗   |
@@ -235,6 +239,9 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 |               | setNavigationBarColor            | ✓       | ✓   | ✓       | ✓   |
 | 界面 - 滚动   | pageScrollTo                     | ✓       | ✓   | ✓       | ✓   |
 | 界面 - 菜单   | getMenuButtonBoundingClientRect  | ✓       | ✓   | ✓       | ✓   |
+|               | onMenuButtonBoundingClientRectWeightChange | ✓ | ✓ | ✓ | ✓ |
+|               | offMenuButtonBoundingClientRectWeightChange | ✓ | ✓ | ✓ | ✓ |
+| 界面 - 自定义组件 | nextTick                       | ✓       | ✓   | ✓       | ✓   |
 | 界面 - 动画   | createAnimation                  | ✓       | ✓   | ✓       | ✓   |
 | 界面 - Canvas | createCanvasContext              | ✓       | ✓   | ✓       | ✓   |
 |               | createOffscreenCanvas            | ✓       | ✓   | ✓       | ✓   |

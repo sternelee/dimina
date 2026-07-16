@@ -5,6 +5,8 @@ import components from './src/index'
 
 export * from './src/index'
 
+const EXTERNAL_CLASS_SCOPE_ATTRIBUTE = 'data-dd-external-class-scope'
+
 function transformAnimation(el, propertyValue) {
 	if (!propertyValue?.actions?.length)
 		return
@@ -60,6 +62,11 @@ function parseExternalClass(el, instance, vnode) {
 				if (!el.hasAttribute(instance.sId)) {
 					el.setAttribute(instance.sId, '')
 				}
+				const scopeTokens = new Set(
+					(el.getAttribute(EXTERNAL_CLASS_SCOPE_ATTRIBUTE) || '').split(/\s+/).filter(Boolean),
+				)
+				scopeTokens.add(instance.sId)
+				el.setAttribute(EXTERNAL_CLASS_SCOPE_ATTRIBUTE, [...scopeTokens].join(' '))
 			}
 		}
 	}

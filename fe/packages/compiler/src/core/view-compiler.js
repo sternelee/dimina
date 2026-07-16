@@ -276,7 +276,7 @@ async function compileML(pages, root, progress) {
 						.map((line, index) => `${Math.max(1, location.line - 2) + index}: ${line.trim()}`)
 						.join('\n')
 					: ''
-				error.message = `视图模块 ${key} 转换失败: ${error.message}${sourceHint}`
+				error.message = `视图模块 ${key} 转换失败: ${error.message}${sourceHint ? `\n${sourceHint}` : ''}`
 				throw error
 			}
 		}

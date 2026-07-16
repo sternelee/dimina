@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, resolveStyleImportPath } from '../src/core/style-compiler'
+import { boostExternalClassSelectors, ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, resolveStyleImportPath } from '../src/core/style-compiler'
 import { getAppStyleScopeId, getComponent, getPages, storeInfo } from '../src/env.js'
 import { compileSS } from '../src/core/style-compiler.js'
 import { compileML } from '../src/core/view-compiler.js'
@@ -117,6 +117,15 @@ describe('normalizeCssUrlValue', () => {
 	})
 })
 
+describe('external class selector specificity', () => {
+	it('adds a higher-specificity alternative only for external-class roots', () => {
+		const output = boostExternalClassSelectors('.loading[data-v-parent]{display:flex}', 'parent')
+
+		expect(output).toContain('.loading[data-v-parent]')
+		expect(output).toContain('.loading[data-v-parent][data-dd-external-class-scope~=data-v-parent]')
+	})
+})
+
 describe('style compiler regressions', () => {
 	let tempDir
 	let outputDir
@@ -184,6 +193,33 @@ describe('style compiler regressions', () => {
 		const outputCss = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.css'), 'utf-8')
 		expect(outputCss).not.toContain('undefined')
 		expect(warnSpy).toHaveBeenCalled()
+	})
+
+	it('preserves caller-before-child style order while emitting external-class override selectors', async () => {
+		prepareBaseProject({
+			usingComponents: { parent: '/components/parent' },
+		})
+		writeProjectFile('pages/home/index.wxss', '.page-style { color: black; }')
+		writeProjectFile('components/parent.json', JSON.stringify({
+			component: true,
+			usingComponents: { child: '/components/child' },
+		}))
+		writeProjectFile('components/parent.wxss', '.parent-external { display: flex; }')
+		writeProjectFile('components/child.json', JSON.stringify({ component: true }))
+		writeProjectFile('components/child.wxss', '.child-internal { display: inline-flex; }')
+
+		storeInfo(tempDir)
+		await compileSS(getPages().mainPages, null, { completedTasks: 0 })
+
+		const outputCss = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.css'), 'utf-8')
+		const childIndex = outputCss.indexOf('.child-internal')
+		const parentIndex = outputCss.indexOf('.parent-external')
+		const pageIndex = outputCss.indexOf('.page-style')
+
+		expect(childIndex).toBeGreaterThanOrEqual(0)
+		expect(parentIndex).toBeGreaterThan(pageIndex)
+		expect(childIndex).toBeGreaterThan(parentIndex)
+		expect(outputCss).toContain('data-dd-external-class-scope')
 	})
 
 	it('cuts off deep component dependency chain safely', async () => {

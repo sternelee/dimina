@@ -40,6 +40,33 @@ function getAbsolutePath(workPath, pagePath, src) {
 }
 
 const assetsMap = {}
+
+function isPathInside(rootPath, targetPath) {
+	const relativePath = path.relative(rootPath, targetPath)
+	return relativePath === '' || (!relativePath.startsWith(`..${path.sep}`) && relativePath !== '..' && !path.isAbsolute(relativePath))
+}
+
+function resolveAssetSourcePath(workPath, pagePath, src) {
+	const projectRoot = path.resolve(workPath)
+	if (src.startsWith('/')) {
+		return path.resolve(projectRoot, `.${src}`)
+	}
+
+	const normalizedPagePath = path.resolve(pagePath)
+	const pageDirectory = path.isAbsolute(pagePath) && isPathInside(projectRoot, normalizedPagePath)
+		? path.dirname(normalizedPagePath)
+		: path.resolve(projectRoot, path.dirname(pagePath.replace(/^[/\\]+/, '')))
+	const resolvedPath = path.resolve(pageDirectory, src)
+	if (isPathInside(projectRoot, resolvedPath)) {
+		return resolvedPath
+	}
+
+	// Mini-program resources cannot escape the project package. Some imported
+	// templates use enough ../ segments for their consuming page rather than the
+	// template file itself, so clamp that traversal at the project root.
+	return path.resolve(projectRoot, src.replace(/^(?:\.\.[/\\])+/, ''))
+}
+
 /**
  * 将静态资源存储到 static 文件夹
  */
@@ -54,11 +81,7 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 		return src
 	}
 
-	// example/article/article -> example/article
-	const relativePath = pagePath.split('/').slice(0, -1).join('/')
-	const absolutePath = src.startsWith('/')
-		? (workPath + src)
-		: path.resolve(workPath, relativePath, src)
+	const absolutePath = resolveAssetSourcePath(workPath, pagePath, src)
 
 	if (assetsMap[absolutePath]) {
 		return assetsMap[absolutePath]

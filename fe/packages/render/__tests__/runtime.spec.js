@@ -18,6 +18,7 @@ const groupB = [
 describe('runtime template components', () => {
 	let dom
 	let runtime
+	let normalizeStaticBooleanAttributes
 
 	beforeEach(async () => {
 		dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/' })
@@ -32,7 +33,9 @@ describe('runtime template components', () => {
 		globalThis.requestAnimationFrame = dom.window.requestAnimationFrame ?? (cb => setTimeout(cb, 0))
 		globalThis.cancelAnimationFrame = dom.window.cancelAnimationFrame ?? (id => clearTimeout(id))
 
-		runtime = (await import('../src/core/runtime.js')).default
+		const runtimeModule = await import('../src/core/runtime.js')
+		runtime = runtimeModule.default
+		normalizeStaticBooleanAttributes = runtimeModule.normalizeStaticBooleanAttributes
 	})
 
 	afterEach(() => {
@@ -190,6 +193,22 @@ describe('runtime template components', () => {
 		})
 
 		app.unmount()
+	})
+
+	it('treats static valueless Boolean component properties as true', () => {
+		const schemas = {
+			loading: { type: Boolean, optionalTypes: [], value: false },
+			label: { type: String, optionalTypes: [], value: '' },
+		}
+
+		expect(normalizeStaticBooleanAttributes(schemas, { loading: '', label: '' }, {
+			props: { loading: '', label: '' },
+			dynamicProps: null,
+		})).toEqual({ loading: true, label: '' })
+		expect(normalizeStaticBooleanAttributes(schemas, { loading: '', label: '' }, {
+			props: { loading: '', label: '' },
+			dynamicProps: ['loading'],
+		})).toEqual({ loading: '', label: '' })
 	})
 
 	it('keeps the lexical event owner for a component rendered through a slot', async () => {

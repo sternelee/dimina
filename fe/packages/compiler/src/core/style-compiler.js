@@ -122,6 +122,49 @@ async function buildCompileCss(module, depthChain = [], compiledPaths = new Set(
 	return result
 }
 
+function boostExternalClassSelectors(cssCode, moduleId) {
+	if (!moduleId || !cssCode) {
+		return cssCode
+	}
+
+	const scopeAttribute = `data-v-${moduleId}`
+	const externalScopeAttribute = 'data-dd-external-class-scope'
+	const ast = postcss.parse(cssCode)
+
+	ast.walkRules((rule) => {
+		if (!rule.selector.includes(`[${scopeAttribute}]`)) {
+			return
+		}
+
+		rule.selector = selectorParser((selectors) => {
+			for (const selector of [...selectors.nodes]) {
+				const boostedSelector = selector.clone()
+				const scopeNodes = []
+				boostedSelector.walkAttributes((attribute) => {
+					if (attribute.attribute === scopeAttribute) {
+						scopeNodes.push(attribute)
+					}
+				})
+
+				const targetScope = scopeNodes.at(-1)
+				if (!targetScope) {
+					continue
+				}
+
+				targetScope.parent.insertAfter(targetScope, selectorParser.attribute({
+					attribute: externalScopeAttribute,
+					operator: '~=',
+					quoteMark: '"',
+					value: scopeAttribute,
+				}))
+				selectors.append(boostedSelector)
+			}
+		}).processSync(rule.selector)
+	})
+
+	return ast.toResult().css
+}
+
 async function enhanceCSS(module) {
 	const absolutePath = module.absolutePath ? module.absolutePath : getAbsolutePath(module.path)
 	if (!absolutePath) {
@@ -225,12 +268,13 @@ async function enhanceCSS(module) {
 		id: moduleId,
 		scoped: !!moduleId,
 	}).code
+	const externalClassCode = boostExternalClassSelectors(scopedCode, moduleId)
 
 	// 统一后处理：autoprefixer + 压缩
 	const res = await postcss([
 		autoprefixer({ overrideBrowserslist: ['cover 99.5%'] }), 
 		cssnano()
-	]).process(scopedCode, { from: undefined })
+	]).process(externalClassCode, { from: undefined })
 
 	// 处理导入的样式
 	const importCss = (await Promise.all(promises))
@@ -324,4 +368,4 @@ function processHostSelector(selector, moduleId) {
 		.replace(/:host(?![\w-])/g, hostSelector)
 }
 
-export { compileSS, ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, processHostSelector, resolveStyleImportPath }
+export { boostExternalClassSelectors, compileSS, ensureImportSemicolons, normalizeCssUrlValue, normalizeRootStyleImports, processHostSelector, resolveStyleImportPath }

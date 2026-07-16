@@ -238,6 +238,7 @@ export class MiniApp {
 	async initApp() {
 		// 1. 等待逻辑线程初始化
 		await this.jscore.init()
+		this._bindThemeChange()
 
 		// 2. 读取配置文件，同时保证 LaunchScreen 最少展示一个略长于 present 的时长
 		const root = 'main'
@@ -1474,6 +1475,14 @@ export class MiniApp {
 			unsubscribe?.()
 		}
 		this._extSubscriptions.clear()
+		if (this._themeMediaQuery?.removeEventListener) {
+			this._themeMediaQuery.removeEventListener('change', this._themeChangeHandler)
+		}
+		else {
+			this._themeMediaQuery?.removeListener?.(this._themeChangeHandler)
+		}
+		this._themeMediaQuery = null
+		this._themeChangeHandler = null
 
 		// 释放 TabBar 高度观察器
 		this._tabBarResizeObserver?.disconnect()
@@ -1649,6 +1658,31 @@ export class MiniApp {
 		return {
 			menuRect: this.getMenuButtonBoundingClientRect(),
 			systemInfo: this.getSystemInfoSync(),
+		}
+	}
+
+	_bindThemeChange() {
+		const mediaQuery = globalThis.matchMedia?.('(prefers-color-scheme: dark)')
+		if (!mediaQuery) {
+			return
+		}
+		this._themeMediaQuery = mediaQuery
+		this._themeChangeHandler = event => {
+			this.jscore.postMessage({
+				type: 'hostEnvUpdate',
+				body: {
+					systemInfo: {
+						...this.getSystemInfoSync(),
+						theme: event.matches ? 'dark' : 'light',
+					},
+				},
+			})
+		}
+		if (mediaQuery.addEventListener) {
+			mediaQuery.addEventListener('change', this._themeChangeHandler)
+		}
+		else {
+			mediaQuery.addListener?.(this._themeChangeHandler)
 		}
 	}
 

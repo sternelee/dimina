@@ -5,6 +5,8 @@ import {
 	getDeviceInfo,
 	getSystemInfoSync,
 	getWindowInfo,
+	offThemeChange,
+	onThemeChange,
 } from '../src/api/core/base/system/index.js'
 import {
 	offMenuButtonBoundingClientRectWeightChange,
@@ -14,6 +16,7 @@ import {
 describe('system info api', () => {
 	afterEach(() => {
 		offMenuButtonBoundingClientRectWeightChange()
+		offThemeChange()
 		hostEnv.reset()
 	})
 
@@ -83,5 +86,15 @@ describe('system info api', () => {
 
 		expect(hostEnv.getMenuRect()).toBe(menuRect)
 		expect(listener).toHaveBeenCalledWith(menuRect)
+	})
+
+	it('notifies theme listeners from host environment updates', () => {
+		const listener = vi.fn()
+		hostEnv.init({ systemInfo: { theme: 'light' } })
+		onThemeChange(listener)
+
+		hostEnv.update({ systemInfo: { theme: 'dark' } })
+
+		expect(listener).toHaveBeenCalledWith({ theme: 'dark' })
 	})
 })

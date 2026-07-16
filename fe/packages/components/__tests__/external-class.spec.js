@@ -107,6 +107,7 @@ describe('replaceExternalClassTokens', () => {
 		expect(image.classList.contains('t-grid-item__image')).toBe(true)
 		expect(image.classList.contains('t-grid-item__image--middle')).toBe(true)
 		expect(image.hasAttribute('data-v-grid-item-scope')).toBe(true)
+		expect(image.getAttribute('data-dd-external-class-scope')).toBe('data-v-grid-item-scope')
 
 		app.unmount()
 		root.remove()

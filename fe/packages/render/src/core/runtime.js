@@ -215,6 +215,28 @@ function hasVNodeProp(vnodeProps, name) {
 	return Object.prototype.hasOwnProperty.call(vnodeProps, kebabName)
 }
 
+export function normalizeStaticBooleanAttributes(propertySchemas, values, vnode) {
+	const normalizedValues = { ...values }
+	const dynamicProps = new Set(vnode?.dynamicProps || [])
+
+	for (const [name, schema] of Object.entries(propertySchemas || {})) {
+		if (schema.type !== Boolean || normalizedValues[name] !== '' || !hasVNodeProp(vnode?.props, name)) {
+			continue
+		}
+
+		const kebabName = name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)
+		if (!dynamicProps.has(name) && !dynamicProps.has(kebabName)) {
+			// Vue compiles a valueless custom-component attribute (for example
+			// <t-button loading>) to an empty string. WXML treats the static
+			// presence of a declared Boolean property as true. Dynamic bindings
+			// still use normal mini-program type conversion, where '' is false.
+			normalizedValues[name] = true
+		}
+	}
+
+	return normalizedValues
+}
+
 // Keep these aliases in sync with @vue/compiler-core helperNameMap/aliasHelper output.
 const VUE_RUNTIME_HELPERS = {
 	_Fragment: Fragment,
@@ -990,7 +1012,7 @@ class Runtime {
 					that.setModuleInstance(moduleId, instance)
 					const normalizeCurrentProperties = () => normalizeMiniProgramPropertyValues(
 						module.propertySchemas,
-						deepToRaw(props),
+						normalizeStaticBooleanAttributes(module.propertySchemas, deepToRaw(props), vueInstance.vnode),
 						{
 							isAbsent: name => !hasVNodeProp(vueInstance.vnode.props, name),
 							warn: warning => console.warn('[system]', '[render]', warning),
