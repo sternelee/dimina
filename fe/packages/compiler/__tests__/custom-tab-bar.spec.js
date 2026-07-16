@@ -2,9 +2,8 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import build from '../src/index.js'
 import { getComponent, getPages, storeInfo } from '../src/env.js'
-
-const INTERNAL_COMPONENT_NAME = '__dimina_custom_tab_bar__'
 
 describe('custom tabBar compilation', () => {
 	let tempDir
@@ -46,12 +45,15 @@ describe('custom tabBar compilation', () => {
 		const message = mainPages.find(page => page.path === 'pages/message/index')
 		const detail = mainPages.find(page => page.path === 'pages/detail/index')
 
-		expect(home.usingComponents[INTERNAL_COMPONENT_NAME]).toBe('/custom-tab-bar/index')
-		expect(message.usingComponents[INTERNAL_COMPONENT_NAME]).toBe('/custom-tab-bar/index')
-		expect(detail.usingComponents).not.toHaveProperty(INTERNAL_COMPONENT_NAME)
+		expect(home.customTabBar).toEqual({ componentName: expect.any(String) })
+		expect(message.customTabBar).toEqual({ componentName: expect.any(String) })
+		expect(home.usingComponents[home.customTabBar.componentName]).toBe('/custom-tab-bar/index')
+		expect(message.usingComponents[message.customTabBar.componentName]).toBe('/custom-tab-bar/index')
+		expect(detail.customTabBar).toBeUndefined()
 		expect(getComponent('/custom-tab-bar/index')).toMatchObject({
 			path: '/custom-tab-bar/index',
 			component: true,
+			customTabBar: true,
 		})
 	})
 
@@ -68,9 +70,51 @@ describe('custom tabBar compilation', () => {
 		storeInfo(tempDir)
 		const { mainPages } = getPages()
 
-		expect(mainPages[0].usingComponents).not.toHaveProperty(INTERNAL_COMPONENT_NAME)
+		expect(mainPages[0].customTabBar).toBeUndefined()
 		expect(console.warn).toHaveBeenCalledWith(
 			'[env] tabBar.custom 已启用，但找不到 custom-tab-bar/index.json',
 		)
+	})
+
+	it('emits the custom tabBar view, logic, and styles with each tab page', async () => {
+		const write = (relativePath, content) => {
+			const filePath = path.join(tempDir, relativePath)
+			fs.mkdirSync(path.dirname(filePath), { recursive: true })
+			fs.writeFileSync(filePath, content)
+		}
+		write('app.json', JSON.stringify({
+			pages: ['pages/home/index'],
+			tabBar: {
+				custom: true,
+				list: [{ pagePath: 'pages/home/index', text: 'Home' }],
+			},
+		}))
+		write('app.js', 'App({})')
+		write('app.wxss', '')
+		write('pages/home/index.json', '{}')
+		write('pages/home/index.js', 'Page({})')
+		write('pages/home/index.wxml', '<view>page content</view>')
+		write('pages/home/index.wxss', '')
+		write('custom-tab-bar/index.json', JSON.stringify({ component: true }))
+		write('custom-tab-bar/index.js', 'Component({ methods: { switchTab() {} } })')
+		write('custom-tab-bar/index.wxml', '<view class="custom-tab-bar" bind:tap="switchTab">ICON</view>')
+		write('custom-tab-bar/index.wxss', '.custom-tab-bar { position: fixed; bottom: 0; }')
+		const outputDir = path.join(tempDir, 'output')
+
+		await build(outputDir, tempDir, false)
+
+		const appConfig = JSON.parse(fs.readFileSync(path.join(outputDir, 'main/app-config.json'), 'utf8'))
+		const viewCode = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.js'), 'utf8')
+		const logicCode = fs.readFileSync(path.join(outputDir, 'main/logic.js'), 'utf8')
+		const styleCode = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.css'), 'utf8')
+		const customTabBar = appConfig.modules['pages/home/index'].customTabBar
+		expect(customTabBar).toEqual({ componentName: expect.any(String) })
+		expect(appConfig.modules['pages/home/index'].usingComponents[customTabBar.componentName])
+			.toBe('/custom-tab-bar/index')
+		expect(viewCode).toContain('/custom-tab-bar/index')
+		expect(viewCode).toContain('customTabBar')
+		expect(viewCode).toContain('ICON')
+		expect(logicCode).toContain('/custom-tab-bar/index')
+		expect(styleCode).toContain('position:fixed')
 	})
 })

@@ -16,7 +16,7 @@ const DEFAULT_TEMPLATE_EXTS = ['.wxml', '.ddml']
 const DEFAULT_STYLE_EXTS = ['.wxss', '.ddss', '.less', '.scss', '.sass']
 const DEFAULT_VIEW_SCRIPT_EXTS = ['.wxs']
 const DEFAULT_VIEW_SCRIPT_TAGS = ['wxs', 'dds']
-const CUSTOM_TAB_BAR_COMPONENT_NAME = '__dimina_custom_tab_bar__'
+// 微信自定义 tabBar 的规范入口只在编译适配层解析；运行时通过产物元数据识别。
 const CUSTOM_TAB_BAR_COMPONENT_PATH = '/custom-tab-bar/index'
 
 // 保留扩展名：所有内置类型 + 逻辑(.js/.ts) + 配置(.json)。自定义项不得占用，
@@ -279,23 +279,44 @@ function storeCustomTabBarConfig() {
 		return
 	}
 
+	const dependencyName = `dimina-${uuid(CUSTOM_TAB_BAR_COMPONENT_PATH)}`
 	const internalConfig = {
 		usingComponents: {
-			[CUSTOM_TAB_BAR_COMPONENT_NAME]: CUSTOM_TAB_BAR_COMPONENT_PATH,
+			[dependencyName]: CUSTOM_TAB_BAR_COMPONENT_PATH,
 		},
 	}
 	storeComponentConfig(internalConfig, path.join(pathInfo.workPath, 'app.json'))
+	const componentConfig = configInfo.componentInfo[CUSTOM_TAB_BAR_COMPONENT_PATH]
+	if (componentConfig) {
+		componentConfig.customTabBar = true
+	}
 
 	for (const item of tabBar.list) {
 		const pagePath = typeof item?.pagePath === 'string'
 			? item.pagePath.replace(/^\/+/, '')
 			: ''
-		const pageConfig = configInfo.pageInfo[pagePath]
-		if (!pageConfig) {
+		if (!pagePath || !configInfo.appInfo.pages?.includes(pagePath)) {
 			continue
 		}
+		const pageConfig = configInfo.pageInfo[pagePath] ||= {}
 		pageConfig.usingComponents ||= {}
-		pageConfig.usingComponents[CUSTOM_TAB_BAR_COMPONENT_NAME] = CUSTOM_TAB_BAR_COMPONENT_PATH
+		const declaredComponents = {
+			...(configInfo.appInfo.usingComponents || {}),
+			...pageConfig.usingComponents,
+		}
+		const declaredEntry = Object.entries(declaredComponents)
+			.find(([, componentPath]) => componentPath === CUSTOM_TAB_BAR_COMPONENT_PATH)
+		let componentName = declaredEntry?.[0] || dependencyName
+		let suffix = 0
+		while (
+			declaredComponents[componentName]
+			&& declaredComponents[componentName] !== CUSTOM_TAB_BAR_COMPONENT_PATH
+		) {
+			suffix++
+			componentName = `${dependencyName}-${suffix}`
+		}
+		pageConfig.usingComponents[componentName] = CUSTOM_TAB_BAR_COMPONENT_PATH
+		pageConfig.customTabBar = { componentName }
 	}
 }
 
@@ -495,6 +516,7 @@ function getPages() {
 			id: uuid(path),
 			path,
 			usingComponents: mergedComponents,
+			customTabBar: pageInfo[path]?.customTabBar,
 		}
 	})
 
@@ -514,6 +536,7 @@ function getPages() {
 					id: uuid(fullPath),
 					path: fullPath,
 					usingComponents: mergedComponents,
+					customTabBar: pageInfo[fullPath]?.customTabBar,
 				}
 			}),
 		}

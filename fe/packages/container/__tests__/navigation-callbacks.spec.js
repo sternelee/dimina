@@ -59,9 +59,9 @@ function callbackIds(app) {
 }
 
 describe('MiniApp navigation callbacks', () => {
-	it('keeps custom tabBar inside the page instead of rendering the host tabBar', () => {
+	it('keeps custom tabBar inside the page without falling back to the host tabBar', () => {
 		const app = createApp()
-		const tabBarEl = { style: {}, textContent: 'legacy' }
+		const tabBarEl = { style: {}, textContent: 'host tabBar' }
 		app.el = {
 			querySelector: vi.fn(() => tabBarEl),
 			style: { setProperty: vi.fn() },

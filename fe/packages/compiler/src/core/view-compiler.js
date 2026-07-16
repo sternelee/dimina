@@ -550,6 +550,7 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 		id: '${module.id}',
 		render: ${transCode},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
+		customTabBar: ${JSON.stringify(module.customTabBar || null)},
 		tplComponents: ${tplComponents},
 		});`
 
@@ -830,6 +831,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 		id: '${module.id}',
 		render: ${transCode},
 		usingComponents: ${JSON.stringify(module.usingComponents)},
+		customTabBar: ${JSON.stringify(module.customTabBar || null)},
 		tplComponents: ${tplComponents},
 		});`
 

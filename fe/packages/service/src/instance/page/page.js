@@ -7,8 +7,6 @@ import { invokeSafely, invokeSafelyAll } from '../../core/safe-callback'
 import { createUpdateCallback, enqueueUpdate } from '../../core/update-queue'
 import { addComputedData, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
 
-const CUSTOM_TAB_BAR_COMPONENT_PATH = '/custom-tab-bar/index'
-
 // https://developers.weixin.qq.com/miniprogram/dev/reference/api/Page.html
 // const lifecycleMethods = ['onLoad', 'onShow', 'onReady', 'onHide', 'onUnload',
 //     'onPullDownRefresh', 'onReachBottom', 'onShareAppMessage', 'onPageScroll',
@@ -112,7 +110,7 @@ export class Page {
 		const instances = Object.values(runtime.instances[this.bridgeId] || {})
 		return instances.find(item =>
 			item?.__isComponent__
-			&& item.is === CUSTOM_TAB_BAR_COMPONENT_PATH
+			&& item.__isCustomTabBar__
 			&& isChildComponent(item, this.__id__, instances),
 		) || null
 	}

@@ -183,6 +183,81 @@ describe('runtime template components', () => {
 		app.unmount()
 	})
 
+	it('mounts the compiled custom tabBar as a sibling of the tab page', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		const createdMessages = []
+		window.DiminaRenderBridge = {
+			invoke: vi.fn(),
+			publish: vi.fn((payload) => {
+				const sent = JSON.parse(payload)
+				if (sent.type !== 'mC') {
+					return
+				}
+				createdMessages.push(sent.body)
+				window.DiminaRenderBridge.onMessage({
+					type: sent.body.moduleId,
+					body: { data: {} },
+				})
+			}),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockImplementation((path) => {
+			if (path === 'pages/home/index') {
+				return {
+					moduleInfo: {
+						id: 'home-page',
+						usingComponents: {
+							tabBarAlias: '/custom-tab-bar/index',
+						},
+						customTabBar: { componentName: 'tabBarAlias' },
+						tplComponents: {},
+						render() {
+							return h('main', { class: 'page-content' }, 'page')
+						},
+					},
+				}
+			}
+			if (path === '/custom-tab-bar/index') {
+				return {
+					moduleInfo: {
+						id: 'custom-tab-bar',
+						usingComponents: {},
+						customTabBar: true,
+						render() {
+							return h('footer', { class: 'custom-tab-bar' }, 'icons')
+						},
+					},
+					propertySchemas: {},
+					props: {},
+				}
+			}
+		})
+
+		const options = runtime.makeOptions({
+			path: 'pages/home/index',
+			bridgeId: 'bridge-custom-tab-bar',
+			pageId: 'page-custom-tab-bar',
+		})
+		const app = createApp(options.app)
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+		window.DiminaRenderBridge.onMessage({
+			type: 'page-custom-tab-bar',
+			body: { data: {} },
+		})
+
+		await vi.waitFor(() => expect(root.textContent).toBe('pageicons'))
+		expect(root.querySelector('.page-content')).not.toBeNull()
+		expect(root.querySelector('.custom-tab-bar')).not.toBeNull()
+		expect(createdMessages).toHaveLength(1)
+		expect(createdMessages[0].isCustomTabBar).toBe(true)
+
+		app.unmount()
+	})
+
 	it('syncs template data when keyed list items are replaced', async () => {
 		const TplItem = runtime.createTplComponent({
 			id: 'tpl-item',

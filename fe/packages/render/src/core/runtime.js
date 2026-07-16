@@ -67,7 +67,6 @@ const VUE_RUNTIME_HELPERS = {
 }
 
 const CANVAS_NODE_TYPE = 'dimina-canvas-node'
-const CUSTOM_TAB_BAR_COMPONENT_NAME = '__dimina_custom_tab_bar__'
 const TYPED_ARRAY_CTORS = {
 	Int8Array,
 	Uint8Array,
@@ -450,12 +449,11 @@ class Runtime {
 	makeOptions(opts) {
 		const { path, bridgeId, pageId } = opts
 		const pageModule = loader.getModuleByPath(path)
-		const { id, usingComponents, tplComponents } = pageModule.moduleInfo
+		const { id, usingComponents, tplComponents, customTabBar } = pageModule.moduleInfo
 		const pageRender = pageModule.moduleInfo.render
-		const hasCustomTabBar = Object.prototype.hasOwnProperty.call(
-			usingComponents || {},
-			CUSTOM_TAB_BAR_COMPONENT_NAME,
-		)
+		const customTabBarComponentName = customTabBar?.componentName
+		const hasCustomTabBar = typeof customTabBarComponentName === 'string'
+			&& Object.prototype.hasOwnProperty.call(usingComponents || {}, customTabBarComponentName)
 		this.pageId = pageId
 		const components = this.createComponent(path, bridgeId, usingComponents)
 		const that = this
@@ -548,7 +546,7 @@ class Runtime {
 					render: hasCustomTabBar
 						? function (...args) {
 							const pageVNode = pageRender.apply(this, args)
-							const CustomTabBar = resolveComponent(`dd-${CUSTOM_TAB_BAR_COMPONENT_NAME}`)
+							const CustomTabBar = resolveComponent(`dd-${customTabBarComponentName}`)
 							return h(Fragment, null, [pageVNode, h(CustomTabBar)])
 						}
 						: pageRender,
@@ -657,7 +655,7 @@ class Runtime {
 				continue
 			}
 
-			const { id, usingComponents: subUsing } = module.moduleInfo
+			const { id, usingComponents: subUsing, customTabBar } = module.moduleInfo
 			const subComponents = this.createComponent(componentPath, bridgeId, subUsing, newDepthChain)
 			const sId = `data-v-${id}`
 
@@ -735,6 +733,7 @@ class Runtime {
 							bridgeId,
 							moduleId,
 							path: componentPath,
+							isCustomTabBar: customTabBar === true,
 							pageId,
 							parentId,
 							eventAttr,

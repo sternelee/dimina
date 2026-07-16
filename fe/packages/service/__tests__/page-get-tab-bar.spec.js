@@ -24,7 +24,8 @@ describe('Page.getTabBar', () => {
 			__id__: 'tab-bar-id',
 			__parentId__: 'page-id',
 			__isComponent__: true,
-			is: '/custom-tab-bar/index',
+			__isCustomTabBar__: true,
+			is: '/components/application-defined-tab-bar',
 		}
 		runtime.instances[bridgeId] = {
 			'page-id': page,

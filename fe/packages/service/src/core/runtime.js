@@ -106,7 +106,7 @@ class Runtime {
 	 * @param {*} opts
 	 */
 	createInstance(opts) {
-		const { bridgeId, moduleId, path, query, eventAttr, pageId, parentId, properties, propertyNames, targetInfo, stackId, deferInitialData = false } = opts
+		const { bridgeId, moduleId, path, query, eventAttr, pageId, parentId, properties, propertyNames, targetInfo, stackId, isCustomTabBar = false, deferInitialData = false } = opts
 
 		const module = loader.getModuleByPath(path)
 		if (!module) {
@@ -123,6 +123,7 @@ class Runtime {
 				bridgeId,
 				moduleId,
 				path,
+				isCustomTabBar,
 				query,
 				eventAttr,
 				pageId,

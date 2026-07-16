@@ -51,6 +51,7 @@ export class Component {
 		this.__eventAttr__ = opts.eventAttr
 		this.__pageId__ = opts.pageId
 		this.__parentId__ = opts.parentId
+		this.__isCustomTabBar__ = opts.isCustomTabBar === true
 		
 		// 初始化关系相关属性
 		this.__relations__ = new Map() // 存储关系节点
