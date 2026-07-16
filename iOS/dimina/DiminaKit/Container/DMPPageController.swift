@@ -268,11 +268,19 @@ public class DMPPageController: UIViewController {
 
         let capsuleView = makeCapsuleButton()
         let menuButtonRect = MenuAPI.getMenuButtonBoundingClientRect()
-        let capsuleWidth = CGFloat(menuButtonRect.getDouble(key: "width") ?? 87)
-        let capsuleHeight = CGFloat(menuButtonRect.getDouble(key: "height") ?? 32)
-        let screenWidth = UIScreen.main.bounds.width
-        let capsuleRight = CGFloat(menuButtonRect.getDouble(key: "right") ?? (screenWidth - 10))
-        let capsuleTrailing = screenWidth - capsuleRight
+        let capsuleWidth = CGFloat(
+            menuButtonRect.getDouble(key: "width") ?? Double(DMPMenuButtonLayout.capsuleSize.width)
+        )
+        let capsuleHeight = CGFloat(
+            menuButtonRect.getDouble(key: "height") ?? Double(DMPMenuButtonLayout.capsuleSize.height)
+        )
+        let windowWidth = DMPUIManager.shared.getDeviceDisplayInfo()["windowWidth"] as? CGFloat
+            ?? view.bounds.width
+        let capsuleRight = CGFloat(
+            menuButtonRect.getDouble(key: "right")
+                ?? Double(windowWidth - DMPMenuButtonLayout.trailingSpacing)
+        )
+        let capsuleTrailing = max(windowWidth - capsuleRight, 0)
 
         view.addSubview(navigationBar)
         view.addSubview(capsuleView)
@@ -289,7 +297,7 @@ public class DMPPageController: UIViewController {
             contentView.leadingAnchor.constraint(equalTo: navigationBar.leadingAnchor),
             contentView.trailingAnchor.constraint(equalTo: navigationBar.trailingAnchor),
             contentView.bottomAnchor.constraint(equalTo: navigationBar.bottomAnchor),
-            contentView.heightAnchor.constraint(equalToConstant: 44),
+            contentView.heightAnchor.constraint(equalToConstant: DMPMenuButtonLayout.navigationBarContentHeight),
 
             backButton.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 8),
             backButton.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
@@ -299,7 +307,10 @@ public class DMPPageController: UIViewController {
             titleLabel.centerXAnchor.constraint(equalTo: contentView.centerXAnchor),
             titleLabel.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             titleLabel.leadingAnchor.constraint(greaterThanOrEqualTo: backButton.trailingAnchor, constant: 8),
-            titleLabel.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -110),
+            titleLabel.trailingAnchor.constraint(
+                lessThanOrEqualTo: contentView.trailingAnchor,
+                constant: -DMPMenuButtonLayout.titleTrailingInset
+            ),
 
             capsuleView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
             capsuleView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -capsuleTrailing),
@@ -317,7 +328,7 @@ public class DMPPageController: UIViewController {
     private func makeCapsuleButton() -> UIView {
         let capsuleView = UIView()
         capsuleView.translatesAutoresizingMaskIntoConstraints = false
-        capsuleView.layer.cornerRadius = 16
+        capsuleView.layer.cornerRadius = DMPMenuButtonLayout.capsuleSize.height / 2
         capsuleView.layer.borderWidth = 0.5
         capsuleView.layer.shadowColor = UIColor.black.cgColor
         capsuleView.layer.shadowOpacity = 0.08

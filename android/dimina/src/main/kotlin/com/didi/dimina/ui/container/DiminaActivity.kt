@@ -67,6 +67,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -95,6 +96,7 @@ import com.didi.dimina.bean.PathInfo
 import com.didi.dimina.bean.TabBarConfig
 import com.didi.dimina.bean.TabBarItem
 import com.didi.dimina.common.LogUtils
+import com.didi.dimina.common.MenuButtonLayout
 import com.didi.dimina.common.PathUtils
 import com.didi.dimina.common.Utils
 import com.didi.dimina.common.VersionUtils
@@ -1413,7 +1415,7 @@ class DiminaActivity : ComponentActivity() {
                                 }
                             },
                             actions = {
-                                Spacer(modifier = Modifier.width(97.dp))
+                                Spacer(modifier = Modifier.width(MenuButtonLayout.TRAILING_OCCUPIED_WIDTH_DP.dp))
                             }
                         )
                     }
@@ -1503,7 +1505,19 @@ class DiminaActivity : ComponentActivity() {
             }
 
             if (!isLoading.value) {
-                val menuRect = remember { Utils.getMenuButtonBoundingClientRect(this@DiminaActivity) }
+                val configuration = LocalConfiguration.current
+                val (windowInfo, menuRect) = remember(
+                    configuration.screenWidthDp,
+                    configuration.screenHeightDp,
+                    configuration.orientation,
+                    statusBarHeight,
+                ) {
+                    val currentWindowInfo = Utils.getMiniProgramSystemInfo(this@DiminaActivity)
+                    currentWindowInfo to MenuButtonLayout.calculate(
+                        windowWidth = currentWindowInfo.getInt("windowWidth"),
+                        statusBarHeight = currentWindowInfo.getInt("statusBarHeight"),
+                    )
+                }
                 MiniProgramCapsuleButton(
                     onMoreClick = {
                         showMiniProgramMenu.value = true
@@ -1512,9 +1526,8 @@ class DiminaActivity : ComponentActivity() {
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(
-                            top = menuRect.optInt("top", Utils.getStatusBarHeight(this@DiminaActivity)).dp,
-                            end = (Utils.getMiniProgramSystemInfo(this@DiminaActivity)
-                                .optInt("windowWidth") - menuRect.optInt("right", 0)).dp
+                            top = menuRect.top.dp,
+                            end = (windowInfo.getInt("windowWidth") - menuRect.right).dp
                         )
                         .zIndex(10f)
                 )
@@ -1715,11 +1728,14 @@ class DiminaActivity : ComponentActivity() {
         val foreground = Color(0xFF1F1F1F)
         val borderColor = Color(0xFFE5E5E5)
         val separatorColor = Color(0xFFE9E9E9)
-        val shape = RoundedCornerShape(16.dp)
+        val shape = RoundedCornerShape((MenuButtonLayout.HEIGHT_DP / 2).dp)
 
         Box(
             modifier = modifier
-                .size(width = 87.dp, height = 32.dp)
+                .size(
+                    width = MenuButtonLayout.WIDTH_DP.dp,
+                    height = MenuButtonLayout.HEIGHT_DP.dp,
+                )
                 .shadow(1.dp, shape, clip = false)
                 .clip(shape)
                 .background(Color.White)
@@ -1731,7 +1747,10 @@ class DiminaActivity : ComponentActivity() {
             ) {
                 Box(
                     modifier = Modifier
-                        .size(width = 43.dp, height = 32.dp)
+                        .size(
+                            width = ((MenuButtonLayout.WIDTH_DP - 1) / 2).dp,
+                            height = MenuButtonLayout.HEIGHT_DP.dp,
+                        )
                         .clickable(onClick = onMoreClick),
                     contentAlignment = Alignment.Center
                 ) {
@@ -1755,7 +1774,10 @@ class DiminaActivity : ComponentActivity() {
 
                 Box(
                     modifier = Modifier
-                        .size(width = 43.dp, height = 32.dp)
+                        .size(
+                            width = ((MenuButtonLayout.WIDTH_DP - 1) / 2).dp,
+                            height = MenuButtonLayout.HEIGHT_DP.dp,
+                        )
                         .clickable(onClick = onCloseClick),
                     contentAlignment = Alignment.Center
                 ) {

@@ -56,6 +56,12 @@ export class DMPApp {
   private _render: DMPRender = new DMPRender(this)
   router: DRouter = DRouter.getInstance();
 
+  private static readonly deviceMetricsChangeCallback = (_metrics: DMPMap): void => {
+    DMPAppManager.sharedInstance().appPools.forEach((app: DMPApp) => {
+      app.container.updateHostEnv()
+    })
+  }
+
   public get render(): DMPRender {
     return this._render
   }
@@ -141,7 +147,12 @@ export class DMPApp {
         DMPLogger.e(Tags.LAUNCH, `ImageKnifePro initFileCache failed: ${error.message}`)
       })
     context.getWindowStage().on('windowStageEvent', DMPAppLifecycle.onWindowStageEvent);
-    DMPDeviceUtil.prepareSafeAreaAndDisplayWH(DMPApp._entryContext.getContext())
+    try {
+      DMPDeviceUtil.prepareSafeAreaAndDisplayWHForWindow(context.getWindowStage().getMainWindowSync())
+    } catch (_) {
+      DMPDeviceUtil.prepareSafeAreaAndDisplayWH(DMPApp._entryContext.getContext())
+    }
+    DMPDeviceUtil.addMetricsChangeListener(DMPApp.deviceMetricsChangeCallback)
   }
 
   getWebController(webViewId: number): DMPWebViewController {

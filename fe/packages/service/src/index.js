@@ -28,6 +28,10 @@ class Service {
 			loader.loadResource({ appId, bridgeId, pagePath, root, baseUrl })
 		})
 
+		this.message.on('hostEnvUpdate', (patch) => {
+			hostEnv.update(patch)
+		})
+
 		// 来自 components/events.js
 		this.message.on('t', async (msg) => {
 			const { bridgeId, moduleId, methodName, event, success } = msg

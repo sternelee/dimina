@@ -66,6 +66,24 @@ export class DMPContainer {
     DMPChannelProxyNext.ContainerToRender(msg, this.app, webViewId)
   }
 
+  public updateHostEnv(): void {
+    let hasLoadedService: boolean = false
+    this.loadStatusMap.forEach((status: ResourceLoadType) => {
+      if ((status & ResourceLoadType.ServiceLoaded) !== 0) {
+        hasLoadedService = true
+      }
+    })
+    if (!hasLoadedService) {
+      return
+    }
+
+    const msg: DMPMap = new DMPMap({
+      type: 'hostEnvUpdate',
+      body: DMPHostEnvBuilder.buildSnapshot(this.app)
+    })
+    DMPChannelProxyNext.ContainerToService(msg, this.app.appIndex)
+  }
+
   public callBridgeMethods(methodName: string, webViewId: number,
     params: DMPMap | number | string | boolean | object, app: DMPApp): number | string | boolean | object {
     return DMPBridges.callMethodsNext(methodName, webViewId, params, app.appIndex, app.appModuleManager)

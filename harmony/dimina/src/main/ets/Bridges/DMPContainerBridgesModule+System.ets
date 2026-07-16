@@ -14,8 +14,6 @@ import { DMPContextUtils } from '../Utils/DMPContextUtils';
 
 export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
   private bundleInfo?: bundleManager.BundleInfo
-  private cachedResult?: DMPMap = undefined;
-  private cacheTimestamp = 0;
 
   getExportMethods(): string[] {
     return ['getSystemInfoSync', 'getEnv', 'getSystemInfoAsync', 'getAccountInfoSync', 'getSystemInfo',
@@ -80,18 +78,7 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
   }
 
   getSystemInfoSync(data: DMPMap, callback: DMPBridgeCallback) {
-    const currentTime = Date.now();
-    // 检查缓存是否有效（10秒）
-    if (this.cachedResult && (currentTime - this.cacheTimestamp < 10000)) {
-      return this.cachedResult;
-    }
-    // 如果缓存无效，则重新获取系统信息
-    const result = this.systemInfo();
-    // 更新缓存
-    this.cachedResult = result;
-    this.cacheTimestamp = currentTime;
-
-    return result;
+    return this.systemInfo();
   }
 
   getSystemInfoAsync(data: DMPMap, callback: DMPBridgeCallback) {
