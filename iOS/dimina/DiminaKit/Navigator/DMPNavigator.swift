@@ -113,7 +113,7 @@ public class DMPNavigator: NSObject {
         showsLaunchLoading: Bool = true
     ) async {
         guard let navigationController = navigationController else {
-            print("导航控制器未设置")
+            DMPLogger.debug("导航控制器未设置")
             return
         }
 
@@ -183,13 +183,13 @@ public class DMPNavigator: NSObject {
         async
     {
         guard let navigationController = navigationController else {
-            print("导航控制器未设置")
+            DMPLogger.debug("导航控制器未设置")
             return
         }
 
         navigationController.view.endEditing(true)
         if isTabBarPage(path) {
-            print("navigateTo failed: can not navigateTo a tabbar page: \(path)")
+            DMPLogger.debug("navigateTo failed: can not navigateTo a tabbar page: \(path)")
             return
         }
 
@@ -213,7 +213,7 @@ public class DMPNavigator: NSObject {
         pageRecords.append(pageRecord)
 
         // 打印调试信息
-        print("navigateTo: Creating page controller for path: \(path), isRoot: false")
+        DMPLogger.debug("navigateTo: Creating page controller for path: \(path), isRoot: false")
 
         await app?.service?.loadSubPackage(pagePath: path)
 
@@ -226,7 +226,7 @@ public class DMPNavigator: NSObject {
     @MainActor
     public func navigateBack(delta: Int = 1, animated: Bool = true, destroy: Bool = true) {
         guard let navigationController = navigationController else {
-            print("导航控制器未设置")
+            DMPLogger.debug("导航控制器未设置")
             return
         }
 
@@ -276,13 +276,13 @@ public class DMPNavigator: NSObject {
     @MainActor
     public func redirectTo(to path: String, query: [String: Any]? = nil) async {
         guard let navigationController = navigationController else {
-            print("导航控制器未设置")
+            DMPLogger.debug("导航控制器未设置")
             return
         }
 
         navigationController.view.endEditing(true)
         if isTabBarPage(path) {
-            print("redirectTo failed: can not redirectTo a tabbar page: \(path)")
+            DMPLogger.debug("redirectTo failed: can not redirectTo a tabbar page: \(path)")
             return
         }
 
@@ -356,7 +356,7 @@ public class DMPNavigator: NSObject {
     public func relaunch(to path: String, query: [String: Any]? = nil, animated: Bool = true) async
     {
         guard let navigationController = navigationController else {
-            print("导航控制器未设置")
+            DMPLogger.debug("导航控制器未设置")
             return
         }
 
@@ -374,18 +374,18 @@ public class DMPNavigator: NSObject {
     @discardableResult
     public func switchTab(to path: String, query: [String: Any]? = nil, animated: Bool = true) async -> Bool {
         guard let navigationController = navigationController else {
-            print("导航控制器未设置")
+            DMPLogger.debug("导航控制器未设置")
             return false
         }
 
         guard let tabBarConfig = app?.getBundleAppConfig()?.tabBar else {
-            print("switchTab failed: tabBar config not found")
+            DMPLogger.debug("switchTab failed: tabBar config not found")
             return false
         }
 
         let targetIndex = tabBarIndex(for: path)
         guard targetIndex >= 0 else {
-            print("switchTab failed: target is not a tabbar page: \(path)")
+            DMPLogger.debug("switchTab failed: target is not a tabbar page: \(path)")
             return false
         }
 
@@ -460,7 +460,7 @@ public class DMPNavigator: NSObject {
     /// 返回到根页面
     private func goBackToRoot(animated: Bool = true) {
         guard let navigationController = navigationController else {
-            print("导航控制器未设置")
+            DMPLogger.debug("导航控制器未设置")
             return
         }
 

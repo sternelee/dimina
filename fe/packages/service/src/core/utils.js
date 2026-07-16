@@ -329,13 +329,14 @@ export function mergeBehaviors(obj, behaviors) {
 
 		// 合并生命周期函数
 		// 规则: 不覆盖, 按顺序执行 (被引用的 > 引用者 > 靠前的 > 靠后的)
-		const lifetimes = ['created', 'attached', 'ready', 'detached']
+		const lifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
 		target.behaviorLifetimes = target.behaviorLifetimes || {}
 
 		for (const lifetime of lifetimes) {
-			if (isFunction(behavior[lifetime])) {
+			const lifecycleMethod = behavior.lifetimes?.[lifetime] || behavior[lifetime]
+			if (isFunction(lifecycleMethod)) {
 				target.behaviorLifetimes[lifetime] = target.behaviorLifetimes[lifetime] || []
-				target.behaviorLifetimes[lifetime].push(behavior[lifetime])
+				target.behaviorLifetimes[lifetime].push(lifecycleMethod)
 			}
 		}
 

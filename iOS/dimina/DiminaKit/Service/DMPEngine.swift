@@ -80,7 +80,7 @@ public class DMPEngine: NSObject {
         
         context.exceptionHandler = { context, exception in
             guard let exception = exception else { return }
-            print("JS Error: \(exception.toString() ?? "Unknown error")")
+            DMPLogger.debug("JS Error: \(exception.toString() ?? "Unknown error")")
         }
         
         context.evaluateScript("DiminaServiceBridge = {};")
@@ -97,7 +97,7 @@ public class DMPEngine: NSObject {
         return await withCheckedContinuation { continuation in
             self.performOnJSThread {
                 let result = self.jsContext?.evaluateScript(script)
-                print("🔴 engine evaluateScript: \(script) result: \(result)")
+                DMPLogger.debug("🔴 engine evaluateScript: \(script) result: \(result)")
                 continuation.resume(returning: result)
             }
         }
@@ -110,10 +110,10 @@ public class DMPEngine: NSObject {
                 do {
                     let fileContent = try String(contentsOfFile: path, encoding: .utf8)
                     let result = self.jsContext?.evaluateScript(fileContent)
-                    print("🔴 engine loadFile: \(path) result: \(result)")
+                    DMPLogger.debug("🔴 engine loadFile: \(path) result: \(result)")
                     continuation.resume(returning: result)
                 } catch {
-                    print("Error loading file at path \(path): \(error.localizedDescription)")
+                    DMPLogger.debug("Error loading file at path \(path): \(error.localizedDescription)")
                     continuation.resume(returning: nil)
                 }
             }
@@ -172,7 +172,7 @@ public class DMPEngine: NSObject {
         }
         
         if jsThread.isExecuting {
-            print("destroy engine failed")
+            DMPLogger.debug("destroy engine failed")
         }
     }
 }

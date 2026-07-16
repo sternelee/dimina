@@ -6,6 +6,7 @@ import deviceInfo from '@ohos.deviceInfo';
 import { bundleManager, ConfigurationConstant, common } from '@kit.AbilityKit';
 import BuildProfile from '../../../../BuildProfile';
 import { i18n } from '@kit.LocalizationKit';
+import { DMPContextUtils } from './DMPContextUtils';
 
 export class DMPHostEnvBuilder {
   private static cachedSnapshot: DMPMap | undefined
@@ -82,7 +83,7 @@ export class DMPHostEnvBuilder {
     // app base info
     result.set('SDKVersion', BuildProfile.HAR_VERSION)
     result.set('version', info?.versionName ?? '')
-    result.set('enableDebug', app.appConfig.isDebugMode)
+    result.set('enableDebug', DMPContextUtils.debugMode)
     result.set('language', language)
     result.set('theme', theme)
 

@@ -10,7 +10,6 @@ import android.content.res.Resources
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import android.util.Log
 import android.view.View
 import android.view.WindowInsets
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -1097,7 +1096,7 @@ class DiminaActivity : ComponentActivity() {
                 } else {
                     webViewReadyCallbacks.add(action)
                 }
-                Log.w(tag, "Tab WebView not initialized yet, adding to callback queue")
+                LogUtils.w(tag, "Tab WebView not initialized yet, adding to callback queue")
                 false
             }
         }
@@ -1105,7 +1104,7 @@ class DiminaActivity : ComponentActivity() {
             action(it)
             true
         } ?: run {
-            Log.w(tag, "WebView not initialized yet, adding to callback queue")
+            LogUtils.w(tag, "WebView not initialized yet, adding to callback queue")
             webViewReadyCallbacks.add(action)
             false
         }
@@ -1368,7 +1367,7 @@ class DiminaActivity : ComponentActivity() {
             onSelected = { uris ->
                 // Convert URIs to file paths
                 val paths =
-                    uris.mapNotNull { uri -> PathUtils.uriToTempFile(this@DiminaActivity, uri) }
+                    uris.mapNotNull { uri -> PathUtils.uriToTempFile(this@DiminaActivity, uri, miniProgram.appId) }
                 // Invoke the callback with the selected image paths
                 imageChooseCallback?.invoke(paths)
                 // Reset the callback and hide the picker

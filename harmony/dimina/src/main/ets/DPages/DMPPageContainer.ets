@@ -55,7 +55,7 @@ export struct DMPPageContainer {
     window.getLastWindow(getContext(this)).then(currentWindow => {
       currentWindow.on('keyboardHeightChange', (data: number) => {
         this.keyboardHeight = px2vp(data);
-        console.log('victor', "keyBoardHeight=" + this.keyboardHeight)
+        DMPLogger.d('', "keyBoardHeight=" + this.keyboardHeight)
       })
     })
     getContext(this).eventHub.on('ps_safety_display', (data: Map<string, number>) => {

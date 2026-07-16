@@ -16,6 +16,8 @@ const DEFAULT_TEMPLATE_EXTS = ['.wxml', '.ddml']
 const DEFAULT_STYLE_EXTS = ['.wxss', '.ddss', '.less', '.scss', '.sass']
 const DEFAULT_VIEW_SCRIPT_EXTS = ['.wxs']
 const DEFAULT_VIEW_SCRIPT_TAGS = ['wxs', 'dds']
+const CUSTOM_TAB_BAR_COMPONENT_NAME = '__dimina_custom_tab_bar__'
+const CUSTOM_TAB_BAR_COMPONENT_PATH = '/custom-tab-bar/index'
 
 // 保留扩展名：所有内置类型 + 逻辑(.js/.ts) + 配置(.json)。自定义项不得占用，
 // 否则会跨角色串编（如 template:['js'] 会把页面逻辑文件当成模板解析）。
@@ -255,6 +257,45 @@ function storePageConfig() {
 		subPackages.forEach((subPkg) => {
 			collectionPageJson(subPkg.pages, subPkg.root)
 		})
+	}
+
+	storeCustomTabBarConfig()
+}
+
+/**
+ * 微信会把 custom-tab-bar/index 作为每个 tab 页的直属组件创建。业务页面
+ * 不需要在 usingComponents 中显式声明它，因此编译阶段补一个内部组件引用，
+ * 让逻辑、视图和样式三个编译器都能沿现有依赖图收集该组件。
+ */
+function storeCustomTabBarConfig() {
+	const tabBar = configInfo.appInfo?.tabBar
+	if (tabBar?.custom !== true || !Array.isArray(tabBar.list)) {
+		return
+	}
+
+	const componentJsonPath = path.join(pathInfo.workPath, 'custom-tab-bar/index.json')
+	if (!fs.existsSync(componentJsonPath)) {
+		console.warn('[env] tabBar.custom 已启用，但找不到 custom-tab-bar/index.json')
+		return
+	}
+
+	const internalConfig = {
+		usingComponents: {
+			[CUSTOM_TAB_BAR_COMPONENT_NAME]: CUSTOM_TAB_BAR_COMPONENT_PATH,
+		},
+	}
+	storeComponentConfig(internalConfig, path.join(pathInfo.workPath, 'app.json'))
+
+	for (const item of tabBar.list) {
+		const pagePath = typeof item?.pagePath === 'string'
+			? item.pagePath.replace(/^\/+/, '')
+			: ''
+		const pageConfig = configInfo.pageInfo[pagePath]
+		if (!pageConfig) {
+			continue
+		}
+		pageConfig.usingComponents ||= {}
+		pageConfig.usingComponents[CUSTOM_TAB_BAR_COMPONENT_NAME] = CUSTOM_TAB_BAR_COMPONENT_PATH
 	}
 }
 

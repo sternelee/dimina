@@ -1,4 +1,5 @@
 import { cloneDeep, get, isFunction, isString } from '@dimina/common'
+import { invokeSafely } from './safe-callback'
 
 /**
  * Parse a mini-program setData path.
@@ -160,7 +161,7 @@ export function invokeDataObservers(ctx, changedPaths, data = ctx.data, info = c
 		}
 
 		const args = descriptor.paths.map(({ path }) => path.length === 0 ? data : get(data, path))
-		descriptor.observer.call(ctx, ...args)
+		invokeSafely(ctx, descriptor.observer, args, 'data observer')
 	}
 }
 
@@ -268,10 +269,10 @@ export function invokePropertyChanges(ctx, propertyChanges) {
 		}
 
 		if (isString(observer)) {
-			ctx[observer]?.(value, change.oldValue, path)
+			invokeSafely(ctx, ctx[observer], [value, change.oldValue, path], 'property observer')
 		}
 		else if (isFunction(observer)) {
-			observer.call(ctx, value, change.oldValue, path)
+			invokeSafely(ctx, observer, [value, change.oldValue, path], 'property observer')
 		}
 	}
 }

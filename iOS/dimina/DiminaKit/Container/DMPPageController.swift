@@ -91,7 +91,7 @@ public class DMPPageController: UIViewController {
             self.webview.setQuery(query: query)
         }
         
-        print("🔧 DMPPageController: WebView (ID: \(webview.getWebViewId())) configuration completed, current page path: \(webview.getPagePath())")
+        DMPLogger.debug("🔧 DMPPageController: WebView (ID: \(webview.getWebViewId())) configuration completed, current page path: \(webview.getPagePath())")
         
         app?.render?.setupJSBridge(webViewId: webview.getWebViewId())
 
@@ -166,7 +166,7 @@ public class DMPPageController: UIViewController {
         hasStartedLoading = true
         showPageLoadingIfNeeded()
         webview.poolState = .loading
-        var enableVConsole = appConfig.isDebugMode
+        var enableVConsole = false
         #if DEBUG
         enableVConsole = true
         #endif
@@ -968,11 +968,11 @@ public class DMPPageController: UIViewController {
     private func destroyWebView() {
         // Add state check to prevent duplicate destruction
         guard !isWebViewDestroyed else {
-            print("🟡 DMPPageController: WebView (ID: \(webview.getWebViewId())) has already been destroyed, skipping duplicate operation")
+            DMPLogger.debug("🟡 DMPPageController: WebView (ID: \(webview.getWebViewId())) has already been destroyed, skipping duplicate operation")
             return
         }
         
-        print("🗑️ DMPPageController: Destroy WebView (ID: \(webview.getWebViewId()))")
+        DMPLogger.debug("🗑️ DMPPageController: Destroy WebView (ID: \(webview.getWebViewId()))")
         isWebViewDestroyed = true
         
         // Notify page unload
@@ -996,7 +996,7 @@ public class DMPPageController: UIViewController {
     }
     
     deinit {
-        print("🗑️ DMPPageController: deinit (WebView ID: \(webview.getWebViewId()))")
+        DMPLogger.debug("🗑️ DMPPageController: deinit (WebView ID: \(webview.getWebViewId()))")
         webview.onLoadingStateChanged = nil
         // Ensure WebView is correctly released
         destroyWebView()

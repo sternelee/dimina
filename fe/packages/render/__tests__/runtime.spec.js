@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JSDOM } from 'jsdom'
-import { createApp, h, nextTick } from 'vue'
+import { createApp, h, nextTick, provide, Suspense } from 'vue'
 import { createMiniProgramSlots } from '../src/core/slots'
 
 const groupA = [
@@ -36,6 +36,7 @@ describe('runtime template components', () => {
 	})
 
 	afterEach(() => {
+		vi.restoreAllMocks()
 		dom.window.close()
 		delete globalThis.window
 		delete globalThis.document
@@ -47,6 +48,139 @@ describe('runtime template components', () => {
 		delete globalThis.navigator
 		delete globalThis.requestAnimationFrame
 		delete globalThis.cancelAnimationFrame
+	})
+
+	it('uses the actual owner when a template reuses a component definition from another tree', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		const createdMessages = []
+		window.DiminaRenderBridge = {
+			publish: vi.fn((payload) => {
+				const sent = JSON.parse(payload)
+				if (sent.type !== 'mC') {
+					return
+				}
+				createdMessages.push(sent.body)
+				window.DiminaRenderBridge.onMessage({
+					type: sent.body.moduleId,
+					body: { data: {} },
+				})
+			}),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockImplementation((path) => {
+			if (path !== '/shared/child') {
+				return undefined
+			}
+			return {
+				moduleInfo: {
+					id: 'shared-child',
+					usingComponents: {},
+					render() {
+						return h('div', { class: 'shared-child' }, 'ready')
+					},
+				},
+				propertySchemas: {},
+				props: {},
+			}
+		})
+
+		// This definition was built while traversing /registered/parent, but a
+		// globally registered template renders it below /actual/parent.
+		const components = runtime.createComponent('/registered/parent', 'bridge-template', {
+			child: '/shared/child',
+		})
+		const ReusedChild = components['dd-child']
+		const app = createApp({
+			setup() {
+				provide('info', { id: 'actual-parent-id', sId: 'actual-parent-scope' })
+				provide('path', '/actual/parent')
+				provide('/actual/parent', { id: 'actual-parent-id' })
+				return () => h(Suspense, null, {
+					default: () => h(ReusedChild),
+				})
+			},
+		})
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+		await nextTick()
+
+		await vi.waitFor(() => expect(root.textContent).toBe('ready'))
+		expect(createdMessages).toHaveLength(1)
+		expect(createdMessages[0]).toMatchObject({
+			parentId: 'actual-parent-id',
+			pageId: 'actual-parent-id',
+		})
+
+		app.unmount()
+	})
+
+	it('keeps the lexical event owner for a component rendered through a slot', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		const createdMessages = []
+		window.DiminaRenderBridge = {
+			publish: vi.fn((payload) => {
+				const sent = JSON.parse(payload)
+				if (sent.type !== 'mC') {
+					return
+				}
+				createdMessages.push(sent.body)
+				window.DiminaRenderBridge.onMessage({
+					type: sent.body.moduleId,
+					body: { data: {} },
+				})
+			}),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockImplementation((path) => {
+			if (path !== '/shared/child') {
+				return undefined
+			}
+			return {
+				moduleInfo: {
+					id: 'shared-child',
+					usingComponents: {},
+					render() {
+						return h('div', { class: 'shared-child' }, 'ready')
+					},
+				},
+				propertySchemas: {},
+				props: {},
+			}
+		})
+
+		const components = runtime.createComponent('/slot/owner', 'bridge-slot', {
+			child: '/shared/child',
+		})
+		const SlottedChild = components['dd-child']
+		const app = createApp({
+			setup() {
+				provide('info', { id: 'render-parent-id', sId: 'render-parent-scope' })
+				provide('path', '/render/parent')
+				provide('/render/parent', { id: 'render-parent-id' })
+				provide('/slot/owner', { id: 'slot-owner-id' })
+				return () => h(Suspense, null, {
+					default: () => h(SlottedChild),
+				})
+			},
+		})
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+		await nextTick()
+
+		await vi.waitFor(() => expect(root.textContent).toBe('ready'))
+		expect(createdMessages).toHaveLength(1)
+		expect(createdMessages[0]).toMatchObject({
+			parentId: 'render-parent-id',
+			pageId: 'slot-owner-id',
+		})
+
+		app.unmount()
 	})
 
 	it('syncs template data when keyed list items are replaced', async () => {
@@ -213,6 +347,118 @@ describe('runtime template components', () => {
 		expect(gl.viewport).toHaveBeenCalledWith(0, 0, 300, 150)
 		expect(gl.shaderSource).toHaveBeenCalledWith(shader, 'void main() {}')
 		expect(gl.compileShader).toHaveBeenCalledWith(shader)
+	})
+
+	it('returns real webgl creation, diagnostics, errors and typed-array feedback', () => {
+		runtime.canvasNodes.clear()
+		runtime.canvasResources.clear()
+		window.DiminaRenderBridge = { publish: vi.fn() }
+
+		const shader = { kind: 'shader' }
+		const errors = [0x0502, 0]
+		const gl = {
+			NO_ERROR: 0,
+			INVALID_OPERATION: 0x0502,
+			VERTEX_SHADER: 0x8B31,
+			FRAGMENT_SHADER: 0x8B30,
+			SHADER_TYPE: 0x8B4F,
+			COMPILE_STATUS: 0x8B81,
+			LOW_FLOAT: 0x8DF0,
+			MEDIUM_FLOAT: 0x8DF1,
+			HIGH_FLOAT: 0x8DF2,
+			LOW_INT: 0x8DF3,
+			MEDIUM_INT: 0x8DF4,
+			HIGH_INT: 0x8DF5,
+			drawingBufferWidth: 2,
+			drawingBufferHeight: 1,
+			getParameter: vi.fn(() => 4096),
+			getSupportedExtensions: vi.fn(() => []),
+			getContextAttributes: vi.fn(() => ({ alpha: false, preserveDrawingBuffer: true })),
+			getShaderPrecisionFormat: vi.fn(() => ({ rangeMin: 127, rangeMax: 127, precision: 23 })),
+			isContextLost: vi.fn(() => false),
+			getError: vi.fn(() => errors.shift() ?? 0),
+			createShader: vi.fn(() => shader),
+			compileShader: vi.fn(),
+			getShaderParameter: vi.fn((_shader, pname) => pname === 0x8B4F ? 0x8B31 : false),
+			getShaderInfoLog: vi.fn(() => 'shader compilation failed'),
+			readPixels: vi.fn((_x, _y, _width, _height, _format, _type, output) => {
+				output.set([1, 2, 3, 4, 5, 6, 7, 8])
+			}),
+		}
+		const canvas = document.createElement('canvas')
+		canvas.getContext = vi.fn(() => gl)
+		runtime.canvasNodes.set('canvas_feedback', {
+			canvas,
+			contexts: new Map(),
+		})
+
+		runtime.canvasNodeFlush({
+			bridgeId: 'bridge_feedback',
+			params: {
+				nodeId: 'canvas_feedback',
+				feedback: 'feedback_callback',
+				operations: [
+					{
+						op: 'getContext',
+						contextId: 'context_feedback',
+						contextType: 'webgl',
+						attributes: { alpha: false },
+					},
+					{
+						op: 'contextCall',
+						contextId: 'context_feedback',
+						method: 'createShader',
+						args: [0x8B31],
+						resultId: 'shader_feedback',
+					},
+					{
+						op: 'contextCall',
+						contextId: 'context_feedback',
+						method: 'compileShader',
+						args: [{ __canvasResourceId: 'shader_feedback' }],
+						feedback: 'shader',
+					},
+					{
+						op: 'contextCall',
+						contextId: 'context_feedback',
+						method: 'readPixels',
+						args: [
+							0,
+							0,
+							2,
+							1,
+							0x1908,
+							0x1401,
+							{ __canvasTypedArray: 'Uint8Array', data: Array.from({ length: 8 }, () => 0) },
+						],
+						typedArrayUpdateId: 'pixels_feedback',
+						typedArrayArgIndex: 6,
+					},
+				],
+			},
+		})
+
+		expect(canvas.getContext).toHaveBeenCalledWith('webgl', { alpha: false })
+		expect(gl.compileShader).toHaveBeenCalledWith(shader)
+		expect(gl.readPixels).toHaveBeenCalledTimes(1)
+		const message = JSON.parse(window.DiminaRenderBridge.publish.mock.calls[0][0])
+		const feedback = message.body.args
+		expect(message.body.id).toBe('feedback_callback')
+		expect(feedback.contexts.context_feedback.success).toBe(true)
+		expect(feedback.contexts.context_feedback.capabilities.contextAttributes).toEqual({
+			alpha: false,
+			preserveDrawingBuffer: true,
+		})
+		expect(feedback.contexts.context_feedback.resources[0]).toEqual({
+			resourceId: 'shader_feedback',
+			metadata: {
+				shaderType: 0x8B31,
+				compileStatus: false,
+				infoLog: 'shader compilation failed',
+			},
+		})
+		expect(feedback.contexts.context_feedback.errors).toEqual([0x0502])
+		expect(feedback.typedArrays[0].value.data).toEqual([1, 2, 3, 4, 5, 6, 7, 8])
 	})
 
 	it('applies service path arrays without re-parsing escaped setData keys', () => {

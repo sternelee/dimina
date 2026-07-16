@@ -10,6 +10,7 @@ import { DMPMap } from '../Utils/DMPMap';
 import BuildProfile from '../../../../BuildProfile';
 import { access } from '@kit.ConnectivityKit';
 import { i18n } from '@kit.LocalizationKit';
+import { DMPContextUtils } from '../Utils/DMPContextUtils';
 
 export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
   private bundleInfo?: bundleManager.BundleInfo
@@ -49,7 +50,7 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
   getSystemSetting(data: DMPMap, callback: DMPBridgeCallback) {
     try {
       let state = access.getState();
-      console.error(`let state = access.getState(): ${state}`);
+      DMPLogger.e('', `let state = access.getState(): ${state}`);
 
       return new DMPMap({
         bluetoothEnabled: state === 0,
@@ -59,7 +60,7 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
       })
 
     } catch (err) {
-      console.error('errCode: ' + (err as BusinessError).code + ', errMessage: ' + (err as BusinessError).message);
+      DMPLogger.e('', 'errCode: ' + (err as BusinessError).code + ', errMessage: ' + (err as BusinessError).message);
       return new DMPMap();
     }
   }
@@ -150,8 +151,8 @@ export class DMPContainerBridgesModuleSystem extends DMPContainerBridgesModule {
 
     //星河sdk版本
     result.set('SDKVersion', BuildProfile.HAR_VERSION);
-    result.set('enableDebug', this.app.appConfig.isDebugMode);
-    result.set('debugEnv', this.app.appConfig.isDebugMode ? 1 : 0)
+    result.set('enableDebug', DMPContextUtils.debugMode);
+    result.set('debugEnv', DMPContextUtils.debugMode ? 1 : 0)
 
     // language: 微信客户端设置的语言
     const locale = i18n.System.getSystemLocale()
@@ -206,4 +207,3 @@ class PageInfo {
   id?: number
   query?: Object
 }
-

@@ -11,6 +11,7 @@ function createElement() {
 			handler({ propertyName: 'transform' })
 		}),
 		removeEventListener: vi.fn(),
+		style: {},
 		parentNode: {
 			removeChild: vi.fn(),
 		},
@@ -22,6 +23,7 @@ function createBridge(pagePath) {
 	return {
 		opts: { pagePath },
 		destroy: vi.fn(),
+		start: vi.fn(),
 		pageShow: vi.fn(),
 		pageHide: vi.fn(),
 		webview: {
@@ -57,6 +59,48 @@ function callbackIds(app) {
 }
 
 describe('MiniApp navigation callbacks', () => {
+	it('keeps custom tabBar inside the page instead of rendering the host tabBar', () => {
+		const app = createApp()
+		const tabBarEl = { style: {}, textContent: 'legacy' }
+		app.el = {
+			querySelector: vi.fn(() => tabBarEl),
+			style: { setProperty: vi.fn() },
+		}
+		app.appConfig.app.tabBar = {
+			custom: true,
+			list: [{ pagePath: 'pages/first', text: 'First' }],
+		}
+		app._renderTabBar = vi.fn()
+
+		app._initTabBar()
+
+		expect(app.customTabBar).toBe(true)
+		expect(app.tabBarPaths).toEqual(['pages/first'])
+		expect(tabBarEl.textContent).toBe('')
+		expect(tabBarEl.style.display).toBe('none')
+		expect(app.tabBarHeight).toBe(0)
+		expect(app._renderTabBar).not.toHaveBeenCalled()
+	})
+
+	it('restores only the top page as visible', async () => {
+		const app = createApp()
+		const root = createBridge('pages/first')
+		const middle = createBridge('pages/first')
+		const top = createBridge('pages/second')
+		app.bridgeList = [root]
+		app.createBridge = vi.fn()
+			.mockResolvedValueOnce(middle)
+			.mockResolvedValueOnce(top)
+
+		await app.restorePageStack([
+			{ pagePath: 'pages/first', query: {} },
+			{ pagePath: 'pages/second', query: {} },
+		])
+
+		expect(middle.start).toHaveBeenCalledWith({ visible: false })
+		expect(top.start).toHaveBeenCalledWith({ visible: true })
+	})
+
 	it('resolves navigateBack with success and complete callbacks', async () => {
 		const app = createApp()
 		const previous = createBridge('pages/first')

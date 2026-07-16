@@ -106,7 +106,7 @@ class Runtime {
 	 * @param {*} opts
 	 */
 	createInstance(opts) {
-		const { bridgeId, moduleId, path, query, eventAttr, pageId, parentId, properties, propertyNames, targetInfo, stackId } = opts
+		const { bridgeId, moduleId, path, query, eventAttr, pageId, parentId, properties, propertyNames, targetInfo, stackId, deferInitialData = false } = opts
 
 		const module = loader.getModuleByPath(path)
 		if (!module) {
@@ -135,11 +135,11 @@ class Runtime {
 			if (!module.isComponent) {
 				router.push(component, stackId)
 			}
-			component.init().then(() => {
-				if (!module.isComponent && !this.getPageState(bridgeId).hidden) {
-					this.pageShow({ bridgeId, moduleId })
-				}
-			})
+			component.init({ deferInitialData })
+			const state = this.getPageState(bridgeId)
+			if (!module.isComponent && state.pendingShow && !state.hidden) {
+				this.pageShow({ bridgeId, moduleId })
+			}
 			
 			return component
 		}
@@ -152,11 +152,11 @@ class Runtime {
 			})
 			this.instances[bridgeId][moduleId] = page
 			router.push(page, stackId)
-			page.init().then(() => {
-				if (!this.getPageState(bridgeId).hidden) {
-					this.pageShow({ bridgeId, moduleId })
-				}
-			})
+			page.init({ deferInitialData })
+			const state = this.getPageState(bridgeId)
+			if (state.pendingShow && !state.hidden) {
+				this.pageShow({ bridgeId, moduleId })
+			}
 			return page
 		}
 		else {
@@ -164,14 +164,14 @@ class Runtime {
 		}
 	}
 
-	async moduleAttached(opts) {
+	moduleAttached(opts) {
 		const { bridgeId, moduleId } = opts
 		const instance = this.instances[bridgeId]?.[moduleId]
 		if (!instance || instance.__type__ !== ComponentModule.type || !instance.__isComponent__) {
 			return
 		}
-		if (instance.__componentAttached__) {
-			return instance.__attachPromise__
+		if (instance.__componentAttached__ || instance.__componentAttaching__) {
+			return
 		}
 
 		const parent = this.instances[bridgeId]?.[instance.__parentId__]
@@ -179,15 +179,14 @@ class Runtime {
 			instance.__componentAttachPending__ = true
 			return
 		}
-		if (instance.__attachPromise__) {
-			return instance.__attachPromise__
-		}
-
 		instance.__componentAttachPending__ = false
 		instance.__componentAttaching__ = true
-		instance.__attachPromise__ = Promise.resolve(instance.componentAttached()).then(async () => {
-			instance.__componentAttaching__ = false
+		try {
+			// exparser 在调用 attached 前先把实例标记为已进入节点树。
 			instance.__componentAttached__ = true
+			instance.componentAttached()
+
+			instance.__componentAttaching__ = false
 			if (this.getPageState(bridgeId).shown && !instance.__pageShown__) {
 				instance.__pageShown__ = true
 				instance.pageShow()
@@ -197,7 +196,7 @@ class Runtime {
 				child?.__parentId__ === moduleId && child.__componentAttachPending__
 			))
 			for (const child of children) {
-				await this.moduleAttached({ bridgeId, moduleId: child.__id__ })
+				this.moduleAttached({ bridgeId, moduleId: child.__id__ })
 			}
 
 			if (instance.__pendingReadyOpts__) {
@@ -205,8 +204,10 @@ class Runtime {
 				delete instance.__pendingReadyOpts__
 				this.moduleReady(pendingReadyOpts)
 			}
-		})
-		return instance.__attachPromise__
+		}
+		finally {
+			instance.__componentAttaching__ = false
+		}
 	}
 
 	moduleReady(opts) {
@@ -247,10 +248,10 @@ class Runtime {
 				instance.__pendingReadyOpts__ = opts
 				return
 			}
-			// 调用组件的 ready 生命周期
-			instance.componentReadied()
-			// 标记组件已准备就绪
+			// Mark ready before invoking user code so re-entrant messages cannot
+			// dispatch the lifetime twice.
 			instance.__componentReadied__ = true
+			instance.componentReadied()
 			this.flushPendingEvents(instance)
 			instance.flushInitSetDataCallbacks?.()
 			
@@ -324,8 +325,7 @@ class Runtime {
 
 		const pageInstances = []
 
-		const orderedInstances = Object.values(instances)
-			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+		const orderedInstances = this.getInstancesInTreeOrder(bridgeId)
 
 		orderedInstances.forEach((instance) => {
 			if (!instance) {
@@ -450,8 +450,7 @@ class Runtime {
 
 		const pageInstances = []
 
-		const orderedInstances = Object.values(instances)
-			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+		const orderedInstances = this.getInstancesInTreeOrder(bridgeId)
 
 		orderedInstances.forEach((instance) => {
 			if (!instance) {
@@ -488,10 +487,9 @@ class Runtime {
 			return
 		}
 
-		const instanceList = Object.values(instances)
-		const customComponents = instanceList
+		const instanceList = this.getInstancesInTreeOrder(bridgeId)
+		const customComponents = this.getInstancesInTreeOrder(bridgeId, { postOrder: true })
 			.filter(instance => instance?.__type__ === ComponentModule.type && instance.__isComponent__)
-			.sort((left, right) => this.getInstanceDepth(right, bridgeId) - this.getInstanceDepth(left, bridgeId))
 
 		customComponents.forEach((instance) => {
 			if (instance.__componentAttached__ && !instance.__componentDetached__) {
@@ -517,14 +515,46 @@ class Runtime {
 		this.pageStates.delete(bridgeId)
 	}
 
-	getInstanceDepth(instance, bridgeId) {
-		let depth = 0
-		let current = instance
-		while (current?.__parentId__) {
-			depth++
-			current = this.instances[bridgeId]?.[current.__parentId__]
+	getInstancesInTreeOrder(bridgeId, { postOrder = false } = {}) {
+		const instances = Object.values(this.instances[bridgeId] || {}).filter(Boolean)
+		const byId = new Map(instances.map(instance => [instance.__id__, instance]))
+		const childrenByParentId = new Map()
+		const roots = []
+
+		for (const instance of instances) {
+			if (instance.__parentId__ && byId.has(instance.__parentId__)) {
+				const children = childrenByParentId.get(instance.__parentId__) || []
+				children.push(instance)
+				childrenByParentId.set(instance.__parentId__, children)
+			}
+			else {
+				roots.push(instance)
+			}
 		}
-		return depth
+
+		const ordered = []
+		const visited = new Set()
+		const visit = (instance) => {
+			if (!instance || visited.has(instance)) {
+				return
+			}
+			visited.add(instance)
+			if (!postOrder) {
+				ordered.push(instance)
+			}
+			for (const child of childrenByParentId.get(instance.__id__) || []) {
+				visit(child)
+			}
+			if (postOrder) {
+				ordered.push(instance)
+			}
+		}
+
+		roots.forEach(visit)
+		// Keep malformed/orphaned cycles observable and deterministic instead of
+		// silently dropping them from lifecycle delivery.
+		instances.forEach(visit)
+		return ordered
 	}
 
 	pageScroll(opts) {
@@ -546,8 +576,7 @@ class Runtime {
 		}
 
 		const pageInstances = []
-		const orderedInstances = Object.values(instances)
-			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+		const orderedInstances = this.getInstancesInTreeOrder(bridgeId)
 
 		orderedInstances.forEach((instance) => {
 			if (!instance) {
@@ -570,7 +599,7 @@ class Runtime {
 	}
 
 	componentError(opts) {
-		const { bridgeId, moduleId } = opts
+		const { bridgeId, moduleId, error } = opts
 		const instance = this.instances[bridgeId]?.[moduleId]
 
 		if (!instance) {
@@ -578,7 +607,7 @@ class Runtime {
 		}
 
 		if (instance.__type__ === ComponentModule.type) {
-			instance.componentError()
+			instance.componentError(error)
 		}
 	}
 
@@ -590,8 +619,7 @@ class Runtime {
 			return
 		}
 
-		Object.values(instances)
-			.sort((left, right) => this.getInstanceDepth(left, bridgeId) - this.getInstanceDepth(right, bridgeId))
+		this.getInstancesInTreeOrder(bridgeId)
 			.forEach((instance) => {
 				if (instance?.__type__ === ComponentModule.type && (!instance.__isComponent__ || instance.__componentAttached__)) {
 					instance.componentRouteDone()

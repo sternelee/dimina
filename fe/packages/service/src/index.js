@@ -77,8 +77,16 @@ class Service {
 			const initialProps = loader.getPropsByPath(module.usingComponents)
 
 			const pageId = `page_${uuid()}`
-			// 创建页面实例
-			runtime.createInstance({ bridgeId, moduleId: pageId, path: pagePath, query, stackId })
+			// 创建页面实例。生命周期同步执行，但首屏数据必须排在 firstRender 后发送，
+			// 确保渲染线程已经注册对应 pageId 的数据监听。
+			const page = runtime.createInstance({
+				bridgeId,
+				moduleId: pageId,
+				path: pagePath,
+				query,
+				stackId,
+				deferInitialData: true,
+			})
 
 			message.send({
 				type: 'firstRender',
@@ -91,6 +99,7 @@ class Service {
 					query,
 				},
 			})
+			page?.sendInitialData()
 		})
 
 		this.message.on('appShow', () => {

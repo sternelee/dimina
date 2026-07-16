@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import loader from '../src/core/loader'
 import runtime from '../src/core/runtime'
 import { Component } from '../src/instance/component/component'
 import { ComponentModule } from '../src/instance/component/component-module'
@@ -83,6 +84,55 @@ describe('Skyline/exparser lifecycle ordering', () => {
 		expect(calls).toEqual(['page:onShow'])
 	})
 
+	it('does not synthesize pageShow while creating a page without a visibility signal', () => {
+		const calls = []
+		const bridgeId = 'bridge-no-synthetic-show'
+		const path = 'pages/no-synthetic-show/index'
+		loader.staticModules[path] = new PageModule({
+			onLoad: () => calls.push('page:onLoad'),
+			onShow: () => calls.push('page:onShow'),
+		}, {
+			path,
+			usingComponents: {},
+		})
+
+		try {
+			const page = runtime.createInstance({ bridgeId, moduleId: 'page-1', path, query: {} })
+			expect(calls).toEqual(['page:onLoad'])
+
+			runtime.pageShow({ bridgeId })
+			expect(calls).toEqual(['page:onLoad', 'page:onShow'])
+			runtime.pageUnload({ bridgeId, moduleId: page.__id__ })
+		}
+		finally {
+			delete loader.staticModules[path]
+		}
+	})
+
+	it('consumes a real pageShow signal queued before page creation', () => {
+		const calls = []
+		const bridgeId = 'bridge-pending-real-show'
+		const path = 'pages/pending-real-show/index'
+		loader.staticModules[path] = new PageModule({
+			onLoad: () => calls.push('page:onLoad'),
+			onShow: () => calls.push('page:onShow'),
+		}, {
+			path,
+			usingComponents: {},
+		})
+
+		try {
+			runtime.pageShow({ bridgeId })
+			const page = runtime.createInstance({ bridgeId, moduleId: 'page-1', path, query: {} })
+
+			expect(calls).toEqual(['page:onLoad', 'page:onShow'])
+			runtime.pageUnload({ bridgeId, moduleId: page.__id__ })
+		}
+		finally {
+			delete loader.staticModules[path]
+		}
+	})
+
 	it('does not reshow a hidden page when render acknowledges pageReady', () => {
 		const calls = []
 		const bridgeId = 'bridge-hidden-ready'
@@ -117,9 +167,8 @@ describe('Skyline/exparser lifecycle ordering', () => {
 		])
 	})
 
-	it('does not wait for a promise returned by page onLoad', async () => {
+	it('completes page lifecycle side effects in the init call stack', () => {
 		let releaseOnLoad
-		let initSettled = false
 		const pageModule = new PageModule({
 			onLoad() {
 				return new Promise((resolve) => {
@@ -137,16 +186,37 @@ describe('Skyline/exparser lifecycle ordering', () => {
 			query: {},
 		})
 
-		const initPromise = page.init().then(() => {
-			initSettled = true
-		})
-		await Promise.resolve()
-		await Promise.resolve()
+		const initResult = page.init()
 
-		expect(initSettled).toBe(true)
+		expect(initResult).toBeUndefined()
 		expect(page.initd).toBe(true)
+		expect(releaseOnLoad).toBeTypeOf('function')
 		releaseOnLoad()
-		await initPromise
+	})
+
+	it('can defer only initial-data delivery without deferring page lifecycles', () => {
+		const calls = []
+		const pageModule = new PageModule({
+			onLoad() {
+				calls.push('page:onLoad')
+			},
+		}, {
+			path: 'pages/deferred-data/index',
+			usingComponents: {},
+		})
+		const page = new Page(pageModule, {
+			bridgeId: 'bridge-deferred-data',
+			moduleId: 'page-1',
+			path: 'pages/deferred-data/index',
+			query: {},
+		})
+
+		expect(page.init({ deferInitialData: true })).toBeUndefined()
+		expect(calls).toEqual(['page:onLoad'])
+		expect(globalThis.DiminaServiceBridge.publish).not.toHaveBeenCalled()
+
+		page.sendInitialData()
+		expect(globalThis.DiminaServiceBridge.publish).toHaveBeenCalledTimes(1)
 	})
 
 	it('runs custom component created, initial property observer, attached and ready in order', async () => {
@@ -190,11 +260,11 @@ describe('Skyline/exparser lifecycle ordering', () => {
 		})
 		runtime.instances[bridgeId] = { [component.__id__]: component }
 
-		await component.init()
+		expect(component.init()).toBeUndefined()
 		runtime.moduleReady({ bridgeId, moduleId: component.__id__ })
 		expect(calls).toEqual(['component:created', 'property:observer'])
 
-		await runtime.moduleAttached({ bridgeId, moduleId: component.__id__ })
+		expect(runtime.moduleAttached({ bridgeId, moduleId: component.__id__ })).toBeUndefined()
 		expect(calls).toEqual([
 			'component:created',
 			'property:observer',
@@ -203,7 +273,7 @@ describe('Skyline/exparser lifecycle ordering', () => {
 		])
 	})
 
-	it('does not wait for promises returned by component created and attached', async () => {
+	it('completes component lifecycle side effects without adopting returned promises', () => {
 		const pendingLifecycles = []
 		const module = new ComponentModule({
 			lifetimes: {
@@ -232,15 +302,15 @@ describe('Skyline/exparser lifecycle ordering', () => {
 			targetInfo: {},
 		})
 
-		await component.init()
-		await component.componentAttached()
+		expect(component.init()).toBeUndefined()
+		expect(component.componentAttached()).toBeUndefined()
 
 		expect(component.initd).toBe(true)
 		expect(pendingLifecycles).toHaveLength(2)
 		pendingLifecycles.forEach(resolve => resolve())
 	})
 
-	it('queues child attached until its parent attaches and keeps child ready before parent ready', async () => {
+	it('queues child attached until its parent attaches and keeps the whole chain synchronous', () => {
 		const calls = []
 		const bridgeId = 'bridge-parent-child'
 		const makeComponent = (id, parentId) => ({
@@ -248,24 +318,170 @@ describe('Skyline/exparser lifecycle ordering', () => {
 			__parentId__: parentId,
 			__type__: ComponentModule.type,
 			__isComponent__: true,
-			componentAttached: async () => calls.push(`${id}:attached`),
+			componentAttached: () => calls.push(`${id}:attached`),
 			componentReadied: () => calls.push(`${id}:ready`),
 		})
 		const parent = makeComponent('parent', 'page-1')
 		const child = makeComponent('child', 'parent')
 		runtime.instances[bridgeId] = { parent, child }
 
-		await runtime.moduleAttached({ bridgeId, moduleId: child.__id__ })
+		expect(runtime.moduleAttached({ bridgeId, moduleId: child.__id__ })).toBeUndefined()
 		runtime.moduleReady({ bridgeId, moduleId: child.__id__ })
 		runtime.moduleReady({ bridgeId, moduleId: parent.__id__ })
 		expect(calls).toEqual([])
 
-		await runtime.moduleAttached({ bridgeId, moduleId: parent.__id__ })
+		expect(runtime.moduleAttached({ bridgeId, moduleId: parent.__id__ })).toBeUndefined()
 		expect(calls).toEqual([
 			'parent:attached',
 			'child:attached',
 			'child:ready',
 			'parent:ready',
 		])
+	})
+
+	it('marks a component ready before invoking a re-entrant ready callback', () => {
+		const bridgeId = 'bridge-ready-reentrant'
+		const component = {
+			__id__: 'component-ready-reentrant',
+			__type__: ComponentModule.type,
+			__isComponent__: true,
+			__componentAttached__: true,
+			componentReadied: vi.fn(() => {
+				runtime.moduleReady({ bridgeId, moduleId: component.__id__ })
+			}),
+			flushInitSetDataCallbacks: vi.fn(),
+		}
+		runtime.instances[bridgeId] = { [component.__id__]: component }
+
+		runtime.moduleReady({ bridgeId, moduleId: component.__id__ })
+
+		expect(component.componentReadied).toHaveBeenCalledTimes(1)
+		expect(component.__componentReadied__).toBe(true)
+	})
+
+	it('dispatches page lifetimes in component-tree DFS order and detaches in post-order', () => {
+		const calls = []
+		const bridgeId = 'bridge-tree-order'
+		const page = {
+			__id__: 'page',
+			__type__: PageModule.type,
+			initd: true,
+			pageShow: () => calls.push('page:show'),
+			pageHide: () => calls.push('page:hide'),
+			pageResize: () => calls.push('page:resize'),
+			pageUnload: () => calls.push('page:unload'),
+		}
+		const component = (id, parentId) => ({
+			__id__: id,
+			__parentId__: parentId,
+			__type__: ComponentModule.type,
+			__isComponent__: true,
+			__componentAttached__: true,
+			pageShow: () => calls.push(`${id}:show`),
+			pageHide: () => calls.push(`${id}:hide`),
+			pageResize: () => calls.push(`${id}:resize`),
+			componentRouteDone: () => calls.push(`${id}:routeDone`),
+			componentDetached: () => calls.push(`${id}:detached`),
+			pageUnload: vi.fn(),
+		})
+		const a = component('a', 'page')
+		const b = component('b', 'page')
+		const aChild = component('a-child', 'a')
+
+		// a-child is intentionally inserted after its parent's sibling. A depth
+		// sort would produce page,a,b,a-child instead of the source tree order.
+		runtime.instances[bridgeId] = { page, a, b, 'a-child': aChild }
+
+		runtime.pageShow({ bridgeId })
+		runtime.pageHide({ bridgeId })
+		runtime.pageResize({ bridgeId, size: { width: 320 } })
+		runtime.componentRouteDone({ bridgeId })
+		runtime.pageUnload({ bridgeId })
+
+		expect(calls).toEqual([
+			'a:show', 'a-child:show', 'b:show', 'page:show',
+			'a:hide', 'a-child:hide', 'b:hide', 'page:hide',
+			'a:resize', 'a-child:resize', 'b:resize', 'page:resize',
+			'a:routeDone', 'a-child:routeDone', 'b:routeDone',
+			'a-child:detached', 'a:detached', 'b:detached', 'page:unload',
+		])
+	})
+
+	it('isolates lifecycle exceptions, reports error lifetimes and continues attachment', () => {
+		const calls = []
+		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+		const module = new ComponentModule({
+			behaviors: [{
+				lifetimes: {
+					created() {
+						calls.push('behavior-1:created')
+						throw new Error('created failed')
+					},
+					attached() {
+						calls.push('behavior-1:attached')
+						throw new Error('attached failed')
+					},
+					error(error) {
+						calls.push(`behavior-1:error:${error.message}`)
+					},
+				},
+			}, {
+				created() {
+					calls.push('behavior-2:created')
+				},
+				attached() {
+					calls.push('behavior-2:attached')
+				},
+			}],
+			lifetimes: {
+				created() {
+					calls.push('component:created')
+				},
+				attached() {
+					calls.push('component:attached')
+				},
+				error(error) {
+					calls.push(`component:error:${error.message}`)
+				},
+			},
+			methods: {},
+		}, {
+			component: true,
+			path: 'components/errors/index',
+			usingComponents: {},
+		})
+		const component = new Component(module, {
+			bridgeId: 'bridge-errors',
+			moduleId: 'component-errors',
+			path: 'components/errors/index',
+			pageId: 'page-1',
+			parentId: 'page-1',
+			properties: {},
+			propertyNames: [],
+			eventAttr: {},
+			targetInfo: {},
+		})
+		runtime.instances['bridge-errors'] = { 'component-errors': component }
+
+		expect(() => component.init()).not.toThrow()
+		expect(() => runtime.moduleAttached({
+			bridgeId: 'bridge-errors',
+			moduleId: 'component-errors',
+		})).not.toThrow()
+
+		expect(component.__componentAttached__).toBe(true)
+		expect(calls).toEqual([
+			'behavior-1:created',
+			'behavior-1:error:created failed',
+			'component:error:created failed',
+			'behavior-2:created',
+			'component:created',
+			'behavior-1:attached',
+			'behavior-1:error:attached failed',
+			'component:error:attached failed',
+			'behavior-2:attached',
+			'component:attached',
+		])
+		consoleError.mockRestore()
 	})
 })

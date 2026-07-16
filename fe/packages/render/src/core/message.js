@@ -57,6 +57,12 @@ class Message {
 			})
 		})
 	}
+
+	waitAndSend(eventName, msg) {
+		const response = this.wait(eventName)
+		this.send(msg)
+		return response
+	}
 }
 
 export default new Message()

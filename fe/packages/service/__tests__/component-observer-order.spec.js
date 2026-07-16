@@ -4,6 +4,41 @@ import { Component } from '../src/instance/component/component'
 import { ComponentModule } from '../src/instance/component/component-module'
 
 describe('Component.tO observer ordering', () => {
+	it('isolates observer exceptions and continues in registration order', () => {
+		const calls = []
+		const error = vi.spyOn(console, 'error').mockImplementation(() => {})
+		const instance = {
+			data: { count: 0 },
+			__pendingSyncedProps__: {},
+			__info__: {
+				behaviorObserverList: [{
+					key: 'count',
+					observer() {
+						calls.push('behavior-1')
+						throw new Error('observer failed')
+					},
+				}, {
+					key: 'count',
+					observer() {
+						calls.push('behavior-2')
+					},
+				}],
+				observers: {
+					count() {
+						calls.push('component')
+					},
+				},
+				properties: {},
+			},
+		}
+
+		Component.prototype.tO.call(instance, { count: 1 })
+
+		expect(calls).toEqual(['behavior-1', 'behavior-2', 'component'])
+		expect(instance.data.count).toBe(1)
+		error.mockRestore()
+	})
+
 	it('executes property observers for initial component properties', async () => {
 		const componentModule = new ComponentModule({
 			properties: {
@@ -73,9 +108,77 @@ describe('Component.tO observer ordering', () => {
 			},
 		})
 
-		await expect(component.init()).resolves.toBeUndefined()
+		expect(component.init()).toBeUndefined()
 		component.componentReadied()
 		expect(component.data._animatedObserved).toBe(true)
+	})
+
+	it('applies incoming properties after created by default', () => {
+		const calls = []
+		const componentModule = new ComponentModule({
+			properties: {
+				active: {
+					type: Boolean,
+					observer(value) {
+						calls.push(`observer:${value}`)
+					},
+				},
+			},
+			lifetimes: {
+				created() {
+					calls.push(`created:${this.data.active}`)
+				},
+			},
+			methods: {},
+		}, { component: true })
+		const component = new Component(componentModule, {
+			bridgeId: 'bridge-late-properties',
+			moduleId: 'component-late-properties',
+			path: '/late-properties',
+			pageId: 'page-1',
+			parentId: 'page-1',
+			properties: { active: true },
+			propertyNames: ['active'],
+		})
+
+		component.init()
+
+		expect(calls).toEqual(['created:false', 'observer:true'])
+		expect(component.data.active).toBe(true)
+	})
+
+	it('supports propertyEarlyInit observer-before-created ordering', () => {
+		const calls = []
+		const componentModule = new ComponentModule({
+			options: { propertyEarlyInit: true },
+			properties: {
+				active: {
+					type: Boolean,
+					observer(value) {
+						calls.push(`observer:${value}`)
+					},
+				},
+			},
+			lifetimes: {
+				created() {
+					calls.push(`created:${this.data.active}`)
+				},
+			},
+			methods: {},
+		}, { component: true })
+		const component = new Component(componentModule, {
+			bridgeId: 'bridge-early-properties',
+			moduleId: 'component-early-properties',
+			path: '/early-properties',
+			pageId: 'page-1',
+			parentId: 'page-1',
+			properties: { active: true },
+			propertyNames: ['active'],
+		})
+
+		component.init()
+
+		expect(calls).toEqual(['observer:true', 'created:true'])
 	})
 
 	it('executes initial property observers after created and only once', async () => {

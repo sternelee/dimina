@@ -81,7 +81,7 @@ class ImageApi : BaseApiHandler() {
                     val compressedFile = File.createTempFile(
                         "IMG_${System.currentTimeMillis()}",
                         ".jpg",
-                        activity.cacheDir
+                        PathUtils.appTempRoot(activity, appId)
                     )
                     val outputStream = FileOutputStream(compressedFile)
                     bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)

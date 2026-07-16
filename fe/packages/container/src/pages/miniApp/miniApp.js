@@ -289,10 +289,11 @@ export class MiniApp {
 			this._updateTabBarSelection(normalizedPath)
 		}
 
-		entryPageBridge.start()
+		const isRestoringPageStack = this.appInfo.restoreStack?.length > 1
+		entryPageBridge.start({ visible: !isRestoringPageStack })
 
 		// 7. 若携带额外的恢复栈（刷新后恢复场景），静默重建后续页面
-		if (this.appInfo.restoreStack && this.appInfo.restoreStack.length > 1) {
+		if (isRestoringPageStack) {
 			await this.restorePageStack(this.appInfo.restoreStack.slice(1))
 		}
 
@@ -348,7 +349,7 @@ export class MiniApp {
 				bridge.webview.el.classList.add('dimina-native-view--slide-out')
 			}
 
-			bridge.start()
+			bridge.start({ visible: isTop })
 		}
 
 		if (pages.length > 0) {
@@ -399,7 +400,7 @@ export class MiniApp {
 
 	onPresentIn() {
 		const currentBridge = this.bridgeList[this.bridgeList.length - 1]
-		// 首次异步创建时， bridge 不存在，会在[Service]自行调用 invokeInitLifecycle
+		// bridge 会缓存目标可见状态，并在双线程资源就绪后按序触发页面生命周期。
 		currentBridge?.appShow()
 		currentBridge?.pageShow()
 	}
@@ -942,6 +943,17 @@ export class MiniApp {
 		this.tabBarBadges = tabBar.list.map(() => '')
 		this.tabBarRedDots = tabBar.list.map(() => false)
 		this.tabBarApiVisible = true
+		this.customTabBar = tabBar.custom === true
+		if (this.customTabBar) {
+			this.tabBarEl = this.el.querySelector('.dimina-mini-app__tabbar')
+			if (this.tabBarEl) {
+				this.tabBarEl.textContent = ''
+				this.tabBarEl.style.display = 'none'
+			}
+			this.tabBarHeight = 0
+			this.el.style.setProperty('--dimina-tabbar-height', '0px')
+			return
+		}
 		this._renderTabBar()
 	}
 
@@ -1063,6 +1075,7 @@ export class MiniApp {
 	 * 到 tab 页时缺少底部留白。
 	 */
 	_getTabBarHeight() {
+		if (this.customTabBar) return 0
 		if (!this.tabBarEl) return this.tabBarHeight
 
 		let height = this.tabBarEl.getBoundingClientRect().height
@@ -1098,7 +1111,7 @@ export class MiniApp {
 		const webviewEl = bridge?.webview?.el
 		if (!webviewEl) return
 
-		if (!enabled) {
+		if (!enabled || this.customTabBar) {
 			webviewEl.style.removeProperty('bottom')
 			return
 		}
@@ -1154,6 +1167,11 @@ export class MiniApp {
 	 */
 	_setTabBarVisible(visible) {
 		if (!this.tabBarEl) return
+		if (this.customTabBar) {
+			this.tabBarEl.style.display = 'none'
+			this._syncTabBarHeightVar()
+			return
+		}
 		const topBridge = this.bridgeList[this.bridgeList.length - 1]
 		const topPath = this._normalizePagePath(topBridge?.opts?.pagePath)
 		const isTopTabPage = !!topPath && topPath === this.currentTabPath && this._isTabBarPage(topPath)

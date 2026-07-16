@@ -1,6 +1,7 @@
 import { callback as callbackRegistry, isFunction } from '@dimina/common'
 import { parseDataPath } from './data-update'
 import message from './message'
+import { invokeSafely } from './safe-callback'
 
 const queues = new Map()
 
@@ -25,7 +26,7 @@ export function createUpdateCallback(ctx, callbacks) {
 	}
 
 	return callbackRegistry.store(() => {
-		callbackList.forEach(cb => cb.call(ctx))
+		callbackList.forEach(cb => invokeSafely(ctx, cb, [], 'setData callback'))
 	})
 }
 

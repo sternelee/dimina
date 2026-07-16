@@ -67,6 +67,7 @@ const VUE_RUNTIME_HELPERS = {
 }
 
 const CANVAS_NODE_TYPE = 'dimina-canvas-node'
+const CUSTOM_TAB_BAR_COMPONENT_NAME = '__dimina_custom_tab_bar__'
 const TYPED_ARRAY_CTORS = {
 	Int8Array,
 	Uint8Array,
@@ -77,6 +78,234 @@ const TYPED_ARRAY_CTORS = {
 	Uint32Array,
 	Float32Array,
 	Float64Array,
+}
+
+const WEBGL_PARAMETER_NAMES = [
+	'VERSION',
+	'SHADING_LANGUAGE_VERSION',
+	'VENDOR',
+	'RENDERER',
+	'MAX_VIEWPORT_DIMS',
+	'ALIASED_POINT_SIZE_RANGE',
+	'ALIASED_LINE_WIDTH_RANGE',
+	'COMPRESSED_TEXTURE_FORMATS',
+	'MAX_TEXTURE_SIZE',
+	'MAX_CUBE_MAP_TEXTURE_SIZE',
+	'MAX_RENDERBUFFER_SIZE',
+	'MAX_VERTEX_ATTRIBS',
+	'MAX_TEXTURE_IMAGE_UNITS',
+	'MAX_VERTEX_TEXTURE_IMAGE_UNITS',
+	'MAX_COMBINED_TEXTURE_IMAGE_UNITS',
+	'MAX_VERTEX_UNIFORM_VECTORS',
+	'MAX_FRAGMENT_UNIFORM_VECTORS',
+	'MAX_VARYING_VECTORS',
+	'RED_BITS',
+	'GREEN_BITS',
+	'BLUE_BITS',
+	'ALPHA_BITS',
+	'DEPTH_BITS',
+	'STENCIL_BITS',
+	'SUBPIXEL_BITS',
+	'SAMPLE_BUFFERS',
+	'SAMPLES',
+	'MAX_3D_TEXTURE_SIZE',
+	'MAX_ARRAY_TEXTURE_LAYERS',
+	'MAX_COLOR_ATTACHMENTS',
+	'MAX_DRAW_BUFFERS',
+	'MAX_ELEMENT_INDEX',
+	'MAX_ELEMENTS_INDICES',
+	'MAX_ELEMENTS_VERTICES',
+	'MAX_FRAGMENT_INPUT_COMPONENTS',
+	'MAX_SAMPLES',
+	'MAX_SERVER_WAIT_TIMEOUT',
+	'MAX_TEXTURE_LOD_BIAS',
+	'MAX_TRANSFORM_FEEDBACK_INTERLEAVED_COMPONENTS',
+	'MAX_TRANSFORM_FEEDBACK_SEPARATE_ATTRIBS',
+	'MAX_TRANSFORM_FEEDBACK_SEPARATE_COMPONENTS',
+	'MAX_UNIFORM_BLOCK_SIZE',
+	'MAX_UNIFORM_BUFFER_BINDINGS',
+	'MAX_VARYING_COMPONENTS',
+	'MAX_VERTEX_OUTPUT_COMPONENTS',
+	'UNIFORM_BUFFER_OFFSET_ALIGNMENT',
+]
+
+const WEBGL_PRECISION_NAMES = [
+	'LOW_FLOAT',
+	'MEDIUM_FLOAT',
+	'HIGH_FLOAT',
+	'LOW_INT',
+	'MEDIUM_INT',
+	'HIGH_INT',
+]
+
+function collectNumericConstants(value) {
+	const constants = {}
+	const visited = new Set()
+	for (let current = value; current && current !== Object.prototype; current = Object.getPrototypeOf(current)) {
+		for (const name of Object.getOwnPropertyNames(current)) {
+			if (visited.has(name) || !/^[A-Z][A-Z0-9_]*$/.test(name)) {
+				continue
+			}
+			visited.add(name)
+			try {
+				if (typeof value[name] === 'number') {
+					constants[name] = value[name]
+				}
+			}
+			catch {
+				// Ignore host object properties that cannot be read in this WebView.
+			}
+		}
+	}
+	return constants
+}
+
+function serializeCanvasResult(value, resolveResourceId) {
+	if (value === null || value === undefined || typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+		return value
+	}
+	const resourceId = resolveResourceId?.(value)
+	if (resourceId) {
+		return { __canvasResourceId: resourceId }
+	}
+	if (ArrayBuffer.isView(value)) {
+		return {
+			__canvasTypedArray: value.constructor.name,
+			data: Array.from(value),
+		}
+	}
+	if (Array.isArray(value)) {
+		return value.map(item => serializeCanvasResult(item, resolveResourceId))
+	}
+	if (typeof value === 'object') {
+		const result = {}
+		const keys = new Set(Object.keys(value))
+		for (const key of ['alpha', 'antialias', 'depth', 'desynchronized', 'failIfMajorPerformanceCaveat', 'powerPreference', 'premultipliedAlpha', 'preserveDrawingBuffer', 'stencil', 'name', 'precision', 'rangeMax', 'rangeMin', 'size', 'type']) {
+			if (key in value) {
+				keys.add(key)
+			}
+		}
+		for (const key of keys) {
+			const serialized = serializeCanvasResult(value[key], resolveResourceId)
+			if (serialized !== undefined) {
+				result[key] = serialized
+			}
+		}
+		return result
+	}
+	return undefined
+}
+
+function describeWebGLContext(context, includeExtensionConstants = true) {
+	if (!context) {
+		return null
+	}
+	const constants = collectNumericConstants(context)
+	const parameters = {}
+	for (const name of WEBGL_PARAMETER_NAMES) {
+		const pname = context[name]
+		if (typeof pname !== 'number') {
+			continue
+		}
+		try {
+			parameters[pname] = serializeCanvasResult(context.getParameter(pname))
+		}
+		catch {
+			// A capability is optional when the current WebGL version does not expose it.
+		}
+	}
+
+	let supportedExtensions = []
+	try {
+		supportedExtensions = context.getSupportedExtensions?.() || []
+	}
+	catch {
+		// Treat an unavailable extension list as empty.
+	}
+	const extensions = {}
+	for (const name of supportedExtensions) {
+		if (!includeExtensionConstants) {
+			extensions[name] = { constants: {} }
+			continue
+		}
+		try {
+			const extension = context.getExtension(name)
+			extensions[name] = {
+				constants: extension ? collectNumericConstants(extension) : {},
+			}
+		}
+		catch {
+			extensions[name] = { constants: {} }
+		}
+	}
+
+	const shaderPrecisionFormats = {}
+	for (const shaderName of ['VERTEX_SHADER', 'FRAGMENT_SHADER']) {
+		for (const precisionName of WEBGL_PRECISION_NAMES) {
+			const shaderType = context[shaderName]
+			const precisionType = context[precisionName]
+			if (typeof shaderType !== 'number' || typeof precisionType !== 'number') {
+				continue
+			}
+			try {
+				const format = context.getShaderPrecisionFormat(shaderType, precisionType)
+				if (format) {
+					shaderPrecisionFormats[`${shaderType}:${precisionType}`] = serializeCanvasResult(format)
+				}
+			}
+			catch {
+				// Keep unsupported precision combinations out of the snapshot.
+			}
+		}
+	}
+
+	let contextAttributes = null
+	try {
+		contextAttributes = serializeCanvasResult(context.getContextAttributes?.())
+	}
+	catch {
+		// Context attributes remain unknown if the host does not expose them.
+	}
+
+	return {
+		supported: true,
+		constants,
+		parameters,
+		contextAttributes,
+		supportedExtensions,
+		extensions,
+		shaderPrecisionFormats,
+		drawingBufferWidth: context.drawingBufferWidth,
+		drawingBufferHeight: context.drawingBufferHeight,
+		contextLost: Boolean(context.isContextLost?.()),
+	}
+}
+
+function probeWebGLCapabilities() {
+	const capabilities = {}
+	for (const contextType of ['webgl', 'webgl2']) {
+		const canvas = document.createElement('canvas')
+		canvas.width = 1
+		canvas.height = 1
+		let context = null
+		try {
+			context = canvas.getContext(contextType)
+			if (!context && contextType === 'webgl') {
+				context = canvas.getContext('experimental-webgl')
+			}
+		}
+		catch {
+			// WebGL can be disabled by the WebView or device policy.
+		}
+		capabilities[contextType] = context ? describeWebGLContext(context) : { supported: false }
+		try {
+			context?.getExtension?.('WEBGL_lose_context')?.loseContext?.()
+		}
+		catch {
+			// The temporary probe context will be reclaimed normally.
+		}
+	}
+	return capabilities
 }
 
 function isCanvasElement(element) {
@@ -96,6 +325,7 @@ class Runtime {
 		this.canvasNodes = new Map()
 		this.canvasResources = new Map()
 		this.canvasRafIds = new Map()
+		this.canvasCapabilities = null
 		// 追踪"mC 已发出但 service 侧 created 尚未完成"的组件 setup
 		// key: moduleId, value: Promise（created 完成时 resolve）
 		this._pendingSetups = new Map()
@@ -221,6 +451,11 @@ class Runtime {
 		const { path, bridgeId, pageId } = opts
 		const pageModule = loader.getModuleByPath(path)
 		const { id, usingComponents, tplComponents } = pageModule.moduleInfo
+		const pageRender = pageModule.moduleInfo.render
+		const hasCustomTabBar = Object.prototype.hasOwnProperty.call(
+			usingComponents || {},
+			CUSTOM_TAB_BAR_COMPONENT_NAME,
+		)
 		this.pageId = pageId
 		const components = this.createComponent(path, bridgeId, usingComponents)
 		const that = this
@@ -310,7 +545,13 @@ class Runtime {
 						return data
 					},
 					components,
-					render: pageModule.moduleInfo.render,
+					render: hasCustomTabBar
+						? function (...args) {
+							const pageVNode = pageRender.apply(this, args)
+							const CustomTabBar = resolveComponent(`dd-${CUSTOM_TAB_BAR_COMPONENT_NAME}`)
+							return h(Fragment, null, [pageVNode, h(CustomTabBar)])
+						}
+						: pageRender,
 					},
 				},
 
@@ -428,6 +669,7 @@ class Runtime {
 				props: module.props,
 				async setup(props, { attrs, expose }) {
 					const parentInfo = inject('info')
+					const parentPath = inject('path')
 
 					expose({
 						props,
@@ -436,8 +678,13 @@ class Runtime {
 					const vueInstance = getCurrentInstance()
 					const vueParentId = that.getParentModuleId(vueInstance)
 					const parentId = vueParentId || parentInfo.id
-					const pageInfo = inject(path)
-					const pageId = pageInfo.id
+					const pageInfo = inject(path, null)
+					// Slot content keeps the lexical event owner from the component that
+					// declared it, even when Vue renders it below a different component.
+					// A globally reused template may not have that lexical provider, so only
+					// then fall back to the nearest runtime component/page instance.
+					const pageId = pageInfo?.id || parentId
+					const pagePath = pageInfo ? path : parentPath
 					const moduleId = `${id}_${uuid()}`
 					provide('info', {
 						id: moduleId,
@@ -446,7 +693,7 @@ class Runtime {
 					provide('path', componentPath)
 					provide(componentPath, {
 						id: moduleId,
-						pagePath: path, // 引入该组件的页面信息
+						pagePath, // 声明该组件的页面或组件路径
 						pageId,
 					})
 					const instance = vueInstance.proxy
@@ -479,7 +726,9 @@ class Runtime {
 					const initialProperties = normalizeCurrentProperties()
 					const propertyNames = Object.keys(module.propertySchemas || {}).filter(name => hasVNodeProp(vueInstance.vnode.props, name))
 
-					message.send({
+					// Service lifecycle dispatch is synchronous. Register the one-shot data
+					// listener before mC so a same-stack response cannot be lost.
+					const initDataPromise = message.waitAndSend(moduleId, {
 						type: 'mC', // createInstance + componentCreated
 						target: 'service',
 						body: {
@@ -500,8 +749,7 @@ class Runtime {
 						},
 					})
 
-					// mC 发出，service 侧开始异步执行 created；记录此 moduleId 为 pending 状态，
-					// message.wait 解除后（service created 完成）才从 pending 中移除
+					// Track the component until its initial data has returned from service.
 					let _pendingResolved = false
 					let _resolvePending
 					const _pendingResolve = () => {
@@ -613,7 +861,7 @@ class Runtime {
 						},
 					)
 
-					const initData = await message.wait(moduleId)
+					const initData = await initDataPromise
 					that._pendingSetups.delete(moduleId)
 					_pendingResolve()
 					that.applyInitialData(moduleId, data, initData)
@@ -794,6 +1042,24 @@ class Runtime {
 		return canvas.__diminaCanvasNodeId
 	}
 
+	getCanvasCapabilities() {
+		if (!this.canvasCapabilities) {
+			this.canvasCapabilities = probeWebGLCapabilities()
+		}
+		return this.canvasCapabilities
+	}
+
+	publishCanvasCapabilities(bridgeId) {
+		message.send({
+			type: 'canvasCapabilities',
+			target: 'service',
+			body: {
+				bridgeId,
+				capabilities: this.getCanvasCapabilities(),
+			},
+		})
+	}
+
 	registerCanvasNode(canvas, type = canvas.getAttribute?.('type') || '2d') {
 		const nodeId = this.getCanvasNodeId(canvas)
 		const isNewNode = !this.canvasNodes.has(nodeId)
@@ -821,10 +1087,11 @@ class Runtime {
 			type,
 			width: canvas.width || width || 300,
 			height: canvas.height || height || 150,
+			webglCapabilities: this.getCanvasCapabilities(),
 		}
 	}
 
-	createOffscreenCanvas({ params }) {
+	createOffscreenCanvas({ bridgeId, params }) {
 		const { nodeId, width = 300, height = 150, type = '2d' } = params
 		const canvas = document.createElement('canvas')
 		canvas.width = width
@@ -834,6 +1101,9 @@ class Runtime {
 			type,
 			contexts: new Map(),
 		})
+		if (type === 'webgl' || type === 'experimental-webgl' || type === 'webgl2') {
+			this.publishCanvasCapabilities(bridgeId)
+		}
 	}
 
 	resolveCanvasArg(value) {
@@ -882,6 +1152,18 @@ class Runtime {
 		return this.canvasResources.get(id)
 	}
 
+	getCanvasResourceId(value) {
+		if (value === null || value === undefined) {
+			return null
+		}
+		for (const [id, resource] of this.canvasResources) {
+			if (resource === value) {
+				return id
+			}
+		}
+		return null
+	}
+
 	setCanvasResource(id, value) {
 		if (id) {
 			this.canvasResources.set(id, value)
@@ -900,119 +1182,275 @@ class Runtime {
 
 	executeCanvasOperation(node, operation, bridgeId) {
 		switch (operation.op) {
-            case "setCanvasProperty":
-                node.canvas[operation.prop] = operation.value;
-                break;
-            case "getContext": {
-                const context = node.canvas.getContext(
-                    operation.contextType,
-                    this.resolveCanvasArg(operation.attributes),
-                );
-                node.contexts.set(operation.contextId, context);
-                this.setCanvasResource(operation.contextId, context);
-                break;
-            }
-            case "contextSetProperty": {
-                const context = this.getCanvasResource(operation.contextId);
-                if (context) {
-                    context[operation.prop] = this.resolveCanvasArg(
-                        operation.value,
-                    );
-                }
-                break;
-            }
-            case "contextCall": {
-                const context = this.getCanvasResource(operation.contextId);
-                const method = context?.[operation.method];
-                if (typeof method === "function") {
-                    const result = method.apply(
-                        context,
-                        (operation.args || []).map((arg) =>
-                            this.resolveCanvasArg(arg),
-                        ),
-                    );
-                    this.setCanvasResource(operation.resultId, result);
-                }
-                break;
-            }
-            case "resourceCall": {
-                const resource = this.getCanvasResource(operation.resourceId);
-                const method = resource?.[operation.method];
-                if (typeof method === "function") {
-                    const result = method.apply(
-                        resource,
-                        (operation.args || []).map((arg) =>
-                            this.resolveCanvasArg(arg),
-                        ),
-                    );
-                    this.setCanvasResource(operation.resultId, result);
-                }
-                break;
-            }
-            case "createImage":
-                this.getCanvasImage(operation.imageId);
-                break;
-            case "imageSetSrc": {
-                const image = this.getCanvasImage(operation.imageId);
-                image.onload = () => {
-                    this.triggerCallback(bridgeId, operation.onload, {
-                        width: image.width,
-                        height: image.height,
-                    });
-                };
-                image.onerror = () => {
-                    this.triggerCallback(bridgeId, operation.onerror, {
-                        errMsg: `createImage:fail ${operation.src}`,
-                    });
-                };
-                image.src = operation.src;
-                break;
-            }
-            case "getImageData": {
-                const context = this.getCanvasResource(operation.contextId);
-                if (context) {
-                    const imageData = context.getImageData(
-                        operation.x,
-                        operation.y,
-                        operation.width,
-                        operation.height,
-                    );
-                    this.triggerCallback(bridgeId, operation.callback, {
-                        data: Array.from(imageData.data),
-                        width: imageData.width,
-                        height: imageData.height,
-                    });
-                }
-                break;
-            }
-            case "toDataURL": {
-                const mimeType = operation.mimeType || "image/png";
-                const dataURL =
-                    operation.quality !== undefined
-                        ? node.canvas.toDataURL(mimeType, operation.quality)
-                        : node.canvas.toDataURL(mimeType);
-                this.triggerCallback(bridgeId, operation.callback, dataURL);
-                break;
-            }
-            default:
-                console.warn(
-                    "[system]",
-                    "[render]",
-                    `Unsupported canvas node operation: ${operation.op}`,
-                );
-        }
+			case 'setCanvasProperty':
+				node.canvas[operation.prop] = operation.value
+				break
+			case 'getContext': {
+				let context = null
+				let statusMessage
+				try {
+					context = node.canvas.getContext(
+						operation.contextType,
+						this.resolveCanvasArg(operation.attributes),
+					)
+				}
+				catch (error) {
+					statusMessage = error instanceof Error ? error.message : String(error)
+				}
+				node.contexts.set(operation.contextId, context)
+				this.setCanvasResource(operation.contextId, context)
+				const isWebGL = operation.contextType === 'webgl'
+					|| operation.contextType === 'experimental-webgl'
+					|| operation.contextType === 'webgl2'
+				return {
+					contextId: operation.contextId,
+					context: context
+						? {
+							success: true,
+							capabilities: isWebGL ? describeWebGLContext(context, false) : null,
+						}
+						: {
+							success: false,
+							statusMessage: statusMessage || `getContext(${operation.contextType}) returned null`,
+						},
+				}
+			}
+			case 'contextSetProperty': {
+				const context = this.getCanvasResource(operation.contextId)
+				if (context) {
+					try {
+						context[operation.prop] = this.resolveCanvasArg(operation.value)
+					}
+					catch (error) {
+						console.warn('[system]', '[render]', `Canvas context property ${operation.prop} failed: ${error}`)
+					}
+				}
+				break
+			}
+			case 'contextCall': {
+				const context = this.getCanvasResource(operation.contextId)
+				const method = context?.[operation.method]
+				if (typeof method !== 'function') {
+					break
+				}
+				const args = (operation.args || []).map(arg => this.resolveCanvasArg(arg))
+				try {
+					const result = method.apply(context, args)
+					this.setCanvasResource(operation.resultId, result)
+				}
+				catch (error) {
+					console.warn('[system]', '[render]', `Canvas context call ${operation.method} failed: ${error}`)
+				}
+
+				const feedback = {
+					contextId: operation.contextId,
+				}
+				if (operation.feedback === 'shader') {
+					const shader = args[0]
+					let metadata = { compileStatus: false, infoLog: '' }
+					try {
+						metadata = {
+							shaderType: context.getShaderParameter(shader, context.SHADER_TYPE),
+							compileStatus: context.getShaderParameter(shader, context.COMPILE_STATUS),
+							infoLog: context.getShaderInfoLog(shader) || '',
+						}
+					}
+					catch {
+						// Resource creation can legitimately fail and return null.
+					}
+					feedback.resource = {
+						resourceId: operation.args?.[0]?.__canvasResourceId,
+						metadata,
+					}
+				}
+				else if (operation.feedback === 'program') {
+					const program = args[0]
+					let metadata = { linkStatus: false, validateStatus: false, infoLog: '' }
+					try {
+						metadata = {
+							linkStatus: context.getProgramParameter(program, context.LINK_STATUS),
+							validateStatus: context.getProgramParameter(program, context.VALIDATE_STATUS),
+							infoLog: context.getProgramInfoLog(program) || '',
+						}
+					}
+					catch {
+						// Resource creation can legitimately fail and return null.
+					}
+					feedback.resource = {
+						resourceId: operation.args?.[0]?.__canvasResourceId,
+						metadata,
+					}
+				}
+				if (operation.typedArrayUpdateId && Number.isInteger(operation.typedArrayArgIndex)) {
+					feedback.typedArray = {
+						id: operation.typedArrayUpdateId,
+						value: serializeCanvasResult(args[operation.typedArrayArgIndex]),
+					}
+				}
+				return feedback
+			}
+			case 'contextQuery': {
+				const context = this.getCanvasResource(operation.contextId)
+				const method = context?.[operation.method]
+				if (typeof method !== 'function') {
+					break
+				}
+				let value = null
+				try {
+					value = method.apply(context, (operation.args || []).map(arg => this.resolveCanvasArg(arg)))
+				}
+				catch (error) {
+					console.warn('[system]', '[render]', `Canvas context query ${operation.method} failed: ${error}`)
+				}
+				return {
+					contextId: operation.contextId,
+					query: {
+						key: operation.key,
+						value: serializeCanvasResult(value, item => this.getCanvasResourceId(item)),
+					},
+				}
+			}
+			case 'contextFeedback':
+				break
+			case 'getExtension': {
+				const context = this.getCanvasResource(operation.contextId)
+				let extension = null
+				try {
+					extension = context?.getExtension?.(operation.name) || null
+				}
+				catch (error) {
+					console.warn('[system]', '[render]', `Canvas extension ${operation.name} failed: ${error}`)
+				}
+				this.setCanvasResource(operation.extensionId, extension)
+				break
+			}
+			case 'extensionCall': {
+				const extension = this.getCanvasResource(operation.extensionId)
+				const method = extension?.[operation.method]
+				if (typeof method === 'function') {
+					try {
+						const result = method.apply(extension, (operation.args || []).map(arg => this.resolveCanvasArg(arg)))
+						this.setCanvasResource(operation.resultId, result)
+					}
+					catch (error) {
+						console.warn('[system]', '[render]', `Canvas extension call ${operation.method} failed: ${error}`)
+					}
+				}
+				break
+			}
+			case 'resourceCall': {
+				const resource = this.getCanvasResource(operation.resourceId)
+				const method = resource?.[operation.method]
+				if (typeof method === 'function') {
+					const result = method.apply(resource, (operation.args || []).map(arg => this.resolveCanvasArg(arg)))
+					this.setCanvasResource(operation.resultId, result)
+				}
+				break
+			}
+			case 'createImage':
+				this.getCanvasImage(operation.imageId)
+				break
+			case 'imageSetSrc': {
+				const image = this.getCanvasImage(operation.imageId)
+				image.onload = () => {
+					this.triggerCallback(bridgeId, operation.onload, {
+						width: image.width,
+						height: image.height,
+					})
+				}
+				image.onerror = () => {
+					this.triggerCallback(bridgeId, operation.onerror, {
+						errMsg: `createImage:fail ${operation.src}`,
+					})
+				}
+				image.src = operation.src
+				break
+			}
+			case 'getImageData': {
+				const context = this.getCanvasResource(operation.contextId)
+				if (context) {
+					const imageData = context.getImageData(operation.x, operation.y, operation.width, operation.height)
+					this.triggerCallback(bridgeId, operation.callback, {
+						data: Array.from(imageData.data),
+						width: imageData.width,
+						height: imageData.height,
+					})
+				}
+				break
+			}
+			case 'toDataURL': {
+				const mimeType = operation.mimeType || 'image/png'
+				const dataURL = operation.quality !== undefined
+					? node.canvas.toDataURL(mimeType, operation.quality)
+					: node.canvas.toDataURL(mimeType)
+				this.triggerCallback(bridgeId, operation.callback, dataURL)
+				break
+			}
+			default:
+				console.warn('[system]', '[render]', `Unsupported canvas node operation: ${operation.op}`)
+		}
 	}
 
 	canvasNodeFlush({ bridgeId, params }) {
 		const node = this.canvasNodes.get(params.nodeId)
 		if (!node) {
 			console.warn('[system]', '[render]', `canvas node ${params.nodeId} not found`)
+			this.triggerCallback(bridgeId, params.feedback, {})
 			return
 		}
 
-		for (const operation of params.operations || []) {
-			this.executeCanvasOperation(node, operation, bridgeId)
+		const feedback = {
+			contexts: {},
+			typedArrays: [],
 		}
+		const touchedContexts = new Set()
+		for (const operation of params.operations || []) {
+			if (operation.contextId) {
+				touchedContexts.add(operation.contextId)
+			}
+			const result = this.executeCanvasOperation(node, operation, bridgeId)
+			if (!result) {
+				continue
+			}
+			if (result.contextId) {
+				feedback.contexts[result.contextId] ||= {}
+				if (result.context) {
+					Object.assign(feedback.contexts[result.contextId], result.context)
+				}
+				if (result.resource?.resourceId) {
+					feedback.contexts[result.contextId].resources ||= []
+					feedback.contexts[result.contextId].resources.push(result.resource)
+				}
+				if (result.query) {
+					feedback.contexts[result.contextId].queries ||= []
+					feedback.contexts[result.contextId].queries.push(result.query)
+				}
+			}
+			if (result.typedArray) {
+				feedback.typedArrays.push(result.typedArray)
+			}
+		}
+
+		for (const contextId of params.feedback ? touchedContexts : []) {
+			const context = this.getCanvasResource(contextId)
+			if (!context || typeof context.getError !== 'function') {
+				continue
+			}
+			feedback.contexts[contextId] ||= {}
+			feedback.contexts[contextId].contextLost = Boolean(context.isContextLost?.())
+			const errors = []
+			for (let i = 0; i < 32; i++) {
+				const error = context.getError()
+				if (error === context.NO_ERROR) {
+					break
+				}
+				errors.push(error)
+			}
+			if (errors.length > 0) {
+				feedback.contexts[contextId].errors = errors
+			}
+		}
+		this.triggerCallback(bridgeId, params.feedback, feedback)
 	}
 
 	canvasNodeRequestAnimationFrame({ bridgeId, params }) {
@@ -1552,7 +1990,7 @@ class Runtime {
 				return
 			}
 
-			// 目标 DOM 已出现，等待所有 pending setup 完成（service 侧 created/attached 执行完毕），
+			// 目标 DOM 已出现，等待所有 pending setup 完成（service 侧 created 与初始数据握手完毕），
 			// 但排除 observer 调用方自身（moduleId），避免在 created/onLoad 内调用时产生循环等待。
 			// 这保证了：IntersectionObserver 首次回调到达 service 时，目标 DOM 内子组件的
 			// 生命周期钩子（如 EventBus.once 注册）已就绪。

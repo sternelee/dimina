@@ -116,7 +116,7 @@ public class DMPContainerApi: NSObject {
         if let handler = Self.getHandler(for: name) {
             return handler(data, env, callback)
         }
-        print("未找到方法: \(name)")
+        DMPLogger.debug("未找到方法: \(name)")
         return DMPNoneResult()
     }
     

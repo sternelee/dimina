@@ -34,7 +34,7 @@ public class DMPApp {
     @MainActor
     public func launch(launchConfig: DMPLaunchConfig) async {
         guard !isLaunching else {
-            print("launch skipped: app is already launching")
+            DMPLogger.debug("launch skipped: app is already launching")
             return
         }
 
@@ -102,7 +102,7 @@ public class DMPApp {
     }
     
     public func initBundle() {
-        print("initBundle")
+        DMPLogger.debug("initBundle")
         DMPResourceManager.prepareSdk()
         DMPResourceManager.prepareApp(appId: appId)
         DMPSandboxManager.initBundleDirectoryForApp(appId: appId)
@@ -117,7 +117,7 @@ public class DMPApp {
     }
 
     public func initContainer() {
-        print("initContainer")
+        DMPLogger.debug("initContainer")
         DMPStorage.setupModule(appId: appId)        
         DMPUIManager.shared.prepareUI()
         container = DMPContainer(app: self)
@@ -126,7 +126,7 @@ public class DMPApp {
 
     @MainActor
     public func initRender() {
-        print("initRender")
+        DMPLogger.debug("initRender")
         render = DMPRender(app: self)
         
         // Pre-warm WebView pool to improve first page opening speed
@@ -134,7 +134,7 @@ public class DMPApp {
     }
 
     public func loadBundle() async {
-        print("loadBundle")
+        DMPLogger.debug("loadBundle")
         // Inject custom API namespaces before loading service.js
         let namespaces = DMPAppManager.sharedInstance().apiNamespaces
         if !namespaces.isEmpty,
@@ -154,7 +154,7 @@ public class DMPApp {
 
         let path = DMPSandboxManager.appConfigPath(appId: appId)
         let config = DMPFileUtil.readJsonFile(at: path)
-        print("config: \(String(describing: config))")
+        DMPLogger.debug("config: \(String(describing: config))")
         self.bundleAppConfig = DMPBundleAppConfig.fromJsonString(json: config)
     }
 
@@ -170,7 +170,7 @@ public class DMPApp {
 
     @MainActor
     public func openPage(launchConfig: DMPLaunchConfig) async {
-        print("openPage")
+        DMPLogger.debug("openPage")
         var newLaunchConfig = launchConfig
         newLaunchConfig.appEntryPath = self.bundleAppConfig?.entryPagePath ?? ""
         currentLaunchConfig = newLaunchConfig
@@ -205,7 +205,7 @@ public class DMPApp {
             return
         }
         isDestroyed = true
-        print("app destroy")
+        DMPLogger.debug("app destroy")
         BluetoothAPIManager.shared.clearApp(appId)
         LocalNetworkAPIManager.shared.clearApp(appId)
 
@@ -223,7 +223,7 @@ public class DMPApp {
         containerToDestroy?.clearExtSubscriptions()
 
         // Storage is a global singleton. Tear it down before another app initializes it.
-        DMPStorage.teardownModule()
+        DMPStorage.teardownModule(appId: appId)
 
         DispatchQueue.global(qos: .utility).async {
             serviceToDestroy?.destroy()

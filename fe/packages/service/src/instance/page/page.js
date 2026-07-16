@@ -3,8 +3,11 @@ import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import message from '../../core/message'
 import runtime from '../../core/runtime'
 import { applyDataUpdates } from '../../core/data-update'
+import { invokeSafely, invokeSafelyAll } from '../../core/safe-callback'
 import { createUpdateCallback, enqueueUpdate } from '../../core/update-queue'
 import { addComputedData, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
+
+const CUSTOM_TAB_BAR_COMPONENT_PATH = '/custom-tab-bar/index'
 
 // https://developers.weixin.qq.com/miniprogram/dev/reference/api/Page.html
 // const lifecycleMethods = ['onLoad', 'onShow', 'onReady', 'onHide', 'onUnload',
@@ -32,19 +35,28 @@ export class Page {
 		this.__pendingInitSetDataCallbacks__ = []
 	}
 
-	init() {
+	init({ deferInitialData = false } = {}) {
 		this.#initMembers()
-		return this.#invokeInitLifecycle().then(() => {
-			addComputedData(this)
-			message.send({
-				type: this.__id__,
-				target: 'render',
-				body: {
-					bridgeId: this.bridgeId,
-					path: this.is,
-					data: this.data,
-				},
-			})
+		this.#invokeInitLifecycle()
+		if (!deferInitialData) {
+			this.sendInitialData()
+		}
+	}
+
+	sendInitialData() {
+		if (this.__initialDataSent__) {
+			return
+		}
+		this.__initialDataSent__ = true
+		addComputedData(this)
+		message.send({
+			type: this.__id__,
+			target: 'render',
+			body: {
+				bridgeId: this.bridgeId,
+				path: this.is,
+				data: this.data,
+			},
 		})
 	}
 
@@ -90,6 +102,19 @@ export class Page {
 	 */
 	createSelectorQuery() {
 		return createSelectorQuery().in(this)
+	}
+
+	/**
+	 * 返回当前 tab 页直属的自定义 tabBar 组件实例。
+	 * https://developers.weixin.qq.com/miniprogram/dev/framework/ability/custom-tabbar.html
+	 */
+	getTabBar() {
+		const instances = Object.values(runtime.instances[this.bridgeId] || {})
+		return instances.find(item =>
+			item?.__isComponent__
+			&& item.is === CUSTOM_TAB_BAR_COMPONENT_PATH
+			&& isChildComponent(item, this.__id__, instances),
+		) || null
 	}
 
 	/**
@@ -151,14 +176,14 @@ export class Page {
 		}
 	}
 
-	async #invokeInitLifecycle() {
-		this.__info__.behaviorLifetimes?.created?.forEach(method => method.call(this))
-		this.created?.()
-		this.__info__.behaviorLifetimes?.attached?.forEach(method => method.call(this))
-		this.attached?.()
+	#invokeInitLifecycle() {
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.created, [], 'created lifetime')
+		invokeSafely(this, this.created, [], 'created lifetime')
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.attached, [], 'attached lifetime')
+		invokeSafely(this, this.attached, [], 'attached lifetime')
 
 		// 页面创建时执行
-		this.onLoad?.(this.opts.query || {})
+		invokeSafely(this, this.onLoad, [this.opts.query || {}], 'onLoad')
 		this.initd = true
 	}
 
@@ -166,35 +191,35 @@ export class Page {
 	 * 页面显示/切入前台时触发。该时机不能保证页面渲染完成，如有页面/组件元素相关操作建议在 onReady 中处理
 	 */
 	pageShow() {
-		this.__info__.behaviorPageLifetimes?.show?.forEach(method => method.call(this))
-		this.onShow?.()
+		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.show, [], 'page show lifetime')
+		invokeSafely(this, this.onShow, [], 'onShow')
 	}
 
 	pageHide() {
-		this.__info__.behaviorPageLifetimes?.hide?.forEach(method => method.call(this))
-		this.onHide?.()
+		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.hide, [], 'page hide lifetime')
+		invokeSafely(this, this.onHide, [], 'onHide')
 	}
 
 	pageReady() {
-		this.__info__.behaviorLifetimes?.ready?.forEach(method => method.call(this))
-		this.ready?.()
-		this.onReady?.()
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.ready, [], 'ready lifetime')
+		invokeSafely(this, this.ready, [], 'ready lifetime')
+		invokeSafely(this, this.onReady, [], 'onReady')
 	}
 
 	pageUnload() {
-		this.__info__.behaviorLifetimes?.detached?.forEach(method => method.call(this))
-		this.detached?.()
-		this.onUnload?.()
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.detached, [], 'detached lifetime')
+		invokeSafely(this, this.detached, [], 'detached lifetime')
+		invokeSafely(this, this.onUnload, [], 'onUnload')
 		this.initd = false
 	}
 
 	pageScrollTop(opts) {
 		const { scrollTop } = opts
-		this.onPageScroll?.({ scrollTop })
+		invokeSafely(this, this.onPageScroll, [{ scrollTop }], 'onPageScroll')
 	}
 
 	pageResize(size) {
-		this.__info__.behaviorPageLifetimes?.resize?.forEach(method => method.call(this, size))
-		this.onResize?.(size)
+		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.resize, [size], 'page resize lifetime')
+		invokeSafely(this, this.onResize, [size], 'onResize')
 	}
 }

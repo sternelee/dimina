@@ -201,6 +201,7 @@ describe('组件间关系测试', () => {
 
 	test('组件 detached 时移除关系', async () => {
 		const bridgeId = 'test-bridge-3'
+		const detachCalls = []
 		runtime.instances[bridgeId] = {}
 
 		// 创建父组件模块
@@ -213,6 +214,7 @@ describe('组件间关系测试', () => {
 						this.linkedChildren.push(target)
 					},
 					unlinked: function(target) {
+						detachCalls.push('relation:unlinked')
 						this.unlinkedChildren = this.unlinkedChildren || []
 						this.unlinkedChildren.push(target)
 					}
@@ -227,6 +229,11 @@ describe('组件间关系测试', () => {
 
 		// 创建子组件模块
 		const childModule = new ComponentModule({
+			lifetimes: {
+				detached() {
+					detachCalls.push(`detached:relations=${runtime.instances[bridgeId]['parent-1'].getRelationNodes('./child-component').length}`)
+				},
+			},
 			relations: {
 				'./parent-component': {
 					type: 'parent'
@@ -280,6 +287,7 @@ describe('组件间关系测试', () => {
 		// 验证关系已移除（同步）
 		expect(parentComponent.getRelationNodes('./child-component')).toHaveLength(0)
 		expect(parentComponent.unlinkedChildren).toContain(childComponent)
+		expect(detachCalls).toEqual(['detached:relations=1', 'relation:unlinked'])
 	})
 
 	test('相对路径解析', () => {

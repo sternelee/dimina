@@ -383,6 +383,28 @@ describe('mergeBehaviors 行为合并逻辑', () => {
 		expect(target.behaviorLifetimes.ready[0]()).toBe('behavior2-ready')
 		expect(target.behaviorLifetimes.detached[0]()).toBe('behavior2-detached')
 	})
+
+	it('uses behavior lifetimes entries instead of duplicate top-level lifecycle fields', () => {
+		const topLevelCreated = vi.fn()
+		const nestedCreated = vi.fn()
+		const moved = vi.fn()
+		const error = vi.fn()
+		const target = {}
+
+		mergeBehaviors(target, [{
+			created: topLevelCreated,
+			lifetimes: {
+				created: nestedCreated,
+				moved,
+				error,
+			},
+		}])
+
+		expect(target.behaviorLifetimes.created).toEqual([nestedCreated])
+		expect(target.behaviorLifetimes.moved).toEqual([moved])
+		expect(target.behaviorLifetimes.error).toEqual([error])
+		expect(topLevelCreated).not.toHaveBeenCalled()
+	})
 })
 
 describe('观察者函数参数测试', () => {

@@ -20,7 +20,7 @@ function resolveWorkspaceAlias(source, importer, cwd) {
 		if (importer?.includes('/packages/common/src/')) {
 			return resolveFile(resolve(cwd, '../common/src', source.slice(2)))
 		}
-		if (importer?.includes('/packages/components/src/')) {
+		if (importer?.includes('/packages/components/')) {
 			return resolveFile(resolve(cwd, '../components/src', source.slice(2)))
 		}
 		return resolveFile(resolve(cwd, 'src', source.slice(2)))
@@ -45,7 +45,7 @@ export default defineConfig({
 	resolve: {
 		alias: {
 			'@dimina/common': resolve(process.cwd(), '../common/src/index.js'),
-			'@dimina/components': resolve(process.cwd(), '../components/src/index.js'),
+			'@dimina/components': resolve(process.cwd(), '../components/index.js'),
 		},
 	},
 	test: {

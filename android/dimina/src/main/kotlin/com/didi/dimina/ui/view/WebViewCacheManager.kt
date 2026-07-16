@@ -20,6 +20,7 @@ import com.didi.dimina.common.PathUtils
 import com.didi.dimina.common.VersionUtils
 import java.io.File
 import java.lang.ref.WeakReference
+import java.net.URI
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.LinkedBlockingQueue
 
@@ -551,6 +552,23 @@ internal fun createWebViewClientWithInterceptor(
 ): WebViewClient {
     val assetLoader = createWebViewAssetLoader(context)
     return object : WebViewClient() {
+		override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+			val allowed = isTrustedRenderNavigation(request.url.toString())
+			if (!allowed) {
+				LogUtils.w(WEBVIEW_TAG, "Blocked untrusted WebView navigation")
+			}
+			return !allowed
+		}
+
+		@Suppress("DEPRECATION")
+		override fun shouldOverrideUrlLoading(view: WebView, url: String): Boolean {
+			val allowed = isTrustedRenderNavigation(url)
+			if (!allowed) {
+				LogUtils.w(WEBVIEW_TAG, "Blocked untrusted WebView navigation")
+			}
+			return !allowed
+		}
+
         override fun onPageFinished(view: WebView, url: String) {
             super.onPageFinished(view, url)
             LogUtils.d(WEBVIEW_TAG, "WebView page finished loading: $url")
@@ -571,12 +589,27 @@ internal fun createWebViewClientWithInterceptor(
     }
 }
 
+internal fun isTrustedRenderNavigation(rawUrl: String): Boolean {
+	if (rawUrl == "about:blank") return true
+
+	return try {
+		val uri = URI(rawUrl)
+		val path = uri.rawPath ?: return false
+		uri.scheme.equals("https", ignoreCase = true)
+			&& uri.host.equals(PathUtils.WEBVIEW_ASSET_DOMAIN, ignoreCase = true)
+			&& uri.port == -1
+			&& Regex("^/jssdk/(?!\\.{1,2}/)[A-Za-z0-9._-]+/main/pageFrame\\.html$").matches(path)
+	} catch (_: Exception) {
+		false
+	}
+}
+
 private fun handleVirtualFileRequest(context: Context, uri: android.net.Uri, appId: String): WebResourceResponse? {
     return try {
         val appContext = context.applicationContext
         val targetFile = File(PathUtils.pathToReal(appContext, uri.toString(), appId)).canonicalFile
-        val cacheRoot = appContext.cacheDir.canonicalFile
-        val filesRoot = appContext.filesDir.canonicalFile
+        val cacheRoot = PathUtils.appTempRoot(appContext, appId).canonicalFile
+        val filesRoot = PathUtils.appUserRoot(appContext, appId).canonicalFile
         if (!isUnderRoot(targetFile, cacheRoot) && !isUnderRoot(targetFile, filesRoot)) {
             return null
         }
@@ -619,12 +652,13 @@ internal fun createWebView(context: Context, onPageLoadFinished: () -> Unit, app
         settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            allowFileAccess = true
-            allowContentAccess = true
+            allowFileAccess = false
+            allowContentAccess = false
+            javaScriptCanOpenWindowsAutomatically = false
             loadWithOverviewMode = true
             useWideViewPort = true
             cacheMode = WebSettings.LOAD_NO_CACHE
-            mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
+            mixedContentMode = WebSettings.MIXED_CONTENT_NEVER_ALLOW
         }
 
         if (0 != (context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE)) {

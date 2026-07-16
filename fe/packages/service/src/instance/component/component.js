@@ -4,6 +4,7 @@ import { createIntersectionObserver } from '../../api/core/wxml/intersection-obs
 import message from '../../core/message'
 import runtime from '../../core/runtime'
 import { applyDataUpdates, invokeDataObservers, invokePropertyChanges } from '../../core/data-update'
+import { invokeSafely, invokeSafelyAll } from '../../core/safe-callback'
 import { beginUpdateBatch, createUpdateCallback, endUpdateBatch, enqueueUpdate } from '../../core/update-queue'
 import { addComputedData, deepEqual, isChildComponent, matchComponent, resolveEventHandler, syncUpdateChildrenProps } from '../../core/utils'
 
@@ -69,12 +70,13 @@ export class Component {
 		this.__initialPropertyObserversInvoked__ = false
 		this.__initialPropertyNames__ = new Set(opts.propertyNames || Object.keys(opts.properties || {}))
 		this.__initialPropertyChanges__ = []
+		this.__initialPropertyValues__ = {}
 		this.__propertySchemas__ = Object.fromEntries(
 			Object.entries(this.__info__.properties || {}).map(([name, definition]) => [name, normalizePropertyDefinition(definition)]),
 		)
 	}
 
-	init() {
+	init({ deferInitialData = false } = {}) {
 		if (this.__isComponent__) {
 			const initialProperties = this.opts.properties || {}
 			for (const [key, schema] of Object.entries(this.__propertySchemas__)) {
@@ -82,7 +84,8 @@ export class Component {
 				const value = resolvePropertyValue(schema, initialProperties[key], {
 					absent: !Object.prototype.hasOwnProperty.call(initialProperties, key),
 				})
-				this.data[key] = value
+				this.data[key] = absentValue
+				this.__initialPropertyValues__[key] = value
 				if (this.__initialPropertyNames__.has(key)) {
 					this.__initialPropertyChanges__.push({
 						propertyName: key,
@@ -98,17 +101,26 @@ export class Component {
 		this.#initCustomMethods()
 		this.#initRelations()
 		this.#initComponentExport()
-		return this.#invokeInitLifecycle().then(() => {
-			addComputedData(this)
-			message.send({
-				type: this.__id__,
-				target: 'render',
-				body: {
-					bridgeId: this.bridgeId,
-					path: this.is,
-					data: this.data,
-				},
-			})
+		this.#invokeInitLifecycle()
+		if (!deferInitialData) {
+			this.sendInitialData()
+		}
+	}
+
+	sendInitialData() {
+		if (this.__initialDataSent__) {
+			return
+		}
+		this.__initialDataSent__ = true
+		addComputedData(this)
+		message.send({
+			type: this.__id__,
+			target: 'render',
+			body: {
+				bridgeId: this.bridgeId,
+				path: this.is,
+				data: this.data,
+			},
 		})
 	}
 
@@ -358,13 +370,7 @@ export class Component {
 		this.__relations__.set(relationPath, relationNodes)
 		
 		// 调用 linked 生命周期函数
-		if (isFunction(relationConfig.linked)) {
-			try {
-				relationConfig.linked.call(this, targetInstance)
-			} catch (error) {
-				console.error('[service] relation linked error:', error)
-			}
-		}
+		invokeSafely(this, relationConfig.linked, [targetInstance], 'relation linked callback')
 	}
 
 	/**
@@ -383,13 +389,7 @@ export class Component {
 		this.__relations__.set(relationPath, relationNodes)
 		
 		// 调用 unlinked 生命周期函数
-		if (isFunction(relationConfig.unlinked)) {
-			try {
-				relationConfig.unlinked.call(this, targetInstance)
-			} catch (error) {
-				console.error('[service] relation unlinked error:', error)
-			}
-		}
+		invokeSafely(this, relationConfig.unlinked, [targetInstance], 'relation unlinked callback')
 	}
 
 	/**
@@ -397,13 +397,7 @@ export class Component {
 	 */
 	#handleRelationChange(relationPath, targetInstance, relationConfig) {
 		// 调用 linkChanged 生命周期函数
-		if (isFunction(relationConfig.linkChanged)) {
-			try {
-				relationConfig.linkChanged.call(this, targetInstance)
-			} catch (error) {
-				console.error('[service] relation linkChanged error:', error)
-			}
-		}
+		invokeSafely(this, relationConfig.linkChanged, [targetInstance], 'relation linkChanged callback')
 	}
 
 	/**
@@ -507,19 +501,31 @@ export class Component {
 		this.__initialPropertyObserversInvoked__ = true
 	}
 
-	async #invokeInitLifecycle() {
+	#applyInitialProperties() {
+		Object.assign(this.data, this.__initialPropertyValues__)
+	}
+
+	#invokeInitLifecycle() {
 		if (this.__isComponent__) {
-			// 组件实例创建时调用 componentCreated
-			await this.componentCreated()
-			this.#invokeInitialPropertyObservers()
+			if (this.__info__.options?.propertyEarlyInit) {
+				this.#applyInitialProperties()
+				this.#invokeInitialPropertyObservers()
+			}
+			// By default, created sees property defaults. Incoming property values
+			// and their observers are applied immediately after created.
+			this.componentCreated()
+			if (!this.__info__.options?.propertyEarlyInit) {
+				this.#applyInitialProperties()
+				this.#invokeInitialPropertyObservers()
+			}
 		}
 		else {
 			// 使用 Component 构造器创建的页面生命周期
-			await this.componentCreated()
+			this.componentCreated()
 			// Component 构造的页面根实例在页面节点树创建阶段进入 attached。
-			await this.componentAttached()
+			this.componentAttached()
 
-			await this.onLoad?.(this.opts.query || {})
+			invokeSafely(this, this.onLoad, [this.opts.query || {}], 'onLoad')
 		}
 		this.initd = true
 	}
@@ -693,9 +699,7 @@ export class Component {
 		
 		try {
 			// 执行回调函数
-			callback.call(this)
-		} catch (error) {
-			console.error('[service] groupSetData callback error:', error)
+			invokeSafely(this, callback, [], 'groupSetData callback')
 		} finally {
 			// 退出批量更新模式
 			this.__groupSetDataMode__ = false
@@ -816,7 +820,7 @@ export class Component {
 
 	pageReady() {
 		if (!this.__isComponent__) {
-			this.ready?.()
+			invokeSafely(this, this.ready, [], 'ready lifetime')
 		}
 	}
 
@@ -825,14 +829,14 @@ export class Component {
 	 */
 	pageUnload() {
 		if (!this.__isComponent__) {
-			this.onUnload?.()
+			invokeSafely(this, this.onUnload, [], 'onUnload')
 		}
 	}
 
 	pageScrollTop(opts) {
 		if (!this.__isComponent__) {
 			const { scrollTop } = opts
-			this.onPageScroll?.({ scrollTop })
+			invokeSafely(this, this.onPageScroll, [{ scrollTop }], 'onPageScroll')
 		}
 	}
 
@@ -841,16 +845,16 @@ export class Component {
 	 * 组件所在的页面被展示时执行
 	 */
 	pageShow() {
-		this.__info__.behaviorPageLifetimes?.show?.forEach(method => method.call(this))
-		this.onShow?.()
+		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.show, [], 'page show lifetime')
+		invokeSafely(this, this.onShow, [], 'page show lifetime')
 	}
 
 	/**
 	 * 组件所在的页面被隐藏时执行
 	 */
 	pageHide() {
-		this.__info__.behaviorPageLifetimes?.hide?.forEach(method => method.call(this))
-		this.onHide?.()
+		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.hide, [], 'page hide lifetime')
+		invokeSafely(this, this.onHide, [], 'page hide lifetime')
 	}
 
 	/**
@@ -858,31 +862,31 @@ export class Component {
 	 * @param {object} size
 	 */
 	pageResize(size) {
-		this.__info__.behaviorPageLifetimes?.resize?.forEach(method => method.call(this, size))
-		this.resize?.(size)
+		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.resize, [size], 'page resize lifetime')
+		invokeSafely(this, this.resize, [size], 'page resize lifetime')
 	}
 
 	// 组件所在页面路由动画完成时执行
 	componentRouteDone() {
-		this.__info__.behaviorPageLifetimes?.routeDone?.forEach(method => method.call(this))
-		this.routeDone?.()
+		invokeSafelyAll(this, this.__info__.behaviorPageLifetimes?.routeDone, [], 'page routeDone lifetime')
+		invokeSafely(this, this.routeDone, [], 'page routeDone lifetime')
 	}
 
 	// --- 组件的生命周期 ---
 	/**
 	 * 在组件实例刚刚被创建时执行
 	 */
-	async componentCreated() {
-		this.__info__.behaviorLifetimes?.created?.forEach(method => method.call(this))
-		this.created?.()
+	componentCreated() {
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.created, [], 'created lifetime')
+		invokeSafely(this, this.created, [], 'created lifetime')
 	}
 
 	/**
 	 * 在组件实例进入页面节点树时执行
 	 */
-	async componentAttached() {
-		this.__info__.behaviorLifetimes?.attached?.forEach(method => method.call(this))
-		this.attached?.()
+	componentAttached() {
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.attached, [], 'attached lifetime')
+		invokeSafely(this, this.attached, [], 'attached lifetime')
 		
 		// 建立组件间关系
 		this.#checkAndLinkRelations()
@@ -892,15 +896,16 @@ export class Component {
 	 * 在组件在视图层布局完成后执行
 	 */
 	componentReadied() {
-		this.__info__.behaviorLifetimes?.ready?.forEach(method => method.call(this))
-		this.ready?.()
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.ready, [], 'ready lifetime')
+		invokeSafely(this, this.ready, [], 'ready lifetime')
 	}
 
 	/**
 	 * 在组件实例被移动到节点树另一个位置时执行
 	 */
 	componentMoved() {
-		this.moved?.()
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.moved, [], 'moved lifetime')
+		invokeSafely(this, this.moved, [], 'moved lifetime')
 		
 		// 组件移动后，需要重新检查关系并触发 linkChanged
 		const relations = this.__info__.relations
@@ -918,7 +923,13 @@ export class Component {
 	 * 在组件实例被从页面节点树移除时执行
 	 */
 	componentDetached() {
-		// 在组件 detached 前移除所有关系
+		// exparser marks the node detached before invoking the lifetime, but keeps
+		// relation links visible until detached callbacks have completed.
+		this.__componentAttached__ = false
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.detached, [], 'detached lifetime')
+		invokeSafely(this, this.detached, [], 'detached lifetime')
+
+		// Relation unlinked callbacks run after detached.
 		const relations = this.__info__.relations
 		if (relations) {
 			for (const [relationPath, relationConfig] of Object.entries(relations)) {
@@ -934,8 +945,6 @@ export class Component {
 		// 通知其他组件移除对当前组件的引用
 		this.#notifyOthersToUnlinkThis()
 		
-		this.__info__.behaviorLifetimes?.detached?.forEach(method => method.call(this))
-		this.detached?.()
 		this.initd = false
 	}
 	
@@ -958,13 +967,7 @@ export class Component {
 					
 					// 调用 unlinked 生命周期函数
 					const relationConfig = instance.__info__.relations?.[relationPath]
-					if (relationConfig && isFunction(relationConfig.unlinked)) {
-						try {
-							relationConfig.unlinked.call(instance, this)
-						} catch (error) {
-							console.error('[service] relation unlinked error:', error)
-						}
-					}
+					invokeSafely(instance, relationConfig?.unlinked, [this], 'relation unlinked callback')
 				}
 			}
 		}
@@ -975,6 +978,7 @@ export class Component {
 	 * @param {*} error
 	 */
 	componentError(error) {
-		this.error?.(error)
+		invokeSafelyAll(this, this.__info__.behaviorLifetimes?.error, [error], 'error lifetime', false)
+		invokeSafely(this, this.error, [error], 'error lifetime', false)
 	}
 }

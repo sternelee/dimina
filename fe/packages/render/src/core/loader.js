@@ -7,7 +7,7 @@ class Loader {
 	}
 
 	async loadResource(opts) {
-		const { bridgeId, appId, pagePath, root, baseUrl } = opts
+		const { bridgeId, appId, pagePath, root, baseUrl, resourceLoadId } = opts
 
 		const filename = pagePath.replace(/\//g, '_')
 		const appStyleResourcePath = `${baseUrl}${appId}/main/app.css`
@@ -24,7 +24,7 @@ class Loader {
 			.filter(result => result.status === 'rejected')
 			.map(result => result.reason instanceof Error ? result.reason.message : String(result.reason))
 		if (errors.length) {
-			this.reportResourceLoadFailed({ bridgeId, pagePath, errors })
+			this.reportResourceLoadFailed({ bridgeId, pagePath, errors, resourceLoadId })
 			return false
 		}
 
@@ -35,6 +35,7 @@ class Loader {
 			this.reportResourceLoadFailed({
 				bridgeId,
 				pagePath,
+				resourceLoadId,
 				errors: [error instanceof Error ? error.message : String(error)],
 			})
 			return false
@@ -45,18 +46,20 @@ class Loader {
 			target: 'service',
 			body: {
 				bridgeId,
+				resourceLoadId,
 			},
 		})
 		return true
 	}
 
-	reportResourceLoadFailed({ bridgeId, pagePath, errors }) {
+	reportResourceLoadFailed({ bridgeId, pagePath, errors, resourceLoadId }) {
 		console.error('[system]', '[render]', `资源加载失败: ${errors.join('; ')}`)
 		message.invoke({
 			type: 'renderResourceLoadFailed',
 			target: 'service',
 			body: {
 				bridgeId,
+				resourceLoadId,
 				pagePath,
 				errors,
 			},
