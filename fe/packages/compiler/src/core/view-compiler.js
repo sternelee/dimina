@@ -9,6 +9,7 @@ import * as cheerio from 'cheerio'
 import { transform } from 'esbuild'
 import * as htmlparser2 from 'htmlparser2'
 import { checkTemplateCompatibility } from '../common/compatibility.js'
+import { toMiniProgramModuleId } from '../common/path-utils.js'
 import { collectAssets, getAbsolutePath, tagWhiteList, transformRpx } from '../common/utils.js'
 import { getAppId, getComponent, getContentByPath, getTargetPath, getTemplateExts, getViewScriptExts, getViewScriptTags, getWorkPath, resetStoreInfo } from '../env.js'
 import { parseBindings } from '../common/expression-parser.js'
@@ -982,6 +983,8 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 	if (!fullPath) {
 		return { tpl: undefined }
 	}
+	const sourcePath = toMiniProgramModuleId(fullPath, workPath)
+		.replace(buildExtStripRegex(getTemplateExts()), '')
 	const diagnosticSource = fullPath.startsWith(workPath)
 		? fullPath.slice(workPath.length)
 		: path
@@ -1032,7 +1035,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 		const src = $(elem).attr('src')
 		// 将目标文件除了 <template/> <wxs/> 外的整个代码引入，相当于是拷贝到 include 位置
 		if (src) {
-			const includeFullPath = resolveTemplateDependencyPath(workPath, path, src)
+			const includeFullPath = resolveTemplateDependencyPath(workPath, sourcePath, src)
 			// 计算被包含文件的路径（去掉扩展名），用于 wxs 路径解析
 			let includePath = includeFullPath.replace(workPath, '').replace(buildExtStripRegex(getTemplateExts()), '')
 			const includeDiagnosticSource = includeFullPath.startsWith(workPath)
@@ -1090,11 +1093,11 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 
 	// 处理 template 节点
 	// https://developers.weixin.qq.com/miniprogram/dev/reference/wxml/template.html
-	transTagTemplate($, templateModule, path, components, componentPlaceholder)
+	transTagTemplate($, templateModule, sourcePath, components, componentPlaceholder)
 
 	// 处理 wxs 节点
 	// https://developers.weixin.qq.com/miniprogram/dev/reference/wxs/01wxs-module.html
-	transTagWxs($, scriptModule, path)
+	transTagWxs($, scriptModule, sourcePath)
 
 	// 处理 import 节点
 	// https://developers.weixin.qq.com/miniprogram/dev/reference/wxml/import.html
@@ -1102,7 +1105,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 	importNodes.each((_, elem) => {
 		const src = $(elem).attr('src')
 		if (src) {
-			const importFullPath = resolveTemplateDependencyPath(workPath, path, src)
+			const importFullPath = resolveTemplateDependencyPath(workPath, sourcePath, src)
 			let importPath = importFullPath.replace(workPath, '').replace(buildExtStripRegex(getTemplateExts()), '')
 			const importDiagnosticSource = importFullPath.startsWith(workPath)
 				? importFullPath.slice(workPath.length)
@@ -1144,7 +1147,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 	})
 	importNodes.remove()
 
-	transAsses($, $('image'), path)
+	transAsses($, $('image'), sourcePath)
 
 	const res = []
 
@@ -1865,6 +1868,17 @@ function parseForExp(exp, attrs) {
 const braceRegex = /(\{\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\}\})|([^{}]+)/g
 const noBraceRegex = /\{\{((?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*)\}\}/
 const ternaryRegex = /[^?]+\?.+:.+/
+const RESERVED_TEMPLATE_CONTEXT_ALIASES = new Map([
+	['class', '__dimina_reserved_class'],
+])
+const RESERVED_TEMPLATE_CONTEXT_NAMES = new Map(
+	[...RESERVED_TEMPLATE_CONTEXT_ALIASES].map(([name, alias]) => [alias, name]),
+)
+
+function encodeReservedTemplateContextIdentifier(expression) {
+	return RESERVED_TEMPLATE_CONTEXT_ALIASES.get(expression) || expression
+}
+
 /**
  * 解析 {{}} 表达式的值
  * @param {*} exp
@@ -1881,7 +1895,7 @@ function parseBraceExp(exp) {
 			const matchResult = result[1].match(noBraceRegex)
 
 			if (matchResult) {
-				const statement = matchResult[1].trim()
+				const statement = encodeReservedTemplateContextIdentifier(matchResult[1].trim())
 				if (ternaryRegex.test(statement)) {
 					// 三目表达式用 () 包裹，防止影响优先级
 					group.push(`(${statement})`)
@@ -2139,11 +2153,7 @@ function insertWxsToRenderCode(code, scriptModule, scriptRes, filename = 'render
 		declarations.push(`const ${localIdentifier} = require(${JSON.stringify(requireModuleName)});`)
 	}
 
-	if (wxsBindings.length === 0) {
-		return getProgramCode(code, ast)
-	}
-
-	if (renderBody?.type === 'BlockStatement') {
+	if (wxsBindings.length > 0 && renderBody?.type === 'BlockStatement') {
 		codeReplacements.push({
 			type: 'insert',
 			start: renderBody.start + 1,
@@ -2162,6 +2172,16 @@ function insertWxsToRenderCode(code, scriptModule, scriptRes, filename = 'render
 				&& !node.computed
 				&& node.property?.type === 'Identifier'
 			) {
+				const reservedName = RESERVED_TEMPLATE_CONTEXT_NAMES.get(node.property.name)
+				if (reservedName) {
+					codeReplacements.push({
+						start: node.property.start,
+						end: node.property.end,
+						value: reservedName,
+					})
+					return
+				}
+
 				const replacement = wxsBindings.find(item => item.templatePropertyName === node.property.name)
 				if (replacement) {
 					codeReplacements.push({
@@ -2173,6 +2193,9 @@ function insertWxsToRenderCode(code, scriptModule, scriptRes, filename = 'render
 			}
 		},
 	})
+	if (codeReplacements.length === 0) {
+		return getProgramCode(code, ast)
+	}
 
 	const transformed = applyCodeReplacements(code, codeReplacements)
 	const transformedAst = parseJs(transformed, filename)

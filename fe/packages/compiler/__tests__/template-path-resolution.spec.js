@@ -51,17 +51,19 @@ describe('mini-program template path resolution', () => {
 	it('resolves an extensionless import and its local WXS from the imported file', async () => {
 		const output = await compileProject(`
 			<import src="../templates/card" />
-			<template is="card" data="{{ text: title }}" />
+			<template is="card" data="{{ class: cardClass, text: title }}" />
 		`, {
 			'templates/card.wxml': `
 				<wxs src="./format.wxs" module="format" />
-				<template name="card"><view>{{format.label(text)}}</view></template>
+				<template name="card"><view class="{{class}} {{classPrefix}}">{{format.label(text)}}</view></template>
 			`,
 			'templates/format.wxs': 'module.exports = { label: function (value) { return value } }',
 		})
 
 		expect(output).toContain('tpl-card')
 		expect(output).toContain('templates_format')
+		expect(output).toContain('.class')
+		expect(output).not.toContain('__dimina_reserved_class')
 	})
 
 	it('resolves an extensionless include and its local WXS from the included file', async () => {
