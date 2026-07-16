@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { normalizePropertyDefinition, normalizePropertyValues, resolvePropertyValue } from '../src/core/properties'
+import { matchesPropertyType, normalizePropertyDefinition, normalizePropertyValues, resolvePropertyValue } from '../src/core/properties'
 
 describe('mini-program property semantics', () => {
 	it('applies implicit defaults and clones mutable defaults', () => {
@@ -13,6 +13,22 @@ describe('mini-program property semantics', () => {
 		expect(normalizePropertyDefinition(Object).value).toBeNull()
 		expect(first).toEqual([])
 		expect(first).not.toBe(second)
+	})
+
+	it('accepts only the property types supported by exparser', () => {
+		expect(normalizePropertyDefinition(Function)).toEqual({
+			type: null,
+			optionalTypes: [],
+			value: null,
+		})
+		expect(normalizePropertyDefinition({
+			type: Function,
+			optionalTypes: [String],
+		})).toEqual({
+			type: String,
+			optionalTypes: [String],
+			value: '',
+		})
 	})
 
 	it('converts values with WeChat primary type rules', () => {
@@ -36,6 +52,12 @@ describe('mini-program property semantics', () => {
 		expect(resolvePropertyValue(schema, true)).toBe(true)
 		expect(resolvePropertyValue(schema, objectValue)).toBe(objectValue)
 		expect(resolvePropertyValue(schema, 42)).toBe('42')
+
+		class ArraySubclass extends Array {}
+		const arraySubclass = new ArraySubclass()
+		expect(matchesPropertyType(Array, [])).toBe(true)
+		expect(matchesPropertyType(Array, arraySubclass)).toBe(false)
+		expect(resolvePropertyValue(normalizePropertyDefinition(Array), arraySubclass)).toBe(arraySubclass)
 	})
 
 	it('distinguishes absent properties from explicitly passed undefined', () => {

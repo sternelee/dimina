@@ -5,6 +5,13 @@ export { modDefine, modRequire } from './core/amd'
 export { default as callback } from './core/callback'
 
 export {
+	createDataFunctionReference,
+	getDataFunctionReferenceId,
+	isDataFunctionReference,
+	transformDataFunctions,
+} from './core/data-function'
+
+export {
 	matchesPropertyType,
 	normalizePropertyDefinition,
 	normalizePropertyValues,

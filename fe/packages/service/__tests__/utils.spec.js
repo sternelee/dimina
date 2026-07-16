@@ -1,5 +1,22 @@
 import { describe, expect, it, vi } from 'vitest'
-import { filterInvokeObserver, mergeBehaviors, syncUpdateChildrenProps } from '../src/core/utils'
+import { filterData, filterInvokeObserver, mergeBehaviors, syncUpdateChildrenProps } from '../src/core/utils'
+
+describe('data initialization', () => {
+	it('preserves function references at every nesting level', () => {
+		const fn = vi.fn()
+		const data = filterData({
+			fn,
+			nested: { fn },
+			list: [fn, { fn }, [fn]],
+		})
+
+		expect(data.fn).toBe(fn)
+		expect(data.nested.fn).toBe(fn)
+		expect(data.list[0]).toBe(fn)
+		expect(data.list[1].fn).toBe(fn)
+		expect(data.list[2]).toEqual([fn])
+	})
+})
 
 describe('数据监听器触发匹配逻辑', () => {
 	const funAB = vi.fn((numberA, numberB) => {
@@ -47,7 +64,7 @@ describe('数据监听器触发匹配逻辑', () => {
 	})
 
 	const funArr = vi.fn((arr) => {
-		// 2.设置 arr 也会触发
+		// 精确监听 arr 不应被 arr[12] 的子路径赋值触发
 		return arr === data2.arr
 	})
 
@@ -70,8 +87,8 @@ describe('数据监听器触发匹配逻辑', () => {
 		expect(funArr12).toHaveReturnedWith(true)
 	})
 
-	it('监听子数据数组字段', () => {
-		expect(funArr).toHaveReturnedWith(true)
+	it('精确监听器不监听子数据数组字段', () => {
+		expect(funArr).not.toHaveBeenCalled()
 	})
 
 	it('监听所有子数据字段的变化', () => {
@@ -278,6 +295,123 @@ describe('mergeBehaviors 行为合并逻辑', () => {
 			data1: 'behavior1',
 			data2: 'behavior2',
 		})
+	})
+
+	it('按 exparser 的祖先顺序处理同名字段优先级', () => {
+		const nestedBehavior = {
+			properties: {
+				behaviorOnly: String,
+				componentWins: String,
+			},
+			data: {
+				config: { nested: true, winner: 'nested' },
+			},
+			methods: {
+				behaviorOnly: () => 'nested',
+				componentWins: () => 'nested',
+			},
+			relations: {
+				'./behavior-only': { type: 'parent', source: 'nested' },
+				'./component-wins': { type: 'parent', source: 'nested' },
+			},
+			export: () => 'nested',
+		}
+		const firstBehavior = {
+			behaviors: [nestedBehavior],
+			properties: { behaviorOnly: Number, componentWins: Number },
+			data: { config: { first: true, winner: 'first' } },
+			methods: {
+				behaviorOnly: () => 'first',
+				componentWins: () => 'first',
+			},
+			relations: {
+				'./behavior-only': { type: 'parent', source: 'first' },
+				'./component-wins': { type: 'parent', source: 'first' },
+			},
+			export: () => 'first',
+		}
+		const secondBehavior = {
+			properties: { behaviorOnly: Boolean, componentWins: Boolean },
+			data: { config: { second: true, winner: 'second' } },
+			methods: {
+				behaviorOnly: () => 'second',
+				componentWins: () => 'second',
+			},
+			relations: {
+				'./behavior-only': { type: 'parent', source: 'second' },
+				'./component-wins': { type: 'parent', source: 'second' },
+			},
+			export: () => 'second',
+		}
+		const target = {
+			properties: { componentWins: Array },
+			data: { config: { component: true, winner: 'component' } },
+			methods: { componentWins: () => 'component' },
+			relations: {
+				'./component-wins': { type: 'parent', source: 'component' },
+			},
+			export: () => 'component',
+		}
+
+		mergeBehaviors(target, [firstBehavior, secondBehavior])
+
+		expect(target.properties).toEqual({
+			behaviorOnly: Boolean,
+			componentWins: Array,
+		})
+		expect(target.data.config).toEqual({
+			nested: true,
+			first: true,
+			second: true,
+			component: true,
+			winner: 'component',
+		})
+		expect(target.methods.behaviorOnly()).toBe('second')
+		expect(target.methods.componentWins()).toBe('component')
+		expect(target.relations['./behavior-only'].source).toBe('second')
+		expect(target.relations['./component-wins'].source).toBe('component')
+		expect(target.export()).toBe('component')
+	})
+
+	it('重复出现的 behavior 重新参与字段覆盖但不重复注册回调', () => {
+		const nestedCreated = vi.fn()
+		const referrerCreated = vi.fn()
+		const nestedObserver = vi.fn()
+		const nestedBehavior = {
+			properties: { winner: String },
+			data: { winner: 'nested' },
+			methods: { winner: () => 'nested' },
+			created: nestedCreated,
+			observers: { winner: nestedObserver },
+		}
+		const referrerBehavior = {
+			behaviors: [nestedBehavior],
+			properties: { winner: Number },
+			data: { winner: 'referrer' },
+			methods: { winner: () => 'referrer' },
+			created: referrerCreated,
+		}
+		const target = {}
+
+		mergeBehaviors(target, [referrerBehavior, nestedBehavior])
+
+		expect(target.properties.winner).toBe(String)
+		expect(target.data.winner).toBe('nested')
+		expect(target.methods.winner()).toBe('nested')
+		expect(target.behaviorLifetimes.created).toEqual([nestedCreated, referrerCreated])
+		expect(target.behaviorObserverList).toEqual([{ key: 'winner', observer: nestedObserver }])
+	})
+
+	it('深度合并时将低优先级 null 当作空对象', () => {
+		const componentValue = { component: true }
+		const target = {
+			data: { config: componentValue },
+		}
+
+		mergeBehaviors(target, [{ data: { config: null } }])
+
+		expect(target.data.config).toEqual(componentValue)
+		expect(target.data.config).not.toBe(componentValue)
 	})
 
 	it('处理无效的 behaviors 参数', () => {
@@ -577,5 +711,42 @@ describe('syncUpdateChildrenProps', () => {
 		expect(child.data.item).not.toBe(parent.data.item)
 		parent.data.item.value = 2
 		expect(child.data.item.value).toBe(1)
+	})
+
+	it('preserves function identity when syncing a parent binding to a child property', () => {
+		const fn = vi.fn()
+		const child = {
+			__id__: 'child-function',
+			__parentId__: 'parent-function',
+			__pendingSyncedProps__: {},
+			__info__: { properties: { callback: {} } },
+			data: {},
+			tO(data) {
+				Object.assign(this.data, data)
+				return data
+			},
+		}
+		const parent = {
+			__id__: 'parent-function',
+			data: { callback: fn },
+			__childPropsBindings__: {
+				'child-function': {
+					callback: {
+						expression: 'callback',
+						dependencies: ['callback'],
+						isSimple: true,
+					},
+				},
+			},
+		}
+
+		const syncedChildren = syncUpdateChildrenProps(parent, {
+			[parent.__id__]: parent,
+			[child.__id__]: child,
+		}, { callback: fn })
+
+		expect(child.data.callback).toBe(fn)
+		expect(child.__pendingSyncedProps__.callback).toBe(fn)
+		expect(syncedChildren[0].data.callback).toBe(fn)
 	})
 })

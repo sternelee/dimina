@@ -121,7 +121,12 @@ function observerPathMatches(observerPath, changedPath) {
 	if (observerPath.wildcard && observerPath.path.length === 0) {
 		return true
 	}
-	return isPathPrefix(observerPath.path, changedPath) || isPathPrefix(changedPath, observerPath.path)
+	if (observerPath.wildcard) {
+		return isPathPrefix(observerPath.path, changedPath) || isPathPrefix(changedPath, observerPath.path)
+	}
+	// exparser only treats an exact observer as affected when its own path (or
+	// one of its ancestors) is assigned. Descendant assignments require `.**`.
+	return isPathPrefix(changedPath, observerPath.path)
 }
 
 function getObserverDescriptors(info) {

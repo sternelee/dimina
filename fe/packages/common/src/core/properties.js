@@ -6,7 +6,6 @@ const SUPPORTED_PROPERTY_TYPES = new Set([
 	Boolean,
 	Object,
 	Array,
-	Function,
 	null,
 ])
 
@@ -62,6 +61,11 @@ export function normalizePropertyDefinition(definition) {
 	}
 }
 
+function isExparserArray(value) {
+	// oxlint-disable-next-line unicorn/no-instanceof-builtins -- exparser 使用 instanceof Array，跨 realm 时与 Array.isArray 的语义不同。
+	return value instanceof Array
+}
+
 /**
  * optionalTypes 只做严格类型匹配；命中后保持调用方传入值，不执行主类型转换。
  */
@@ -70,8 +74,7 @@ export function matchesPropertyType(type, value) {
 	if (type === Number) return Number.isFinite(value)
 	if (type === Boolean) return typeof value === 'boolean'
 	if (type === Object) return value !== null && value?.constructor === Object
-	if (type === Array) return Array.isArray(value)
-	if (type === Function) return typeof value === 'function'
+	if (type === Array) return value !== null && value?.constructor === Array
 	return value !== undefined
 }
 
@@ -129,7 +132,7 @@ export function resolvePropertyValue(schema, value, { absent = false, warn } = {
 	}
 
 	if (type === Array) {
-		if (Array.isArray(value)) {
+		if (isExparserArray(value)) {
 			return value
 		}
 		warnTypeConversion(warn, 'property received type-uncompatible value: expected <Array> but got non-array value. Used empty array instead.')

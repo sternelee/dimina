@@ -6,7 +6,6 @@ const TYPE_MAPS = {
 	b: Boolean,
 	o: Object,
 	a: Array,
-	f: Function,
 }
 
 export class Module {

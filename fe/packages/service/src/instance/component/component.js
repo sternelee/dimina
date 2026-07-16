@@ -78,19 +78,20 @@ export class Component {
 	}
 
 	init({ deferInitialData = false } = {}) {
+		this.#initCustomMethods()
 		if (this.__isComponent__) {
 			const initialProperties = this.opts.properties || {}
 			for (const [key, schema] of Object.entries(this.__propertySchemas__)) {
 				const absentValue = resolvePropertyValue(schema, undefined, { absent: true })
-				const value = resolvePropertyValue(schema, initialProperties[key], {
-					absent: !Object.prototype.hasOwnProperty.call(initialProperties, key),
-				})
 				this.data[key] = absentValue
-				this.__initialPropertyValues__[key] = value
 				if (this.__initialPropertyNames__.has(key)) {
+					const value = this.normalizePropertyValue(key, initialProperties[key], {
+						applyFilter: false,
+					})
+					this.__initialPropertyValues__[key] = value
 					this.__initialPropertyChanges__.push({
 						propertyName: key,
-						oldValue: absentValue,
+						oldValue: undefined,
 						path: [key],
 						value,
 					})
@@ -99,7 +100,6 @@ export class Component {
 		}
 
 		this.#initLifecycle()
-		this.#initCustomMethods()
 		this.#initRelations()
 		this.#initComponentExport()
 		this.#invokeInitLifecycle()
@@ -503,22 +503,25 @@ export class Component {
 	}
 
 	#applyInitialProperties() {
-		Object.assign(this.data, this.__initialPropertyValues__)
+		for (const [key, incomingValue] of Object.entries(this.__initialPropertyValues__)) {
+			const oldValue = this.data[key]
+			const value = this.normalizePropertyValue(key, incomingValue, { oldValue })
+			this.data[key] = value
+			const change = this.__initialPropertyChanges__.find(item => item.propertyName === key)
+			if (change) {
+				change.oldValue = oldValue
+				change.value = value
+			}
+		}
 	}
 
 	#invokeInitLifecycle() {
 		if (this.__isComponent__) {
-			if (this.__info__.options?.propertyEarlyInit) {
-				this.#applyInitialProperties()
-				this.#invokeInitialPropertyObservers()
-			}
-			// By default, created sees property defaults. Incoming property values
-			// and their observers are applied immediately after created.
+			// exparser creates the component with declared defaults, then applies
+			// incoming template properties and their observers after created.
 			this.componentCreated()
-			if (!this.__info__.options?.propertyEarlyInit) {
-				this.#applyInitialProperties()
-				this.#invokeInitialPropertyObservers()
-			}
+			this.#applyInitialProperties()
+			this.#invokeInitialPropertyObservers()
 		}
 		else {
 			// 使用 Component 构造器创建的页面生命周期
@@ -536,25 +539,33 @@ export class Component {
 	 * triggerObserver
 	 */
 	tO(data) {
-		const normalizedData = typeof this.normalizePropertyValues === 'function'
-			? this.normalizePropertyValues(data)
+		const incomingData = typeof this.normalizePropertyValues === 'function'
+			? this.normalizePropertyValues(data, { applyFilter: false })
 			: data
 		const nextData = {}
-		for (const [prop, val] of Object.entries(normalizedData)) {
+		const appliedData = {}
+		for (const [prop, incomingValue] of Object.entries(incomingData)) {
 			if (
 				this.__pendingSyncedProps__
 				&& Object.prototype.hasOwnProperty.call(this.__pendingSyncedProps__, prop)
-				&& deepEqual(this.__pendingSyncedProps__[prop], val)
+				&& deepEqual(this.__pendingSyncedProps__[prop], incomingValue)
 			) {
-				this.data[prop] = val
+				if (!this.hasPropertyFilter?.(prop)) {
+					this.data[prop] = incomingValue
+				}
+				appliedData[prop] = this.data[prop]
 				delete this.__pendingSyncedProps__[prop]
 				continue
 			}
-			nextData[prop] = val
+			const value = typeof this.normalizePropertyValue === 'function'
+				? this.normalizePropertyValue(prop, incomingValue)
+				: incomingValue
+			nextData[prop] = value
+			appliedData[prop] = value
 		}
 
 		if (Object.keys(nextData).length === 0) {
-			return
+			return appliedData
 		}
 
 		const propertyChanges = []
@@ -571,15 +582,41 @@ export class Component {
 
 		invokeDataObservers(this, changedPaths)
 		invokePropertyChanges(this, propertyChanges)
+		return appliedData
 	}
 
-	normalizePropertyValues(data) {
+	hasPropertyFilter(prop) {
+		const definition = this.__info__.properties?.[prop]
+		return !!definition && typeof definition === 'object' && definition.filter != null
+	}
+
+	normalizePropertyValue(prop, value, { absent = false, applyFilter = true, oldValue = this.data[prop], path = [prop] } = {}) {
+		const schema = this.__propertySchemas__[prop]
+		if (!schema) {
+			return value
+		}
+
+		const normalizedValue = resolvePropertyValue(schema, value, { absent })
+		if (absent || !applyFilter || !this.hasPropertyFilter(prop)) {
+			return normalizedValue
+		}
+
+		const definition = this.__info__.properties[prop]
+		const filter = isFunction(definition.filter)
+			? definition.filter
+			: this.__info__.methods?.[definition.filter]
+		if (!isFunction(filter)) {
+			return normalizedValue
+		}
+
+		const filteredValue = invokeSafely(this, filter, [normalizedValue, oldValue, path], 'property filter')
+		return filteredValue === undefined ? normalizedValue : filteredValue
+	}
+
+	normalizePropertyValues(data, { applyFilter = true } = {}) {
 		const normalized = {}
 		for (const [prop, value] of Object.entries(data || {})) {
-			const schema = this.__propertySchemas__[prop]
-			normalized[prop] = schema
-				? resolvePropertyValue(schema, value)
-				: value
+			normalized[prop] = this.normalizePropertyValue(prop, value, { applyFilter })
 		}
 		return normalized
 	}
@@ -743,13 +780,11 @@ export class Component {
 	 * https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/relations.html
 	 */
 	getRelationNodes(relationPath) {
-		if (!relationPath) {
-			console.warn('[service] getRelationNodes 需要传入关系路径参数')
-			return []
+		// exparser 对未声明的 relation 返回 null，已声明但未建立关系时返回空数组。
+		const relationNodes = this.__relations__.get(relationPath)
+		if (!relationNodes) {
+			return null
 		}
-
-		// 获取关系节点
-		const relationNodes = this.__relations__.get(relationPath) || []
 		
 		// 返回节点数组的副本，避免外部修改
 		return [...relationNodes]

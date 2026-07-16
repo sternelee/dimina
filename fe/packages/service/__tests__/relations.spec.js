@@ -86,6 +86,8 @@ describe('组件间关系测试', () => {
 		expect(childNodes).toHaveLength(1)
 		expect(childNodes[0]).toBe(childComponent)
 		expect(parentComponent.linkedChild).toBe(childComponent)
+		expect(parentComponent.getRelationNodes('./undeclared-component')).toBeNull()
+		expect(parentComponent.getRelationNodes()).toBeNull()
 
 		// 验证子组件获取父组件
 		const parentNodes = childComponent.getRelationNodes('./parent-component')

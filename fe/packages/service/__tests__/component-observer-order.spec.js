@@ -147,7 +147,7 @@ describe('Component.tO observer ordering', () => {
 		expect(component.data.active).toBe(true)
 	})
 
-	it('supports propertyEarlyInit observer-before-created ordering', () => {
+	it('does not let non-exparser options move property observers before created', () => {
 		const calls = []
 		const componentModule = new ComponentModule({
 			options: { propertyEarlyInit: true },
@@ -178,7 +178,7 @@ describe('Component.tO observer ordering', () => {
 
 		component.init()
 
-		expect(calls).toEqual(['observer:true', 'created:true'])
+		expect(calls).toEqual(['created:false', 'observer:true'])
 	})
 
 	it('executes initial property observers after created and only once', async () => {

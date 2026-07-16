@@ -1,5 +1,6 @@
 import { callback as callbackRegistry, isFunction } from '@dimina/common'
 import { parseDataPath } from './data-update'
+import { encodeDataFunctions } from './data-function'
 import message from './message'
 import { invokeSafely } from './safe-callback'
 
@@ -52,7 +53,7 @@ function snapshotUpdate(data, changes = []) {
 			const path = parseDataPath(key)
 			return path ? [{ path, value }] : []
 		})
-	const snapshot = JSON.parse(JSON.stringify({ data, changes: normalizedChanges }))
+	const snapshot = JSON.parse(JSON.stringify(encodeDataFunctions({ data, changes: normalizedChanges })))
 	return {
 		data: snapshot.data || {},
 		changes: (snapshot.changes || []).filter(change => Object.prototype.hasOwnProperty.call(change, 'value')),

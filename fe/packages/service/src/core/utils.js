@@ -48,41 +48,26 @@ export function filterData(obj) {
 	if (isNil(obj)) {
 		return obj
 	}
+	if (isFunction(obj)) {
+		return obj
+	}
+	if (obj instanceof Date) {
+		return obj.getTime()
+	}
+	if (Array.isArray(obj)) {
+		return obj.map(item => filterData(item))
+	}
+	if (typeof obj !== 'object') {
+		return obj
+	}
+
 	return Object.entries(obj).reduce((acc, [key, value]) => {
 		if (key.startsWith('$')) {
 			// 过滤以 $ 开头的内部属性
 			return acc
 		}
-		else if (isFunction(value)) {
-			console.warn('[service] 值不支持函数引用', key)
-			return acc
-		}
-		else if (Array.isArray(value)) {
-			// 如果值是数组，递归过滤其中的函数
-			acc[key] = value
-				.map(item => {
-					if (typeof item === 'object' && item !== null) {
-						// 特殊处理 Date 对象，转换为时间戳
-						if (item instanceof Date) {
-							return item.getTime()
-						}
-						return filterData(item)
-					}
-					return item
-				})
-		}
-		else if (value && typeof value === 'object' && !Array.isArray(value)) {
-			// 如果值是对象（非数组），递归过滤该对象中的函数
-			// 特殊处理 Date 对象，转换为时间戳
-			if (value instanceof Date) {
-				acc[key] = value.getTime()
-			} else {
-				acc[key] = filterData(value)
-			}
-		}
 		else {
-			// 其他类型（包括简单类型和非函数对象）直接保留
-			acc[key] = value
+			acc[key] = filterData(value)
 		}
 
 		return acc
@@ -120,7 +105,6 @@ const TYPE_TO_STRING_MAP = new Map([
 	[Boolean, 'b'],
 	[Object, 'o'],
 	[Array, 'a'],
-	[Function, 'f'],
 ])
 
 /**
@@ -247,8 +231,20 @@ export function mergeBehaviors(obj, behaviors) {
 		return
 	}
 
-	// 使用 WeakMap 缓存已处理的 behavior,避免重复执行生命周期和 observers
+	// 字段在 behavior 每次出现的位置都会重新参与覆盖；生命周期和 observers 只注册一次。
 	const processedBehaviors = new WeakMap()
+	const activeBehaviors = new WeakSet()
+	const componentProperties = obj.properties
+	const componentData = obj.data
+	const componentMethods = obj.methods
+	const componentRelations = obj.relations
+	const hasComponentExport = Object.prototype.hasOwnProperty.call(obj, 'export')
+	const componentExport = obj.export
+	let behaviorProperties
+	let behaviorData
+	let behaviorMethods
+	let behaviorRelations
+	let behaviorExport
 
 	/**
 	 * 深度合并对象类型的 data 字段
@@ -257,21 +253,20 @@ export function mergeBehaviors(obj, behaviors) {
 	 * @returns {object} 合并后的对象
 	 */
 	function deepMergeData(target, source) {
-		const result = { ...target }
+		const result = Array.isArray(target) ? [...target] : { ...target }
 		
 		for (const key in source) {
 			if (Object.prototype.hasOwnProperty.call(source, key)) {
 				const targetValue = result[key]
 				const sourceValue = source[key]
-				
-				// 如果两个值都是对象类型(非 null、非数组),则递归合并
+
+				// exparser clones the existing object-like value (including null as
+				// an empty object) before recursively merging a higher-priority object.
 				if (
-					targetValue && 
-					typeof targetValue === 'object' && 
-					!Array.isArray(targetValue) &&
-					sourceValue && 
-					typeof sourceValue === 'object' && 
-					!Array.isArray(sourceValue)
+					typeof targetValue === 'object'
+					&& sourceValue !== null
+					&& typeof sourceValue === 'object'
+					&& !Array.isArray(sourceValue)
 				) {
 					result[key] = deepMergeData(targetValue, sourceValue)
 				} else {
@@ -301,84 +296,85 @@ export function mergeBehaviors(obj, behaviors) {
 			return
 		}
 		
-		// 检查是否已处理过该 behavior(避免重复执行生命周期和 observers)
-		if (processedBehaviors.has(behavior)) {
+		// 与 exparser prepare 一样在循环引用时停止继续递归。
+		if (activeBehaviors.has(behavior)) {
 			return
 		}
-		processedBehaviors.set(behavior, true)
+		activeBehaviors.add(behavior)
+		const callbacksAlreadyProcessed = processedBehaviors.has(behavior)
 
 		// 先递归处理嵌套的 behaviors(被引用的 behavior 优先于引用者 behavior)
 		if (Array.isArray(behavior.behaviors)) {
 			behavior.behaviors.forEach(b => merge(target, b))
 		}
 
-	// 合并 properties
-	// 规则: 组件本身覆盖 behavior, 靠后的 behavior 覆盖靠前的, 引用者覆盖被引用者
-	if (behavior.properties) {
-		target.properties = { ...behavior.properties, ...target.properties }
-	}
+		// 先累积 behavior 字段；全部 behavior 处理完后再叠加组件自身字段。
+		if (behavior.properties) {
+			behaviorProperties = { ...behaviorProperties, ...behavior.properties }
+		}
 
 		// 合并 data
 		// 规则: 组件本身覆盖 behavior, 对象类型深度合并, 其他类型按优先级覆盖
 		if (behavior.data) {
-			if (!target.data) {
-				target.data = {}
-			}
-			target.data = deepMergeData(behavior.data, target.data)
+			behaviorData = deepMergeData(behaviorData || {}, behavior.data)
 		}
 
-		// 合并生命周期函数
-		// 规则: 不覆盖, 按顺序执行 (被引用的 > 引用者 > 靠前的 > 靠后的)
-		const lifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
-		target.behaviorLifetimes = target.behaviorLifetimes || {}
+		if (!callbacksAlreadyProcessed) {
+			processedBehaviors.set(behavior, true)
 
-		for (const lifetime of lifetimes) {
-			const lifecycleMethod = behavior.lifetimes?.[lifetime] || behavior[lifetime]
-			if (isFunction(lifecycleMethod)) {
-				target.behaviorLifetimes[lifetime] = target.behaviorLifetimes[lifetime] || []
-				target.behaviorLifetimes[lifetime].push(lifecycleMethod)
-			}
-		}
+			// 合并生命周期函数
+			// 规则: 不覆盖, 按顺序执行 (被引用的 > 引用者 > 靠前的 > 靠后的)
+			const lifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
+			target.behaviorLifetimes = target.behaviorLifetimes || {}
 
-		// 合并 observers
-		// 规则: 不覆盖, 按顺序执行 (被引用的 > 引用者 > 靠前的 > 靠后的)
-		if (behavior.observers) {
-			target.behaviorObservers = target.behaviorObservers || {}
-			target.behaviorObserverList = target.behaviorObserverList || []
-			
-			for (const observerKey in behavior.observers) {
-				if (!target.behaviorObservers[observerKey]) {
-					target.behaviorObservers[observerKey] = []
+			for (const lifetime of lifetimes) {
+				const lifecycleMethod = behavior.lifetimes?.[lifetime] || behavior[lifetime]
+				if (isFunction(lifecycleMethod)) {
+					target.behaviorLifetimes[lifetime] = target.behaviorLifetimes[lifetime] || []
+					target.behaviorLifetimes[lifetime].push(lifecycleMethod)
 				}
-				target.behaviorObservers[observerKey].push(behavior.observers[observerKey])
-				target.behaviorObserverList.push({
-					key: observerKey,
-					observer: behavior.observers[observerKey],
-				})
+			}
+
+			// 合并 observers
+			// 规则: 不覆盖, 按顺序执行 (被引用的 > 引用者 > 靠前的 > 靠后的)
+			if (behavior.observers) {
+				target.behaviorObservers = target.behaviorObservers || {}
+				target.behaviorObserverList = target.behaviorObserverList || []
+
+				for (const observerKey in behavior.observers) {
+					if (!target.behaviorObservers[observerKey]) {
+						target.behaviorObservers[observerKey] = []
+					}
+					target.behaviorObservers[observerKey].push(behavior.observers[observerKey])
+					target.behaviorObserverList.push({
+						key: observerKey,
+						observer: behavior.observers[observerKey],
+					})
+				}
 			}
 		}
 
-	// 合并 methods
-	// 规则: 组件本身覆盖 behavior, 靠后的 behavior 覆盖靠前的, 引用者覆盖被引用者
-	if (behavior.methods) {
-		target.methods = { ...behavior.methods, ...target.methods }
-	}
+		// 合并 methods
+		// 规则: 组件本身覆盖 behavior, 靠后的 behavior 覆盖靠前的, 引用者覆盖被引用者
+		if (behavior.methods) {
+			behaviorMethods = { ...behaviorMethods, ...behavior.methods }
+		}
 
 		// 合并 relations
 		// 规则: 靠后的覆盖靠前的
 		if (behavior.relations) {
-			target.relations = { ...target.relations, ...behavior.relations }
+			behaviorRelations = { ...behaviorRelations, ...behavior.relations }
 		}
 
 		// 合并 export 方法 (用于 wx://component-export)
 		// 规则: 靠后的覆盖靠前的
 		if (behavior.export) {
-			target.export = behavior.export
+			behaviorExport = behavior.export
 		}
 
 		// 合并 pageLifetimes (页面生命周期)
 		// 规则: 不覆盖, 按顺序执行
-		if (behavior.pageLifetimes) {
+		if (!callbacksAlreadyProcessed && behavior.pageLifetimes) {
 			target.behaviorPageLifetimes = target.behaviorPageLifetimes || {}
 			const pageLifetimes = ['show', 'hide', 'resize', 'routeDone']
 			
@@ -389,6 +385,8 @@ export function mergeBehaviors(obj, behaviors) {
 				}
 			}
 		}
+
+		activeBehaviors.delete(behavior)
 	}
 
 	/**
@@ -416,6 +414,28 @@ export function mergeBehaviors(obj, behaviors) {
 
 	// 按顺序合并所有 behaviors (靠前的先执行)
 	behaviors.forEach(behavior => merge(obj, behavior))
+
+	// exparser prepares ancestors in declaration order, then the component
+	// definition itself. Therefore later behaviors override earlier ones,
+	// referrers override nested behaviors, and the component always wins last.
+	if (behaviorProperties || componentProperties) {
+		obj.properties = { ...behaviorProperties, ...componentProperties }
+	}
+	if (behaviorData || componentData) {
+		obj.data = deepMergeData(behaviorData || {}, componentData || {})
+	}
+	if (behaviorMethods || componentMethods) {
+		obj.methods = { ...behaviorMethods, ...componentMethods }
+	}
+	if (behaviorRelations || componentRelations) {
+		obj.relations = { ...behaviorRelations, ...componentRelations }
+	}
+	if (hasComponentExport) {
+		obj.export = componentExport
+	}
+	else if (behaviorExport) {
+		obj.export = behaviorExport
+	}
 }
 
 /**
@@ -598,10 +618,11 @@ export function syncUpdateChildrenProps(parent, allInstances, changedData) {
 
 		// 如果有数据需要更新，直接触发子组件 observers，确保属性驱动的行为在 service 侧即时生效
 		if (Object.keys(updateData).length > 0) {
-			const normalizedData = child.normalizePropertyValues?.(updateData) || updateData
-			child.tO?.(normalizedData)
+			const incomingData = child.normalizePropertyValues?.(updateData, { applyFilter: false }) || updateData
+			const appliedData = child.tO?.(incomingData)
+			const normalizedData = appliedData || child.normalizePropertyValues?.(incomingData) || incomingData
 			child.__pendingSyncedProps__ = child.__pendingSyncedProps__ || {}
-			Object.assign(child.__pendingSyncedProps__, normalizedData)
+			Object.assign(child.__pendingSyncedProps__, incomingData)
 			syncedChildren.push({ child, data: normalizedData })
 		}
 	}

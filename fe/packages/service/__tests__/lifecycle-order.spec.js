@@ -1,4 +1,6 @@
+import { getDataFunctionReferenceId, isDataFunctionReference } from '@dimina/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resetDataFunctionReferences, resolveDataFunction } from '../src/core/data-function'
 import loader from '../src/core/loader'
 import runtime from '../src/core/runtime'
 import { Component } from '../src/instance/component/component'
@@ -8,6 +10,7 @@ import { PageModule } from '../src/instance/page/page-module'
 
 describe('Skyline/exparser lifecycle ordering', () => {
 	beforeEach(() => {
+		resetDataFunctionReferences()
 		runtime.instances = {}
 		runtime.pageStates.clear()
 		globalThis.DiminaServiceBridge.publish = vi.fn(() => Promise.resolve())
@@ -196,7 +199,13 @@ describe('Skyline/exparser lifecycle ordering', () => {
 
 	it('can defer only initial-data delivery without deferring page lifecycles', () => {
 		const calls = []
+		const dataFunction = vi.fn()
 		const pageModule = new PageModule({
+			data: {
+				dataFunction,
+				nested: { dataFunction },
+				list: [dataFunction],
+			},
 			onLoad() {
 				calls.push('page:onLoad')
 			},
@@ -217,6 +226,15 @@ describe('Skyline/exparser lifecycle ordering', () => {
 
 		page.sendInitialData()
 		expect(globalThis.DiminaServiceBridge.publish).toHaveBeenCalledTimes(1)
+		const [, initialDataMessage] = globalThis.DiminaServiceBridge.publish.mock.calls[0]
+		const bridgedFunction = initialDataMessage.body.data.dataFunction
+		expect(page.data.dataFunction).toBe(dataFunction)
+		expect(page.data.nested.dataFunction).toBe(dataFunction)
+		expect(page.data.list[0]).toBe(dataFunction)
+		expect(isDataFunctionReference(bridgedFunction)).toBe(true)
+		expect(initialDataMessage.body.data.nested.dataFunction).toEqual(bridgedFunction)
+		expect(initialDataMessage.body.data.list[0]).toEqual(bridgedFunction)
+		expect(resolveDataFunction(getDataFunctionReferenceId(bridgedFunction))).toBe(dataFunction)
 	})
 
 	it('runs custom component created, initial property observer, attached and ready in order', async () => {

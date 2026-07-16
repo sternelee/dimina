@@ -1,4 +1,6 @@
+import { getDataFunctionReferenceId, isDataFunctionReference } from '@dimina/common'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { resolveDataFunction } from '../src/core/data-function'
 import { resetUpdateQueues } from '../src/core/update-queue'
 import runtime from '../src/core/runtime'
 import { Component } from '../src/instance/component/component'
@@ -56,7 +58,7 @@ describe('Skyline/exparser setData semantics', () => {
 		warn.mockRestore()
 	})
 
-	it('clones reference values for logic and snapshots JSON-compatible values for render', async () => {
+	it('clones reference values for logic and bridges functions by stable reference', async () => {
 		const page = makePage()
 		const shared = { value: 1 }
 		const source = {
@@ -77,11 +79,33 @@ describe('Skyline/exparser setData semantics', () => {
 
 		await Promise.resolve()
 		const update = sentMessages[0].body.updates[0]
-		expect(update.data.item).toEqual({
+		expect(update.data.item).toMatchObject({
 			left: { value: 1 },
 			right: { value: 1 },
 			createdAt: '2025-01-02T03:04:05.000Z',
 		})
+		expect(isDataFunctionReference(update.data.item.method)).toBe(true)
+		expect(resolveDataFunction(getDataFunctionReferenceId(update.data.item.method))).toBe(source.method)
+	})
+
+	it('keeps direct and array function assignments in both data and change records', async () => {
+		const page = makePage()
+		const fn = () => 'value'
+
+		page.setData({ fn, list: [fn] })
+
+		expect(page.data.fn).toBe(fn)
+		expect(page.data.list[0]).toBe(fn)
+
+		await Promise.resolve()
+		const update = sentMessages[0].body.updates[0]
+		const fnReference = update.data.fn
+		expect(isDataFunctionReference(fnReference)).toBe(true)
+		expect(update.data.list[0]).toEqual(fnReference)
+		expect(update.changes).toEqual([
+			{ path: ['fn'], value: fnReference },
+			{ path: ['list'], value: [fnReference] },
+		])
 	})
 
 	it('runs behavior observers before component observers without old values and drains nested setData', async () => {
@@ -115,6 +139,36 @@ describe('Skyline/exparser setData semantics', () => {
 
 		await Promise.resolve()
 		expect(sentMessages[0].body.updates[0].data).toEqual({ count: 2, mirrored: 2 })
+	})
+
+	it('requires a deep wildcard for descendant assignments but observes ancestor replacement', () => {
+		const calls = []
+		const page = makePage({
+			observers: {
+				profile(value) {
+					calls.push(['profile', value])
+				},
+				'profile.name'(value) {
+					calls.push(['profile.name', value])
+				},
+				'profile.**'(value) {
+					calls.push(['profile.**', value])
+				},
+			},
+		})
+
+		page.setData({ 'profile.name.first': 'Ada' })
+		expect(calls).toEqual([
+			['profile.**', { name: { first: 'Ada' } }],
+		])
+
+		calls.length = 0
+		page.setData({ profile: { name: { first: 'Grace' } } })
+		expect(calls).toEqual([
+			['profile', { name: { first: 'Grace' } }],
+			['profile.name', { first: 'Grace' }],
+			['profile.**', { name: { first: 'Grace' } }],
+		])
 	})
 
 	it('runs property observers in assignment order and passes the full nested update path', async () => {
