@@ -64,14 +64,16 @@ export function normalizePropertyDefinition(definition) {
 function isExparserArray(value) {
 	// Dimina 的 service/container/render 分属不同 realm。数组经过桥接后仍是数组，
 	// 但不一定满足当前 render realm 的 `instanceof Array`。
-	// Array.isArray 同时保留 exparser 对 Array 子类的主类型接收语义。
+	// 主类型 Array 使用 Array.isArray：它既能识别跨 realm 数组，也保留
+	// exparser 接受 Array 子类的转换语义。
 	return Array.isArray(value)
 }
 
 function isPlainArray(value) {
 	// optionalTypes 的 Array 匹配比主类型严格：普通数组可命中，Array 子类不可命中。
-	// 通过构造器名称兼容跨 realm 的原生 Array 构造器身份不同问题。
-	return Array.isArray(value) && value?.constructor?.name === Array.name
+	// 这里复用跨 realm 安全的基础数组判断，再用原生构造器名称排除 Array 子类；
+	// 因此不能直接把主类型和 optionalTypes 合并为同一种判断语义。
+	return isExparserArray(value) && value?.constructor?.name === Array.name
 }
 
 /**
