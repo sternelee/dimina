@@ -1,4 +1,4 @@
-import { camelCaseToUnderscore, deepEqual, get, isFunction, isNil, isString, toCamelCase } from '@dimina/common'
+import { camelCaseToUnderscore, deepEqual, get, isFunction, isNil, isString, normalizePropertyDefinition, toCamelCase } from '@dimina/common'
 
 const queue = []
 let isFlushing = false
@@ -97,38 +97,11 @@ export function serializeProps(properties) {
 	if (properties) {
 		const props = {}
 		for (const key in properties) {
-			const item = properties[key]
-			props[key] = props[key] || {}
-
-			// 处理 type 字段
-			// 兼容 items: Array 和 item: { type: String, value: '' } 两种形式
-			const transType = item && typeof item === 'object' && Object.prototype.hasOwnProperty.call(item, 'type') ? convertToStringType(item.type) : convertToStringType(item)
-			let array = null
-			if (Array.isArray(transType)) {
-				array = [...transType]
-			}
-			else {
-				array = [transType]
-			}
-
-			// 处理 optionalTypes 字段
-			if (item && item.optionalTypes) {
-				const oTransType = convertToStringType(item.optionalTypes)
-				if (Array.isArray(oTransType)) {
-					array = [...oTransType]
-				}
-				else {
-					array.push(oTransType)
-				}
-			}
-			props[key].type = array
-			if (props[key].type.length > 0) {
-				if (item && isFunction(item.value)) {
-					props[key].default = item.value()
-				}
-				else if (item) {
-					props[key].default = item.value
-				}
+			const schema = normalizePropertyDefinition(properties[key])
+			props[key] = {
+				// 第一个类型是主类型，后续类型是只做严格匹配的 optionalTypes。
+				type: [schema.type, ...schema.optionalTypes].map(convertToStringType),
+				default: schema.value,
 			}
 
 			// 标记处理 observer 字段
@@ -759,10 +732,11 @@ export function syncUpdateChildrenProps(parent, allInstances, changedData) {
 
 		// 如果有数据需要更新，直接触发子组件 observers，确保属性驱动的行为在 service 侧即时生效
 		if (Object.keys(updateData).length > 0) {
-			child.tO?.(updateData)
+			const normalizedData = child.normalizePropertyValues?.(updateData) || updateData
+			child.tO?.(normalizedData)
 			child.__pendingSyncedProps__ = child.__pendingSyncedProps__ || {}
-			Object.assign(child.__pendingSyncedProps__, updateData)
-			syncedChildren.push({ child, data: updateData })
+			Object.assign(child.__pendingSyncedProps__, normalizedData)
+			syncedChildren.push({ child, data: normalizedData })
 		}
 	}
 

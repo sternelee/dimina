@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { JSDOM } from 'jsdom'
 import { createApp, h, nextTick } from 'vue'
+import { createMiniProgramSlots } from '../src/core/slots'
 
 const groupA = [
 	{ id: 1, name: 'Alice', score: 90 },
@@ -212,5 +213,20 @@ describe('runtime template components', () => {
 		expect(gl.viewport).toHaveBeenCalledWith(0, 0, 300, 150)
 		expect(gl.shaderSource).toHaveBeenCalledWith(shader, 'void main() {}')
 		expect(gl.compileShader).toHaveBeenCalledWith(shader)
+	})
+})
+
+describe('mini-program dynamic slots', () => {
+	it('merges duplicate slot functions in declaration order', () => {
+		const slots = createMiniProgramSlots({}, [
+			{ name: 'info', fn: () => ['success'] },
+			[
+				{ name: 'info', fn: () => ['failure'] },
+				{ name: 'footer', fn: () => ['footer'] },
+			],
+		])
+
+		expect(slots.info()).toEqual(['success', 'failure'])
+		expect(slots.footer()).toEqual(['footer'])
 	})
 })

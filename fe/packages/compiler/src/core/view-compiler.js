@@ -1168,6 +1168,88 @@ function transAsses($, imageNodes, path) {
 	})
 }
 
+const DIMINA_SLOT_GROUP_TAG = 'dimina-slot-group'
+const DIMINA_FOR_SCOPE_TAG = 'dimina-for-scope'
+
+function getDirectiveAttributeNames(attrs, suffixes) {
+	return Object.keys(attrs || {}).filter(name => suffixes.some(suffix => name.endsWith(suffix)))
+}
+
+function hasForAndIf(attrs) {
+	return getDirectiveAttributeNames(attrs, [':for', ':for-items']).length > 0
+		&& getDirectiveAttributeNames(attrs, [':if']).length > 0
+}
+
+function groupDuplicateNamedSlots($, components) {
+	const slotHosts = $('*').toArray().filter((element) => {
+		const tag = element.tagName
+		return tag === 'component' || Boolean(components?.[tag])
+	})
+
+	for (const host of slotHosts) {
+		const groups = new Map()
+		for (const child of $(host).children().toArray()) {
+			const slotName = child.attribs?.slot
+			if (!slotName) continue
+			const group = groups.get(slotName) || []
+			group.push(child)
+			groups.set(slotName, group)
+		}
+
+		for (const [slotName, nodes] of groups) {
+			// 单个普通插槽继续使用原转换，保留既有 v-if/fallback 行为。
+			if (nodes.length === 1 && !hasForAndIf(nodes[0].attribs)) {
+				continue
+			}
+
+			const wrapper = $(`<${DIMINA_SLOT_GROUP_TAG}></${DIMINA_SLOT_GROUP_TAG}>`)
+			wrapper.attr('name', slotName)
+			$(nodes[0]).before(wrapper)
+			for (const node of nodes) {
+				$(node).removeAttr('slot')
+				wrapper.append(node)
+			}
+		}
+	}
+}
+
+function wrapForIfScopes($) {
+	const nodes = $('*').toArray()
+	for (const node of nodes) {
+		if (node.tagName === DIMINA_FOR_SCOPE_TAG || !hasForAndIf(node.attribs)) {
+			continue
+		}
+
+		const attrsToMove = getDirectiveAttributeNames(node.attribs, [
+			':for',
+			':for-items',
+			':for-item',
+			':for-index',
+			':key',
+		])
+		const wrapper = $(`<${DIMINA_FOR_SCOPE_TAG}></${DIMINA_FOR_SCOPE_TAG}>`)
+		for (const name of attrsToMove) {
+			wrapper.attr(name, node.attribs[name])
+			$(node).removeAttr(name)
+		}
+		$(node).before(wrapper)
+		wrapper.append(node)
+	}
+}
+
+function normalizeTemplateSyntax(html, components) {
+	const $ = cheerio.load(html, {
+		xmlMode: true,
+		decodeEntities: false,
+		_useHtmlParser2: true,
+		lowerCaseTags: false,
+		lowerCaseAttributeNames: false,
+	})
+	groupDuplicateNamedSlots($, components)
+	wrapForIfScopes($)
+	return $.html()
+}
+
 function transHtmlTag(html, res, components, componentPlaceholder) {
 	const attrsList = []
 	const parser = new htmlparser2.Parser(
@@ -1189,7 +1271,7 @@ function transHtmlTag(html, res, components, componentPlaceholder) {
 		{ xmlMode: true },
 	)
 
-	parser.write(html)
+	parser.write(normalizeTemplateSyntax(html, components))
 	parser.end()
 }
 
@@ -1200,7 +1282,16 @@ function transHtmlTag(html, res, components, componentPlaceholder) {
 function transTag(opts) {
 	const { isStart, tag, attrs, components } = opts
 	let res
-	if (tag === 'slot') {
+	if (tag === DIMINA_SLOT_GROUP_TAG) {
+		if (isStart) {
+			return `<template ${generateSlotDirective(attrs.name)}>`
+		}
+		return '</template>'
+	}
+	else if (tag === DIMINA_FOR_SCOPE_TAG) {
+		res = 'template'
+	}
+	else if (tag === 'slot') {
 		// https://cn.vuejs.org/guide/components/slots.html#slots
 		// 保留插槽节点和自定义组件节点
 		res = tag
@@ -2041,6 +2132,7 @@ export {
 	parseClassRules,
 	parseKeyExpression,
 	parseTemplateDataExp,
+	normalizeTemplateSyntax,
 	processIncludeConditionalAttrs,
 	processWxsContent,
 	splitWithBraces,

@@ -1,4 +1,4 @@
-import { cloneDeep, isFunction, isString, set } from '@dimina/common'
+import { cloneDeep, isFunction, isString, normalizePropertyDefinition, resolvePropertyValue, set } from '@dimina/common'
 import { createSelectorQuery } from '../../api/core/wxml/selector-query'
 import { createIntersectionObserver } from '../../api/core/wxml/intersection-observer'
 import message from '../../core/message'
@@ -65,19 +65,18 @@ export class Component {
 		this.__childPropsBindings__ = {}
 		this.__pendingSyncedProps__ = {}
 		this.__initialPropertyObserversInvoked__ = false
+		this.__propertySchemas__ = Object.fromEntries(
+			Object.entries(this.__info__.properties || {}).map(([name, definition]) => [name, normalizePropertyDefinition(definition)]),
+		)
 	}
 
 	init() {
 		if (this.__isComponent__) {
-			for (const key in this.__info__.properties) {
-				// 先取逻辑层的属性默认值
-				if (!Object.prototype.hasOwnProperty.call(this.opts.properties, key) || this.opts.properties[key] === undefined) {
-					this.data[key] = this.__info__.properties[key]?.value ?? null
-				}
-				else {
-					// 没有默认值则取渲染层的属性实际值
-					this.data[key] = this.opts.properties[key]
-				}
+			const initialProperties = this.opts.properties || {}
+			for (const [key, schema] of Object.entries(this.__propertySchemas__)) {
+				this.data[key] = resolvePropertyValue(schema, initialProperties[key], {
+					absent: !Object.prototype.hasOwnProperty.call(initialProperties, key),
+				})
 			}
 		}
 
@@ -523,8 +522,11 @@ export class Component {
 	 * triggerObserver
 	 */
 	tO(data) {
+		const normalizedData = typeof this.normalizePropertyValues === 'function'
+			? this.normalizePropertyValues(data)
+			: data
 		const nextData = {}
-		for (const [prop, val] of Object.entries(data)) {
+		for (const [prop, val] of Object.entries(normalizedData)) {
 			if (
 				this.__pendingSyncedProps__
 				&& Object.prototype.hasOwnProperty.call(this.__pendingSyncedProps__, prop)
@@ -563,6 +565,17 @@ export class Component {
 		observersToExecute.forEach(run => run())
 		invokeBehaviorObservers(this, Object.keys(nextData), Object.fromEntries(Object.keys(nextData).map(prop => [prop, undefined])))
 		runPropertyObservers(this, Object.keys(nextData), oldValues)
+	}
+
+	normalizePropertyValues(data) {
+		const normalized = {}
+		for (const [prop, value] of Object.entries(data || {})) {
+			const schema = this.__propertySchemas__[prop]
+			normalized[prop] = schema
+				? resolvePropertyValue(schema, value)
+				: value
+		}
+		return normalized
 	}
 
 	getPageId() {

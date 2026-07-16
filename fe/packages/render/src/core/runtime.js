@@ -1,4 +1,4 @@
-import { deepEqual, getDataAttributes, set, uuid } from '@dimina/common'
+import { deepEqual, getDataAttributes, normalizePropertyValues as normalizeMiniProgramPropertyValues, set, uuid } from '@dimina/common'
 import { Components, deepToRaw, triggerEvent } from '@dimina/components'
 import {
 	createApp,
@@ -6,7 +6,6 @@ import {
 	createCommentVNode,
 	createElementBlock,
 	createElementVNode,
-	createSlots,
 	createTextVNode,
 	createVNode,
 	Fragment,
@@ -35,6 +34,14 @@ import {
 } from 'vue'
 import loader from './loader'
 import message from './message'
+import { createMiniProgramSlots } from './slots'
+
+function hasVNodeProp(vnodeProps, name) {
+	if (!vnodeProps) return false
+	if (Object.prototype.hasOwnProperty.call(vnodeProps, name)) return true
+	const kebabName = name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)
+	return Object.prototype.hasOwnProperty.call(vnodeProps, kebabName)
+}
 
 // Keep these aliases in sync with @vue/compiler-core helperNameMap/aliasHelper output.
 const VUE_RUNTIME_HELPERS = {
@@ -45,7 +52,7 @@ const VUE_RUNTIME_HELPERS = {
 	_createCommentVNode: createCommentVNode,
 	_createElementBlock: createElementBlock,
 	_createElementVNode: createElementVNode,
-	_createSlots: createSlots,
+	_createSlots: createMiniProgramSlots,
 	_normalizeClass: normalizeClass,
 	_normalizeStyle: normalizeStyle,
 	_openBlock: openBlock,
@@ -436,8 +443,16 @@ class Runtime {
 					})
 					const instance = vueInstance.proxy
 					that.setModuleInstance(moduleId, instance)
+					const normalizeCurrentProperties = () => normalizeMiniProgramPropertyValues(
+						module.propertySchemas,
+						deepToRaw(props),
+						{
+							isAbsent: name => !hasVNodeProp(vueInstance.vnode.props, name),
+							warn: warning => console.warn('[system]', '[render]', warning),
+						},
+					)
 
-				const externalClasses = []
+					const externalClasses = []
 					for (const [k, v] of Object.entries(module.props ?? {})) {
 						if (v.cls) {
 							// 自定义组件的外部样式类，通过 v-c-class 自定义指令处理
@@ -446,47 +461,49 @@ class Runtime {
 					}
 					provide('externalClasses', externalClasses)
 
-				const eventAttr = {}
-				for (const attrName in attrs) {
-					if (attrName.startsWith('bind') || attrName.startsWith('catch')) {
-						eventAttr[attrName.replace(/^(?:bind:|bind|catch:|catch)/, '')] = attrs[attrName]
+					const eventAttr = {}
+					for (const attrName in attrs) {
+						if (attrName.startsWith('bind') || attrName.startsWith('catch')) {
+							eventAttr[attrName.replace(/^(?:bind:|bind|catch:|catch)/, '')] = attrs[attrName]
+						}
 					}
-				}
 
-			message.send({
-					type: 'mC', // createInstance + componentAttached
-					target: 'service',
-					body: {
-						bridgeId,
-						moduleId,
-						path: componentPath,
-						pageId,
-						parentId,
-						eventAttr,
-						targetInfo: {
-							dataset: getDataAttributes(attrs, deepToRaw),
-							id: attrs.id,
-							class: attrs.class,
+					const initialProperties = normalizeCurrentProperties()
+
+					message.send({
+						type: 'mC', // createInstance + componentAttached
+						target: 'service',
+						body: {
+							bridgeId,
+							moduleId,
+							path: componentPath,
+							pageId,
+							parentId,
+							eventAttr,
+							targetInfo: {
+								dataset: getDataAttributes(attrs, deepToRaw),
+								id: attrs.id,
+								class: attrs.class,
+							},
+							properties: initialProperties,
+							propBindings: null, // 初始化时为 null，稍后从 DOM 元素读取
 						},
-						properties: deepToRaw(props),
-						propBindings: null, // 初始化时为 null，稍后从 DOM 元素读取
-					},
-				})
+					})
 
-				// mC 发出，service 侧开始异步执行 created；记录此 moduleId 为 pending 状态，
-				// message.wait 解除后（service created 完成）才从 pending 中移除
-				let _pendingResolved = false
-				let _resolvePending
-				const _pendingResolve = () => {
-					if (_pendingResolved) {
-						return
+					// mC 发出，service 侧开始异步执行 created；记录此 moduleId 为 pending 状态，
+					// message.wait 解除后（service created 完成）才从 pending 中移除
+					let _pendingResolved = false
+					let _resolvePending
+					const _pendingResolve = () => {
+						if (_pendingResolved) {
+							return
+						}
+						_pendingResolved = true
+						_resolvePending?.()
 					}
-					_pendingResolved = true
-					_resolvePending?.()
-				}
-				that._pendingSetups.set(moduleId, new Promise(r => (_resolvePending = r)))
+					that._pendingSetups.set(moduleId, new Promise(r => (_resolvePending = r)))
 
-				onMounted(() => {
+					onMounted(() => {
 						nextTick(() => {
 							// 从 DOM 元素读取属性绑定信息
 							const propBindings = instance.$el?._propBindings
@@ -516,63 +533,68 @@ class Runtime {
 						}
 					})
 
-				onUnmounted(() => {
-					message.send({
-						type: 'mU',
-						target: 'service',
-						body: {
-							bridgeId,
-							moduleId,
-						},
+					onUnmounted(() => {
+						message.send({
+							type: 'mU',
+							target: 'service',
+							body: {
+								bridgeId,
+								moduleId,
+							},
+						})
+						that.deleteModuleInstance(moduleId)
+						that.setupData.delete(moduleId)
+						that.initializedModules.delete(moduleId)
+						that.preInitUpdates.delete(moduleId)
+						that._pendingSetups.delete(moduleId)
+						_pendingResolve()
 					})
-					that.deleteModuleInstance(moduleId)
-					that.setupData.delete(moduleId)
-					that.initializedModules.delete(moduleId)
-					that.preInitUpdates.delete(moduleId)
-					that._pendingSetups.delete(moduleId)
-					_pendingResolve()
-				})
 
-			const data = reactive({})
-			that.setupData.set(moduleId, data)
-			let skipInitialPropsNotify = true
-			
-		watch(
-				() => deepToRaw(props),
-				(newProps, oldProps = {}) => {
-					Object.assign(data, newProps)
-					if (skipInitialPropsNotify) {
-						skipInitialPropsNotify = false
-						return
-					}
+					const data = reactive({})
+					that.setupData.set(moduleId, data)
+					let previousNormalizedProps = initialProperties
+					let isInitialPropsWatch = true
 
-					const changedProps = Object.entries(newProps).reduce((acc, [key, value]) => {
-						if (!deepEqual(value, oldProps[key])) {
-							acc[key] = value
-						}
-						return acc
-					}, {})
+					watch(
+						() => deepToRaw(props),
+						() => {
+							const newProps = isInitialPropsWatch
+								? initialProperties
+								: normalizeCurrentProperties()
+							Object.assign(data, newProps)
+							if (isInitialPropsWatch) {
+								isInitialPropsWatch = false
+								return
+							}
 
-					if (Object.keys(changedProps).length === 0) {
-						return
-					}
+							const changedProps = Object.entries(newProps).reduce((acc, [key, value]) => {
+								if (!deepEqual(value, previousNormalizedProps[key])) {
+									acc[key] = value
+								}
+								return acc
+							}, {})
+							previousNormalizedProps = newProps
 
-					message.send({
-						type: 't',
-						target: 'service',
-						body: {
-							bridgeId,
-							moduleId,
-							methodName: 'tO', // triggerObserver
-							event: changedProps,
+							if (Object.keys(changedProps).length === 0) {
+								return
+							}
+
+							message.send({
+								type: 't',
+								target: 'service',
+								body: {
+									bridgeId,
+									moduleId,
+									methodName: 'tO', // triggerObserver
+									event: changedProps,
+								},
+							})
 						},
-					})
-				},
-				{
-					immediate: true,
-				}
-			)
-					
+						{
+							immediate: true,
+						},
+					)
+
 					const initData = await message.wait(moduleId)
 					that._pendingSetups.delete(moduleId)
 					_pendingResolve()
