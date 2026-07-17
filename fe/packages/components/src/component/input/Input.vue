@@ -3,7 +3,7 @@
 // https://developers.weixin.qq.com/miniprogram/dev/component/input.html
 // https://github.com/Tencent/weui/blob/master/src/example/input/input.html
 
-import { isDesktop, sleep, transformRpx } from '@dimina/common'
+import { isDesktop, transformRpx } from '@dimina/common'
 import { invokeAPI, triggerEvent, useInfo } from '@/common/events'
 import { getActualBottom } from '@/common/utils'
 
@@ -50,7 +50,7 @@ const props = defineProps({
 	 */
 	placeholder: {
 		type: String,
-		required: true,
+		default: '',
 	},
 	/**
 	 * 指定 placeholder 的样式，目前仅支持color,font-size和font-weight
@@ -166,6 +166,15 @@ const props = defineProps({
 		type: String,
 		default: 'input-placeholder',
 	},
+	keyboardAppearance: { type: String, default: 'default' },
+	dropdownStyle: { type: Object, default: () => ({}) },
+	autoFill: { type: String, default: '' },
+	safePasswordCertPath: { type: String, default: null },
+	safePasswordTimeStamp: { type: Number, default: null },
+	safePasswordNonce: { type: Number, default: null },
+	safePasswordSalt: { type: String, default: null },
+	safePasswordCustomHash: { type: String },
+	safePasswordLength: { type: Number, default: 6 },
 })
 
 const emit = defineEmits(['update:value'])
@@ -252,10 +261,21 @@ const computedPlaceholderStyle = computed(() => {
 
 // 注入父组件提供的方法
 const collectFormValue = inject('collectFormValue', undefined)
+const registerFormControl = inject('registerFormControl', undefined)
 collectFormValue?.(props.name, props.value)
 
 // 处理placeholder样式
 const iValue = ref(props.value)
+
+const unregisterFormControl = registerFormControl?.({
+	getName: () => props.name,
+	getValue: () => iValue.value,
+	reset: () => {
+		iValue.value = ''
+		collectFormValue?.(props.name, iValue.value)
+	},
+})
+onBeforeUnmount(() => unregisterFormControl?.())
 
 const placeholderShow = computed(() => {
 	return iValue.value === undefined || iValue.value === null || iValue.value === ''
@@ -266,22 +286,32 @@ const inputRef = ref(null)
 const keyCode = ref(null)
 
 const vFocus = {
-	mounted: async (el) => {
-		if (!props.autoFocus) {
+	mounted: (el) => {
+		if (!props.autoFocus && !props.focus) {
 			return
 		}
-		if (isDesktop) {
-			// 兼容 web 端页面进入动画
-			await sleep(540)
-		}
 		el.focus()
+		applySelection(el)
 	},
+}
+
+function applySelection(element = inputRef.value) {
+	if (!element?.setSelectionRange) return
+	const cursor = Number(props.cursor)
+	const start = cursor >= 0 ? cursor : Number(props.selectionStart)
+	const end = cursor >= 0 ? cursor : Number(props.selectionEnd)
+	if (start >= 0) {
+		element.setSelectionRange(start, end >= 0 ? end : start)
+	}
 }
 
 watch(
 	[() => props.focus, () => props.value],
 	([nF, nV], [, preV]) => {
-		nF && inputRef.value.focus()
+		if (nF) {
+			inputRef.value.focus()
+			applySelection()
+		}
 		if (preV !== nV) {
 			iValue.value = nV
 		}
@@ -290,6 +320,8 @@ watch(
 
 const wrapperRef = ref(null)
 const info = useInfo()
+const keyboardAccessoryVisible = ref(false)
+provide('keyboardAccessoryVisible', keyboardAccessoryVisible)
 
 function handleKeydown(event) {
 	keyCode.value = event.keyCode
@@ -339,6 +371,8 @@ function handleWrapperEvent(event) {
 			break
 
 		case 'focusin':
+			keyboardAccessoryVisible.value = true
+			applySelection(event.target)
 			triggerEvent('focus', {
 				event,
 				info,
@@ -362,6 +396,7 @@ function handleWrapperEvent(event) {
 			break
 
 		case 'focusout':
+			keyboardAccessoryVisible.value = false
 			triggerEvent('blur', {
 				event,
 				info,
@@ -371,18 +406,23 @@ function handleWrapperEvent(event) {
 				},
 			})
 			break
+
+		case 'change':
+			triggerEvent('change', { event, info, detail: { value } })
+			break
 	}
 }
 </script>
 
 <template>
 	<div
-		ref="wrapperRef" v-bind="$attrs" :class="wrapperClass" role="textbox" @input="handleWrapperEvent"
-		@focusin="handleWrapperEvent" @focusout="handleWrapperEvent"
+		ref="wrapperRef" v-bind="$attrs" :class="wrapperClass" role="textbox" data-dd-label-target @input="handleWrapperEvent"
+		@focusin="handleWrapperEvent" @focusout="handleWrapperEvent" @change="handleWrapperEvent"
 	>
 		<input
 			:id="id" ref="inputRef" v-focus class="dd-input" :type="inputType" :inputmode="inputMode"
-			:maxlength="maxlength" :value="iValue" :disabled="disabled" @keydown="handleKeydown"
+			:maxlength="maxlength" :value="iValue" :disabled="disabled"
+			:autocomplete="autoFill || undefined" @keydown="handleKeydown"
 		/>
 		<div
 			v-show="placeholderShow" class="dd-input-placeholder" :class="placeholderClass"
@@ -390,6 +430,7 @@ function handleWrapperEvent(event) {
 		>
 			{{ placeholder }}
 		</div>
+		<slot />
 	</div>
 </template>
 

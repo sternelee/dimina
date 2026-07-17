@@ -7,30 +7,34 @@ const maskRef = ref(null)
 const contentRef = ref(null)
 const currentY = ref(0)
 const duration = ref('0.2s')
-const pickerItemStyle = inject('pickerItemStyle', {})
+const pickerItemStyle = inject('pickerItemStyle', computed(() => ({})))
 const pickerEvent = inject('pickerEvent', undefined)
+const pickerImmediateChange = inject('pickerImmediateChange', computed(() => false))
 const getPickerHeight = inject('getPickerHeight', () => 0)
 const getItemIndex = inject('getItemIndex', () => 0)
 const itemIndex = getItemIndex()
 const setPickerValue = inject('setPickerValue', undefined)
-const itemValue = inject('itemValue', Array.from({ length: itemIndex }).fill(0))
+const itemValue = inject('itemValue', ref(Array.from({ length: itemIndex }).fill(0)))
 
-const indicatorClass = ref(pickerItemStyle.indicatorClass)
-const maskClass = ref(pickerItemStyle.maskClass)
+const indicatorClass = computed(() => pickerItemStyle.value.indicatorClass)
+const maskClass = computed(() => pickerItemStyle.value.maskClass)
 // 子节点行高，默认为34px
 const nodeLineHeight = ref('34px')
 
 let isDragging = false
 let startY = 0
 let moveY = 0
+let startIndex = 0
+let valueChanged = false
 
 const slots = useSlots()
 // 可选项长度
 let itemsSize = slots.default ? Math.max(slots.default()[0].children.length - 1, 0) : 0
 
 // 选中项索引, 数字大于可选项长度时，选择最后一项
-const currentIndex = ref(Math.min(itemValue[itemIndex], itemsSize))
+const currentIndex = ref(Math.min(itemValue.value[itemIndex] || 0, itemsSize))
 let itemHeight = 0
+let pendingEndEvent
 
 setPickerValue?.(itemIndex, currentIndex.value)
 
@@ -38,8 +42,10 @@ function startDrag(event) {
 	pickerEvent?.('pickstart', event)
 	isDragging = true
 	startY = event.touches ? event.touches[0].clientY : event.clientY
-	moveY = 0
 	itemHeight = indicatorRef.value.offsetHeight
+	startIndex = currentIndex.value
+	valueChanged = false
+	moveY = -currentIndex.value * itemHeight
 }
 
 function drag(event) {
@@ -67,14 +73,40 @@ function endDrag(event) {
 		currentY.value = 0
 	}
 	setPickerValue?.(itemIndex, currentIndex.value)
-	pickerEvent?.('change', event)
-	pickerEvent?.('pickend', event)
+	valueChanged = currentIndex.value !== startIndex
+	if (pickerImmediateChange.value && valueChanged) {
+		pickerEvent?.('change', event)
+	}
+	pendingEndEvent = event
+	if (duration.value === '0s' || moveY === -currentIndex.value * itemHeight) {
+		finishScroll()
+	}
 }
+
+function finishScroll(event = pendingEndEvent) {
+	if (!pendingEndEvent && !event) return
+	if (!pickerImmediateChange.value && valueChanged) {
+		pickerEvent?.('change', event)
+	}
+	pickerEvent?.('pickend', event)
+	pendingEndEvent = undefined
+}
+
+watch(() => itemValue.value[itemIndex], (value) => {
+	const nextIndex = Math.min(Math.max(Number(value) || 0, 0), itemsSize)
+	currentIndex.value = nextIndex
+	currentY.value = -nextIndex * itemHeight
+})
+
+watch(pickerItemStyle, (styles) => {
+	if (indicatorRef.value) indicatorRef.value.style.cssText = styles.indicatorStyle || ''
+	if (maskRef.value) maskRef.value.style.cssText = styles.maskStyle || ''
+})
 
 onMounted(async () => {
 	await nextTick()
 	const pickerHeight = getPickerHeight()
-	indicatorRef.value.style = pickerItemStyle.indicatorStyle
+	indicatorRef.value.style.cssText = pickerItemStyle.value.indicatorStyle || ''
 
 	// 获取子节点的行高
 	if (slots.default && slots.default()[0].children.length > 0) {
@@ -92,7 +124,7 @@ onMounted(async () => {
 	const pTop = (pickerHeight - itemHeight) / 2
 	indicatorRef.value.style.top = `${pTop}px`
 
-	maskRef.value.style = pickerItemStyle.maskStyle
+	maskRef.value.style.cssText = pickerItemStyle.value.maskStyle || ''
 	maskRef.value.style.backgroundSize = `100% ${pTop}px`
 
 	const slotNodes = contentRef.value.children
@@ -114,7 +146,7 @@ onMounted(async () => {
 				ref="contentRef" class="dd-picker__content" :style="{
 					'--duration': duration,
 					'transform': `translateY(${currentY}px)`,
-				}" @touchstart="startDrag" @touchmove.prevent="drag" @touchend.prevent="endDrag" @touchcancel="endDrag"
+				}" @transitionend.self="finishScroll" @touchstart="startDrag" @touchmove.prevent="drag" @touchend.prevent="endDrag" @touchcancel="endDrag"
 				@mousedown="startDrag" @mousemove.prevent="drag" @mouseup="endDrag" @mouseleave="endDrag"
 			>
 				<slot />

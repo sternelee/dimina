@@ -59,6 +59,45 @@ class Service {
 			callback.invoke(id, args)
 		})
 
+		// A built-in component lives in the render thread, while container API
+		// callbacks are delivered to the service thread. Relay those callbacks
+		// to the render callback registry without bypassing the normal API bridge.
+		this.message.on('componentInvokeAPI', (msg) => {
+			const { apiName, bridgeId, callbacks = {}, params = {} } = msg
+			let successId
+			let failId
+			const sendToRender = (renderCallbackId, data) => {
+				if (!renderCallbackId) return
+				this.message.send({
+					type: 'triggerCallback',
+					target: 'render',
+					body: { bridgeId, data, success: renderCallbackId },
+				})
+			}
+
+			if (callbacks.success) {
+				successId = callback.store(data => sendToRender(callbacks.success, data))
+			}
+			if (callbacks.fail) {
+				failId = callback.store(data => sendToRender(callbacks.fail, data))
+			}
+			const completeId = callback.store((data) => {
+				sendToRender(callbacks.complete, data)
+				callback.remove(successId)
+				callback.remove(failId)
+			})
+
+			this.message.invoke({
+				type: 'invokeAPI',
+				target: 'container',
+				body: {
+					name: apiName,
+					bridgeId,
+					params: { ...params, complete: completeId, fail: failId, success: successId },
+				},
+			})
+		})
+
 		this.message.on('resourceLoadFailed', ({ bridgeId, pagePath, errors = [] }) => {
 			console.error(`[service] resourceLoadFailed: bridgeId: ${bridgeId}, pagePath: ${pagePath}, errors: ${errors.join('; ')}`)
 		})

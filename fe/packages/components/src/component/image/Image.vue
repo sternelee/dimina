@@ -13,8 +13,25 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	lazyLoadMargin: {
+		type: Number,
+		default: 2,
+	},
+	webp: {
+		type: Boolean,
+		default: false,
+	},
+	showMenuByLongpress: {
+		type: Boolean,
+		default: false,
+	},
+	referrerPolicy: {
+		type: String,
+		default: 'unsafe-url',
+	},
 	mode: {
 		type: String,
+		default: 'scaleToFill',
 		validator: (val) => {
 			return ['scaleToFill', 'aspectFit', 'aspectFill', 'widthFix', 'heightFix', 'top', 'bottom', 'center', 'left', 'right', 'top left', 'top right', 'bottom left', 'bottom right'].includes(val)
 		},
@@ -42,6 +59,8 @@ const dynamicClass = computed(() => MODE_CLASS_MAP[props.mode] || '')
 
 const imgRef = ref(null)
 const conRef = ref(null)
+const renderedSrc = ref(props.lazyLoad ? '' : props.src)
+let intersectionObserver
 
 const info = useInfo()
 let lastCompletedSrc = ''
@@ -53,13 +72,30 @@ onMounted(() => {
 	else if (props.mode === 'heightFix') {
 		conRef.value.style.width = 'auto'
 	}
+	if (props.lazyLoad && 'IntersectionObserver' in window) {
+		const margin = Math.max(Number(props.lazyLoadMargin) || 0, 0)
+		intersectionObserver = new IntersectionObserver((entries) => {
+			if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)) {
+				renderedSrc.value = props.src
+				intersectionObserver.disconnect()
+				intersectionObserver = undefined
+			}
+		}, { rootMargin: `${margin * 100}vh ${margin * 100}vw` })
+		intersectionObserver.observe(conRef.value)
+	}
+	else {
+		renderedSrc.value = props.src
+	}
 	checkCompletedImage()
 })
+
+onBeforeUnmount(() => intersectionObserver?.disconnect())
 
 watch(
 	() => props.src,
 	async () => {
 		lastCompletedSrc = ''
+		if (!props.lazyLoad || !intersectionObserver) renderedSrc.value = props.src
 		await nextTick()
 		checkCompletedImage()
 	},
@@ -96,6 +132,10 @@ function handleError(event) {
 	})
 }
 
+function handleContextMenu(event) {
+	if (!props.showMenuByLongpress) event.preventDefault()
+}
+
 // 判断是否有tap事件属性
 const hasTapEvent = hasEvent(info, 'tap')
 if (hasTapEvent) {
@@ -112,7 +152,7 @@ if (hasTapEvent) {
 // 判断是否有触摸相关事件属性
 const hasTouchEvents = hasEvent(info, 'touchstart') || hasEvent(info, 'touchmove')
 	|| hasEvent(info, 'touchend') || hasEvent(info, 'touchcancel')
-	|| hasEvent(info, 'longpress')
+	|| hasEvent(info, 'longpress') || hasEvent(info, 'longtap')
 
 // 只有当存在触摸相关事件属性时，才使用触摸事件处理逻辑
 if (hasTouchEvents) {
@@ -121,9 +161,10 @@ if (hasTouchEvents) {
 </script>
 
 <template>
-	<span ref="conRef" v-bind="$attrs" class="dd-image">
+	<span ref="conRef" v-bind="$attrs" class="dd-image" @contextmenu="handleContextMenu">
 		<img
-			ref="imgRef" :class="dynamicClass" :src="src" alt="" decoding="async" :loading="props.lazyLoad ? 'lazy' : 'eager'" @load="handleLoaded"
+			ref="imgRef" :class="dynamicClass" :src="renderedSrc" alt="" decoding="async"
+			:loading="props.lazyLoad ? 'lazy' : 'eager'" :referrerpolicy="referrerPolicy" @load="handleLoaded"
 			@error="handleError"
 		/>
 	</span>

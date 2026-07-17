@@ -1428,16 +1428,22 @@ export class MiniApp {
 		onComplete?.()
 	}
 
-	navigateToMiniProgram(opts) {
-		const { appId, path } = opts
-		AppManager.openApp(
-			{
-				appId,
-				path,
-				scene: 1037, // 打开小程序
-			},
-			this.parent,
-		)
+	async navigateToMiniProgram(opts) {
+		const { appId, path, scene = 1037 } = opts
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		try {
+			await AppManager.openApp(
+				{ appId, path, scene },
+				this.parent,
+			)
+			onSuccess?.({ errMsg: 'navigateToMiniProgram:ok' })
+		}
+		catch (error) {
+			onFail?.({ errMsg: `navigateToMiniProgram:fail ${error.message}` })
+		}
+		finally {
+			onComplete?.()
+		}
 	}
 
 	bindMoreEvent() {
