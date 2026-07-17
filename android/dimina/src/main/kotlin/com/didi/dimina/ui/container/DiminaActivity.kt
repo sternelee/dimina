@@ -207,6 +207,7 @@ class DiminaActivity : ComponentActivity() {
     
     private var adjustBottom = 0.0
     private var updateCheckStarted = false
+    private var preserveMiniAppOnDestroy = false
 
     // 屏幕高度
     private var screenHeight = 0
@@ -1309,10 +1310,10 @@ class DiminaActivity : ComponentActivity() {
         }
         clearAllNativeComponents()
 
-        if (miniApp.isBridgeListEmpty(miniProgram.appId)) {
+        if (!preserveMiniAppOnDestroy && miniApp.isBridgeListEmpty(miniProgram.appId)) {
             // Clear resources for this specific MiniProgram
             miniApp.clear(miniProgram.appId)
-        } else if (miniApp.isBridgeListEmpty()) {
+        } else if (!preserveMiniAppOnDestroy && miniApp.isBridgeListEmpty()) {
             miniApp.clearAll()
         }
         super.onDestroy()
@@ -1538,11 +1539,13 @@ class DiminaActivity : ComponentActivity() {
 
     private fun reenterMiniProgram() {
         val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
-        DiminaActivity.launch(
-            this,
-            miniProgram.copy(root = true, path = entryPagePath),
-            Intent.FLAG_ACTIVITY_CLEAR_TOP
-        )
+        val reentryProgram = miniProgram.copy(root = true, path = entryPagePath)
+
+        activityRegistry.closeAll(miniProgram.appId) { activity ->
+            activity.preserveMiniAppOnDestroy = true
+            activity.finish()
+        }
+        DiminaActivity.launch(this, reentryProgram)
     }
 
     fun applyUpdate() {
