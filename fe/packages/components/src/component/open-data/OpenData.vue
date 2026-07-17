@@ -105,6 +105,10 @@ watch(
 	requestData,
 	{ deep: true, immediate: true },
 )
+
+onBeforeUnmount(() => {
+	requestVersion++
+})
 </script>
 
 <template>

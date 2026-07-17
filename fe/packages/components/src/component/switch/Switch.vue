@@ -104,15 +104,19 @@ function handleClicked(event) {
 <template>
 	<div
 		v-if="type === 'checkbox'" :id="id" v-bind="$attrs" class="dd-checkbox-input" data-dd-label-target
+		role="checkbox" :tabindex="disabled ? -1 : 0" :aria-checked="isOn" :aria-disabled="disabled"
 		:class="{ 'dd-checkbox-input-checked': isOn, 'dd-checkbox-input-disabled': disabled }" @click="handleClicked"
+		@keydown.enter.prevent="handleClicked" @keydown.space.prevent="handleClicked"
 	>
 		<i
 			class="dd-checkbox-input-inner" :style="computedStyle"
 		/>
 	</div>
 	<div
-		v-else :id="id" v-bind="$attrs" class="dd-switch-input" data-dd-label-target :class="{ 'dd-switch-input-checked': isOn, 'dd-switch-input-disabled': disabled }"
+		v-else :id="id" v-bind="$attrs" class="dd-switch-input" data-dd-label-target role="switch"
+		:tabindex="disabled ? -1 : 0" :aria-checked="isOn" :aria-disabled="disabled" :class="{ 'dd-switch-input-checked': isOn, 'dd-switch-input-disabled': disabled }"
 		@click="handleClicked"
+		@keydown.enter.prevent="handleClicked" @keydown.space.prevent="handleClicked"
 	>
 		<i class="dd-switch-input-inner" :style="computedStyle" />
 	</div>

@@ -417,11 +417,20 @@ export function mergeBehaviors(obj, behaviors) {
 				// 只需要确保 behaviors 数组中包含这个 behavior
 				break
 			case 'wx://form-field':
-				// 表单字段 behavior 的处理
-				// 这里可以添加表单字段相关的属性和方法
+				// exparser 为 form-field 自动注入公开的 name/value 属性，组件
+				// 自身声明的同名属性仍会在最终合并时覆盖这里的定义。
+				behaviorProperties = {
+					...behaviorProperties,
+					name: { type: String },
+					value: { type: null },
+				}
 				break
+			case 'wx://form-field-group':
 			case 'wx://form-field-button':
-				// TODO: https://developers.weixin.qq.com/miniprogram/dev/component/form.html#wx-form-field-button
+			case 'wx://label-target':
+			case 'wx://style-filter':
+			case 'wx://request-filter':
+				// 这些 behavior 的关系/事件语义由运行时组件树维护。
 				break
 			default:
 				console.warn(`[service] 未知的内置 behavior: ${behaviorName}`)

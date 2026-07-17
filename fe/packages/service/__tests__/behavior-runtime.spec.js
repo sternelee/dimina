@@ -11,6 +11,25 @@ describe('behavior runtime alignment', () => {
 		runtime.pageStates.clear()
 	})
 
+	it('injects and transports wx://form-field properties', () => {
+		const componentModule = new ComponentModule({
+			behaviors: ['wx://form-field'],
+			properties: {
+				// Component declarations keep higher priority than the behavior.
+				value: { type: String, value: 'own' },
+			},
+	}, {
+			component: true,
+			path: 'components/form-field/index',
+			usingComponents: {},
+		})
+		const props = componentModule.getProps()
+
+		expect(props.name.type).toEqual(['s'])
+		expect(props.value).toMatchObject({ type: ['s'], default: 'own' })
+		expect(props.__diminaMeta.builtinBehaviors).toContain('wx://form-field')
+	})
+
 	it('runs page behavior lifetimes and observers', async () => {
 		const calls = []
 		const pageModule = new PageModule({

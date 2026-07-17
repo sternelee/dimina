@@ -19,6 +19,10 @@ const props = defineProps({
 		type: String,
 		default: 'none',
 	},
+	hover: {
+		type: Boolean,
+		default: false,
+	},
 	hoverStopPropagation: {
 		type: Boolean,
 		default: false,
@@ -48,7 +52,7 @@ watch(
 
 <template>
 	<View
-		ref="viewRef" v-bind="$attrs" :marker-id="markerId" :hover-class="hoverClass"
+		ref="viewRef" v-bind="$attrs" :marker-id="markerId" :hover="hover" :hover-class="hoverClass"
 		:hover-stop-propagation="hoverStopPropagation" :hover-start-time="hoverStartTime" :hover-stay-time="hoverStayTime"
 	>
 		<slot />

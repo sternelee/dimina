@@ -21,6 +21,23 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	backgroundSize: {
+		type: String,
+		default: '100% 100%',
+	},
+	backgroundPosition: {
+		type: String,
+		default: '',
+	},
+	backgroundRepeat: {
+		type: String,
+		default: 'no-repeat',
+	},
+	renderingMode: {
+		type: String,
+		default: 'backgroundImage',
+		validator: value => ['backgroundImage', 'img'].includes(value),
+	},
 	showMenuByLongpress: {
 		type: Boolean,
 		default: false,
@@ -57,61 +74,141 @@ const MODE_CLASS_MAP = {
 
 const dynamicClass = computed(() => MODE_CLASS_MAP[props.mode] || '')
 
+const BACKGROUND_MODE_MAP = {
+	'scaleToFill': { backgroundSize: '100% 100%' },
+	'aspectFit': { backgroundSize: 'contain', backgroundPosition: 'center center' },
+	'aspectFill': { backgroundSize: 'cover', backgroundPosition: 'center center' },
+	'widthFix': { backgroundSize: '100% 100%' },
+	'heightFix': { backgroundSize: '100% 100%' },
+	'top': { backgroundPosition: 'top center' },
+	'bottom': { backgroundPosition: 'bottom center' },
+	'center': { backgroundPosition: 'center center' },
+	'left': { backgroundPosition: 'center left' },
+	'right': { backgroundPosition: 'center right' },
+	'top left': { backgroundPosition: 'top left' },
+	'top right': { backgroundPosition: 'top right' },
+	'bottom left': { backgroundPosition: 'bottom left' },
+	'bottom right': { backgroundPosition: 'bottom right' },
+}
+
+const backgroundStyle = computed(() => {
+	if (props.renderingMode !== 'backgroundImage') return undefined
+	return {
+		backgroundImage: renderedSrc.value ? `url(${JSON.stringify(renderedSrc.value)})` : '',
+		backgroundSize: props.backgroundSize,
+		backgroundPosition: props.backgroundPosition,
+		backgroundRepeat: props.backgroundRepeat,
+		...BACKGROUND_MODE_MAP[props.mode],
+	}
+})
+
 const imgRef = ref(null)
 const conRef = ref(null)
 const renderedSrc = ref(props.lazyLoad ? '' : props.src)
 let intersectionObserver
+let resizeObserver
+let originalWidth = ''
+let originalHeight = ''
+let hasBeenShown = !props.lazyLoad
 
 const info = useInfo()
 let lastCompletedSrc = ''
 
 onMounted(() => {
-	if (props.mode === 'widthFix') {
-		conRef.value.style.height = 'auto'
-	}
-	else if (props.mode === 'heightFix') {
-		conRef.value.style.width = 'auto'
-	}
-	if (props.lazyLoad && 'IntersectionObserver' in window) {
-		const margin = Math.max(Number(props.lazyLoadMargin) || 0, 0)
-		intersectionObserver = new IntersectionObserver((entries) => {
-			if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)) {
-				renderedSrc.value = props.src
-				intersectionObserver.disconnect()
-				intersectionObserver = undefined
-			}
-		}, { rootMargin: `${margin * 100}vh ${margin * 100}vw` })
-		intersectionObserver.observe(conRef.value)
-	}
-	else {
-		renderedSrc.value = props.src
+	originalWidth = conRef.value.style.width
+	originalHeight = conRef.value.style.height
+	applyModeSize()
+	setupLazyLoading()
+	if (window.ResizeObserver && conRef.value) {
+		resizeObserver = new ResizeObserver(updateFixedSize)
+		resizeObserver.observe(conRef.value)
 	}
 	checkCompletedImage()
 })
 
-onBeforeUnmount(() => intersectionObserver?.disconnect())
+onBeforeUnmount(() => {
+	intersectionObserver?.disconnect()
+	resizeObserver?.disconnect()
+})
 
 watch(
 	() => props.src,
 	async () => {
 		lastCompletedSrc = ''
-		if (!props.lazyLoad || !intersectionObserver) renderedSrc.value = props.src
+		if (props.lazyLoad) {
+			hasBeenShown = false
+			renderedSrc.value = ''
+			await nextTick()
+			setupLazyLoading()
+		}
+		else {
+			showImage()
+		}
 		await nextTick()
 		checkCompletedImage()
 	},
 )
 
+function showImage() {
+	hasBeenShown = true
+	renderedSrc.value = props.src
+	intersectionObserver?.disconnect()
+	intersectionObserver = undefined
+}
+
+function setupLazyLoading() {
+	intersectionObserver?.disconnect()
+	intersectionObserver = undefined
+	if (!props.lazyLoad || hasBeenShown || !('IntersectionObserver' in window)) {
+		showImage()
+		return
+	}
+	const margin = Math.max(Number(props.lazyLoadMargin) || 0, 0)
+	intersectionObserver = new IntersectionObserver((entries) => {
+		if (entries.some(entry => entry.isIntersecting || entry.intersectionRatio > 0)) showImage()
+	}, { rootMargin: `${margin * 100}vh ${margin * 100}vw` })
+	intersectionObserver.observe(conRef.value)
+}
+
+watch(
+	() => [props.lazyLoad, props.lazyLoadMargin],
+	([lazyLoad], [previousLazyLoad]) => {
+		if (!lazyLoad) showImage()
+		else if (!previousLazyLoad && renderedSrc.value) hasBeenShown = true
+		else setupLazyLoading()
+	},
+)
+
 function handleLoaded(event) {
 	lastCompletedSrc = props.src
+	updateFixedSize()
 	triggerEvent('load', {
 		event,
 		info,
 		detail: {
-			width: imgRef.value?.width,
-			height: imgRef.value?.height,
+			width: imgRef.value?.naturalWidth || imgRef.value?.width,
+			height: imgRef.value?.naturalHeight || imgRef.value?.height,
 		},
 	})
 }
+
+function updateFixedSize() {
+	const image = imgRef.value
+	const container = conRef.value
+	if (!image?.naturalWidth || !image?.naturalHeight || !container) return
+	const ratio = image.naturalWidth / image.naturalHeight
+	if (props.mode === 'widthFix') container.style.height = `${container.clientWidth / ratio}px`
+	else if (props.mode === 'heightFix') container.style.width = `${container.clientHeight * ratio}px`
+}
+
+function applyModeSize() {
+	if (!conRef.value) return
+	conRef.value.style.width = props.mode === 'heightFix' ? 'auto' : originalWidth
+	conRef.value.style.height = props.mode === 'widthFix' ? 'auto' : originalHeight
+	nextTick(updateFixedSize)
+}
+
+watch(() => props.mode, applyModeSize)
 
 function checkCompletedImage() {
 	const img = imgRef.value
@@ -140,12 +237,7 @@ function handleContextMenu(event) {
 const hasTapEvent = hasEvent(info, 'tap')
 if (hasTapEvent) {
 	useTapEvents(conRef, (event) => {
-		if (!props.disabled) {
-			if (props.hoverStopPropagation) {
-				event.stopPropagation()
-			}
-			triggerEvent('tap', { event, info })
-		}
+		triggerEvent('tap', { event, info })
 	})
 }
 
@@ -161,9 +253,9 @@ if (hasTouchEvents) {
 </script>
 
 <template>
-	<span ref="conRef" v-bind="$attrs" class="dd-image" @contextmenu="handleContextMenu">
+<span ref="conRef" v-bind="$attrs" class="dd-image" :style="backgroundStyle" @contextmenu="handleContextMenu">
 		<img
-			ref="imgRef" :class="dynamicClass" :src="renderedSrc" alt="" decoding="async"
+			ref="imgRef" :class="[dynamicClass, { 'dd-image-preloader': renderingMode === 'backgroundImage' }]" :src="renderedSrc" alt="" decoding="async"
 			:loading="props.lazyLoad ? 'lazy' : 'eager'" :referrerpolicy="referrerPolicy" @load="handleLoaded"
 			@error="handleError"
 		/>
@@ -173,9 +265,10 @@ if (hasTouchEvents) {
 <style lang="scss">
 .dd-image {
 	display: inline-block;
-	width: inherit;
-	height: inherit;
+	width: 320px;
+	height: 240px;
 	overflow: hidden;
+	background-repeat: no-repeat;
 	img {
 		width: inherit;
 		height: inherit;
@@ -189,6 +282,11 @@ if (hasTouchEvents) {
 	&[hidden] {
 		display: none;
 	}
+}
+
+.dd-image-preloader {
+	position: absolute;
+	opacity: 0;
 }
 
 .dd-image-scale {

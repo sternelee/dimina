@@ -2,7 +2,7 @@
 // 画布
 // https://developers.weixin.qq.com/miniprogram/dev/component/canvas.html
 
-import { hasEvent, useInfo } from '@/common/events'
+import { hasEvent, triggerEvent, useInfo } from '@/common/events'
 import { useTouchEvents } from '@/common/useTouchEvents'
 
 const props = defineProps({
@@ -18,6 +18,10 @@ const props = defineProps({
 		type: String,
 		default: '',
 	},
+	newTouchListener: {
+		type: Boolean,
+		default: false,
+	},
 	renderWidth: {
 		type: Number,
 		default: 300,
@@ -31,6 +35,7 @@ const props = defineProps({
 const info = useInfo()
 const canvasRef = ref(null)
 const rootRef = ref(null)
+const isError = ref(false)
 
 const hasTouchEvents = ['touchstart', 'touchmove', 'touchend', 'touchcancel', 'longpress', 'longtap']
 	.some(eventName => hasEvent(info, eventName))
@@ -43,10 +48,28 @@ function preventScroll(event) {
 		event.preventDefault()
 	}
 }
+
+onMounted(() => {
+	if (props.type) return
+	let errMsg
+	if (!props.canvasId) {
+		errMsg = 'canvas-id attribute is undefined'
+	}
+	else {
+		const scope = rootRef.value.closest('.dd-page') || document
+		const duplicates = Array.from(scope.querySelectorAll('canvas[canvas-id]'))
+			.filter(canvas => canvas.getAttribute('canvas-id') === props.canvasId)
+		if (duplicates.length > 1) errMsg = `canvas-id ${props.canvasId} in this page has already existed`
+	}
+	if (errMsg) {
+		isError.value = true
+		triggerEvent('error', { info, detail: { errMsg } })
+	}
+})
 </script>
 
 <template>
-	<div ref="rootRef" v-bind="$attrs" class="dd-canvas" @touchmove="preventScroll">
+	<div ref="rootRef" v-bind="$attrs" class="dd-canvas" :style="isError ? { display: 'none' } : undefined" @touchmove="preventScroll">
 		<canvas
 			ref="canvasRef" :canvas-id="canvasId" :data-type="type || undefined"
 			:width="renderWidth" :height="renderHeight"

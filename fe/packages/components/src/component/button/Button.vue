@@ -108,6 +108,10 @@ const props = defineProps({
 		type: String,
 		default: 'button-hover',
 	},
+	hover: {
+		type: Boolean,
+		default: false,
+	},
 	/**
 	 * 指定是否阻止本节点的祖先节点出现点击态
 	 */
@@ -188,7 +192,8 @@ function handleOpenType(event) {
 
 <template>
 	<span
-		:id="id" v-bind="$attrs" class="dd-button" data-dd-label-target :type="type" :size="size" :loading="loadingParsed"
+		:id="id" v-bind="$attrs" class="dd-button" data-dd-label-target role="button" :tabindex="disabled ? -1 : 0"
+		:aria-disabled="disabled" :type="type" :size="size" :loading="loadingParsed"
 		:plain="plainParsed" :disabled="disabledParsed" :class="[
 			`dd-button--${type}`,
 			size === 'mini' && 'dd-button--mini',
@@ -198,6 +203,7 @@ function handleOpenType(event) {
 			isHover ? hoverClass : undefined,
 		]"
 		@click="handleClicked"
+		@keydown.enter.prevent="handleClicked" @keydown.space.prevent="handleClicked"
 		@touchstart="onHoverStart" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
 		@mousedown="onHoverStart" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
 	>

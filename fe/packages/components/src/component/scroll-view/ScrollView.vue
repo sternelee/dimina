@@ -374,7 +374,7 @@ watch(
 	{ flush: 'post' },
 )
 
-watch(() => props.scrollIntoView, (id) => {
+function scrollToChild(id) {
 	if (!id || !scrollView.value) return
 	const escapedId = window.CSS?.escape ? CSS.escape(id) : id.replace(/(["'\\#.:[\],>+~*^$|=()])/g, '\\$1')
 	const target = scrollView.value.querySelector(`#${escapedId}`)
@@ -386,13 +386,16 @@ watch(() => props.scrollIntoView, (id) => {
 		left: props.scrollX ? scrollView.value.scrollLeft + targetRect.left - rootRect.left : scrollView.value.scrollLeft,
 		behavior: props.scrollWithAnimation ? 'smooth' : 'auto',
 	})
-}, { flush: 'post' })
+}
+
+watch(() => props.scrollIntoView, scrollToChild, { flush: 'post' })
 
 onMounted(() => {
 	// 初始化滚动位置
 	if (scrollView.value) {
 		if (props.scrollTop !== undefined) scrollView.value.scrollTop = Number(props.scrollTop) || 0
 		if (props.scrollLeft !== undefined) scrollView.value.scrollLeft = Number(props.scrollLeft) || 0
+		if (props.scrollIntoView) scrollToChild(props.scrollIntoView)
 	}
 })
 </script>

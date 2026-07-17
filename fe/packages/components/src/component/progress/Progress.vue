@@ -158,7 +158,10 @@ const progressColor = computed(() => {
 </script>
 
 <template>
-	<div v-bind="$attrs" class="dd-progress">
+<div
+	v-bind="$attrs" class="dd-progress" role="progressbar"
+	:aria-valuenow="currentPercent" aria-valuemin="0" aria-valuemax="100"
+>
 		<div
 			class="dd-progress-bar" aria-label="" :aria-valuenow="`${percent}%`" :style="{
 				borderRadius: `${borderRadius}px`,

@@ -83,7 +83,11 @@ function handleClicked(event) {
 </script>
 
 <template>
-	<div :id="id" v-bind="$attrs" class="dd-checkbox" data-dd-label-target @click="handleClicked">
+	<div
+		:id="id" v-bind="$attrs" class="dd-checkbox" data-dd-label-target role="checkbox"
+		:tabindex="disabled ? -1 : 0" :aria-checked="isOn" :aria-disabled="disabled" @click="handleClicked"
+		@keydown.enter.prevent="handleClicked" @keydown.space.prevent="handleClicked"
+	>
 		<div class="dd-checkbox-wrapper">
 			<div
 				class="dd-checkbox-input"

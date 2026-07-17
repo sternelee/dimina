@@ -275,7 +275,10 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-	<div :id="id" v-bind="$attrs" class="dd-slider" :class="{ 'dd-slider-disabled': disabled }">
+	<div
+		:id="id" v-bind="$attrs" class="dd-slider" role="slider" :aria-valuemin="min" :aria-valuemax="max"
+		:aria-valuenow="disValue" :aria-disabled="disabled" :class="{ 'dd-slider-disabled': disabled }"
+	>
 		<div class="dd-slider-wrapper">
 			<div ref="sliderHandle" class="dd-slider-tap-area" @click="handleClick">
 				<div class="dd-slider-handle-wrapper" :style="backColor">

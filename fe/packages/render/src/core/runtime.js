@@ -1124,7 +1124,9 @@ class Runtime {
 						}
 					})
 
+					let unregisterFormControl
 					onUnmounted(() => {
+						unregisterFormControl?.()
 						const roots = collectVNodeRootElements(vueInstance.subTree)
 						that.unregisterModuleRoots(moduleId, roots)
 						message.send({
@@ -1145,6 +1147,12 @@ class Runtime {
 
 					const data = reactive({})
 					that.setupData.set(moduleId, data)
+					if (module.builtinBehaviors?.has('wx://form-field')) {
+						unregisterFormControl = inject('registerFormControl', undefined)?.({
+							getName: () => Object.prototype.hasOwnProperty.call(data, 'name') ? data.name : props.name,
+							getValue: () => Object.prototype.hasOwnProperty.call(data, 'value') ? data.value : props.value,
+						})
+					}
 					let previousNormalizedProps = initialProperties
 					let isInitialPropsWatch = true
 

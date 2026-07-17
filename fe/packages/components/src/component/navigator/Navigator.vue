@@ -79,6 +79,10 @@ const props = defineProps({
 		type: String,
 		default: 'navigator-hover',
 	},
+	hover: {
+		type: Boolean,
+		default: true,
+	},
 	/**
 	 * 指定是否阻止本节点的祖先节点出现点击态
 	 */
@@ -175,7 +179,8 @@ function clicked(event) {
 
 <template>
 	<span
-		v-bind="$attrs" class="dd-navigator" :class="[isHover ? hoverClass : undefined]" @click="clicked"
+		v-bind="$attrs" class="dd-navigator" role="link" tabindex="0" :class="[isHover ? hoverClass : undefined]" @click="clicked"
+		@keydown.enter.prevent="clicked"
 		@touchstart="onHoverStart" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
 		@mousedown="onHoverStart" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
 	>

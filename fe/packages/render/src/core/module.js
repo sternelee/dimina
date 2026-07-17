@@ -14,7 +14,10 @@ export class Module {
 	}
 
 	setInitialData(props) {
-		const { propertySchemas, vueProps } = this.unSerializeProps(props)
+		this.builtinBehaviors = new Set(props?.__diminaMeta?.builtinBehaviors || [])
+		const serializedProps = props ? { ...props } : props
+		if (serializedProps) delete serializedProps.__diminaMeta
+		const { propertySchemas, vueProps } = this.unSerializeProps(serializedProps)
 		this.propertySchemas = propertySchemas
 		this.props = vueProps
 	}

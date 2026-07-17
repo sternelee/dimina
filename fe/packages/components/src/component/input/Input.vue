@@ -5,6 +5,7 @@
 
 import { isDesktop, transformRpx } from '@dimina/common'
 import { invokeAPI, triggerEvent, useInfo } from '@/common/events'
+import { useKeyboardHeight } from '@/common/useKeyboardHeight'
 import { getActualBottom } from '@/common/utils'
 
 const props = defineProps({
@@ -322,6 +323,7 @@ const wrapperRef = ref(null)
 const info = useInfo()
 const keyboardAccessoryVisible = ref(false)
 provide('keyboardAccessoryVisible', keyboardAccessoryVisible)
+useKeyboardHeight(info, keyboardAccessoryVisible)
 
 function handleKeydown(event) {
 	keyCode.value = event.keyCode

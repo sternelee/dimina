@@ -22,4 +22,17 @@ describe('render module property transport', () => {
 		})
 		expect(module.propertySchemas.active).toMatchObject({ type: Boolean, value: false })
 	})
+
+	it('keeps builtin behavior metadata out of Vue props', () => {
+		const module = new Module({})
+		module.setInitialData({
+			__diminaMeta: { builtinBehaviors: ['wx://form-field'] },
+			name: { type: ['s'] },
+			value: { type: [null] },
+		})
+
+		expect(module.builtinBehaviors.has('wx://form-field')).toBe(true)
+		expect(module.props).toEqual({ name: { type: null }, value: { type: null } })
+		expect(module.propertySchemas).not.toHaveProperty('__diminaMeta')
+	})
 })

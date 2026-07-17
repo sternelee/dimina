@@ -3,7 +3,6 @@
 // https://developers.weixin.qq.com/miniprogram/dev/component/swiper.html
 
 import { transformRpx } from '@dimina/common'
-import { cloneVNode } from 'vue'
 import { triggerEvent, useInfo } from '@/common/events'
 
 const props = defineProps({
@@ -137,17 +136,26 @@ const currentIndex = ref(props.current)
 // 添加标记来追踪内部变更
 let isInternalChange = false
 
-// 递归查找所有子节点中是 Swiper-Item 的节点数量
+// 迭代查找嵌套插槽中的 SwiperItem，避免异常深度或循环 VNode 造成栈溢出。
 function findSwiperItems(nodes) {
 	const res = []
-	for (let i = 0; i < nodes.length; i++) {
-		const vnode = nodes[i]
+	const stack = Array.isArray(nodes) ? [...nodes].reverse() : []
+	const visited = new WeakSet()
+	while (stack.length) {
+		const vnode = stack.pop()
+		if (!vnode || typeof vnode !== 'object' || visited.has(vnode)) continue
+		visited.add(vnode)
 		if (vnode.type?.__name === 'SwiperItem') {
 			res.push(vnode)
+			continue
 		}
-		else if (vnode.children) {
-			// 如果当前节点有子节点，则递归查找
-			res.push(...findSwiperItems(vnode.children.default ? vnode.children.default() : vnode.children))
+
+		let children = vnode.children
+		if (children?.default && typeof children.default === 'function') {
+			children = children.default()
+		}
+		if (Array.isArray(children)) {
+			for (let i = children.length - 1; i >= 0; i--) stack.push(children[i])
 		}
 	}
 

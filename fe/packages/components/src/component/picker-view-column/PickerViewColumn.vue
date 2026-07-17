@@ -26,10 +26,10 @@ let startY = 0
 let moveY = 0
 let startIndex = 0
 let valueChanged = false
+let dragDistance = 0
 
-const slots = useSlots()
-// 可选项长度
-let itemsSize = slots.default ? Math.max(slots.default()[0].children.length - 1, 0) : 0
+// 可选项最大索引。挂载后以真实 DOM 子节点为准，兼容 Fragment 和条件渲染。
+let itemsSize = 0
 
 // 选中项索引, 数字大于可选项长度时，选择最后一项
 const currentIndex = ref(Math.min(itemValue.value[itemIndex] || 0, itemsSize))
@@ -41,18 +41,28 @@ setPickerValue?.(itemIndex, currentIndex.value)
 function startDrag(event) {
 	pickerEvent?.('pickstart', event)
 	isDragging = true
+	duration.value = '0s'
 	startY = event.touches ? event.touches[0].clientY : event.clientY
 	itemHeight = indicatorRef.value.offsetHeight
 	startIndex = currentIndex.value
 	valueChanged = false
+	dragDistance = 0
 	moveY = -currentIndex.value * itemHeight
 }
 
 function drag(event) {
 	if (!isDragging)
 		return
-	moveY = (event.touches ? event.touches[0].clientY : event.clientY) - startY - currentIndex.value * itemHeight
+	dragDistance = (event.touches ? event.touches[0].clientY : event.clientY) - startY
+	moveY = dragDistance - currentIndex.value * itemHeight
 	currentY.value = moveY
+}
+
+function getTargetItemIndex(event) {
+	let target = event.target
+	while (target && target.parentElement !== contentRef.value) target = target.parentElement
+	if (!target || target.parentElement !== contentRef.value) return -1
+	return Array.from(contentRef.value.children).indexOf(target)
 }
 
 function endDrag(event) {
@@ -62,9 +72,13 @@ function endDrag(event) {
 
 	duration.value = '0.2s'
 
-	if (moveY < 0) {
-		// 重新获取选项数量
-		itemsSize = slots.default ? Math.max(slots.default()[0].children.length - 1, 0) : 0
+	itemsSize = Math.max((contentRef.value?.children.length || 1) - 1, 0)
+	const targetIndex = Math.abs(dragDistance) < 3 ? getTargetItemIndex(event) : -1
+	if (targetIndex >= 0) {
+		currentIndex.value = targetIndex
+		currentY.value = -currentIndex.value * itemHeight
+	}
+	else if (moveY < 0) {
 		currentIndex.value = Math.min(itemsSize, Math.abs(Math.round(moveY / itemHeight)))
 		currentY.value = -currentIndex.value * itemHeight
 	}
@@ -98,40 +112,43 @@ watch(() => itemValue.value[itemIndex], (value) => {
 	currentY.value = -nextIndex * itemHeight
 })
 
-watch(pickerItemStyle, (styles) => {
-	if (indicatorRef.value) indicatorRef.value.style.cssText = styles.indicatorStyle || ''
-	if (maskRef.value) maskRef.value.style.cssText = styles.maskStyle || ''
-})
-
-onMounted(async () => {
-	await nextTick()
+function applyLayoutStyles() {
+	if (!indicatorRef.value || !maskRef.value || !contentRef.value || !itemHeight) return
 	const pickerHeight = getPickerHeight()
-	indicatorRef.value.style.cssText = pickerItemStyle.value.indicatorStyle || ''
-
-	// 获取子节点的行高
-	if (slots.default && slots.default()[0].children.length > 0) {
-		const firstChild = contentRef.value.querySelector(':first-child')
-		if (firstChild) {
-			const computedStyle = window.getComputedStyle(firstChild)
-			nodeLineHeight.value = computedStyle.lineHeight || '34px'
-			// 设置 indicator 高度与子节点行高一致
-			indicatorRef.value.style.height = nodeLineHeight.value
-		}
-	}
-
-	itemHeight = indicatorRef.value.offsetHeight
-
 	const pTop = (pickerHeight - itemHeight) / 2
+	indicatorRef.value.style.cssText = pickerItemStyle.value.indicatorStyle || ''
+	indicatorRef.value.style.height = `${itemHeight}px`
 	indicatorRef.value.style.top = `${pTop}px`
-
 	maskRef.value.style.cssText = pickerItemStyle.value.maskStyle || ''
 	maskRef.value.style.backgroundSize = `100% ${pTop}px`
-
-	const slotNodes = contentRef.value.children
-	Array.from(slotNodes).forEach((node) => {
+	Array.from(contentRef.value.children).forEach((node) => {
 		node.style.height = `${itemHeight}px`
 	})
 	contentRef.value.style.paddingTop = `${pTop}px`
+}
+
+watch(pickerItemStyle, () => applyLayoutStyles(), { deep: true })
+
+onMounted(async () => {
+	await nextTick()
+	indicatorRef.value.style.cssText = pickerItemStyle.value.indicatorStyle || ''
+
+	// 获取子节点的行高
+	const firstChild = contentRef.value.firstElementChild
+	if (firstChild) {
+		const computedStyle = window.getComputedStyle(firstChild)
+		const lineHeight = Number.parseFloat(computedStyle.lineHeight)
+		const fontSize = Number.parseFloat(computedStyle.fontSize) || 16
+		nodeLineHeight.value = `${Number.isFinite(lineHeight) ? lineHeight : fontSize * 1.2}px`
+		// 设置 indicator 高度与子节点行高一致
+		indicatorRef.value.style.height = nodeLineHeight.value
+	}
+
+	itemHeight = indicatorRef.value.offsetHeight || Number.parseFloat(nodeLineHeight.value) || 34
+	itemsSize = Math.max(contentRef.value.children.length - 1, 0)
+	currentIndex.value = Math.min(Math.max(Number(itemValue.value[itemIndex]) || 0, 0), itemsSize)
+	setPickerValue?.(itemIndex, currentIndex.value)
+	applyLayoutStyles()
 	duration.value = '0s'
 	currentY.value = -currentIndex.value * itemHeight
 })

@@ -91,7 +91,11 @@ function handleClicked(event) {
 </script>
 
 <template>
-	<div :id="id" v-bind="$attrs" class="dd-radio" data-dd-label-target @click="handleClicked">
+	<div
+		:id="id" v-bind="$attrs" class="dd-radio" data-dd-label-target role="radio"
+		:tabindex="disabled ? -1 : 0" :aria-checked="isOn" :aria-disabled="disabled" @click="handleClicked"
+		@keydown.enter.prevent="handleClicked" @keydown.space.prevent="handleClicked"
+	>
 		<div class="dd-radio-wrapper">
 			<div
 				class="dd-radio-input" :class="{ 'dd-radio-input-checked': isOn, 'dd-radio-input-disabled': disabled }"
