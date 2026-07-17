@@ -192,7 +192,9 @@ describe('style compiler regressions', () => {
 
 		const outputCss = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.css'), 'utf-8')
 		expect(outputCss).not.toContain('undefined')
-		expect(warnSpy).toHaveBeenCalled()
+		expect(outputCss).toContain('.a')
+		expect(outputCss).toContain('.b')
+		expect(warnSpy).not.toHaveBeenCalled()
 	})
 
 	it('preserves caller-before-child style order while emitting external-class override selectors', async () => {
@@ -222,7 +224,7 @@ describe('style compiler regressions', () => {
 		expect(outputCss).toContain('data-dd-external-class-scope')
 	})
 
-	it('cuts off deep component dependency chain safely', async () => {
+	it('compiles a deep acyclic component dependency chain without truncation', async () => {
 		const depth = 22
 		prepareBaseProject({
 			usingComponents: { 'comp-0': '/components/c0' },
@@ -245,7 +247,8 @@ describe('style compiler regressions', () => {
 		const outputCss = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.css'), 'utf-8')
 		expect(outputCss).not.toContain('undefined')
 		expect(outputCss).toContain('.c0')
-		expect(warnSpy).toHaveBeenCalled()
+		expect(outputCss).toContain(`.c${depth - 1}`)
+		expect(warnSpy).not.toHaveBeenCalled()
 	})
 
 	it('isolates cache by module id for same imported style path', async () => {

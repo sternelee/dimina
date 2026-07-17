@@ -63,7 +63,7 @@ if (!isMainThread) {
 async function compileSS(pages, root, progress) {
 	// page 样式
 	for (const page of pages) {
-		const code = await buildCompileCss(page, [], new Set()) || ''
+		const code = await buildCompileCss(page, new Set()) || ''
 		const filename = `${page.path.replace(/\//g, '_')}`
 		if (root) {
 			const subDir = `${getTargetPath()}/${root}`
@@ -86,36 +86,31 @@ async function compileSS(pages, root, progress) {
 	}
 }
 
-async function buildCompileCss(module, depthChain = [], compiledPaths = new Set()) {
-	const currentPath = module.path || module.absolutePath
+async function buildCompileCss(module, compiledPaths = new Set()) {
+	let result = ''
+	const pendingModules = [module]
 
-	// Circular dependency detected
-	if (depthChain.includes(currentPath)) {
-		console.warn('[style]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		return ''
-	}
-	// Deep dependency chain detected
-	if (depthChain.length > 20) {
-		console.warn('[style]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		return ''
-	}
-	if (compiledPaths.has(currentPath)) {
-		return ''
-	}
-	compiledPaths.add(currentPath)
-	depthChain = [...depthChain, currentPath]
-	let result = await enhanceCSS(module) || ''
+	while (pendingModules.length > 0) {
+		const currentModule = pendingModules.pop()
+		const currentPath = currentModule.path || currentModule.absolutePath
 
-	if (module.usingComponents) {
-		// component 样式
-		// 组件对应 wxss 文件的样式，只对组件 wxml 内的节点生效
-		// https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/wxml-wxss.html
-		for (const componentInfo of Object.values(module.usingComponents)) {
-			const componentModule = getComponent(componentInfo)
-			if (!componentModule) {
-				continue
+		// A component stylesheet only needs to be emitted once per page traversal.
+		// Mark it before visiting children so self and mutual references close
+		// naturally without a fixed depth limit.
+		if (compiledPaths.has(currentPath)) {
+			continue
+		}
+		compiledPaths.add(currentPath)
+		result += await enhanceCSS(currentModule) || ''
+
+		// Preserve the original depth-first, declaration-order traversal while
+		// using an explicit stack instead of the JavaScript call stack.
+		const componentPaths = Object.values(currentModule.usingComponents || {})
+		for (let index = componentPaths.length - 1; index >= 0; index--) {
+			const componentModule = getComponent(componentPaths[index])
+			if (componentModule) {
+				pendingModules.push(componentModule)
 			}
-			result += await buildCompileCss(componentModule, depthChain, compiledPaths) || ''
 		}
 	}
 
@@ -226,7 +221,7 @@ async function enhanceCSS(module) {
 
 			node.remove()
 
-			promises.push(buildCompileCss({ absolutePath: importFullPath, id: module.id }, [], new Set()))
+			promises.push(buildCompileCss({ absolutePath: importFullPath, id: module.id }, new Set()))
 		}
 		else if (node.type === 'rule') {
 			// 处理 ::v-deep

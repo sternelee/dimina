@@ -251,7 +251,7 @@ async function compileML(pages, root, progress) {
 
 	for (const page of pages) {
 		const scriptRes = new Map()
-		buildCompileView(page, false, scriptRes, [], new Set())
+		buildCompileView(page, false, scriptRes, new Set(), new Set())
 
 		let mergeRender = ''
 
@@ -384,20 +384,15 @@ function isRegisteredWxsModule(modulePath) {
 	return wxsModuleRegistry.has(modulePath)
 }
 
-function buildCompileView(module, isComponent = false, scriptRes, depthChain = [], inheritedTemplatePaths = new Set()) {
+function buildCompileView(module, isComponent = false, scriptRes, activePaths = new Set(), inheritedTemplatePaths = new Set()) {
 	const currentPath = module.path
 
-	// Circular dependency detected
-	if (depthChain.includes(currentPath)) {
-		console.warn('[view]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
+	// Recursive component declarations are valid. Stop only the duplicate edge
+	// on the current traversal path; the runtime keeps the recursive mapping.
+	if (activePaths.has(currentPath)) {
 		return
 	}
-	// Deep dependency chain detected
-	if (depthChain.length > 20) {
-		console.warn('[view]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		return
-	}
-	depthChain = [...depthChain, currentPath]
+	activePaths.add(currentPath)
 
 	// 收集所有 wxs 模块（包括组件的）
 	const allScriptModules = []
@@ -423,11 +418,10 @@ function buildCompileView(module, isComponent = false, scriptRes, depthChain = [
 			// 检查自依赖：当前模块已经完成本轮编译，只跳过重复编译；
 			// render runtime 仍会保留该递归组件映射。
 			if (componentModule.path === module.path) {
-				console.warn('[view]', `检测到循环依赖，跳过重复编译: ${module.path}`)
 				continue
 			}
 			// 递归编译组件，并收集其 wxs 模块
-			const componentInstruction = buildCompileView(componentModule, true, scriptRes, depthChain, childInheritedTemplatePaths)
+			const componentInstruction = buildCompileView(componentModule, true, scriptRes, activePaths, childInheritedTemplatePaths)
 			if (componentInstruction && componentInstruction.scriptModule) {
 				// 将组件的 wxs 模块添加到当前模块的 wxs 模块列表中
 				for (const sm of componentInstruction.scriptModule) {
@@ -453,6 +447,7 @@ function buildCompileView(module, isComponent = false, scriptRes, depthChain = [
 		compileModuleWithAllWxs(module, scriptRes, allScriptModules)
 	}
 
+	activePaths.delete(currentPath)
 	// 返回当前模块的指令信息（包含 wxs 模块）
 	return { scriptModule: allScriptModules, templateModule: currentInstruction?.templateModule || [] }
 }

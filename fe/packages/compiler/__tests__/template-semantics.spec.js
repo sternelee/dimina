@@ -126,6 +126,7 @@ describe('mini-program template semantics', () => {
 	})
 
 	it('compiles a custom component that declares and renders itself', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
 		const output = await compilePage('<tree-node depth="3" />', {
 			usingComponents: {
 				'tree-node': '/components/tree-node',
@@ -144,5 +145,65 @@ describe('mini-program template semantics', () => {
 
 		expect(output).toContain('dd-tree-node')
 		expect(output).not.toContain('dd-text')
+		expect(warn).not.toHaveBeenCalled()
+	})
+
+	it('silently compiles mutually recursive custom components', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const output = await compilePage('<node-a />', {
+			usingComponents: {
+				'node-a': '/components/node-a',
+			},
+			componentFixtures: [
+				{
+					path: 'components/node-a',
+					config: {
+						component: true,
+						usingComponents: { 'node-b': '/components/node-b' },
+					},
+					template: '<view><node-b /></view>',
+				},
+				{
+					path: 'components/node-b',
+					config: {
+						component: true,
+						usingComponents: { 'node-a': '/components/node-a' },
+					},
+					template: '<view><node-a /></view>',
+				},
+			],
+		})
+
+		expect(output).toContain('dd-node-a')
+		expect(output).toContain('dd-node-b')
+		expect(warn).not.toHaveBeenCalled()
+	})
+
+	it('compiles a deep acyclic component chain without a fixed depth cutoff', async () => {
+		const depth = 24
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const componentFixtures = Array.from({ length: depth }, (_, index) => {
+			const hasChild = index < depth - 1
+			return {
+				path: `components/deep-${index}`,
+				config: {
+					component: true,
+					usingComponents: hasChild
+						? { [`deep-${index + 1}`]: `/components/deep-${index + 1}` }
+						: {},
+				},
+				template: hasChild
+					? `<view><deep-${index + 1} /></view>`
+					: '<view>leaf</view>',
+			}
+		})
+
+		const output = await compilePage('<deep-0 />', {
+			usingComponents: { 'deep-0': '/components/deep-0' },
+			componentFixtures,
+		})
+
+		expect(output).toContain(`"/components/deep-${depth - 1}"`)
+		expect(warn).not.toHaveBeenCalled()
 	})
 })

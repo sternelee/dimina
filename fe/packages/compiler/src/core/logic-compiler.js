@@ -127,23 +127,16 @@ async function compileJS(pages, root, mainCompileRes, progress) {
 	return compileRes
 }
 
-async function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra, depthChain = [], putMain = false) {
-	// Track dependency chain to detect potential circular dependencies
+async function buildJSByPath(packageName, module, compileRes, mainCompileRes, addExtra, activePaths = new Set(), putMain = false) {
 	const currentPath = module.path
 
-	// Circular dependency detected
-	if (depthChain.includes(currentPath)) {
-		console.warn('[logic]', `检测到循环依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		return
-	}
-	// Deep dependency chain detected
-	if (depthChain.length > 20) {
-		console.warn('[logic]', `检测到深度依赖: ${[...depthChain, currentPath].join(' -> ')}`)
-		return
-	}
-	depthChain = [...depthChain, currentPath]
-	if (!module.path) {
+	if (!currentPath) {
 		// 业务逻辑不存在
+		return
+	}
+	// Module cycles are valid dependency graphs. Stop only a back edge on the
+	// current traversal path, without truncating a finite deep dependency chain.
+	if (activePaths.has(currentPath)) {
 		return
 	}
 	// 防止添加相同的 js
@@ -195,6 +188,7 @@ async function buildJSByPath(packageName, module, compileRes, mainCompileRes, ad
 	const extraInfo = {
 		path: module.path
 	}
+	activePaths.add(currentPath)
 
 	// https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/
 	// 将 component 字段设为 true 可将这一组文件设为自定义组件
@@ -230,7 +224,7 @@ async function buildJSByPath(packageName, module, compileRes, mainCompileRes, ad
 				continue
 			}
 
-			await buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, depthChain, putMain || toMainSubPackage)
+			await buildJSByPath(packageName, componentModule, compileRes, mainCompileRes, true, activePaths, putMain || toMainSubPackage)
 
 			componentsObj[name] = path
 		}
@@ -384,7 +378,7 @@ async function buildJSByPath(packageName, module, compileRes, mainCompileRes, ad
 
 	// 处理所有依赖模块（异步）
 	for (const depId of dependenciesToProcess) {
-		await buildJSByPath(packageName, { path: depId }, compileRes, mainCompileRes, false, depthChain, putMain)
+		await buildJSByPath(packageName, { path: depId }, compileRes, mainCompileRes, false, activePaths, putMain)
 	}
 
 	// 反向遍历修改，避免位置偏移
@@ -442,6 +436,7 @@ async function buildJSByPath(packageName, module, compileRes, mainCompileRes, ad
 	
 	// 将当前模块标记为已处理
 	processedModules.add(packageName + currentPath)
+	activePaths.delete(currentPath)
 }
 
 function isLocalAssetString(value) {
