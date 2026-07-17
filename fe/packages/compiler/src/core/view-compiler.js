@@ -8,7 +8,7 @@ import { compileTemplate } from '@vue/compiler-sfc'
 import * as cheerio from 'cheerio'
 import { transform } from 'esbuild'
 import * as htmlparser2 from 'htmlparser2'
-import { checkTemplateCompatibility } from '../common/compatibility.js'
+import { checkTemplateCompatibility, takeCompatibilityWarnings } from '../common/compatibility.js'
 import { toMiniProgramModuleId } from '../common/path-utils.js'
 import { collectAssets, getAbsolutePath, tagWhiteList, transformRpx } from '../common/utils.js'
 import { getAppId, getComponent, getContentByPath, getTargetPath, getTemplateExts, getViewScriptExts, getViewScriptTags, getWorkPath, resetStoreInfo } from '../env.js'
@@ -220,7 +220,10 @@ if (!isMainThread) {
 			wxsModuleRegistry.clear()
 			wxsFilePathMap.clear()
 
-			parentPort.postMessage({ success: true })
+			parentPort.postMessage({
+				success: true,
+				compatibilityWarnings: takeCompatibilityWarnings(),
+			})
 		}
 		catch (error) {
 			// 错误时也清理缓存
@@ -1402,6 +1405,7 @@ function generateSlotDirective(slotValue) {
  */
 function getProps(attrs, tag, components) {
 	const attrsList = []
+	const isCustomComponent = Boolean(components && components[tag])
 	// 用于记录属性绑定关系：{ 子组件属性名: 父组件数据路径 }
 	const propBindings = {}
 	const hasEventBindings = Object.keys(attrs).some(name => /^(?:capture-)?(?:bind|catch)(?::)?.+/.test(name))
@@ -1461,11 +1465,24 @@ function getProps(attrs, tag, components) {
 			})
 		}
 		else if (name === 'style') {
+			const parsedStyle = parseSafeBraceExp(value)
 			// 内联样式
 			attrsList.push({
 				name: 'v-c-style',
-				value: transformRpx(parseSafeBraceExp(value)),
+				value: transformRpx(parsedStyle),
 			})
+			// style 是小程序自定义组件可声明的 property，同时也会作用于
+			// 组件宿主。Vue 会把 style 规范化为 DOM 样式对象，因此通过内部
+			// transport prop 保留原始字符串，render 层再映射回 style property。
+			if (isCustomComponent) {
+				attrsList.push({
+					name: ':dimina-wxml-style',
+					value: parsedStyle,
+				})
+				if (isWrappedByBraces(value) && parsedStyle) {
+					propBindings.style = parsedStyle
+				}
+			}
 		}
 		else if (name === 'class') {
 			if (isWrappedByBraces(value)) {
@@ -1549,7 +1566,7 @@ function getProps(attrs, tag, components) {
 				: parseSafeBraceExp(value)
 
 			// 如果是自定义组件的属性绑定，记录绑定关系
-			if (components && components[tag]) {
+			if (isCustomComponent) {
 				// 记录：子组件属性名 -> 父组件数据表达式
 				// 例如：count2="{{count}}" => propBindings['count2'] = 'count'
 				//       value="{{item.name}}" => propBindings['value'] = 'item.name'
@@ -1591,7 +1608,7 @@ function getProps(attrs, tag, components) {
 	})
 
 	// 如果是自定义组件且有属性绑定，添加绑定信息
-	if (components && components[tag] && Object.keys(propBindings).length > 0) {
+	if (isCustomComponent && Object.keys(propBindings).length > 0) {
 		// 解析绑定表达式，提取依赖信息
 		try {
 			// 过滤掉无效值，确保所有值都是可序列化的字符串

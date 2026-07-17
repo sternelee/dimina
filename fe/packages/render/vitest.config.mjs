@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs'
 import { resolve } from 'node:path'
 import vue from '@vitejs/plugin-vue'
+import ViteAutoImport from 'unplugin-auto-import/vite'
 import { defineConfig } from 'vitest/config'
 
 function resolveFile(base) {
@@ -34,6 +35,10 @@ function resolveWorkspaceAlias(source, importer, cwd) {
 export default defineConfig({
 	plugins: [
 		vue(),
+		ViteAutoImport({
+			imports: ['vue'],
+			dts: false,
+		}),
 		{
 			name: 'dimina-workspace-source-alias',
 			enforce: 'pre',

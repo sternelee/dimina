@@ -40,6 +40,7 @@ import { createMiniProgramSlots } from './slots'
 const COMPONENT_HOST_ATTRIBUTE = 'data-dd-component-host'
 const STYLE_ISOLATION_ATTRIBUTE = 'data-dd-style-isolation'
 const STYLE_HOST_ATTRIBUTE = 'data-dd-style-host'
+const WXML_STYLE_PROP = 'diminaWxmlStyle'
 
 function normalizeStyleIsolation(value) {
 	if (value === 'shared') {
@@ -213,6 +214,22 @@ function hasVNodeProp(vnodeProps, name) {
 	if (Object.prototype.hasOwnProperty.call(vnodeProps, name)) return true
 	const kebabName = name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)
 	return Object.prototype.hasOwnProperty.call(vnodeProps, kebabName)
+}
+
+function getVNodeProp(vnodeProps, name) {
+	if (!vnodeProps) return undefined
+	if (Object.prototype.hasOwnProperty.call(vnodeProps, name)) return vnodeProps[name]
+	const kebabName = name.replace(/[A-Z]/g, letter => `-${letter.toLowerCase()}`)
+	return vnodeProps[kebabName]
+}
+
+export function applyWxmlStyleProperty(propertySchemas, values, vnode) {
+	const normalizedValues = { ...values }
+	if (propertySchemas?.style && hasVNodeProp(vnode?.props, WXML_STYLE_PROP)) {
+		normalizedValues.style = getVNodeProp(vnode.props, WXML_STYLE_PROP)
+	}
+	delete normalizedValues[WXML_STYLE_PROP]
+	return normalizedValues
 }
 
 export function normalizeStaticBooleanAttributes(propertySchemas, values, vnode) {
@@ -977,7 +994,10 @@ class Runtime {
 				name: componentPath,
 				__scopeId: sId,
 				components: undefined,
-				props: module.props,
+				props: {
+					...module.props,
+					[WXML_STYLE_PROP]: { type: null },
+				},
 				async setup(props, { attrs, expose }) {
 					const parentInfo = inject('info')
 					const parentPath = inject('path')
@@ -1015,9 +1035,16 @@ class Runtime {
 					that.setModuleInstance(moduleId, instance)
 					const normalizeCurrentProperties = () => normalizeMiniProgramPropertyValues(
 						module.propertySchemas,
-						normalizeStaticBooleanAttributes(module.propertySchemas, deepToRaw(props), vueInstance.vnode),
+						normalizeStaticBooleanAttributes(
+							module.propertySchemas,
+							applyWxmlStyleProperty(module.propertySchemas, deepToRaw(props), vueInstance.vnode),
+							vueInstance.vnode,
+						),
 						{
-							isAbsent: name => !hasVNodeProp(vueInstance.vnode.props, name),
+							isAbsent: name => (
+								!hasVNodeProp(vueInstance.vnode.props, name)
+								&& !(name === 'style' && hasVNodeProp(vueInstance.vnode.props, WXML_STYLE_PROP))
+							),
 							warn: warning => console.warn('[system]', '[render]', warning),
 						},
 					)
@@ -1034,7 +1061,10 @@ class Runtime {
 					const eventAttr = normalizeEventAttributes(attrs)
 
 					const initialProperties = normalizeCurrentProperties()
-					const propertyNames = Object.keys(module.propertySchemas || {}).filter(name => hasVNodeProp(vueInstance.vnode.props, name))
+					const propertyNames = Object.keys(module.propertySchemas || {}).filter(name => (
+						hasVNodeProp(vueInstance.vnode.props, name)
+						|| (name === 'style' && hasVNodeProp(vueInstance.vnode.props, WXML_STYLE_PROP))
+					))
 
 					// Service lifecycle dispatch is synchronous. Register the one-shot data
 					// listener before mC so a same-stack response cannot be lost.

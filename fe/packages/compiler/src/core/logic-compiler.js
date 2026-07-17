@@ -5,7 +5,7 @@ import { parseSync } from 'oxc-parser'
 import { walk } from 'oxc-walker'
 import MagicString from 'magic-string'
 import { transform } from 'esbuild'
-import { getWxMemberName, warnUnsupportedWxApi } from '../common/compatibility.js'
+import { getWxMemberName, takeCompatibilityWarnings, warnUnsupportedWxApi } from '../common/compatibility.js'
 import { collectAssets, hasCompileInfo } from '../common/utils.js'
 import { getAppConfigInfo, getAppId, getComponent, getContentByPath, getNpmResolver, getTargetPath, getWorkPath, resetStoreInfo, resolveAppAlias } from '../env.js'
 import { mergeSourcemap, remapSourcemap } from './sourcemap.js'
@@ -54,7 +54,10 @@ if (!isMainThread) {
 			// Worker 任务完成后清理缓存，释放内存
 			processedModules.clear()
 
-			parentPort.postMessage({ success: true })
+			parentPort.postMessage({
+				success: true,
+				compatibilityWarnings: takeCompatibilityWarnings(),
+			})
 		}
 		catch (error) {
 			// 错误时也清理缓存

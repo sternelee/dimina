@@ -18,6 +18,7 @@ const groupB = [
 describe('runtime template components', () => {
 	let dom
 	let runtime
+	let applyWxmlStyleProperty
 	let normalizeStaticBooleanAttributes
 
 	beforeEach(async () => {
@@ -35,6 +36,7 @@ describe('runtime template components', () => {
 
 		const runtimeModule = await import('../src/core/runtime.js')
 		runtime = runtimeModule.default
+		applyWxmlStyleProperty = runtimeModule.applyWxmlStyleProperty
 		normalizeStaticBooleanAttributes = runtimeModule.normalizeStaticBooleanAttributes
 	})
 
@@ -126,6 +128,82 @@ describe('runtime template components', () => {
 		runtime.registerModuleRoots('parent-id', [parentRoot])
 
 		expect(runtime.getRenderParentModuleId([childRoot], 'child-id')).toBe('parent-id')
+	})
+
+	it('maps the raw WXML host style back to a declared component property', () => {
+		expect(applyWxmlStyleProperty(
+			{ style: { type: String } },
+			{ style: '', diminaWxmlStyle: 'height: 488rpx' },
+			{ props: { 'dimina-wxml-style': 'height: 488rpx' } },
+		)).toEqual({ style: 'height: 488rpx' })
+
+		expect(applyWxmlStyleProperty(
+			{},
+			{ diminaWxmlStyle: 'height: 488rpx' },
+			{ props: { 'dimina-wxml-style': 'height: 488rpx' } },
+		)).toEqual({})
+	})
+
+	it('sends the raw WXML style when creating a component that declares style', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		let createdMessage
+		window.DiminaRenderBridge = {
+			publish: vi.fn((payload) => {
+				const sent = JSON.parse(payload)
+				if (sent.type !== 'mC') return
+				createdMessage = sent.body
+				window.DiminaRenderBridge.onMessage({
+					type: sent.body.moduleId,
+					body: { data: { style: sent.body.properties.style } },
+				})
+			}),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockReturnValue({
+			moduleInfo: {
+				id: 'styled-child',
+				usingComponents: {},
+				render() {
+					return h('div', { class: 'styled-child', style: this.style }, 'styled')
+				},
+			},
+			propertySchemas: {
+				style: { type: String, optionalTypes: [], value: '' },
+			},
+			props: {
+				style: { type: null },
+			},
+		})
+
+		const StyledChild = runtime.createComponent('/pages/style/index', 'bridge-style', {
+			child: '/components/styled-child',
+		})['dd-child']
+		const styledChildRef = ref()
+		const app = createApp({
+			setup() {
+				provide('info', { id: 'page-id', sId: 'page-scope' })
+				provide('path', '/pages/style/index')
+				provide('/pages/style/index', { id: 'page-id' })
+				return () => h(Suspense, null, {
+					default: () => h(StyledChild, {
+						ref: styledChildRef,
+						'dimina-wxml-style': 'height: 488rpx',
+					}),
+				})
+			},
+		})
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+
+		await vi.waitFor(() => expect(root.textContent).toBe('styled'))
+		expect(styledChildRef.value.props.diminaWxmlStyle).toBe('height: 488rpx')
+		expect(createdMessage.properties.style).toBe('height: 488rpx')
+		expect(createdMessage.propertyNames).toContain('style')
+
+		app.unmount()
 	})
 
 	it('keeps a self-declared custom component available to its own render definition', async () => {

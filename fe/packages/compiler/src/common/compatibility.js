@@ -1,11 +1,13 @@
 import { Parser } from 'htmlparser2'
 import { isHTMLTag } from '@vue/shared'
+import { isMainThread } from 'node:worker_threads'
 import { getViewScriptTags } from '../env.js'
 import { supportedBuiltinComponents, supportedWxApis } from './compatibility-reference.js'
 import { miniProgramBuiltinTags, tagWhiteList } from './utils.js'
 
 let cachedReference = null
 const warnedItems = new Set()
+const pendingWarnings = []
 
 function loadReference() {
 	if (cachedReference) {
@@ -163,7 +165,12 @@ function checkTemplateCompatibility(content, filePath, components = {}) {
 				warnUnsupportedComponent(tagName, filePath, line)
 			},
 			onerror(error) {
-				console.warn('[compat]', `Failed to parse template for compatibility diagnostics: ${filePath}`, error.message)
+				warnOnce(
+					'parse',
+					filePath,
+					error.message,
+					`[compat] Failed to parse template for compatibility diagnostics: ${filePath} ${error.message}`,
+				)
 			},
 		},
 		{
@@ -205,7 +212,16 @@ function warnOnce(type, name, location, message) {
 		return
 	}
 	warnedItems.add(key)
-	console.warn(message)
+	if (isMainThread) {
+		console.warn(message)
+	}
+	else {
+		pendingWarnings.push(message)
+	}
+}
+
+function takeCompatibilityWarnings() {
+	return pendingWarnings.splice(0)
 }
 
 export {
@@ -213,5 +229,6 @@ export {
 	getWxMemberName,
 	loadReference,
 	parseApiReference,
+	takeCompatibilityWarnings,
 	warnUnsupportedWxApi,
 }

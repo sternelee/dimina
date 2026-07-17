@@ -1,5 +1,7 @@
 /** @vitest-environment jsdom */
 
+import fs from 'node:fs'
+import { resolve } from 'node:path'
 import { createApp, h, nextTick, provide } from 'vue'
 import Button from '../src/component/button/Button.vue'
 import Camera from '../src/component/camera/Camera.vue'
@@ -99,10 +101,12 @@ describe('exparser component alignment', () => {
 	it('keeps the background-image preloader in normal flow for intrinsic sizing', () => {
 		const { host } = mountComponent(Image, { src: '/cover.png' })
 		const preloader = host.querySelector('.dd-image-preloader')
+		const imageSource = fs.readFileSync(resolve(process.cwd(), 'src/component/image/Image.vue'), 'utf8')
+		const preloaderRules = imageSource.match(/\.dd-image-preloader\s*\{([^}]*)\}/)?.[1]
 
 		expect(preloader).not.toBeNull()
-		expect(getComputedStyle(preloader).position).not.toBe('absolute')
-		expect(getComputedStyle(preloader).opacity).toBe('0')
+		expect(preloaderRules).toContain('opacity: 0')
+		expect(preloaderRules).not.toContain('position: absolute')
 	})
 
 	it('renders a real canvas with the canvas selector contract and slot overlay', () => {
