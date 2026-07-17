@@ -1,6 +1,8 @@
 import { Parser } from 'htmlparser2'
+import { isHTMLTag } from '@vue/shared'
 import { getViewScriptTags } from '../env.js'
 import { supportedBuiltinComponents, supportedWxApis } from './compatibility-reference.js'
+import { miniProgramBuiltinTags, tagWhiteList } from './utils.js'
 
 let cachedReference = null
 const warnedItems = new Set()
@@ -128,7 +130,19 @@ function warnUnsupportedComponent(tagName, filePath, line) {
 	const { supportedBuiltinComponents } = loadReference()
 	// 视图脚本标签（wxs、dds 及自定义标签）不是组件，需动态豁免。
 	// 兼容性清单仅包含 wxs，因此还需在此放行 dds 和自定义标签，避免误报。
-	if (!tagName || supportedBuiltinComponents.has(tagName) || getViewScriptTags().includes(tagName)) {
+	if (
+		!tagName
+		|| supportedBuiltinComponents.has(tagName)
+		|| tagWhiteList.includes(tagName)
+		|| getViewScriptTags().includes(tagName)
+	) {
+		return
+	}
+
+	// glass-easel resolves registered mini-program components first, then falls
+	// back to a native node for undeclared tags. Standard HTML follows that native
+	// path, but known mini-program built-ins still need an unsupported warning.
+	if (!miniProgramBuiltinTags.has(tagName) && isHTMLTag(tagName)) {
 		return
 	}
 

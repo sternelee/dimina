@@ -128,6 +128,67 @@ describe('runtime template components', () => {
 		expect(runtime.getRenderParentModuleId([childRoot], 'child-id')).toBe('parent-id')
 	})
 
+	it('keeps a self-declared custom component available to its own render definition', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const componentPath = '/components/tree-node'
+		const getModule = vi.spyOn(loader, 'getModuleByPath').mockReturnValue({
+			moduleInfo: {
+				id: 'tree-node',
+				usingComponents: {
+					'tree-node': componentPath,
+				},
+				render() {},
+			},
+			propertySchemas: {},
+			props: {},
+		})
+
+		const components = runtime.createComponent('/pages/tree/index', 'bridge-tree', {
+			'tree-node': componentPath,
+		})
+		const pageTreeNode = components['dd-tree-node']
+		const recursiveTreeNode = pageTreeNode.components['dd-tree-node']
+
+		expect(recursiveTreeNode).toBeDefined()
+		expect(recursiveTreeNode).not.toBe(pageTreeNode)
+		expect(recursiveTreeNode.components['dd-tree-node']).toBe(recursiveTreeNode)
+		expect(getModule).toHaveBeenCalledTimes(2)
+	})
+
+	it('closes mutually recursive component definitions without dropping either edge', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const modules = {
+			'/components/node-a': {
+				moduleInfo: {
+					id: 'node-a',
+					usingComponents: { 'node-b': '/components/node-b' },
+					render() {},
+				},
+				propertySchemas: {},
+				props: {},
+			},
+			'/components/node-b': {
+				moduleInfo: {
+					id: 'node-b',
+					usingComponents: { 'node-a': '/components/node-a' },
+					render() {},
+				},
+				propertySchemas: {},
+				props: {},
+			},
+		}
+		vi.spyOn(loader, 'getModuleByPath').mockImplementation(path => modules[path])
+
+		const components = runtime.createComponent('/pages/mutual/index', 'bridge-mutual', {
+			'node-a': '/components/node-a',
+		})
+		const rootA = components['dd-node-a']
+		const nestedB = rootA.components['dd-node-b']
+		const nestedA = nestedB.components['dd-node-a']
+
+		expect(nestedA.components['dd-node-b']).toBe(nestedB)
+	})
+
 	it('uses the actual owner when a template reuses a component definition from another tree', async () => {
 		const loader = (await import('../src/core/loader.js')).default
 		const message = (await import('../src/core/message.js')).default

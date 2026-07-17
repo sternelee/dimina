@@ -944,18 +944,22 @@ class Runtime {
 		return eventPath
 	}
 
-	createComponent(path, bridgeId, usingComponents, depthChain = []) {
+	createComponent(path, bridgeId, usingComponents, componentCache = new Map()) {
 		if (!usingComponents || Object.keys(usingComponents).length === 0) {
 			return
 		}
 
 		const components = {}
 		const that = this
-		const newDepthChain = [...depthChain, path]
 
 		for (const [componentName, componentPath] of Object.entries(usingComponents)) {
-			// 循环依赖检测（A -> B -> A）
-			if (newDepthChain.includes(componentPath)) {
+			// Cache component options by declaring path and target path. Registering
+			// the option before walking its children closes self and mutual cycles,
+			// while retaining the lexical declaring path used by setup below.
+			const cacheKey = `${path}\0${componentPath}`
+			const cachedComponent = componentCache.get(cacheKey)
+			if (cachedComponent) {
+				components[`dd-${componentName}`] = cachedComponent
 				continue
 			}
 
@@ -965,15 +969,14 @@ class Runtime {
 			}
 
 			const { id, usingComponents: subUsing, customTabBar } = module.moduleInfo
-			const subComponents = this.createComponent(componentPath, bridgeId, subUsing, newDepthChain)
 			const sId = `data-v-${id}`
 			const styleIsolation = normalizeStyleIsolation(module.moduleInfo.styleIsolation)
 
 			// setup -> beforeCreate -> beforeMount
-			components[`dd-${componentName}`] = {
+			const componentOptions = {
 				name: componentPath,
 				__scopeId: sId,
-				components: subComponents,
+				components: undefined,
 				props: module.props,
 				async setup(props, { attrs, expose }) {
 					const parentInfo = inject('info')
@@ -1195,6 +1198,9 @@ class Runtime {
 					return markComponentHost(module.moduleInfo.render.apply(this, args), styleIsolation, id)
 				},
 			}
+			componentCache.set(cacheKey, componentOptions)
+			componentOptions.components = this.createComponent(componentPath, bridgeId, subUsing, componentCache)
+			components[`dd-${componentName}`] = componentOptions
 		}
 		return components
 	}

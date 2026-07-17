@@ -217,6 +217,29 @@ const tagWhiteList = [
 	'web-view',
 ]
 
+// Known mini-program built-ins are tracked separately from ordinary HTML tags.
+// This lets compatibility diagnostics keep warning for an unimplemented
+// built-in such as <ad> or <audio>, while the view compiler follows glass-easel
+// and leaves undeclared tags as native elements.
+const miniProgramBuiltinTags = new Set([
+	...tagWhiteList,
+	'canvas',
+	'match-media',
+	'page-container',
+	'share-element',
+	'editor',
+	'audio',
+	'channel-live',
+	'channel-video',
+	'live-player',
+	'live-pusher',
+	'voip-room',
+	'ad',
+	'ad-custom',
+	'official-account',
+	'xr-frame',
+])
+
 export {
 	artCode,
 	collectAssets,
@@ -224,6 +247,7 @@ export {
 	getAbsolutePath,
 	hasCompileInfo,
 	isObjectEmpty,
+	miniProgramBuiltinTags,
 	tagWhiteList,
 	transformRpx,
 	uuid,

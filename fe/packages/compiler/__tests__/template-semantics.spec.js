@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 describe('mini-program template semantics', () => {
 	let tempDir
@@ -14,12 +14,21 @@ describe('mini-program template semantics', () => {
 	})
 
 	afterEach(() => {
+		vi.restoreAllMocks()
 		if (originalTargetPath) process.env.TARGET_PATH = originalTargetPath
 		else delete process.env.TARGET_PATH
 		fs.rmSync(tempDir, { recursive: true, force: true })
 	})
 
-	async function compilePage(template) {
+	async function compilePage(template, options = {}) {
+		const usingComponents = options.usingComponents || {
+			'info-card': '/components/info-card',
+		}
+		const componentFixtures = options.componentFixtures || [{
+			path: 'components/info-card/index',
+			config: { component: true },
+			template: '<view><slot name="info"></slot></view>',
+		}]
 		const pagePath = `pages/index-${compileIndex++}`
 		fs.writeFileSync(path.join(tempDir, 'app.json'), JSON.stringify({
 			pages: [pagePath],
@@ -29,16 +38,15 @@ describe('mini-program template semantics', () => {
 		}))
 		fs.mkdirSync(path.join(tempDir, 'pages'), { recursive: true })
 		fs.writeFileSync(path.join(tempDir, `${pagePath}.json`), JSON.stringify({
-			usingComponents: {
-				'info-card': '/components/info-card',
-			},
+			usingComponents,
 		}))
 		fs.writeFileSync(path.join(tempDir, `${pagePath}.wxml`), template)
-		fs.mkdirSync(path.join(tempDir, 'components/info-card'), { recursive: true })
-		fs.writeFileSync(path.join(tempDir, 'components/info-card/index.json'), JSON.stringify({
-			component: true,
-		}))
-		fs.writeFileSync(path.join(tempDir, 'components/info-card/index.wxml'), '<view><slot name="info"></slot></view>')
+		for (const fixture of componentFixtures) {
+			const componentBasePath = path.join(tempDir, fixture.path)
+			fs.mkdirSync(path.dirname(componentBasePath), { recursive: true })
+			fs.writeFileSync(`${componentBasePath}.json`, JSON.stringify(fixture.config))
+			fs.writeFileSync(`${componentBasePath}.wxml`, fixture.template)
+		}
 
 		const outputDir = path.join(tempDir, 'dist')
 		fs.mkdirSync(outputDir, { recursive: true })
@@ -85,5 +93,56 @@ describe('mini-program template semantics', () => {
 
 		expect(output).toMatch(/info:_withCtx\([^]*_renderList\([^]*=>[^]*\.visible\?/)
 		expect(output.indexOf('.visible')).toBeGreaterThan(output.indexOf('_renderList'))
+	})
+
+	it('keeps HTML and undeclared tags native while registered components win resolution', async () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		const output = await compilePage(`
+			<page-meta root-font-size="system" />
+			<view>
+				<div><span><p>paragraph</p></span></div>
+				<strong class="emphasis"><i>Bold italic</i></strong>
+				<em><b><small>emphasis</small></b></em>
+				<sub>sub</sub><sup>sup</sup><code>code</code>
+				<blockquote><ul><li>item</li></ul></blockquote>
+				<table><tbody><tr><td>cell</td></tr></tbody></table>
+				<unknown-html data-native="true" />
+				<info-card />
+			</view>
+		`)
+
+		for (const tag of [
+			'div', 'span', 'p', 'strong', 'i', 'em', 'b', 'small', 'sub', 'sup',
+			'code', 'blockquote', 'ul', 'li', 'table', 'tbody', 'tr', 'td', 'unknown-html',
+		]) {
+			expect(output).toContain(`"${tag}"`)
+			expect(output).not.toContain(`_resolveComponent("dd-${tag}")`)
+		}
+		expect(warn).toHaveBeenCalledWith(expect.stringContaining('<unknown-html>'))
+		expect(output).toContain('dd-page-meta')
+		expect(output).toContain('dd-info-card')
+		expect(output).not.toContain('resolveComponent("unknown-html")')
+		expect(output).not.toContain('dd-text')
+	})
+
+	it('compiles a custom component that declares and renders itself', async () => {
+		const output = await compilePage('<tree-node depth="3" />', {
+			usingComponents: {
+				'tree-node': '/components/tree-node',
+			},
+			componentFixtures: [{
+				path: 'components/tree-node/index',
+				config: {
+					component: true,
+					usingComponents: {
+						'tree-node': '/components/tree-node',
+					},
+				},
+				template: '<view><tree-node wx:if="{{depth > 0}}" depth="{{depth - 1}}" /></view>',
+			}],
+		})
+
+		expect(output).toContain('dd-tree-node')
+		expect(output).not.toContain('dd-text')
 	})
 })

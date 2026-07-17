@@ -358,6 +358,23 @@ function registerWxsModule(modulePath) {
 	wxsModuleRegistry.add(modulePath)
 }
 
+function getTemplateCompilerOptions(scopeId) {
+	return {
+		// https://template-explorer.vuejs.org/
+		prefixIdentifiers: true,
+		hoistStatic: false,
+		cacheHandlers: true,
+		scopeId,
+		mode: 'function',
+		inline: true,
+		// transTag has already rewritten registered built-ins and custom
+		// components to the reserved dd-* namespace. Every remaining unknown WXML
+		// tag follows glass-easel's unused-native-node fallback instead of Vue's
+		// component resolution.
+		isCustomElement: tag => !tag.startsWith('dd-'),
+	}
+}
+
 /**
  * 检查是否为已注册的 wxs 模块
  * @param {string} modulePath - 模块路径
@@ -403,12 +420,12 @@ function buildCompileView(module, isComponent = false, scriptRes, depthChain = [
 			if (!componentModule) {
 				continue
 			}
-			// 检查自依赖：如果组件依赖自己，则跳过
+			// 检查自依赖：当前模块已经完成本轮编译，只跳过重复编译；
+			// render runtime 仍会保留该递归组件映射。
 			if (componentModule.path === module.path) {
-				console.warn('[view]', `检测到循环依赖，跳过处理: ${module.path}`)
+				console.warn('[view]', `检测到循环依赖，跳过重复编译: ${module.path}`)
 				continue
 			}
-
 			// 递归编译组件，并收集其 wxs 模块
 			const componentInstruction = buildCompileView(componentModule, true, scriptRes, depthChain, childInheritedTemplatePaths)
 			if (componentInstruction && componentInstruction.scriptModule) {
@@ -520,15 +537,7 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 		filename: module.path, // 用于错误提示
 		id: `data-v-${module.id}`,
 		scoped: true,
-		compilerOptions: {
-			// https://template-explorer.vuejs.org/
-			prefixIdentifiers: true,
-			hoistStatic: false,
-			cacheHandlers: true,
-			scopeId: `data-v-${module.id}`,
-			mode: 'function',
-			inline: true,
-		},
+		compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 	})
 
 	let tplComponents = '{'
@@ -538,14 +547,7 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 			filename: tm.path,
 			id: `data-v-${module.id}`,
 			scoped: true,
-			compilerOptions: {
-				prefixIdentifiers: true,
-				hoistStatic: false,
-				cacheHandlers: true,
-				scopeId: `data-v-${module.id}`,
-				mode: 'function',
-				inline: true,
-			},
+			compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 		})
 
 		code = insertWxsToRenderCode(code, compileInstruction.scriptModule, scriptRes, tm.path)
@@ -808,14 +810,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 		filename: module.path,
 		id: `data-v-${module.id}`,
 		scoped: true,
-		compilerOptions: {
-			prefixIdentifiers: true,
-			hoistStatic: false,
-			cacheHandlers: true,
-			scopeId: `data-v-${module.id}`,
-			mode: 'function',
-			inline: true,
-		},
+		compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 	})
 
 	let tplComponents = '{'
@@ -825,14 +820,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules) {
 			filename: tm.path,
 			id: `data-v-${module.id}`,
 			scoped: true,
-			compilerOptions: {
-				prefixIdentifiers: true,
-				hoistStatic: false,
-				cacheHandlers: true,
-				scopeId: `data-v-${module.id}`,
-				mode: 'function',
-				inline: true,
-			},
+			compilerOptions: getTemplateCompilerOptions(`data-v-${module.id}`),
 		})
 
 		code = insertWxsToRenderCode(code, allScriptModules, scriptRes, tm.path)
@@ -1328,11 +1316,13 @@ function transTag(opts) {
 		// 动态组件
 		res = tag
 	}
-	else if (!tagWhiteList.includes(tag)) {
-		res = 'dd-text'
+	else if (tagWhiteList.includes(tag)) {
+		res = `dd-${tag}`
 	}
 	else {
-		res = `dd-${tag}`
+		// glass-easel: local/global usingComponents resolution wins; an
+		// undeclared tag is kept as an unused native node with its original name.
+		res = tag
 	}
 
 	let tagRes
