@@ -1406,6 +1406,15 @@ function getProps(attrs, tag, components) {
 	const propBindings = {}
 	const hasEventBindings = Object.keys(attrs).some(name => /^(?:capture-)?(?:bind|catch)(?::)?.+/.test(name))
 
+	// New packages use vw as the rpx transport unit. Keep that contract on the
+	// compiled node so PageMeta can distinguish them from legacy rem packages.
+	if (tag === 'page-meta') {
+		attrsList.push({
+			name: 'dimina-rpx-unit',
+			value: 'vw',
+		})
+	}
+
 	if (hasEventBindings) {
 		// exparser 的自定义事件沿 WXML 节点树派发，而 Vue 没有对应的
 		// ShadowRoot/slot 路径。在真实 DOM 节点上保留事件绑定和节点类型，

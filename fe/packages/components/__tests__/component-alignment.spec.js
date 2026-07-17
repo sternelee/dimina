@@ -9,6 +9,7 @@ import CheckboxGroup from '../src/component/checkbox-group/CheckboxGroup.vue'
 import Form from '../src/component/form/Form.vue'
 import Map from '../src/component/map/Map.vue'
 import MovableView from '../src/component/movable-view/MovableView.vue'
+import PageMeta from '../src/component/page-meta/PageMeta.vue'
 import RootPortal from '../src/component/root-portal/RootPortal.vue'
 import Slider from '../src/component/slider/Slider.vue'
 import Video from '../src/component/video/Video.vue'
@@ -57,10 +58,29 @@ afterEach(() => {
 		host.remove()
 	}
 	document.querySelectorAll('.portal-child').forEach(node => node.remove())
+	document.documentElement.style.fontSize = ''
+	document.documentElement.style.backgroundColor = ''
 	vi.useRealTimers()
 })
 
 describe('exparser component alignment', () => {
+	it('changes the rem root only for packages with the vw rpx contract', () => {
+		const page = document.createElement('div')
+		page.className = 'dd-page'
+		document.body.appendChild(page)
+		document.documentElement.style.fontSize = '0.5px'
+
+		const legacy = mountComponent(PageMeta, { rootFontSize: 'system' })
+		expect(document.documentElement.style.fontSize).toBe('0.5px')
+		legacy.app.unmount()
+		legacy.host.remove()
+		mounts.splice(mounts.indexOf(legacy), 1)
+
+		mountComponent(PageMeta, { diminaRpxUnit: 'vw', rootFontSize: 'system' })
+		expect(document.documentElement.style.fontSize).toBe('16px')
+		page.remove()
+	})
+
 	it('renders a real canvas with the canvas selector contract and slot overlay', () => {
 		const { host } = mountComponent(Canvas, {
 			canvasId: 'paint',

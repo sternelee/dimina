@@ -56,7 +56,7 @@ export default defineConfig({
 		outDir: 'dist',
 		emptyOutDir: true,
 		sourcemap: false,
-		target: 'node18',
+		target: 'node20',
 		minify: false,
 	},
 })

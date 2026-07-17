@@ -8,6 +8,14 @@ import { invokeAPI, invokeAPIWithCallback, triggerEvent, useInfo } from '@/commo
 
 const props = defineProps({
 	/**
+	 * 编译器注入的 rpx 传输单位标记，用于兼容历史 rem 产物。
+	 */
+	diminaRpxUnit: {
+		type: String,
+		default: '',
+		required: false,
+	},
+	/**
 	 * 下拉背景字体、loading 图的样式，仅支持 dark 和 light
 	 */
 	backgroundTextStyle: {
@@ -124,7 +132,9 @@ function updatePageStyle() {
 	if (props.pageFontSize) {
 		pageElement.style.fontSize = normalizeFontSize(props.pageFontSize)
 	}
-	document.documentElement.style.fontSize = normalizeFontSize(props.rootFontSize)
+	if (props.diminaRpxUnit === 'vw') {
+		document.documentElement.style.fontSize = normalizeFontSize(props.rootFontSize)
+	}
 	document.documentElement.style.backgroundColor = props.rootBackgroundColor || ''
 }
 
@@ -166,7 +176,7 @@ watch(
 	updateBackground,
 )
 watch(
-	() => [props.pageStyle, props.pageFontSize, props.rootFontSize, props.rootBackgroundColor],
+	() => [props.diminaRpxUnit, props.pageStyle, props.pageFontSize, props.rootFontSize, props.rootBackgroundColor],
 	updatePageStyle,
 )
 watch(() => [props.scrollTop, props.scrollDuration], scrollPage)

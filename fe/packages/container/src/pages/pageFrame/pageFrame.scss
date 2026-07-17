@@ -1,6 +1,7 @@
 :root {
-    // rpx is converted independently; rem keeps the browser/exparser root-font semantics.
-    font-size: 16px;
+    // Legacy packages emitted rpx as rem. New packages carry an explicit vw
+    // marker, so this scale remains the safe default for stored app bundles.
+    font-size: clamp(0.4px, 0.13333vw, 2px);
     user-select: none;
     -webkit-user-select: none;
     -webkit-touch-callout: none;

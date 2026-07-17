@@ -8,6 +8,8 @@
 
 ### 安装
 
+运行环境要求 Node.js 20 或更高版本。
+
 ```sh
 npm install @dimina/compiler -g
 ```

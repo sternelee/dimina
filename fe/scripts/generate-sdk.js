@@ -3,7 +3,6 @@
 const os = require('node:os')
 const path = require('node:path')
 const process = require('node:process')
-const archiver = require('archiver')
 const fsExtra = require('fs-extra')
 
 // Define paths relative to the script location
@@ -16,6 +15,7 @@ const targetDir = path.join(mainDir, 'assets/')
 const sharedJssdkDir = path.resolve(__dirname, '../../shared/jssdk/')
 
 async function zipDirectory(sourceDir, outputFile) {
+	const { default: archiver } = await import('archiver')
 	const output = fsExtra.createWriteStream(outputFile)
 	const archive = archiver('zip', {
 		zlib: { level: 9 },

@@ -120,6 +120,7 @@ describe('mini-program template semantics', () => {
 		}
 		expect(warn).toHaveBeenCalledWith(expect.stringContaining('<unknown-html>'))
 		expect(output).toContain('dd-page-meta')
+		expect(output).toContain('"dimina-rpx-unit":"vw"')
 		expect(output).toContain('dd-info-card')
 		expect(output).not.toContain('resolveComponent("unknown-html")')
 		expect(output).not.toContain('dd-text')
