@@ -15,9 +15,9 @@ const targetDir = path.join(mainDir, 'assets/')
 const sharedJssdkDir = path.resolve(__dirname, '../../shared/jssdk/')
 
 async function zipDirectory(sourceDir, outputFile) {
-	const { default: archiver } = await import('archiver')
+	const { ZipArchive } = await import('archiver')
 	const output = fsExtra.createWriteStream(outputFile)
-	const archive = archiver('zip', {
+	const archive = new ZipArchive({
 		zlib: { level: 9 },
 	})
 
