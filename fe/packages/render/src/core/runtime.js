@@ -42,6 +42,22 @@ const STYLE_ISOLATION_ATTRIBUTE = 'data-dd-style-isolation'
 const STYLE_HOST_ATTRIBUTE = 'data-dd-style-host'
 const WXML_STYLE_PROP = 'diminaWxmlStyle'
 
+// 小程序 data 允许在运行期新增顶层字段。让 Vue 将尚不存在的公开字段视为可读，
+// 既能在首次访问时建立响应式依赖，也不会产生“未定义实例属性”的无效告警。
+function createTemplateData() {
+	const data = reactive({})
+	const templateData = new Proxy(data, {
+		getOwnPropertyDescriptor(target, key) {
+			return Reflect.getOwnPropertyDescriptor(target, key) || (
+				typeof key === 'string' && !key.startsWith('$') && !key.startsWith('_')
+					? { configurable: true, enumerable: false, value: undefined }
+					: undefined
+			)
+		},
+	})
+	return { data, templateData }
+}
+
 function normalizeStyleIsolation(value) {
 	if (value === 'shared') {
 		return 'shared'
@@ -649,16 +665,7 @@ class Runtime {
 				data: Object,
 			},
 			setup(props) {
-				const state = reactive({})
-				const stateProxy = new Proxy(state, {
-					getOwnPropertyDescriptor(target, key) {
-						return Reflect.getOwnPropertyDescriptor(target, key) || (
-							typeof key === 'string' && !key.startsWith('$') && !key.startsWith('_')
-								? { configurable: true, enumerable: false, value: undefined }
-								: undefined
-						)
-					},
-				})
+				const { data: state, templateData } = createTemplateData()
 				watchEffect(() => {
 					const newData = props.data || {}
 					for (const key in state) {
@@ -666,7 +673,7 @@ class Runtime {
 					}
 					Object.assign(state, newData)
 				})
-				return stateProxy
+				return templateData
 			},
 			render,
 		}
@@ -784,11 +791,11 @@ class Runtime {
 								window.removeEventListener('scroll', handleScroll)
 							})
 
-						const data = reactive({})
+						const { data, templateData } = createTemplateData()
 						that.setupData.set(that.pageId, data)
 						const initData = await message.wait(that.pageId)
 						that.applyInitialData(that.pageId, data, initData)
-						return data
+						return templateData
 					},
 					components,
 					render: hasCustomTabBar
@@ -1175,7 +1182,7 @@ class Runtime {
 						_pendingResolve()
 					})
 
-					const data = reactive({})
+					const { data, templateData } = createTemplateData()
 					that.setupData.set(moduleId, data)
 					if (module.builtinBehaviors?.has('wx://form-field')) {
 						unregisterFormControl = inject('registerFormControl', undefined)?.({
@@ -1230,7 +1237,7 @@ class Runtime {
 					that._pendingSetups.delete(moduleId)
 					_pendingResolve()
 					that.applyInitialData(moduleId, data, initData)
-					return data
+					return templateData
 				},
 				render(...args) {
 					return markComponentHost(module.moduleInfo.render.apply(this, args), styleIsolation, id)

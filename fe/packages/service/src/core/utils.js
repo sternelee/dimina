@@ -23,26 +23,6 @@ function flushQueue() {
 }
 
 export { deepEqual }
-/**
- * 将 computed 的 key 提前写入 data，确保渲染层初始化时能正确追踪这些 key 的响应式依赖。
- *
- * 背景：渲染层 setup() 收到 initData 后才首次渲染，若 computed key 不在 initData 里，
- * 渲染函数第一次执行时访问该 key 拿到 undefined，Vue 不会建立依赖，后续值更新也不会触发重渲染。
- *
- * computed 经框架（如 mpx）的 filterOptions 处理后不会出现在 moduleInfo 里，
- * 只能在实例初始化完成后从框架运行时读取。目前通过 __mpxProxy 访问，
- * 后续若框架侧暴露标准字段（如 moduleInfo.__computedKeys），可在此替换为更通用的读取方式。
- */
-export function addComputedData(ctx) {
-	const computed = ctx.__mpxProxy?.options?.computed
-	if (computed) {
-		for (const ck of Object.keys(computed)) {
-			if (!Object.prototype.hasOwnProperty.call(ctx.data, ck)) {
-				ctx.data[ck] = null
-			}
-		}
-	}
-}
 
 export function filterData(obj) {
 	if (isNil(obj)) {

@@ -8,7 +8,7 @@ import runtime from '../../core/runtime'
 import { applyDataUpdates, invokeDataObservers, invokePropertyChanges } from '../../core/data-update'
 import { invokeSafely, invokeSafelyAll } from '../../core/safe-callback'
 import { beginUpdateBatch, createUpdateCallback, endUpdateBatch, enqueueUpdate } from '../../core/update-queue'
-import { addComputedData, deepEqual, isChildComponent, matchComponent, resolveEventBinding, syncUpdateChildrenProps } from '../../core/utils'
+import { deepEqual, isChildComponent, matchComponent, resolveEventBinding, syncUpdateChildrenProps } from '../../core/utils'
 
 // 组件生命周期
 const componentLifetimes = ['created', 'attached', 'ready', 'moved', 'detached', 'error']
@@ -116,7 +116,6 @@ export class Component {
 			return
 		}
 		this.__initialDataSent__ = true
-		addComputedData(this)
 		message.send({
 			type: this.__id__,
 			target: 'render',

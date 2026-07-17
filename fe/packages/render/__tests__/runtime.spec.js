@@ -206,6 +206,64 @@ describe('runtime template components', () => {
 		app.unmount()
 	})
 
+	it('renders top-level data keys that are added after initial component data', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+		let moduleId
+		window.DiminaRenderBridge = {
+			publish: vi.fn((payload) => {
+				const sent = JSON.parse(payload)
+				if (sent.type !== 'mC') return
+				moduleId = sent.body.moduleId
+				window.DiminaRenderBridge.onMessage({
+					type: moduleId,
+					body: { data: {} },
+				})
+			}),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockReturnValue({
+			moduleInfo: {
+				id: 'late-data-child',
+				usingComponents: {},
+				render() {
+					return h('div', this.lateValue)
+				},
+			},
+			propertySchemas: {},
+			props: {},
+		})
+
+		const LateDataChild = runtime.createComponent('/pages/late-data/index', 'bridge-late-data', {
+			child: '/components/late-data-child',
+		})['dd-child']
+		const app = createApp({
+			setup() {
+				provide('info', { id: 'page-id', sId: 'page-scope' })
+				provide('path', '/pages/late-data/index')
+				provide('/pages/late-data/index', { id: 'page-id' })
+				return () => h(Suspense, null, {
+					default: () => h(LateDataChild),
+				})
+			},
+		})
+		const root = document.createElement('div')
+		document.body.append(root)
+		app.mount(root)
+
+		await vi.waitFor(() => expect(moduleId).toBeDefined())
+		runtime.updateModule({
+			moduleId,
+			data: { lateValue: 'ready' },
+		})
+		await vi.waitFor(() => expect(root.textContent).toBe('ready'))
+		expect(warn.mock.calls.flat().join('\n')).not.toContain('Property "lateValue" was accessed during render')
+
+		app.unmount()
+	})
+
 	it('keeps a self-declared custom component available to its own render definition', async () => {
 		const loader = (await import('../src/core/loader.js')).default
 		const componentPath = '/components/tree-node'
@@ -1038,6 +1096,36 @@ describe('runtime template components', () => {
 			list: [undefined, { name: 'second' }],
 		})
 
+		runtime.setupData.delete(moduleId)
+		runtime.initializedModules.delete(moduleId)
+	})
+
+	it('makes late-added top-level data available through the component proxy', () => {
+		const moduleId = 'module-late-key'
+		const data = {}
+		const update = vi.fn()
+		const instance = {
+			$: {
+				accessCache: { lateValue: 0 },
+				ctx: {},
+				update,
+			},
+		}
+		runtime.setupData.set(moduleId, data)
+		runtime.initializedModules.add(moduleId)
+		runtime.instance.set(moduleId, instance)
+
+		runtime.updateModule({
+			moduleId,
+			data: { lateValue: 'ready' },
+		})
+
+		expect(data.lateValue).toBe('ready')
+		expect(instance.$.accessCache).not.toHaveProperty('lateValue')
+		expect(instance.$.ctx.lateValue).toBe('ready')
+		expect(update).toHaveBeenCalledOnce()
+
+		runtime.instance.delete(moduleId)
 		runtime.setupData.delete(moduleId)
 		runtime.initializedModules.delete(moduleId)
 	})

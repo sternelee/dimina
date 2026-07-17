@@ -5,7 +5,7 @@ import runtime from '../../core/runtime'
 import { applyDataUpdates } from '../../core/data-update'
 import { invokeSafely, invokeSafelyAll } from '../../core/safe-callback'
 import { createUpdateCallback, enqueueUpdate } from '../../core/update-queue'
-import { addComputedData, isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
+import { isChildComponent, matchComponent, syncUpdateChildrenProps } from '../../core/utils'
 
 // https://developers.weixin.qq.com/miniprogram/dev/reference/api/Page.html
 // const lifecycleMethods = ['onLoad', 'onShow', 'onReady', 'onHide', 'onUnload',
@@ -46,7 +46,6 @@ export class Page {
 			return
 		}
 		this.__initialDataSent__ = true
-		addComputedData(this)
 		message.send({
 			type: this.__id__,
 			target: 'render',

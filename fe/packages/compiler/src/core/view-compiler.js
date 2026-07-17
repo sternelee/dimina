@@ -1602,7 +1602,7 @@ function getProps(attrs, tag, components) {
 			propsRes.push(`:${name}="\`${value}\`"`)
 		}
 		else {
-			// 替换引号是为了兼容 https://github.com/didi/mpx/blob/master/packages/webpack-plugin/lib/template-compiler/compiler.js#L1135
+			// 统一转义属性值，避免生成的 Vue 模板被值中的引号截断。
 			propsRes.push(`${name}="${escapeQuotes(value)}"`)
 		}
 	})
