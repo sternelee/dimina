@@ -16,6 +16,7 @@
   <a href="https://didi.github.io/dimina/"><strong>Live Demo</strong></a> ·
   <a href="#quick-start">Quick Start</a> ·
   <a href="./docs/API-Reference.md">Capability Reference</a> ·
+  <a href="./CHANGELOG.md">Changelog</a> ·
   <a href="./docs/README.md">Architecture</a> ·
   <a href="#contributing">Contribute</a>
 </p>

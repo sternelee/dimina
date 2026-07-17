@@ -16,6 +16,7 @@
   <a href="https://didi.github.io/dimina/"><strong>在线体验</strong></a> ·
   <a href="#最快上手">最快上手</a> ·
   <a href="./docs/API-Reference.md">能力参考</a> ·
+  <a href="./CHANGELOG.md">更新日志</a> ·
   <a href="./docs/README.md">架构文档</a> ·
   <a href="#参与共建">参与共建</a>
 </p>
