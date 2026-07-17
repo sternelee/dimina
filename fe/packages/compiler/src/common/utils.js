@@ -176,7 +176,7 @@ function uuid(str) {
 
 const tagWhiteList = [
 	'page',
-	'wrapper',
+	'component-host',
 	'block',
 	'button',
 	'camera',

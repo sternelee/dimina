@@ -984,8 +984,8 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 
 		if (isComponent) {
 			// TODO: 实现 componentPlaceholder，https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/placeholder.html
-			// 自定义组件统一添加根节点，，手动声明继承关系来移除 wrapper 节点， https://cn.vuejs.org/guide/components/attrs#nested-component-inheritance
-			content = `<wrapper name="${path}">${content}</wrapper>`
+			// 自定义组件统一添加宿主节点，承载组件边界、属性、事件与样式隔离语义。
+			content = `<component-host name="${path}">${content}</component-host>`
 		}
 		else {
 			// 检查是否有唯一根节点，如果不是唯一根节点，则使用 <view></view> 包裹，以修复多节点导致的警告：

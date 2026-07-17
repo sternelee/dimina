@@ -6,6 +6,9 @@ import components from './src/index'
 export * from './src/index'
 
 const EXTERNAL_CLASS_SCOPE_ATTRIBUTE = 'data-dd-external-class-scope'
+const LEGACY_COMPONENT_TAG_ALIASES = {
+	'component-host': ['dd-wrapper'],
+}
 
 function transformAnimation(el, propertyValue) {
 	if (!propertyValue?.actions?.length)
@@ -231,6 +234,11 @@ function Components(app) {
 			inheritAttrs: false,
 		}]
 		install(app, component)
+		for (const alias of LEGACY_COMPONENT_TAG_ALIASES[component.__tagName] || []) {
+			// Keep already-compiled applications working while new output uses
+			// dd-component-host exclusively.
+			app.component(alias, component)
+		}
 	})
 }
 

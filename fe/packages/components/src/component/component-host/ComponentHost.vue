@@ -11,7 +11,7 @@ useInfo()
 
 // 将 path 转换为有效的 HTML 标签名
 const componentName = computed(() => {
-	if (!props.name) return 'wrapper-component'
+	if (!props.name) return 'component-host'
 	
 	// 将路径转换为有效的标签名：
 	// 1. 移除开头的斜杠
@@ -27,10 +27,10 @@ const componentName = computed(() => {
 	
 	// 确保以字母开头
 	if (!/^[a-zA-Z]/.test(name)) {
-		name = 'wrapper-' + name
+		name = 'component-host-' + name
 	}
 	
-	return name || 'wrapper-component'
+	return name || 'component-host'
 })
 
 // 自定义组件需要该组件接收点击事件定义，相关事件将在 render 中处理

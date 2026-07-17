@@ -129,6 +129,8 @@ describe('mini-program template semantics', () => {
 	it('preserves custom-component style as both host style and a declared property', async () => {
 		const output = await compilePage('<info-card style="height: {{cardHeight}}rpx" />')
 
+		expect(output).toContain('dd-component-host')
+		expect(output).not.toContain('dd-wrapper')
 		expect(output).toContain('"dimina-wxml-style"')
 		expect(output).toContain('_resolveDirective("c-style")')
 		expect(output).toMatch(/style:\{expression:"'height: '\+cardHeight\+'rpx'"/)
