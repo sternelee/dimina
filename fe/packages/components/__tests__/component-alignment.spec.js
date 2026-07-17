@@ -7,11 +7,14 @@ import Canvas from '../src/component/canvas/Canvas.vue'
 import Checkbox from '../src/component/checkbox/Checkbox.vue'
 import CheckboxGroup from '../src/component/checkbox-group/CheckboxGroup.vue'
 import Form from '../src/component/form/Form.vue'
+import Image from '../src/component/image/Image.vue'
 import Map from '../src/component/map/Map.vue'
 import MovableView from '../src/component/movable-view/MovableView.vue'
 import PageMeta from '../src/component/page-meta/PageMeta.vue'
 import RootPortal from '../src/component/root-portal/RootPortal.vue'
 import Slider from '../src/component/slider/Slider.vue'
+import Swiper from '../src/component/swiper/Swiper.vue'
+import SwiperItem from '../src/component/swiper-item/SwiperItem.vue'
 import Video from '../src/component/video/Video.vue'
 import View from '../src/component/view/View.vue'
 
@@ -64,6 +67,18 @@ afterEach(() => {
 })
 
 describe('exparser component alignment', () => {
+	it('clones circular swiper items through the configured Vue auto import', async () => {
+		const { host } = mountComponent(Swiper, { circular: true }, {
+			default: () => [
+				h(SwiperItem, { itemId: 'first' }, { default: () => 'First' }),
+				h(SwiperItem, { itemId: 'second' }, { default: () => 'Second' }),
+			],
+		})
+		await nextTick()
+
+		expect(host.querySelectorAll('[data-dd-cloned]')).toHaveLength(2)
+	})
+
 	it('changes the rem root only for packages with the vw rpx contract', () => {
 		const page = document.createElement('div')
 		page.className = 'dd-page'
@@ -79,6 +94,15 @@ describe('exparser component alignment', () => {
 		mountComponent(PageMeta, { diminaRpxUnit: 'vw', rootFontSize: 'system' })
 		expect(document.documentElement.style.fontSize).toBe('16px')
 		page.remove()
+	})
+
+	it('keeps the background-image preloader in normal flow for intrinsic sizing', () => {
+		const { host } = mountComponent(Image, { src: '/cover.png' })
+		const preloader = host.querySelector('.dd-image-preloader')
+
+		expect(preloader).not.toBeNull()
+		expect(getComputedStyle(preloader).position).not.toBe('absolute')
+		expect(getComputedStyle(preloader).opacity).toBe('0')
 	})
 
 	it('renders a real canvas with the canvas selector contract and slot overlay', () => {

@@ -285,7 +285,6 @@ if (hasTouchEvents) {
 }
 
 .dd-image-preloader {
-	position: absolute;
 	opacity: 0;
 }
 

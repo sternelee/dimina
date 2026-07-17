@@ -37,14 +37,50 @@ function transformAnimation(el, propertyValue) {
 	executeAnimation()
 }
 
-function transformCss(el, val, append) {
-	const convertedStyle = transformRpx(val)
-	if (append) {
-		// 防止覆盖组件自身样式
-		el.style.cssText += convertedStyle
+const directiveStyleState = new WeakMap()
+
+function snapshotStyle(style) {
+	return new Map(Array.from(style, name => [name, {
+		priority: style.getPropertyPriority(name),
+		value: style.getPropertyValue(name),
+	}]))
+}
+
+function restoreDirectiveStyle(el) {
+	const originalDeclarations = directiveStyleState.get(el)
+	if (!originalDeclarations) return
+
+	for (const name of originalDeclarations.keys()) {
+		el.style.removeProperty(name)
 	}
-	else {
-		el.style.cssText = convertedStyle
+	for (const [name, declaration] of originalDeclarations) {
+		if (declaration) {
+			el.style.setProperty(name, declaration.value, declaration.priority)
+		}
+	}
+	directiveStyleState.delete(el)
+}
+
+function transformCss(el, val) {
+	const convertedStyle = transformRpx(val)
+	if (typeof convertedStyle !== 'string' || !convertedStyle.trim()) return
+
+	const before = snapshotStyle(el.style)
+	el.style.cssText += convertedStyle
+	const after = snapshotStyle(el.style)
+	const originalDeclarations = new Map()
+	const declarationNames = new Set([...before.keys(), ...after.keys()])
+
+	for (const name of declarationNames) {
+		const previous = before.get(name)
+		const current = after.get(name)
+		if (previous?.value !== current?.value || previous?.priority !== current?.priority) {
+			originalDeclarations.set(name, previous || null)
+		}
+	}
+
+	if (originalDeclarations.size) {
+		directiveStyleState.set(el, originalDeclarations)
 	}
 }
 
@@ -131,10 +167,15 @@ function removeEventBindingRecord(el, binding, vnode) {
 function Components(app) {
 	app.directive('c-style', {
 		mounted(el, binding) {
-			transformCss(el, binding.value, true)
+			transformCss(el, binding.value)
+		},
+		beforeUpdate(el) {
+			// Remove only declarations owned by the previous WXML style value.
+			// Vue can then patch the component's own inline style independently.
+			restoreDirectiveStyle(el)
 		},
 		updated(el, binding) {
-			transformCss(el, binding.value, false)
+			transformCss(el, binding.value)
 		},
 	})
 

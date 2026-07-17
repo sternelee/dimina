@@ -7,7 +7,10 @@ export default defineConfig({
 	plugins: [
 		vue(),
 		ViteAutoImport({
-			imports: ['vue'],
+			imports: [
+				'vue',
+				{ vue: ['cloneVNode'] },
+			],
 			dts: false,
 		}),
 	],
