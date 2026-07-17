@@ -1825,7 +1825,7 @@ function splitWithBraces(str) {
 function parseClassRules(cssRule) {
 	let list = splitWithBraces(cssRule)
 	list = list.map((item) => {
-		return parseBraceExp(item)
+		return parseSafeBraceExp(item)
 	})
 
 	if (list.length === 1) {
@@ -1869,7 +1869,7 @@ function getForIndexName(attrs) {
 function parseForExp(exp, attrs) {
 	const item = getForItemName(attrs)
 	const index = getForIndexName(attrs)
-	const listVariableName = parseBraceExp(exp)
+	const listVariableName = parseSafeBraceExp(exp)
 	return `(${item}, ${index}) in ${listVariableName}`
 }
 
@@ -1933,9 +1933,9 @@ function parseBraceExp(exp) {
 function parseTemplateDataExp(exp) {
 	const matchResult = exp.trim().match(/^\{\{([\s\S]*)\}\}$/)
 	if (matchResult) {
-		return `{${matchResult[1].trim()}}`
+		return addOptionalChaining(`{${matchResult[1].trim()}}`)
 	}
-	return `{${parseBraceExp(exp)}}`
+	return `{${parseSafeBraceExp(exp)}}`
 }
 
 function transTagWxs($, scriptModule, filePath) {

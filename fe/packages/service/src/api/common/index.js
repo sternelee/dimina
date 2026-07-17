@@ -188,6 +188,10 @@ export function invokeAPI(name, data, target = 'container') {
 		const { success, fail, complete, keep, evtId, ...rest } = data
 
 		params = rest
+		if (evtId !== undefined) {
+			// 扩展订阅通过 evtId 与普通带 success 的 API 调用区分。
+			params.evtId = evtId
+		}
 
 		if (isFunction(success)) {
 			params.success = callback.store(success, keep, evtId)

@@ -42,6 +42,7 @@ export class MiniApp {
 		this.apiRegistry = {}
 		// 维护第三方扩展的持续订阅，key: `${module}_${event}`，value: unsubscribe 函数
 		this._extSubscriptions = new Map();
+		this._windowResizeHandlers = new Set()
 		this.tabBarConfig = null            // app.tabBar 配置
 		this.tabBarPaths = []               // 与 list 等长，pagePath 数组（已规范化、无前导 /）
 		this.tabBarBridges = new Map()      // pagePath -> Bridge：懒加载的持久 tab 池
@@ -220,10 +221,26 @@ export class MiniApp {
 		else if (typeof this[name] === 'function') {
 			this[name](params)
 		}
-		else {
-			// 未命中已知方法，转发给第三方扩展路由处理
+		else if (params?.module !== undefined || params?.evtId !== undefined) {
+			// 扩展调用必须携带明确的协议标记，不能仅凭 success 判断，
+			// 否则未实现的普通回调 API 会被误判为 extOnBridge。
 			this._handleExtCall(name, params)
 		}
+		else {
+			this._handleUnsupportedApi(name, params)
+		}
+	}
+
+	_handleUnsupportedApi(name, params = {}) {
+		const { onFail, onComplete } = this._createApiCallbacks(params)
+		const error = { errMsg: `${name}:fail api is not supported` }
+		if (onFail) {
+			onFail(error)
+		}
+		else {
+			console.warn(`[container] ${error.errMsg}`)
+		}
+		onComplete?.()
 	}
 
 	viewDidLoad() {
@@ -1481,6 +1498,10 @@ export class MiniApp {
 			unsubscribe?.()
 		}
 		this._extSubscriptions.clear()
+		for (const handler of this._windowResizeHandlers) {
+			globalThis.removeEventListener?.('resize', handler)
+		}
+		this._windowResizeHandlers.clear()
 		if (this._themeMediaQuery?.removeEventListener) {
 			this._themeMediaQuery.removeEventListener('change', this._themeChangeHandler)
 		}
@@ -1632,6 +1653,33 @@ export class MiniApp {
             },
         });
 		onComplete?.()
+	}
+
+	getSystemInfo(opts = {}) {
+		const { onSuccess, onComplete } = this._createApiCallbacks(opts)
+		onSuccess?.({
+			...this.getSystemInfoSync(),
+			errMsg: 'getSystemInfo:ok',
+		})
+		onComplete?.()
+	}
+
+	onWindowResize(opts = {}) {
+		const onResize = this.createCallbackFunction(opts.success)
+		if (!onResize || !globalThis.addEventListener) {
+			return
+		}
+
+		const handler = () => {
+			const { windowWidth, windowHeight, deviceOrientation = 'portrait' } = this.getSystemInfoSync()
+			onResize({
+				size: { windowWidth, windowHeight },
+				deviceOrientation,
+			})
+		}
+		this._windowResizeHandlers ??= new Set()
+		this._windowResizeHandlers.add(handler)
+		globalThis.addEventListener('resize', handler)
 	}
 
 	getMenuButtonBoundingClientRect() {
@@ -2328,11 +2376,11 @@ export class MiniApp {
 	 * service 侧 extBridge/extOnBridge/extOffBridge 的 invokeAPI 名称规则：
 	 *   extBridge   → name = event,              params = { module, data, success, fail, complete }
 	 *   extOnBridge → name = `${module}_${event}`, params = { success(callBack), evtId }
-	 *   extOffBridge→ name = `${module}_${event}`, params = { success(undefined) }（无 evtId，keep=false）
+	 *   extOffBridge→ name = `${module}_${event}`, params = { success(undefined), evtId }
 	 *
 	 * 区分方式：
 	 *   - extBridge：params 中携带 module 字段
-	 *   - extOnBridge vs extOffBridge：evtId 存在且 success 有值 → on；否则 → off
+	 *   - extOnBridge vs extOffBridge：success 有值 → on；否则 → off
 	 */
 	_handleExtCall(name, params = {}) {
 		if (params.module !== undefined) {
@@ -2403,7 +2451,7 @@ export class MiniApp {
 
 		const { module, event } = this._parseExtEventKey(eventKey)
 		if (!module) {
-			console.error(`[container] extOnBridge:fail no registered module matched for key "${eventKey}"`)
+			console.warn(`[container] extOnBridge:fail no registered module matched for key "${eventKey}"`)
 			return
 		}
 
