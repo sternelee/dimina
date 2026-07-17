@@ -76,8 +76,6 @@ function getRect() {
 function getNativeParams() {
 	const enablePoi = props.enablePOI === undefined ? props.enablePoi : props.enablePOI
 	return {
-		type,
-		id: props.id,
 		latitude: props.latitude,
 		longitude: props.longitude,
 		scale: props.scale,

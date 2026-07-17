@@ -72,8 +72,11 @@ function transformTextNodes() {
 	if (textRef.value) {
 		const walker = document.createTreeWalker(textRef.value, NodeFilter.SHOW_TEXT)
 		const nodes = []
-		let node
-		while ((node = walker.nextNode())) nodes.push(node)
+		let node = walker.nextNode()
+		while (node) {
+			nodes.push(node)
+			node = walker.nextNode()
+		}
 		for (const textNode of nodes) {
 				// 获取文本内容
 				const text = textNode.nodeValue

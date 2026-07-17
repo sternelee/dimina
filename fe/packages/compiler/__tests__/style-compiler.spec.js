@@ -197,6 +197,21 @@ describe('style compiler regressions', () => {
 		expect(warnSpy).not.toHaveBeenCalled()
 	})
 
+	it('keeps compiled rpx stable when page-meta changes the rem root size', async () => {
+		prepareBaseProject()
+		writeProjectFile('pages/home/index.wxml', '<page-meta root-font-size="system"/><view class="box"/>')
+		writeProjectFile('pages/home/index.wxss', '.box { width: 750rpx; margin-left: -7.5rpx; font-size: 1rem; }')
+
+		storeInfo(tempDir)
+		await compileSS(getPages().mainPages, null, { completedTasks: 0 })
+
+		const outputCss = fs.readFileSync(path.join(outputDir, 'main/pages_home_index.css'), 'utf-8')
+		expect(outputCss).toContain('width:100vw')
+		expect(outputCss).toContain('margin-left:-1vw')
+		expect(outputCss).toContain('font-size:1rem')
+		expect(outputCss).not.toContain('750rem')
+	})
+
 	it('preserves caller-before-child style order while emitting external-class override selectors', async () => {
 		prepareBaseProject({
 			usingComponents: { parent: '/components/parent' },

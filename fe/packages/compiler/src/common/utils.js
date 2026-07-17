@@ -160,7 +160,8 @@ function transformRpx(styleText) {
 	}
 
 	return styleText.replace(/([+-]?\d+(?:\.\d+)?)rpx/g, (_, pixel) => {
-		return `${Number(pixel)}rem`
+		const viewportWidth = Number((Number(pixel) / 7.5).toFixed(6))
+		return `${Object.is(viewportWidth, -0) ? 0 : viewportWidth}vw`
 	})
 }
 

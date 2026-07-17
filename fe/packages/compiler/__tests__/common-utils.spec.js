@@ -2,7 +2,14 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { collectAssets } from '../src/common/utils.js'
+import { collectAssets, transformRpx } from '../src/common/utils.js'
+
+describe('transformRpx', () => {
+	it('does not reuse rem as the rpx transport unit', () => {
+		expect(transformRpx('width:750rpx;margin-left:-7.5rpx;font-size:1rem'))
+			.toBe('width:100vw;margin-left:-1vw;font-size:1rem')
+	})
+})
 
 describe('collectAssets', () => {
 	let tempDir

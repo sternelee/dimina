@@ -61,11 +61,11 @@ function requestData() {
 		apiName = 'getGroupInfoByGId'
 		params = { openGId: props.openGid }
 	}
-	else if (/^user/.test(props.type)) {
+	else if (props.type.startsWith('user')) {
 		apiName = 'getUserInfo'
 		params = { lang: props.lang }
 	}
-	else if (/CloudStorage$/.test(props.type)) {
+	else if (props.type.endsWith('CloudStorage')) {
 		apiName = `get${props.type[0].toUpperCase()}${props.type.slice(1)}`
 		params = { keyList: props.keyList }
 	}
@@ -84,7 +84,7 @@ function requestData() {
 				if (!result.roomTopic) triggerEvent('error', { info, detail: { errMsg: 'groupName is empty.' } })
 				triggerEvent('getgroupname', { info, detail: result })
 			}
-			else if (/^user/.test(props.type)) {
+			else if (props.type.startsWith('user')) {
 				renderUserInfo(result.userInfo || result)
 			}
 			else {
