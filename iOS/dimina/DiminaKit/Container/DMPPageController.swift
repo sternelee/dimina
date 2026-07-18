@@ -147,7 +147,7 @@ public class DMPPageController: UIViewController {
             view.bringSubviewToFront(customNavigationCapsuleView)
         }
         if let miniProgramMenuContainerView = miniProgramMenuContainerView {
-            view.bringSubviewToFront(miniProgramMenuContainerView)
+            miniProgramMenuContainerView.superview?.bringSubviewToFront(miniProgramMenuContainerView)
         }
         loadingView?.superview?.bringSubviewToFront(loadingView!)
     }
@@ -691,7 +691,10 @@ public class DMPPageController: UIViewController {
         cancelButton.titleLabel?.font = .systemFont(ofSize: 18)
         cancelButton.addTarget(self, action: #selector(dismissMiniProgramMenu), for: .touchUpInside)
 
-        view.addSubview(overlay)
+        guard let presentationView = navigationController?.view ?? parent?.view ?? view else {
+            return
+        }
+        presentationView.addSubview(overlay)
         overlay.addSubview(sheetView)
         sheetView.addSubview(headerView)
         sheetView.addSubview(topDivider)
@@ -699,12 +702,12 @@ public class DMPPageController: UIViewController {
         sheetView.addSubview(bottomDivider)
         sheetView.addSubview(cancelButton)
 
-        let bottomInset = view.safeAreaInsets.bottom
+        let bottomInset = presentationView.safeAreaInsets.bottom
         NSLayoutConstraint.activate([
-            overlay.topAnchor.constraint(equalTo: view.topAnchor),
-            overlay.leadingAnchor.constraint(equalTo: view.leadingAnchor),
-            overlay.trailingAnchor.constraint(equalTo: view.trailingAnchor),
-            overlay.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+            overlay.topAnchor.constraint(equalTo: presentationView.topAnchor),
+            overlay.leadingAnchor.constraint(equalTo: presentationView.leadingAnchor),
+            overlay.trailingAnchor.constraint(equalTo: presentationView.trailingAnchor),
+            overlay.bottomAnchor.constraint(equalTo: presentationView.bottomAnchor),
 
             sheetView.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
             sheetView.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
@@ -747,7 +750,7 @@ public class DMPPageController: UIViewController {
         ])
 
         miniProgramMenuContainerView = overlay
-        view.bringSubviewToFront(overlay)
+        presentationView.bringSubviewToFront(overlay)
     }
 
     private func makeMiniProgramMenuItem(title: String, image: UIImage, action: Selector) -> UIControl {
@@ -803,19 +806,25 @@ public class DMPPageController: UIViewController {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
         return renderer.image { _ in
             let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
-            let text = "↻" as NSString
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 24, weight: .medium),
-                .foregroundColor: color
-            ]
-            let textSize = text.size(withAttributes: attributes)
-            text.draw(
-                at: CGPoint(
-                    x: (24 - textSize.width) / 2,
-                    y: (24 - textSize.height) / 2
-                ),
-                withAttributes: attributes
+            let path = UIBezierPath(
+                arcCenter: CGPoint(x: 12, y: 12),
+                radius: 7.25,
+                startAngle: 45 * .pi / 180,
+                endAngle: 315 * .pi / 180,
+                clockwise: true
             )
+            path.lineWidth = 2
+            path.lineCapStyle = .round
+            color.setStroke()
+            path.stroke()
+
+            let arrow = UIBezierPath()
+            arrow.move(to: CGPoint(x: 19.68, y: 9.42))
+            arrow.addLine(to: CGPoint(x: 15.29, y: 8.71))
+            arrow.addLine(to: CGPoint(x: 18.97, y: 5.03))
+            arrow.close()
+            color.setFill()
+            arrow.fill()
         }.withRenderingMode(.alwaysOriginal)
     }
 
@@ -823,19 +832,15 @@ public class DMPPageController: UIViewController {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
         return renderer.image { _ in
             let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
-            let text = "×" as NSString
-            let attributes: [NSAttributedString.Key: Any] = [
-                .font: UIFont.systemFont(ofSize: 26, weight: .medium),
-                .foregroundColor: color
-            ]
-            let textSize = text.size(withAttributes: attributes)
-            text.draw(
-                at: CGPoint(
-                    x: (24 - textSize.width) / 2,
-                    y: (24 - textSize.height) / 2
-                ),
-                withAttributes: attributes
-            )
+            let path = UIBezierPath()
+            path.move(to: CGPoint(x: 6.75, y: 6.75))
+            path.addLine(to: CGPoint(x: 17.25, y: 17.25))
+            path.move(to: CGPoint(x: 17.25, y: 6.75))
+            path.addLine(to: CGPoint(x: 6.75, y: 17.25))
+            path.lineWidth = 2
+            path.lineCapStyle = .round
+            color.setStroke()
+            path.stroke()
         }.withRenderingMode(.alwaysOriginal)
     }
 
