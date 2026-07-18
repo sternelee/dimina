@@ -1,9 +1,6 @@
 @CustomDialog
 export struct DMPMiniProgramMenuDialog {
   controller: CustomDialogController
-  private canvasSettings: RenderingContextSettings = new RenderingContextSettings(true)
-  private reenterIconContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.canvasSettings)
-  private closeIconContext: CanvasRenderingContext2D = new CanvasRenderingContext2D(this.canvasSettings)
   private appName: string = ''
   private buildController?: () => CustomDialogController
   private onReenter?: () => void
@@ -88,19 +85,15 @@ export struct DMPMiniProgramMenuDialog {
     Column() {
       Stack() {
         if (isReenter) {
-          Canvas(this.reenterIconContext)
-            .width(24)
-            .height(24)
-            .onReady(() => {
-              this.drawReenterIcon(this.reenterIconContext)
-            })
+          SymbolGlyph($r('sys.symbol.arrow_clockwise'))
+            .fontSize(24)
+            .fontColor(['#333333'])
+            .fontWeight(FontWeight.Medium)
         } else {
-          Canvas(this.closeIconContext)
-            .width(24)
-            .height(24)
-            .onReady(() => {
-              this.drawCloseIcon(this.closeIconContext)
-            })
+          SymbolGlyph($r('sys.symbol.xmark'))
+            .fontSize(24)
+            .fontColor(['#333333'])
+            .fontWeight(FontWeight.Medium)
         }
       }
       .width(52)
@@ -126,39 +119,6 @@ export struct DMPMiniProgramMenuDialog {
     .onClick(() => {
       onClick()
     })
-  }
-
-  private prepareIconContext(context: CanvasRenderingContext2D): void {
-    context.clearRect(0, 0, 24, 24)
-    context.strokeStyle = '#333333'
-    context.lineWidth = 2
-    context.lineCap = 'round'
-    context.lineJoin = 'round'
-  }
-
-  private drawReenterIcon(context: CanvasRenderingContext2D): void {
-    this.prepareIconContext(context)
-    context.beginPath()
-    context.arc(12, 12, 7.25, 45 * Math.PI / 180, 315 * Math.PI / 180)
-    context.stroke()
-
-    context.beginPath()
-    context.moveTo(19.68, 9.42)
-    context.lineTo(15.29, 8.71)
-    context.lineTo(18.97, 5.03)
-    context.closePath()
-    context.fillStyle = '#333333'
-    context.fill()
-  }
-
-  private drawCloseIcon(context: CanvasRenderingContext2D): void {
-    this.prepareIconContext(context)
-    context.beginPath()
-    context.moveTo(6.75, 6.75)
-    context.lineTo(17.25, 17.25)
-    context.moveTo(17.25, 6.75)
-    context.lineTo(6.75, 17.25)
-    context.stroke()
   }
 
   private getAppInitial(): string {

@@ -663,14 +663,19 @@ public class DMPPageController: UIViewController {
         topDivider.translatesAutoresizingMaskIntoConstraints = false
         topDivider.backgroundColor = UIColor(red: 242 / 255, green: 242 / 255, blue: 242 / 255, alpha: 1)
 
+        let iconColor = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
+        let symbolConfiguration = UIImage.SymbolConfiguration(pointSize: 24, weight: .medium)
+
         let reenterItem = makeMiniProgramMenuItem(
             title: "重新进入\n小程序",
-            image: makeMenuReenterImage(),
+            image: UIImage(systemName: "arrow.clockwise", withConfiguration: symbolConfiguration)?
+                .withTintColor(iconColor, renderingMode: .alwaysOriginal) ?? UIImage(),
             action: #selector(miniProgramMenuReenterTapped)
         )
         let closeItem = makeMiniProgramMenuItem(
             title: "关闭小程序",
-            image: makeMenuCloseImage(),
+            image: UIImage(systemName: "xmark", withConfiguration: symbolConfiguration)?
+                .withTintColor(iconColor, renderingMode: .alwaysOriginal) ?? UIImage(),
             action: #selector(miniProgramMenuCloseTapped)
         )
 
@@ -800,48 +805,6 @@ public class DMPPageController: UIViewController {
         ])
 
         return control
-    }
-
-    private func makeMenuReenterImage() -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
-        return renderer.image { _ in
-            let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
-            let path = UIBezierPath(
-                arcCenter: CGPoint(x: 12, y: 12),
-                radius: 7.25,
-                startAngle: 45 * .pi / 180,
-                endAngle: 315 * .pi / 180,
-                clockwise: true
-            )
-            path.lineWidth = 2
-            path.lineCapStyle = .round
-            color.setStroke()
-            path.stroke()
-
-            let arrow = UIBezierPath()
-            arrow.move(to: CGPoint(x: 19.68, y: 9.42))
-            arrow.addLine(to: CGPoint(x: 15.29, y: 8.71))
-            arrow.addLine(to: CGPoint(x: 18.97, y: 5.03))
-            arrow.close()
-            color.setFill()
-            arrow.fill()
-        }.withRenderingMode(.alwaysOriginal)
-    }
-
-    private func makeMenuCloseImage() -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 24, height: 24))
-        return renderer.image { _ in
-            let color = UIColor(red: 51 / 255, green: 51 / 255, blue: 51 / 255, alpha: 1)
-            let path = UIBezierPath()
-            path.move(to: CGPoint(x: 6.75, y: 6.75))
-            path.addLine(to: CGPoint(x: 17.25, y: 17.25))
-            path.move(to: CGPoint(x: 17.25, y: 6.75))
-            path.addLine(to: CGPoint(x: 6.75, y: 17.25))
-            path.lineWidth = 2
-            path.lineCapStyle = .round
-            color.setStroke()
-            path.stroke()
-        }.withRenderingMode(.alwaysOriginal)
     }
 
     @objc private func dismissMiniProgramMenu() {
