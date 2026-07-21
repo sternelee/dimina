@@ -46,13 +46,17 @@ if (!isMainThread) {
 		catch (error) {
 			// 错误时也清理缓存
 			compileRes.clear()
-			
-			parentPort.postMessage({ 
-				success: false, 
+
+			parentPort.postMessage({
+				success: false,
 				error: {
 					message: error.message,
 					stack: error.stack,
-					name: error.name
+					name: error.name,
+					file: error.file,
+					line: error.line,
+					column: error.column,
+					stage: error.stage,
 				}
 			})
 		}
@@ -138,30 +142,35 @@ function createExternalClassPlugin(moduleId) {
 			}
 			processedRules.add(rule)
 
-			rule.selector = selectorParser((selectors) => {
-				for (const selector of [...selectors.nodes]) {
-					const boostedSelector = selector.clone()
-					const scopeNodes = []
-					boostedSelector.walkAttributes((attribute) => {
-						if (attribute.attribute === scopeAttribute) {
-							scopeNodes.push(attribute)
+			try {
+				rule.selector = selectorParser((selectors) => {
+					for (const selector of [...selectors.nodes]) {
+						const boostedSelector = selector.clone()
+						const scopeNodes = []
+						boostedSelector.walkAttributes((attribute) => {
+							if (attribute.attribute === scopeAttribute) {
+								scopeNodes.push(attribute)
+							}
+						})
+
+						const targetScope = scopeNodes.at(-1)
+						if (!targetScope) {
+							continue
 						}
-					})
 
-					const targetScope = scopeNodes.at(-1)
-					if (!targetScope) {
-						continue
+						targetScope.parent.insertAfter(targetScope, selectorParser.attribute({
+							attribute: externalScopeAttribute,
+							operator: '~=',
+							quoteMark: '"',
+							value: scopeAttribute,
+						}))
+						selectors.append(boostedSelector)
 					}
-
-					targetScope.parent.insertAfter(targetScope, selectorParser.attribute({
-						attribute: externalScopeAttribute,
-						operator: '~=',
-						quoteMark: '"',
-						value: scopeAttribute,
-					}))
-					selectors.append(boostedSelector)
-				}
-			}).processSync(rule.selector)
+				}).processSync(rule.selector)
+			}
+			catch (error) {
+				throw rule.error(error.message, { plugin: 'dimina-external-class' })
+			}
 		},
 	}
 }
@@ -181,6 +190,27 @@ function getStyleSourcePath(absolutePath) {
 		return `/${path.relative(workPath, absolutePath).split(path.sep).join('/')}`
 	}
 	return absolutePath.split(path.sep).join('/')
+}
+
+function createStyleCompileError(stage, absolutePath, cause) {
+	if (cause?.name === 'StyleCompileError') {
+		return cause
+	}
+
+	const line = cause?.line ?? (Number.isInteger(cause?.span?.start?.line) ? cause.span.start.line + 1 : undefined)
+	const column = cause?.column ?? (Number.isInteger(cause?.span?.start?.column) ? cause.span.start.column + 1 : undefined)
+	const file = getStyleSourcePath(absolutePath)
+	const location = line == null
+		? file
+		: `${file}:${line}${column == null ? '' : `:${column}`}`
+	const reason = cause?.reason || cause?.sassMessage || cause?.message || String(cause)
+	const error = new Error(`[style:${stage}] ${location} ${reason}`, { cause })
+	error.name = 'StyleCompileError'
+	error.file = file
+	error.line = line
+	error.column = column
+	error.stage = stage
+	return error
 }
 
 function normalizePreprocessorMap(inputMap, absolutePath, inputCSS) {
@@ -246,13 +276,18 @@ function createStyleTransformPlugin(module, absolutePath, importResults, options
 				rule.selector = processHostSelector(rule.selector, module.id)
 			}
 
-			rule.selector = selectorParser((selectors) => {
-				selectors.walkTags((tag) => {
-					if (tagWhiteList.includes(tag.value)) {
-						tag.value = `.dd-${tag.value}`
-					}
-				})
-			}).processSync(rule.selector)
+			try {
+				rule.selector = selectorParser((selectors) => {
+					selectors.walkTags((tag) => {
+						if (tagWhiteList.includes(tag.value)) {
+							tag.value = `.dd-${tag.value}`
+						}
+					})
+				}).processSync(rule.selector)
+			}
+			catch (error) {
+				throw rule.error(error.message, { plugin: 'dimina-style-transform' })
+			}
 		},
 		Comment(comment) {
 			comment.remove()
@@ -320,12 +355,7 @@ async function enhanceCSS(module, options = {}) {
 		}
 	}
 	catch (error) {
-		console.error(`[style] 预处理器编译失败 ${absolutePath}:`, error.message)
-		// 如果预处理器编译失败，使用原始内容继续处理
-		processedCSS = inputCSS
-		processedMap = options.sourcemap
-			? createLineSourcemap(inputCSS, getStyleSourcePath(absolutePath), inputCSS)
-			: null
+		throw createStyleCompileError('preprocess', absolutePath, error)
 	}
 
 	const fixedCSS = ensureImportSemicolons(processedCSS)
@@ -344,34 +374,54 @@ async function enhanceCSS(module, options = {}) {
 			map: getPostcssMapOptions(options.sourcemap, processedMap),
 		})
 	} catch (error) {
-		console.error(`[style] PostCSS 解析失败 ${absolutePath}:`, error.message)
-		// 如果 PostCSS 解析失败，返回空字符串
-		return { code: '', map: null }
+		throw createStyleCompileError('transform', absolutePath, error)
 	}
 
 	// 样式隔离
 	const moduleId = module.id
-	const scopedResult = compileStyle({
-		source: transformedResult.css,
-		filename: getStyleSourcePath(absolutePath),
-		id: moduleId,
-		scoped: !!moduleId,
-		inMap: options.sourcemap ? transformedResult.map.toJSON() : undefined,
-	})
-	const externalResult = await postcss([createExternalClassPlugin(moduleId)])
-		.process(scopedResult.code, {
-			from: undefined,
-			map: getPostcssMapOptions(options.sourcemap, scopedResult.map),
+	let scopedResult
+	try {
+		scopedResult = compileStyle({
+			source: transformedResult.css,
+			filename: getStyleSourcePath(absolutePath),
+			id: moduleId,
+			scoped: !!moduleId,
+			inMap: options.sourcemap ? transformedResult.map.toJSON() : undefined,
 		})
+		if (scopedResult.errors.length > 0) {
+			throw scopedResult.errors[0]
+		}
+	}
+	catch (error) {
+		throw createStyleCompileError('scope', absolutePath, error)
+	}
+
+	let externalResult
+	try {
+		externalResult = await postcss([createExternalClassPlugin(moduleId)])
+			.process(scopedResult.code, {
+				from: undefined,
+				map: getPostcssMapOptions(options.sourcemap, scopedResult.map),
+			})
+	}
+	catch (error) {
+		throw createStyleCompileError('external-class', absolutePath, error)
+	}
 
 	// 统一后处理：autoprefixer + 压缩
-	const finalResult = await postcss([
-		autoprefixer({ overrideBrowserslist: ['cover 99.5%'] }), 
-		cssnano()
-	]).process(externalResult.css, {
-		from: undefined,
-		map: getPostcssMapOptions(options.sourcemap, externalResult.map?.toJSON()),
-	})
+	let finalResult
+	try {
+		finalResult = await postcss([
+			autoprefixer({ overrideBrowserslist: ['cover 99.5%'] }),
+			cssnano()
+		]).process(externalResult.css, {
+			from: undefined,
+			map: getPostcssMapOptions(options.sourcemap, externalResult.map?.toJSON()),
+		})
+	}
+	catch (error) {
+		throw createStyleCompileError('postprocess', absolutePath, error)
+	}
 
 	// 处理导入的样式
 	const importedChunks = (await Promise.all(importResults)).filter(result => result.code)

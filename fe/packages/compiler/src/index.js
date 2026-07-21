@@ -179,12 +179,18 @@ function runCompileInWorker(script, ctx, task, options = {}) {
 				}
 				else if (message.error) {
 					const error = new Error(message.error.message || message.error)
+					if (message.error.name)
+						error.name = message.error.name
 					if (message.error.stack)
 						error.stack = message.error.stack
 					if (message.error.file)
 						error.file = message.error.file
-					if (message.error.line)
+					if (message.error.line != null)
 						error.line = message.error.line
+					if (message.error.column != null)
+						error.column = message.error.column
+					if (message.error.stage)
+						error.stage = message.error.stage
 					handleError(error)
 				}
 			}
