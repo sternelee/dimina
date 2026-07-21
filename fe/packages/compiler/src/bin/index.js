@@ -6,6 +6,7 @@ import chokidar from 'chokidar'
 import { program } from 'commander'
 import pack from '../../package.json' with { type: 'json' }
 import build from '../index.js'
+import { createIgnoredPathMatcher, createWatchRebuildScheduler, getPublishedOutputPath } from './watch.js'
 
 program
 	.command('build')
@@ -20,29 +21,44 @@ program
 		const useAppIdDir = options.appIdDir !== false
 		const sourcemap = !!options.sourcemap
 
+		let buildResult
 		try {
-			await build(targetPath, workPath, useAppIdDir, { sourcemap })
+			buildResult = await build(targetPath, workPath, useAppIdDir, { sourcemap })
 		}
 		catch (error) {
 			throw new Error(`${workPath} 编译出错: ${error.message}`, { cause: error })
 		}
 		const watch = options.watch
 		if (watch) {
+			const ignoredOutputPaths = new Set([
+				getPublishedOutputPath(targetPath, useAppIdDir, buildResult.appId),
+			])
+			const eventLabels = {
+				add: '新增',
+				change: '改动',
+				unlink: '删除',
+			}
+			const scheduler = createWatchRebuildScheduler({
+				rebuild: async () => {
+					const result = await build(targetPath, workPath, useAppIdDir, { sourcemap })
+					ignoredOutputPaths.add(getPublishedOutputPath(targetPath, useAppIdDir, result.appId))
+				},
+				onRebuild: ({ event, filePath, count }) => {
+					const merged = count > 1 ? `（合并 ${count} 个文件事件）` : ''
+					console.log(`${filePath} ${eventLabels[event]}，重新编译${merged}`)
+				},
+				onError: (error) => {
+					console.error(`${workPath} 编译出错: ${error.message}`)
+				},
+			})
 			chokidar
 				.watch(workPath, {
 					persistent: true, // 持续监听
 					ignoreInitial: true, // 忽略初始的 add/addDir 事件
+					ignored: createIgnoredPathMatcher(ignoredOutputPaths),
 				})
-				.on('all', async (event, path) => {
-					if (event === 'change') {
-						console.log(`${path} 改动，重新编译`)
-						try {
-							await build(targetPath, workPath, useAppIdDir, { sourcemap })
-						}
-						catch (error) {
-							console.error(`${workPath} 编译出错: ${error.message}`)
-						}
-					}
+				.on('all', (event, filePath) => {
+					scheduler.schedule(event, filePath)
 				})
 		}
 	})
