@@ -127,17 +127,12 @@ export default async function build(targetPath, workPath, useAppIdDir = true, op
 		},
 	)
 
-	try {
-		const context = await tasks.run()
-		printCompatibilityWarnings(workPath, context.compatibilityWarnings)
-		return {
-			appId: getAppId(),
-			name: getAppName(),
-			path: getAppConfigInfo().entryPagePath || context.pages.mainPages[1].path,
-		}
-	}
-	catch (e) {
-		console.error(`${workPath} 编译出错: ${e.message}\n${e.stack}`)
+	const context = await tasks.run()
+	printCompatibilityWarnings(workPath, context.compatibilityWarnings)
+	return {
+		appId: getAppId(),
+		name: getAppName(),
+		path: getAppConfigInfo().entryPagePath || context.pages.mainPages[1].path,
 	}
 }
 
