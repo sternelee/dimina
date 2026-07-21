@@ -39,10 +39,6 @@ public class DMPPageController: UIViewController {
     // （homeButton: true 的内页，微信实测两者并存），按 showBack 切换激活
     private var homeButtonLeadingToEdge: NSLayoutConstraint?
     private var homeButtonLeadingAfterBack: NSLayoutConstraint?
-    private var customNavigationCapsuleView: UIView?
-    private var customNavigationCapsuleMoreButton: UIButton?
-    private var customNavigationCapsuleCloseButton: UIButton?
-    private var customNavigationCapsuleSeparatorView: UIView?
     private var miniProgramMenuContainerView: UIView?
     private var isClosingMiniProgram = false
     private var webViewTopToNavigationConstraint: NSLayoutConstraint?
@@ -141,6 +137,10 @@ public class DMPPageController: UIViewController {
     public override func viewWillAppear(_ animated: Bool) {
         super.viewWillAppear(animated)
         navigationController?.setNavigationBarHidden(true, animated: false)
+        navigator?.setCapsuleVisible(true)
+        if loadingView == nil {
+            navigator?.bringCapsuleToFront()
+        }
         setupNavigationBar()
         showPageLoadingIfNeeded()
     }
@@ -149,9 +149,6 @@ public class DMPPageController: UIViewController {
         super.viewDidLayoutSubviews()
         if let customNavigationBar = customNavigationBar, !customNavigationBar.isHidden {
             view.bringSubviewToFront(customNavigationBar)
-        }
-        if let customNavigationCapsuleView = customNavigationCapsuleView {
-            view.bringSubviewToFront(customNavigationCapsuleView)
         }
         if let miniProgramMenuContainerView = miniProgramMenuContainerView {
             miniProgramMenuContainerView.superview?.bringSubviewToFront(miniProgramMenuContainerView)
@@ -283,24 +280,7 @@ public class DMPPageController: UIViewController {
         titleLabel.font = .systemFont(ofSize: 17, weight: .semibold)
         titleLabel.lineBreakMode = .byTruncatingTail
 
-        let capsuleView = makeCapsuleButton()
-        let menuButtonRect = MenuAPI.getMenuButtonBoundingClientRect()
-        let capsuleWidth = CGFloat(
-            menuButtonRect.getDouble(key: "width") ?? Double(DMPMenuButtonLayout.capsuleSize.width)
-        )
-        let capsuleHeight = CGFloat(
-            menuButtonRect.getDouble(key: "height") ?? Double(DMPMenuButtonLayout.capsuleSize.height)
-        )
-        let windowWidth = DMPUIManager.shared.getDeviceDisplayInfo()["windowWidth"] as? CGFloat
-            ?? view.bounds.width
-        let capsuleRight = CGFloat(
-            menuButtonRect.getDouble(key: "right")
-                ?? Double(windowWidth - DMPMenuButtonLayout.trailingSpacing)
-        )
-        let capsuleTrailing = max(windowWidth - capsuleRight, 0)
-
         view.addSubview(navigationBar)
-        view.addSubview(capsuleView)
         navigationBar.addSubview(contentView)
         contentView.addSubview(backButton)
         contentView.addSubview(homeButtonBackground)
@@ -338,12 +318,7 @@ public class DMPPageController: UIViewController {
             titleLabel.trailingAnchor.constraint(
                 lessThanOrEqualTo: contentView.trailingAnchor,
                 constant: -DMPMenuButtonLayout.titleTrailingInset
-            ),
-
-            capsuleView.centerYAnchor.constraint(equalTo: contentView.centerYAnchor),
-            capsuleView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -capsuleTrailing),
-            capsuleView.widthAnchor.constraint(equalToConstant: capsuleWidth),
-            capsuleView.heightAnchor.constraint(equalToConstant: capsuleHeight),
+            )
         ])
 
         let homeLeadingToEdge = homeButton.leadingAnchor.constraint(
@@ -363,96 +338,6 @@ public class DMPPageController: UIViewController {
         customNavigationHomeButton = homeButton
         customNavigationHomeButtonBackground = homeButtonBackground
         customNavigationTitleLabel = titleLabel
-        customNavigationCapsuleView = capsuleView
-    }
-
-    private func makeCapsuleButton() -> UIView {
-        let capsuleView = UIView()
-        capsuleView.translatesAutoresizingMaskIntoConstraints = false
-        capsuleView.layer.cornerRadius = DMPMenuButtonLayout.capsuleSize.height / 2
-        capsuleView.layer.borderWidth = 0.5
-        capsuleView.layer.shadowColor = UIColor.black.cgColor
-        capsuleView.layer.shadowOpacity = 0.08
-        capsuleView.layer.shadowRadius = 2
-        capsuleView.layer.shadowOffset = CGSize(width: 0, height: 1)
-
-        let moreButton = UIButton(type: .custom)
-        moreButton.translatesAutoresizingMaskIntoConstraints = false
-        moreButton.contentHorizontalAlignment = .center
-        moreButton.contentVerticalAlignment = .center
-        moreButton.setImage(makeCapsuleMoreImage(color: UIColor(red: 31 / 255, green: 31 / 255, blue: 31 / 255, alpha: 1)), for: .normal)
-        moreButton.accessibilityLabel = "More"
-        moreButton.addTarget(self, action: #selector(capsuleMoreButtonTapped), for: .touchUpInside)
-
-        let closeButton = UIButton(type: .custom)
-        closeButton.translatesAutoresizingMaskIntoConstraints = false
-        closeButton.contentHorizontalAlignment = .center
-        closeButton.contentVerticalAlignment = .center
-        closeButton.setImage(makeCapsuleCloseImage(color: UIColor(red: 31 / 255, green: 31 / 255, blue: 31 / 255, alpha: 1)), for: .normal)
-        closeButton.accessibilityLabel = "Close"
-        closeButton.addTarget(self, action: #selector(capsuleCloseButtonTapped), for: .touchUpInside)
-
-        let separatorView = UIView()
-        separatorView.translatesAutoresizingMaskIntoConstraints = false
-
-        capsuleView.addSubview(moreButton)
-        capsuleView.addSubview(separatorView)
-        capsuleView.addSubview(closeButton)
-
-        NSLayoutConstraint.activate([
-            moreButton.leadingAnchor.constraint(equalTo: capsuleView.leadingAnchor),
-            moreButton.topAnchor.constraint(equalTo: capsuleView.topAnchor),
-            moreButton.bottomAnchor.constraint(equalTo: capsuleView.bottomAnchor),
-            moreButton.widthAnchor.constraint(equalToConstant: 43),
-
-            separatorView.centerXAnchor.constraint(equalTo: capsuleView.centerXAnchor),
-            separatorView.centerYAnchor.constraint(equalTo: capsuleView.centerYAnchor),
-            separatorView.widthAnchor.constraint(equalToConstant: 0.5),
-            separatorView.heightAnchor.constraint(equalToConstant: 16),
-
-            closeButton.trailingAnchor.constraint(equalTo: capsuleView.trailingAnchor),
-            closeButton.topAnchor.constraint(equalTo: capsuleView.topAnchor),
-            closeButton.bottomAnchor.constraint(equalTo: capsuleView.bottomAnchor),
-            closeButton.widthAnchor.constraint(equalToConstant: 43),
-        ])
-
-        customNavigationCapsuleMoreButton = moreButton
-        customNavigationCapsuleCloseButton = closeButton
-        customNavigationCapsuleSeparatorView = separatorView
-
-        return capsuleView
-    }
-
-    private func makeCapsuleMoreImage(color: UIColor) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 22, height: 22))
-        return renderer.image { context in
-            color.setFill()
-            let centerY: CGFloat = 11
-            let centers: [(CGFloat, CGFloat)] = [(5, 2), (11, 3.2), (17, 2)]
-            for (centerX, radius) in centers {
-                context.cgContext.fillEllipse(in: CGRect(
-                    x: centerX - radius,
-                    y: centerY - radius,
-                    width: radius * 2,
-                    height: radius * 2
-                ))
-            }
-        }.withRenderingMode(.alwaysOriginal)
-    }
-
-    private func makeCapsuleCloseImage(color: UIColor) -> UIImage {
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 22, height: 22))
-        return renderer.image { context in
-            let cgContext = context.cgContext
-            let center = CGPoint(x: 11, y: 11)
-
-            color.setStroke()
-            cgContext.setLineWidth(2.4)
-            cgContext.strokeEllipse(in: CGRect(x: 3.2, y: 3.2, width: 15.6, height: 15.6))
-
-            color.setFill()
-            cgContext.fillEllipse(in: CGRect(x: center.x - 3.1, y: center.y - 3.1, width: 6.2, height: 6.2))
-        }.withRenderingMode(.alwaysOriginal)
     }
 
     private func makePageLoadingView() -> UIView {
@@ -579,6 +464,7 @@ public class DMPPageController: UIViewController {
         self.loadingParentController = nil
 
         setupNavigationBar()
+        navigator?.bringCapsuleToFront()
     }
 
     public func updateNavigationTitle(_ title: String) {
@@ -592,7 +478,6 @@ public class DMPPageController: UIViewController {
         customNavigationTitleLabel?.textColor = textColor
         updateCustomBackButton(darkStyle: darkStyle)
         updateCustomHomeButton(darkStyle: darkStyle)
-        updateCustomCapsuleButton(darkStyle: darkStyle)
     }
 
     private func updateCustomBackButton(darkStyle: Bool) {
@@ -651,18 +536,11 @@ public class DMPPageController: UIViewController {
         }
     }
 
-    private func updateCustomCapsuleButton(darkStyle: Bool) {
-        customNavigationCapsuleView?.backgroundColor = .white
-        let borderColor = UIColor(red: 229 / 255, green: 229 / 255, blue: 229 / 255, alpha: 1)
-        customNavigationCapsuleView?.layer.borderColor = borderColor.cgColor
-        customNavigationCapsuleSeparatorView?.backgroundColor = UIColor(red: 233 / 255, green: 233 / 255, blue: 233 / 255, alpha: 1)
-    }
-
-    @objc private func capsuleMoreButtonTapped() {
+    func showMiniProgramMenuFromCapsule() {
         showMiniProgramMenu()
     }
 
-    @objc private func capsuleCloseButtonTapped() {
+    func closeMiniProgramFromCapsule() {
         guard !isClosingMiniProgram else {
             return
         }
@@ -670,8 +548,7 @@ public class DMPPageController: UIViewController {
         let appToDestroy = app
 
         dismissMiniProgramMenu()
-        customNavigationCapsuleMoreButton?.isEnabled = false
-        customNavigationCapsuleCloseButton?.isEnabled = false
+        navigator?.setCapsuleEnabled(false)
 
         if let navigator = navigator {
             navigator.closeMiniProgram {
@@ -897,7 +774,7 @@ public class DMPPageController: UIViewController {
 
     @objc private func miniProgramMenuCloseTapped() {
         dismissMiniProgramMenu()
-        capsuleCloseButtonTapped()
+        closeMiniProgramFromCapsule()
     }
 
     // Set navigation bar style

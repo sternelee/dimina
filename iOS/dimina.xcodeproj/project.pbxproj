@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		14603AA5921BC560B952F3E9 /* DMPUtilPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61DD3E623362F9D7264941CD /* DMPUtilPathTests.swift */; };
+		9A1D30A12F12000100000001 /* DMPNavigatorCapsuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1D30A12F12000100000002 /* DMPNavigatorCapsuleTests.swift */; };
 		1A2B3C4D5E6F700000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000101 /* Alamofire */; };
 		1A2B3C4D5E6F700000000002 /* MMKV in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000102 /* MMKV */; };
 		1A2B3C4D5E6F700000000003 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000103 /* ZIPFoundation */; };
@@ -29,6 +30,7 @@
 		2EAA9C0614F7638987B22EAC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		5D995E363EB06797E5E3DB0D /* diminaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = diminaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		61DD3E623362F9D7264941CD /* DMPUtilPathTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPUtilPathTests.swift; sourceTree = "<group>"; };
+		9A1D30A12F12000100000002 /* DMPNavigatorCapsuleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPNavigatorCapsuleTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -93,6 +95,7 @@
 		A25481309172EDD172D6037B /* diminaTests */ = {
 			isa = PBXGroup;
 			children = (
+				9A1D30A12F12000100000002 /* DMPNavigatorCapsuleTests.swift */,
 				61DD3E623362F9D7264941CD /* DMPUtilPathTests.swift */,
 			);
 			name = diminaTests;
@@ -246,6 +249,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				9A1D30A12F12000100000001 /* DMPNavigatorCapsuleTests.swift in Sources */,
 				14603AA5921BC560B952F3E9 /* DMPUtilPathTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
