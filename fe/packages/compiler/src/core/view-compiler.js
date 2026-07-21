@@ -587,6 +587,7 @@ function compileModule(module, isComponent, scriptRes, options = {}) {
 		styleIsolation: ${JSON.stringify(module.styleIsolation || 'isolated')},
 		render: `, renderResult, `,
 		usingComponents: ${JSON.stringify(module.usingComponents)},
+		componentPlaceholder: ${JSON.stringify(module.componentPlaceholder || {})},
 		customTabBar: ${JSON.stringify(module.customTabBar || null)},
 		tplComponents: {`]
 	for (const templateResult of templateResults) {
@@ -869,6 +870,7 @@ function compileModuleWithAllWxs(module, scriptRes, allScriptModules, sourceMapR
 		styleIsolation: ${JSON.stringify(module.styleIsolation || 'isolated')},
 		render: `, renderResult, `,
 		usingComponents: ${JSON.stringify(module.usingComponents)},
+		componentPlaceholder: ${JSON.stringify(module.componentPlaceholder || {})},
 		customTabBar: ${JSON.stringify(module.customTabBar || null)},
 		tplComponents: {`]
 	for (const templateResult of templateResults) {
@@ -1023,7 +1025,7 @@ function toCompileTemplate(isComponent, path, components, componentPlaceholder, 
 		checkTemplateCompatibility(content, diagnosticSource, components)
 
 		if (isComponent) {
-			// TODO: 实现 componentPlaceholder，https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/placeholder.html
+			// componentPlaceholder 作为模块元数据交给渲染层解析；模板仍保留目标组件别名。
 			// 自定义组件统一添加宿主节点，承载组件边界、属性、事件与样式隔离语义。
 			content = `<component-host name="${path}">${content}</component-host>`
 		}
