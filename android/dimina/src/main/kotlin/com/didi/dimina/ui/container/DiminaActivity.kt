@@ -120,6 +120,7 @@ import com.didi.dimina.ui.view.MediaPickerRoot
 import com.didi.dimina.ui.view.MediaType
 import com.didi.dimina.ui.view.NativeComponentHost
 import com.didi.dimina.ui.view.ScanCodeLauncher
+import com.didi.dimina.ui.view.WebViewCacheManager
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -232,6 +233,7 @@ class DiminaActivity : ComponentActivity() {
     private var adjustBottom = 0.0
     private var updateCheckStarted = false
     private var preserveMiniAppOnDestroy = false
+    private var pageResourcesReleased = false
 
     // 屏幕高度
     private var screenHeight = 0
@@ -1356,6 +1358,49 @@ class DiminaActivity : ComponentActivity() {
         }
     }
 
+    private fun releasePageResources() {
+        if (pageResourcesReleased || !isMiniProgramInitialized) return
+        pageResourcesReleased = true
+
+        val bridgesToDestroy = buildList {
+            bridge?.let { add(it) }
+            tabPageStates.values.forEach { state ->
+                state.bridge?.let { add(it) }
+            }
+        }.distinct()
+
+        bridgesToDestroy.forEach { cBridge ->
+            miniApp.removeBridge(miniProgram.appId, cBridge)?.destroy()
+        }
+        bridge = null
+        tabPageStates.values.forEach { it.bridge = null }
+
+        clearAllNativeComponents()
+        nativeComponentHost = null
+        nativeOverlay = null
+        tabPageStates.values.forEach { state ->
+            state.nativeComponentHost = null
+            state.nativeOverlay = null
+        }
+    }
+
+    private fun prepareForColdRestart() {
+        // 这批 Activity 的 onDestroy 可能晚于新 Activity 创建，由重启协调者统一
+        // clear MiniApp，避免旧页面再次清掉刚创建的新 JS 运行时。
+        preserveMiniAppOnDestroy = true
+        releasePageResources()
+
+        val ownedWebViews = buildList {
+            webView?.let { add(it) }
+            tabPageStates.values.forEach { state ->
+                state.webView?.let { add(it) }
+            }
+        }.distinct()
+        WebViewCacheManager.evictAndDestroy(ownedWebViews)
+        webView = null
+        tabPageStates.values.forEach { it.webView = null }
+    }
+
     fun onDomReady() {
         // 6.隐藏加载动画
         LogUtils.d(
@@ -1386,17 +1431,7 @@ class DiminaActivity : ComponentActivity() {
             activityRegistry.unregister(miniProgram.appId, this)
         }
 
-        val bridgesToDestroy = buildList {
-            bridge?.let { add(it) }
-            tabPageStates.values.forEach { state ->
-                state.bridge?.let { add(it) }
-            }
-        }.distinct()
-
-        bridgesToDestroy.forEach { cBridge ->
-            miniApp.removeBridge(miniProgram.appId, cBridge)?.destroy()
-        }
-        clearAllNativeComponents()
+        releasePageResources()
 
         if (!preserveMiniAppOnDestroy && miniApp.isBridgeListEmpty(miniProgram.appId)) {
             // Clear resources for this specific MiniProgram
@@ -1663,23 +1698,25 @@ class DiminaActivity : ComponentActivity() {
     private fun reenterMiniProgram() {
         val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
         val reentryProgram = miniProgram.copy(root = true, path = entryPagePath)
-
-        activityRegistry.closeAll(miniProgram.appId) { activity ->
-            activity.preserveMiniAppOnDestroy = true
-            activity.finish()
-        }
-        DiminaActivity.launch(this, reentryProgram)
+        coldRestartMiniProgram(reentryProgram)
     }
 
     fun applyUpdate() {
         val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
         val updatedMiniProgram = miniProgram.copy(root = true, path = entryPagePath)
-        // 不 preserve：更新语义要求冷重启 JS 实例，这是和 reLaunch 的关键区别
+        coldRestartMiniProgram(updatedMiniProgram)
+    }
+
+    private fun coldRestartMiniProgram(program: MiniProgram) {
+        // Re-enter is an app-level reload, not wx.reLaunch: destroy the shared
+        // JS runtime and transient API resources so the new root Activity runs
+        // the complete initialization and loading flow again.
         activityRegistry.closeAll(miniProgram.appId) { activity ->
+            activity.prepareForColdRestart()
             activity.finish()
         }
         miniApp.clear(miniProgram.appId)
-        DiminaActivity.launch(this, updatedMiniProgram)
+        DiminaActivity.launch(this, program)
     }
 
     private fun getDefaultEntryPagePath(): String? {

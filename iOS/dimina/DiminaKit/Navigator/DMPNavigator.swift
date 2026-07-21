@@ -574,6 +574,41 @@ public class DMPNavigator: NSObject {
         )
     }
 
+    /// Rebuild the mini-program runtime between tearing down the old page tree
+    /// and launching the new root page. Unlike `relaunch`, this is an app-level
+    /// cold reload and intentionally runs the launch-loading path again.
+    @MainActor
+    func reloadMiniProgram(
+        animated: Bool = false,
+        prepareRuntime: @MainActor () async -> DMPLaunchConfig
+    ) async {
+        guard let navigationController = navigationController else {
+            DMPLogger.debug("导航控制器未设置")
+            return
+        }
+
+        navigationController.view.endEditing(true)
+        let hostControllers = hostViewControllers(in: navigationController)
+        let pageControllers = navigationController.viewControllers.compactMap {
+            $0 as? DMPPageController
+        }
+
+        // Lifecycle and WebView teardown must still reach the old service.
+        clearMiniProgramPageState()
+        pageControllers.forEach { $0.destroy() }
+
+        let launchConfig = await prepareRuntime()
+        await app?.openPage(launchConfig: launchConfig)
+
+        guard let newRootController = navigationController.topViewController else {
+            return
+        }
+        navigationController.setViewControllers(
+            hostControllers + [newRootController],
+            animated: animated
+        )
+    }
+
     @MainActor
     public func closeMiniProgram(
         animated: Bool = true,

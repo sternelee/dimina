@@ -226,11 +226,12 @@ export class DMPApp {
       nextLaunchConfig.query = config.query
     }
     this.navigatorManager.closeAllNavigators(false)
-    await this.startMainService()
-    this.launch(nextLaunchConfig)
+    this.destroyEngine()
+    this.resetAndStartDimina(nextLaunchConfig)
   }
 
   resetAndStartDimina(config: DMPLaunchConfig) {
+    this.onUpdateResults = []
     this._service = new DMPService(this.appIndex);
     this._render = new DMPRender(this);
     this._container = new DMPContainer(this);

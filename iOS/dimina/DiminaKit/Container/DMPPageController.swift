@@ -27,6 +27,7 @@ public class DMPPageController: UIViewController {
 
     // WebView related
     private var webview: DMPWebview
+    private let loadingStateObserverToken = UUID()
     private var hostingController: UIHostingController<DMPWebViewContainer>?
     private var customNavigationBar: UIView?
     private var customNavigationContentView: UIView?
@@ -186,7 +187,7 @@ public class DMPPageController: UIViewController {
     }
 
     private func observeLoadingState() {
-        webview.onLoadingStateChanged = { [weak self] isLoading in
+        webview.setLoadingStateObserver(ownerToken: loadingStateObserverToken) { [weak self] isLoading in
             let updateLoading = {
                 if isLoading {
                     self?.showPageLoadingIfNeeded()
@@ -766,9 +767,8 @@ public class DMPPageController: UIViewController {
 
     @objc private func miniProgramMenuReenterTapped() {
         dismissMiniProgramMenu()
-        let entryPath = app?.getBundleAppConfig()?.entryPagePath ?? pagePath
         Task { @MainActor in
-            await navigator?.relaunch(to: entryPath.isEmpty ? pagePath : entryPath, query: nil, animated: false)
+            await app?.reEnter()
         }
     }
 
@@ -963,6 +963,7 @@ public class DMPPageController: UIViewController {
         
         DMPLogger.debug("🗑️ DMPPageController: Destroy WebView (ID: \(webview.getWebViewId()))")
         isWebViewDestroyed = true
+        webview.clearLoadingStateObserver(ownerToken: loadingStateObserverToken)
         
         // Notify page unload
         if let app = app {
@@ -986,7 +987,7 @@ public class DMPPageController: UIViewController {
     
     deinit {
         DMPLogger.debug("🗑️ DMPPageController: deinit (WebView ID: \(webview.getWebViewId()))")
-        webview.onLoadingStateChanged = nil
+        webview.clearLoadingStateObserver(ownerToken: loadingStateObserverToken)
         // Ensure WebView is correctly released
         destroyWebView()
     }
