@@ -1,6 +1,7 @@
 import path from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
-import { createIgnoredPathMatcher, createWatchRebuildScheduler, getPublishedOutputPath } from '../src/bin/watch.js'
+import { DependencyGraph } from '../src/common/dependency-graph.js'
+import { createIgnoredPathMatcher, createWatchBuildPlan, createWatchRebuildScheduler, getPublishedOutputPath } from '../src/bin/watch.js'
 
 describe('compiler watch scheduler', () => {
 	it('rebuilds for added, changed, and deleted files but ignores directory events', async () => {
@@ -78,5 +79,50 @@ describe('compiler watch scheduler', () => {
 		expect(isIgnored(path.join(outputPath, 'main/logic.js'))).toBe(true)
 		expect(isIgnored(path.join(workPath, 'test-app-source/index.js'))).toBe(false)
 		expect(isIgnored(path.join(workPath, 'pages/index/index.js'))).toBe(false)
+	})
+
+	it('uses reverse dependencies for incremental changes and keeps structural changes full', () => {
+		const graph = new DependencyGraph()
+		graph.addNode('pages/index/index', { entry: true, type: 'page' })
+		graph.addNode('/components/card/index', { type: 'component' })
+		graph.addDependency('pages/index/index', '/components/card/index', 'component')
+		graph.addFile('/components/card/index', '/project/components/card/index.wxml', 'view')
+		graph.addFile('pages/index/index', '/project/pages/index/index.json', 'config')
+
+		const incremental = createWatchBuildPlan({
+			event: 'change',
+			filePath: '/project/components/card/index.wxml',
+			dependencyGraph: graph,
+			publishedPath: '/dist/app',
+		})
+		expect(incremental).toMatchObject({
+			skip: false,
+			incremental: true,
+			options: {
+				affectedEntries: ['pages/index/index'],
+				stages: ['view'],
+				seedPath: '/dist/app',
+			},
+		})
+
+		expect(createWatchBuildPlan({
+			event: 'change',
+			filePath: '/project/pages/index/index.json',
+			dependencyGraph: graph,
+			publishedPath: '/dist/app',
+		})).toEqual({ skip: false, incremental: false, options: {} })
+		expect(createWatchBuildPlan({
+			event: 'change',
+			filePath: '/project/README.md',
+			dependencyGraph: graph,
+			publishedPath: '/dist/app',
+		})).toEqual({ skip: true, incremental: false, options: {} })
+		expect(createWatchBuildPlan({
+			event: 'change',
+			filePath: '/project/components/card/index.wxml',
+			count: 2,
+			dependencyGraph: graph,
+			publishedPath: '/dist/app',
+		})).toEqual({ skip: false, incremental: false, options: {} })
 	})
 })

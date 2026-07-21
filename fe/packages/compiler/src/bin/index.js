@@ -6,7 +6,8 @@ import chokidar from 'chokidar'
 import { program } from 'commander'
 import pack from '../../package.json' with { type: 'json' }
 import build from '../index.js'
-import { createIgnoredPathMatcher, createWatchRebuildScheduler, getPublishedOutputPath } from './watch.js'
+import { createIgnoredPathMatcher, createWatchBuildPlan, createWatchRebuildScheduler, getPublishedOutputPath } from './watch.js'
+import { DependencyGraph } from '../common/dependency-graph.js'
 
 program
 	.command('build')
@@ -30,6 +31,7 @@ program
 		}
 		const watch = options.watch
 		if (watch) {
+			let dependencyGraph = new DependencyGraph(buildResult.dependencyGraph)
 			const ignoredOutputPaths = new Set([
 				getPublishedOutputPath(targetPath, useAppIdDir, buildResult.appId),
 			])
@@ -39,8 +41,20 @@ program
 				unlink: '删除',
 			}
 			const scheduler = createWatchRebuildScheduler({
-				rebuild: async () => {
-					const result = await build(targetPath, workPath, useAppIdDir, { sourcemap })
+				rebuild: async (change) => {
+					const publishedPath = getPublishedOutputPath(targetPath, useAppIdDir, buildResult.appId)
+					const plan = createWatchBuildPlan({
+						...change,
+						dependencyGraph,
+						publishedPath,
+					})
+					if (plan.skip) return
+					const result = await build(targetPath, workPath, useAppIdDir, {
+						sourcemap,
+						...plan.options,
+					})
+					buildResult = result
+					dependencyGraph = new DependencyGraph(result.dependencyGraph)
 					ignoredOutputPaths.add(getPublishedOutputPath(targetPath, useAppIdDir, result.appId))
 				},
 				onRebuild: ({ event, filePath, count }) => {
@@ -58,6 +72,15 @@ program
 					ignored: createIgnoredPathMatcher(ignoredOutputPaths),
 				})
 				.on('all', (event, filePath) => {
+					const plan = createWatchBuildPlan({
+						event,
+						filePath,
+						dependencyGraph,
+						publishedPath: getPublishedOutputPath(targetPath, useAppIdDir, buildResult.appId),
+					})
+					if (plan.skip) {
+						return
+					}
 					scheduler.schedule(event, filePath)
 				})
 		}
