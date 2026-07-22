@@ -232,7 +232,6 @@ class DiminaActivity : ComponentActivity() {
     }
     
     private var adjustBottom = 0.0
-    private var updateCheckStarted = false
     private var preserveMiniAppOnDestroy = false
     private var pageResourcesReleased = false
 
@@ -508,12 +507,23 @@ class DiminaActivity : ComponentActivity() {
                     BundledResourcePolicy.shouldExtract(
                         bundledVersion = miniProgram.versionCode,
                         installedVersion = localVersion,
-                        requiredResourcePresent = findAppConfigFile("jsapp/$appId") != null,
+                        requiredResourcePresent =
+                            findAppConfigFile("jsapp/$appId") != null &&
+                                File(filesDir, "jsapp/$appId/main/logic.js").isFile,
                     )
                 } else false
 
                 if (shouldExtract) {
-                    if (Utils.unzipAssets(this@DiminaActivity, "jsapp/$appId/$appId.zip", "jsapp/$appId")) {
+                    if (Utils.unzipAssets(
+                            this@DiminaActivity,
+                            "jsapp/$appId/$appId.zip",
+                            "jsapp/$appId",
+                            requiredPaths = listOf(
+                                "main/app-config.json",
+                                "main/logic.js",
+                            ),
+                        )
+                    ) {
                         VersionUtils.setAppVersion(appId, miniProgram.versionCode)
                         LogUtils.d(tag, "Mini program extraction completed successfully")
                     } else {
@@ -601,25 +611,8 @@ class DiminaActivity : ComponentActivity() {
         if (setAsActive) {
             this.bridge = bridge
         }
-        startUpdateCheckIfNeeded()
+        miniApp.startUpdateCheckIfNeeded(applicationContext, miniProgram)
         return bridge
-    }
-
-    private fun startUpdateCheckIfNeeded() {
-        if (updateCheckStarted) {
-            return
-        }
-        updateCheckStarted = true
-
-        CoroutineScope(Dispatchers.IO).launch {
-            RemoteUpdateManager.checkForUpdate(
-                context = applicationContext,
-                miniProgram = miniProgram,
-                notify = { event ->
-                    miniApp.postUpdateStatus(miniProgram.appId, event)
-                }
-            )
-        }
     }
 
 
@@ -1694,9 +1687,23 @@ class DiminaActivity : ComponentActivity() {
     }
 
     fun applyUpdate() {
-        val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
-        val updatedMiniProgram = miniProgram.copy(root = true, path = entryPagePath)
-        coldRestartMiniProgram(updatedMiniProgram)
+        CoroutineScope(Dispatchers.IO).launch {
+            val activated = RemoteUpdateManager.activatePendingUpdate(
+                applicationContext,
+                miniProgram.appId,
+            )
+            if (!activated) {
+                miniApp.postUpdateStatus(miniProgram.appId, "updatefail")
+                return@launch
+            }
+
+            withContext(Dispatchers.Main) {
+                // Read the entry page from the newly activated app-config instead
+                // of carrying the old package's route into the new runtime.
+                val updatedMiniProgram = miniProgram.copy(root = true, path = null)
+                coldRestartMiniProgram(updatedMiniProgram)
+            }
+        }
     }
 
     private fun coldRestartMiniProgram(program: MiniProgram) {
