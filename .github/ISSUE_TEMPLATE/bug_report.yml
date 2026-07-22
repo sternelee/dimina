@@ -51,7 +51,7 @@ body:
     id: platforms
     attributes:
       label: 相关平台 / Platforms
-      description: 可多选；编译器、文档等与运行平台无关的问题请选择最后一项。
+      description: 可多选；编译器等与运行平台无关的问题请选择最后一项。
       multiple: true
       options:
         - Android
@@ -140,7 +140,7 @@ body:
       description: 可上传截图、录屏、脱敏日志或最小复现压缩包。
     validations:
       required: false
-      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.log,.txt,.json,.zip,.gz,.tar.gz"
+      accept: ".png,.jpg,.jpeg,.gif,.webp,.mp4,.mov,.log,.txt,.json,.zip,.gz"
 
   - type: textarea
     id: additional-context
