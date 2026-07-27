@@ -21,6 +21,17 @@ const waitTransitionEnd = (el, property, timeout = WAIT_TRANSITION_TIMEOUT_MS) =
 import tpl from './miniApp.html?raw'
 import './miniApp.scss'
 
+function preventModalTouchMove(event) {
+	if (event.cancelable) {
+		event.preventDefault()
+	}
+}
+
+function blockModalPageTouchMove(event) {
+	preventModalTouchMove(event)
+	event.stopImmediatePropagation?.()
+}
+
 export class MiniApp {
 	constructor(opts) {
 		this.appInfo = opts
@@ -56,6 +67,7 @@ export class MiniApp {
 		// 关闭顶上 modal 露出下方；前后 modal 互不干扰，各自 success/complete 独立。
 		this._modalStack = []
 		this._modalPendingTimers = new Set()
+		this._modalPageTouchTarget = null
 		this._destroyed = false
 	}
 
@@ -1602,6 +1614,7 @@ export class MiniApp {
 			entry.dialog?.remove()
 		}
 		this._modalStack.length = 0
+		this._unlockModalPageTouch()
 
 		// 清掉残留 toast
 		this.hideToast({})
@@ -1934,9 +1947,35 @@ export class MiniApp {
 		this.hideToast(opts)
 	}
 
+	_lockModalPageTouch() {
+		if (this._modalPageTouchTarget) return
+		const currentBridge = this.bridgeList?.[this.bridgeList.length - 1]
+		const pageWindow = currentBridge?.webview?.iframe?.contentWindow
+		if (!pageWindow?.addEventListener) return
+
+		pageWindow.addEventListener('touchmove', blockModalPageTouchMove, {
+			capture: true,
+			passive: false,
+		})
+		this._modalPageTouchTarget = pageWindow
+	}
+
+	_unlockModalPageTouch() {
+		if (!this._modalPageTouchTarget) return
+		this._modalPageTouchTarget.removeEventListener(
+			'touchmove',
+			blockModalPageTouchMove,
+			true,
+		)
+		this._modalPageTouchTarget = null
+	}
 
 	showModal(opts) {
 		if (this._destroyed) return
+		if (this._modalStack.length === 0) {
+			// 当前 touch stream 仍以 iframe 内元素为 target；外层 mask 无法接管已开始的手势。
+			this._lockModalPageTouch()
+		}
 		// 同步 mount + push：栈状态立即生效（destroy / 栈深查询都能看到这条 entry）
 		const entry = this._mountModal(opts || {})
 		this._modalStack.push(entry)
@@ -1993,6 +2032,7 @@ export class MiniApp {
 
         const mask = document.createElement("div");
         mask.className = "dimina-dialog-mask";
+        mask.addEventListener("touchmove", preventModalTouchMove, { passive: false });
 
         const dialog = document.createElement("div");
         dialog.className = "dimina-dialog";
@@ -2044,6 +2084,9 @@ export class MiniApp {
 
             // pop 后触发视图更新：之前的下一层（新栈顶）显示出来
             this._updateModalView();
+            if (this._modalStack.length === 0) {
+                this._unlockModalPageTouch();
+            }
             onSuccess?.(result);
             onComplete?.();
         };

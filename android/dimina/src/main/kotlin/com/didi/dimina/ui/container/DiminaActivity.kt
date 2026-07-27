@@ -10,6 +10,8 @@ import android.content.res.Resources
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
+import android.os.SystemClock
+import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
 import android.view.animation.AccelerateDecelerateInterpolator
@@ -875,6 +877,33 @@ class DiminaActivity : ComponentActivity() {
             tabPageStates[selectedTabIndex.intValue]?.webView ?: webView
         } else {
             webView
+        }
+    }
+
+    /**
+     * Cancels the touch stream owned by the WebView that invoked the current API.
+     *
+     * A modal can be requested while that WebView is still handling a gesture.
+     * Adding a view above it does not retarget an existing Android touch stream,
+     * so the WebView must receive ACTION_CANCEL before the modal is mounted.
+     */
+    fun cancelActiveWebViewTouch() {
+        val targetWebView = getWebViewForBridge(apiBridgeContext) ?: return
+        runOnUiThread {
+            val eventTime = SystemClock.uptimeMillis()
+            val cancelEvent = MotionEvent.obtain(
+                eventTime,
+                eventTime,
+                MotionEvent.ACTION_CANCEL,
+                0f,
+                0f,
+                0,
+            )
+            try {
+                targetWebView.dispatchTouchEvent(cancelEvent)
+            } finally {
+                cancelEvent.recycle()
+            }
         }
     }
 

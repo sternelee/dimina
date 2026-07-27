@@ -28,6 +28,8 @@ export struct DMPWebComponent {
   // 同层渲染用到
   private sameLayerNodeControllerMap: Map<string, DMPNodeController> = new Map();
   @State componentIdArr: Array<string> = [];
+  @State modalInteractionBlocked: boolean = false
+  private modalInteractionBlockCount: number = 0
   private requestCallback: RequestCallback = new RequestCallback(this.appIndex);
   startTime: number = 0
   endTime: number = 0
@@ -56,6 +58,15 @@ export struct DMPWebComponent {
 
   onBack() {
 
+  }
+
+  setModalInteractionBlocked(blocked: boolean) {
+    if (blocked) {
+      this.modalInteractionBlockCount++
+    } else {
+      this.modalInteractionBlockCount = Math.max(0, this.modalInteractionBlockCount - 1)
+    }
+    this.modalInteractionBlocked = this.modalInteractionBlockCount > 0
   }
 
   @Builder
@@ -147,6 +158,7 @@ export struct DMPWebComponent {
         .expandSafeArea([SafeAreaType.KEYBOARD])
 
     }
+    .enabled(!this.modalInteractionBlocked)
   }
 
   private createSameLayerNode(embed: NativeEmbedDataInfo, componentId: string) {

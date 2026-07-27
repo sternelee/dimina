@@ -451,6 +451,8 @@
 	z-index: 1100;
 	opacity: 0;
 	transition: opacity 200ms ease;
+	touch-action: none;
+	overscroll-behavior: contain;
 
 	&.show {
 		opacity: 1;
@@ -481,6 +483,7 @@
 	display: flex;
 	flex-direction: column;
 	align-items: stretch;
+	overscroll-behavior: contain;
 	// 略小并轻微下移，加 show 时回弹到中心
 	transform: translate(-50%, -45%) scale(0.92);
 	opacity: 0;
@@ -504,9 +507,12 @@
 		margin: 0;
 		padding: 24px 24px 8px;
 		line-height: 1.4;
+		touch-action: none;
 	}
 
 	.dimina-dialog__content {
+		flex: 1 1 auto;
+		min-height: 0;
 		font-size: 15px;
 		color: #333;
 		text-align: center;
@@ -515,12 +521,17 @@
 		line-height: 1.5;
 		word-break: break-word;
 		white-space: pre-wrap;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+		touch-action: pan-y;
+		-webkit-overflow-scrolling: touch;
 	}
 
 	.dimina-dialog__buttons {
 		display: flex;
 		width: 100%;
 		border-top: 1px solid rgba(0, 0, 0, 0.1);
+		touch-action: none;
 	}
 
 	.dimina-dialog__button {
