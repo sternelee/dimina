@@ -1,0 +1,61 @@
+# General
+.DS_Store
+Thumbs.db
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+coverage/
+dist/
+build/
+tmp/
+temp/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Node / Frontend
+node_modules/
+.vite/
+*.local
+*.tsbuildinfo
+
+# Monorepo build outputs
+fe/**/dist/
+fe/**/coverage/
+fe/**/.vite/
+
+# Android
+android/**/.gradle/
+android/**/build/
+android/**/.cxx/
+android/local.properties
+*.iml
+
+# iOS
+iOS/DerivedData/
+iOS/build/
+iOS/Pods/
+*.xcuserdatad
+*.xcuserdata
+*.xcuserstate
+
+# Harmony
+harmony/**/build/
+harmony/**/.hvigor/
+harmony/**/.deps/
+
+# IDEs and editors
+.idea/
+.vscode/
+*.swp
+
+# Temporary archives (do not ignore tracked ones)
+# *.zip
+
+# Generated temp dirs
+fe/temp-*/
