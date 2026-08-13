@@ -27,11 +27,11 @@
   "devDependencies": {
     "@vitest/coverage-v8": "^4.1.10",
     "archiver": "^8.0.0",
-    "concurrently": "^10.0.3",
-    "fs-extra": "^11.3.6",
-    "oxlint": "^1.74.0",
+    "concurrently": "^10.0.4",
+    "fs-extra": "^11.4.0",
+    "oxlint": "^1.78.0",
     "typescript": "^7.0.2",
-    "vite": "^8.1.4",
+    "vite": "^8.2.1",
     "vitest": "^4.1.10"
   },
   "volta": {

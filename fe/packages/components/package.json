@@ -25,11 +25,11 @@
 	},
 	"dependencies": {
 		"@dimina/common": "workspace:^",
-		"dompurify": "^3.4.12",
-		"vue": "^3.5.39"
+		"dompurify": "^3.4.13",
+		"vue": "^3.5.41"
 	},
 	"devDependencies": {
 		"@vitejs/plugin-vue": "^6.0.8",
-		"unplugin-auto-import": "^21.0.0"
+		"unplugin-auto-import": "^21.1.0"
 	}
 }
