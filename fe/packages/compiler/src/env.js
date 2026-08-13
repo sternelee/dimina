@@ -186,12 +186,8 @@ function storePathInfo(workPath) {
 	} else {
 		// 使用工作区目录或系统临时目录，确保有写入权限
 		const tempDir = process.env.GITHUB_WORKSPACE || os.tmpdir()
-		const targetDir = path.join(tempDir, `dimina-fe-dist-${Date.now()}`)
-
-		// 确保目录存在
-		if (!fs.existsSync(targetDir)) {
-			fs.mkdirSync(targetDir, { recursive: true })
-		}
+		// mkdtemp 的原子分配保证并行构建不会在同一毫秒复用并互相覆盖产物。
+		const targetDir = fs.mkdtempSync(path.join(tempDir, 'dimina-fe-dist-'))
 
 		pathInfo.targetPath = targetDir
 	}

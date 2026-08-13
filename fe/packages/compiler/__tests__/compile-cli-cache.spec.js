@@ -3,8 +3,9 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { COMPILE_CACHE_VERSION } from '../src/common/compile-cache.js'
+import { storeInfo } from '../src/env.js'
 
 const testDir = path.dirname(fileURLToPath(import.meta.url))
 const compileCliPath = path.resolve(testDir, '../src/bin/compile.js')
@@ -92,5 +93,56 @@ describe('compile CLI persistent dependency cache', () => {
 			path.join(publicPath, 'compile-cache-app/main/pages_index_index.js'),
 			'utf8',
 		)).toContain('incremental view')
+	})
+})
+
+describe('temporary compiler output path', () => {
+	let tempDir
+	let projectPath
+	let originalGithubWorkspace
+	let originalTargetPath
+
+	beforeEach(() => {
+		originalGithubWorkspace = process.env.GITHUB_WORKSPACE
+		originalTargetPath = process.env.TARGET_PATH
+		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-output-path-'))
+		projectPath = path.join(tempDir, 'app')
+		process.env.GITHUB_WORKSPACE = tempDir
+		delete process.env.TARGET_PATH
+
+		writeProjectFile('app.json', JSON.stringify({ pages: ['pages/index/index'] }))
+		writeProjectFile('project.config.json', JSON.stringify({ appid: 'output-path-app' }))
+		writeProjectFile('pages/index/index.json', '{}')
+		writeProjectFile('pages/index/index.js', 'Page({})\n')
+		writeProjectFile('pages/index/index.wxml', '<view />\n')
+		writeProjectFile('pages/index/index.wxss', '')
+	})
+
+	afterEach(() => {
+		vi.restoreAllMocks()
+		if (originalGithubWorkspace === undefined) delete process.env.GITHUB_WORKSPACE
+		else process.env.GITHUB_WORKSPACE = originalGithubWorkspace
+		if (originalTargetPath === undefined) delete process.env.TARGET_PATH
+		else process.env.TARGET_PATH = originalTargetPath
+		fs.rmSync(tempDir, { recursive: true, force: true })
+	})
+
+	function writeProjectFile(relativePath, content) {
+		const filePath = path.join(projectPath, relativePath)
+		fs.mkdirSync(path.dirname(filePath), { recursive: true })
+		fs.writeFileSync(filePath, content)
+	}
+
+	it('allocates distinct directories for builds started in the same millisecond', () => {
+		vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000)
+
+		const firstTargetPath = storeInfo(projectPath).pathInfo.targetPath
+		const secondTargetPath = storeInfo(projectPath).pathInfo.targetPath
+
+		expect(firstTargetPath).not.toBe(secondTargetPath)
+		expect(path.dirname(firstTargetPath)).toBe(tempDir)
+		expect(path.dirname(secondTargetPath)).toBe(tempDir)
+		expect(fs.existsSync(firstTargetPath)).toBe(true)
+		expect(fs.existsSync(secondTargetPath)).toBe(true)
 	})
 })
