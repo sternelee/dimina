@@ -1,5 +1,5 @@
 // Generated from docs/API-Reference.md.
-// Keep this file in sync by running: pnpm --filter compiler sync:compat
+// Keep this file in sync by running: pnpm --filter @dimina/compiler sync:compat
 
 const supportedBuiltinComponents = [
 	"block",
@@ -111,6 +111,11 @@ const supportedWxApis = [
 	"request",
 	"downloadFile",
 	"uploadFile",
+	"UploadTask.abort",
+	"UploadTask.onProgressUpdate",
+	"UploadTask.offProgressUpdate",
+	"UploadTask.onHeadersReceived",
+	"UploadTask.offHeadersReceived",
 	"startLocalServiceDiscovery",
 	"stopLocalServiceDiscovery",
 	"onLocalServiceDiscoveryStop",

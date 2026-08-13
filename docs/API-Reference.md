@@ -11,7 +11,7 @@
 3. 在运行时使用 `wx.canIUse()`（目标平台支持时）保护可选能力。
 4. 对相机、定位、文件、同层渲染等平台相关能力，在真机验证权限、失败回调和最终画面。
 
-> 本文的组件表和 API 表还会生成编译器的兼容性提示清单。修改表中名称后，需要在 `fe/` 下运行 `pnpm --filter compiler sync:compat` 并提交对应生成文件。
+> 本文档是编译器兼容性提示清单的唯一数据源。修改组件表或 API 表后，需要在 `fe/` 下运行 `pnpm --filter @dimina/compiler sync:compat` 生成对应 JS 文件；可运行 `pnpm --filter @dimina/compiler check:compat` 只读检查两者是否一致。
 
 ## 语法兼容处理
 
@@ -250,7 +250,12 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 |               | createIntersectionObserver       | ✓       | ✓   | ✓       | ✓   |
 | 网络          | request                          | ✓       | ✓   | ✓       | ✓   |
 |               | downloadFile                     | ✓       | ✓   | ✓       | ✗   |
-|               | uploadFile                       | ✓       | ✓   | ✓       | ✗   |
+| 网络 - 上传   | uploadFile                       | ✓       | ✓   | ✓       | ✗   |
+|               | UploadTask.abort                 | ✓       | ✓   | ✓       | ✗   |
+|               | UploadTask.onProgressUpdate      | ✓       | ✓   | ✓       | ✗   |
+|               | UploadTask.offProgressUpdate     | ✓       | ✓   | ✓       | ✗   |
+|               | UploadTask.onHeadersReceived     | ✓       | ✓   | ✓       | ✗   |
+|               | UploadTask.offHeadersReceived    | ✓       | ✓   | ✓       | ✗   |
 | 网络 - mDNS 局域网发现 | startLocalServiceDiscovery      | ✓       | ✓   | ✓       | ✗   |
 |               | stopLocalServiceDiscovery         | ✓       | ✓   | ✓       | ✗   |
 |               | onLocalServiceDiscoveryStop       | ✓       | ✓   | ✓       | ✗   |
