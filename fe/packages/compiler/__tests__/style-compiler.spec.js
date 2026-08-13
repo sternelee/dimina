@@ -403,13 +403,20 @@ describe('style compiler regressions', () => {
 
 	it('scopes app styles so isolated components do not receive them implicitly', async () => {
 		prepareBaseProject()
-		writeProjectFile('app.wxss', 'page .global-target { color: red; }')
+		writeProjectFile('app.wxss', [
+			'page { position: fixed; overflow: hidden; background: linear-gradient(#fff, #eee); }',
+			'page .global-target { color: red; }',
+		].join('\n'))
 
 		storeInfo(tempDir)
 		const appStyleScopeId = getAppStyleScopeId()
 		await compileSS([{ path: 'app', id: appStyleScopeId }], null, { completedTasks: 0 })
 
 		const outputCss = fs.readFileSync(path.join(outputDir, 'main/app.css'), 'utf-8')
+		expect(outputCss).toContain(`.dd-page[data-v-${appStyleScopeId}]`)
+		expect(outputCss).toContain('position:fixed')
+		expect(outputCss).toContain('overflow:hidden')
+		expect(outputCss).toContain('linear-gradient')
 		expect(outputCss).toContain(`.dd-page .global-target[data-v-${appStyleScopeId}]`)
 	})
 })

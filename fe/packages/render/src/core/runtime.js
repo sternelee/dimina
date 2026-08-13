@@ -225,6 +225,28 @@ function installStyleScopeSync(roots, scopeIds, pageScopeId) {
 	return () => observers.forEach(observer => observer.disconnect())
 }
 
+function installPageFrameStyleScopes(scopeIds) {
+	const pageFrame = document.body?.classList.contains('dd-page') ? document.body : null
+	if (!pageFrame) {
+		return () => {}
+	}
+
+	const addedScopeIds = [...new Set(scopeIds.filter(Boolean))]
+		.filter((scopeId) => {
+			if (pageFrame.hasAttribute(scopeId)) {
+				return false
+			}
+			pageFrame.setAttribute(scopeId, '')
+			return true
+		})
+
+	return () => {
+		for (const scopeId of addedScopeIds) {
+			pageFrame.removeAttribute(scopeId)
+		}
+	}
+}
+
 function hasVNodeProp(vnodeProps, name) {
 	if (!vnodeProps) return false
 	if (Object.prototype.hasOwnProperty.call(vnodeProps, name)) return true
@@ -748,6 +770,7 @@ class Runtime {
 							instance.__page__ = true
 							that.setModuleInstance(that.pageId, instance)
 							let stopStyleScopeSync = () => {}
+							let clearPageFrameStyleScopes = () => {}
 
 							let ticking = false
 							const handleScroll = () => {
@@ -769,6 +792,7 @@ class Runtime {
 							}
 
 							onMounted(() => {
+								clearPageFrameStyleScopes = installPageFrameStyleScopes(globalStyleScopeIds)
 								stopStyleScopeSync = installStyleScopeSync(
 									collectVNodeRootElements(vueInstance.subTree),
 									globalStyleScopeIds,
@@ -789,6 +813,7 @@ class Runtime {
 
 							onUnmounted(() => {
 								stopStyleScopeSync()
+								clearPageFrameStyleScopes()
 								window.removeEventListener('scroll', handleScroll)
 							})
 

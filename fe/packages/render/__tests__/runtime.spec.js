@@ -682,6 +682,7 @@ describe('runtime template components', () => {
 	it('applies page and app styles only inside apply-shared components', async () => {
 		const loader = (await import('../src/core/loader.js')).default
 		const message = (await import('../src/core/message.js')).default
+		document.body.classList.add('dd-page')
 		window.DiminaRenderBridge = {
 			invoke: vi.fn(),
 			publish: vi.fn((payload) => {
@@ -796,6 +797,7 @@ describe('runtime template components', () => {
 		const isolatedHost = root.querySelector('.isolated-host')
 		const isolatedInner = root.querySelector('.isolated-inner')
 		await vi.waitFor(() => expect(appliedInner.hasAttribute('data-v-app-style-scope')).toBe(true))
+		expect(document.body.matches('.dd-page[data-v-app-style-scope][data-v-page-style-scope][data-v-shared-component-scope]')).toBe(true)
 		expect(appliedHost.getAttribute('data-dd-style-isolation')).toBe('apply-shared')
 		expect(appliedHost.getAttribute('data-dd-style-host')).toBe('applied-style-scope')
 		expect(appliedInner.hasAttribute('data-dd-style-host')).toBe(false)
@@ -849,6 +851,9 @@ describe('runtime template components', () => {
 		expect(nestedIsolatedInner.hasAttribute('data-v-app-style-scope')).toBe(false)
 
 		app.unmount()
+		expect(document.body.hasAttribute('data-v-app-style-scope')).toBe(false)
+		expect(document.body.hasAttribute('data-v-page-style-scope')).toBe(false)
+		expect(document.body.hasAttribute('data-v-shared-component-scope')).toBe(false)
 	})
 
 	it('syncs template data when keyed list items are replaced', async () => {
