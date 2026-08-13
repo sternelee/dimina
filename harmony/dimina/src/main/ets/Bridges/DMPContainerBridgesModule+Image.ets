@@ -18,10 +18,12 @@ import { CameraPicker } from './PhotoView/CameraPicker'
 import { DRouter } from '../Navigator/DRouter'
 import { DMPPhotoPreview } from './PhotoView/DMPPhotoPreview'
 import { DMPOpenType } from '../DApp/config/DMPLaunchConfig'
+import picker from '@ohos.file.picker'
+import { fileUri } from '@kit.CoreFileKit'
 
 export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
   getExportMethods(): string[] {
-    return ['getImageInfo', 'chooseImage', 'saveImageToPhotosAlbum', 'previewImage',
+    return ['getImageInfo', 'chooseImage', 'chooseMessageFile', 'saveImageToPhotosAlbum', 'previewImage',
       'compressImage'];
   }
 
@@ -91,6 +93,156 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
         this.invokeFailureCallback(callback, null, `拍照失败${err.code}`)
       }
     }
+  }
+
+  async chooseMessageFile(data: DMPMap, callback: DMPBridgeCallback) {
+    const countValue = data.get('count');
+    if (typeof countValue !== 'number' || countValue < 0 || countValue > 100 || !Number.isInteger(countValue)) {
+      this.failChooseMessageFile(callback, 'invalid count');
+      return;
+    }
+    const count = countValue as number;
+
+    const requestedType = data.getString('type') ?? 'all';
+    if (!['all', 'image', 'video', 'file'].includes(requestedType)) {
+      this.failChooseMessageFile(callback, 'invalid type');
+      return;
+    }
+
+    const extensionValue = data.get('extension');
+    if (requestedType === 'file' && extensionValue !== undefined
+      && (!Array.isArray(extensionValue) || !extensionValue.every((value: object) => typeof value === 'string'))) {
+      this.failChooseMessageFile(callback, 'invalid extension');
+      return;
+    }
+    const extensions = requestedType === 'file'
+      ? ((extensionValue as Array<string> | undefined) ?? [])
+        .map((value: string) => value.trim().replace(/^\./, '').toLowerCase())
+      : [];
+    if (extensions.some((value: string) => value.length === 0)) {
+      this.failChooseMessageFile(callback, 'invalid extension');
+      return;
+    }
+
+    if (count === 0) {
+      this.successChooseMessageFile(callback, new Array<Map<string, object>>());
+      return;
+    }
+
+    const options = new picker.DocumentSelectOptions();
+    options.maxSelectNumber = count;
+    if (requestedType === 'image') {
+      options.fileSuffixFilters = DMPContainerBridgesModuleImage.imageExtensions.map((value: string) => `.${value}`);
+    } else if (requestedType === 'video') {
+      options.fileSuffixFilters = DMPContainerBridgesModuleImage.videoExtensions.map((value: string) => `.${value}`);
+    } else if (requestedType === 'file' && extensions.length > 0) {
+      options.fileSuffixFilters = extensions.map((value: string) => `.${value}`);
+    }
+
+    try {
+      const documentPicker = new picker.DocumentViewPicker(DMPContextUtils.getUIAbilityContext());
+      const uris = await documentPicker.select(options);
+      if (uris.length === 0) {
+        this.failChooseMessageFile(callback, 'cancel');
+        return;
+      }
+
+      const directory = `${DMPContextUtils.getUIAbilityContext().cacheDir}/chooseMessageFile`;
+      if (!fs.accessSync(directory)) {
+        fs.mkdirSync(directory, true);
+      }
+
+      const tempFiles = new Array<Map<string, object>>();
+      const copiedPaths = new Array<string>();
+      try {
+        for (let index = 0; index < Math.min(uris.length, count); index++) {
+          const uri = uris[index];
+          const name = this.messageFileName(uri, index);
+          const actualType = this.messageFileType(name);
+          const extension = this.messageFileExtension(name);
+          const accepted = requestedType === 'all'
+            || (requestedType === actualType
+              && (requestedType !== 'file' || extensions.length === 0 || extensions.includes(extension)));
+          if (!accepted) {
+            continue;
+          }
+
+          const suffix = extension.substring(0, 20);
+          const localPath = `${directory}/${Date.now()}_${index}${suffix.length > 0 ? `.${suffix}` : ''}`;
+          await fs.copy(uri, fileUri.getUriFromPath(localPath));
+          copiedPaths.push(localPath);
+          const stat = fs.statSync(localPath);
+          const item = new Map<string, object>();
+          item['name'] = name;
+          item['path'] = DMPFileUrlConvertor.vPathFromLocalPath(localPath);
+          item['size'] = stat.size;
+          item['time'] = Math.floor((stat.mtime > 0 ? stat.mtime : Date.now()) / 1000);
+          item['type'] = actualType;
+          tempFiles.push(item);
+        }
+
+        if (tempFiles.length === 0) {
+          throw new Error('no supported file selected');
+        }
+        this.successChooseMessageFile(callback, tempFiles);
+      } catch (error) {
+        copiedPaths.forEach((path: string) => {
+          if (fs.accessSync(path)) {
+            fs.unlinkSync(path);
+          }
+        });
+        throw error;
+      }
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'cannot read selected file';
+      this.failChooseMessageFile(callback, reason);
+    }
+  }
+
+  private static readonly imageExtensions: string[] = [
+    'apng', 'avif', 'bmp', 'gif', 'heic', 'heif', 'ico', 'jpeg', 'jpg', 'png', 'svg', 'tif', 'tiff', 'webp'
+  ];
+  private static readonly videoExtensions: string[] = [
+    '3g2', '3gp', 'avi', 'flv', 'm2ts', 'm4v', 'mkv', 'mov', 'mp4', 'mpeg', 'mpg', 'mts', 'ogv', 'ts', 'webm', 'wmv'
+  ];
+
+  private messageFileName(uri: string, index: number): string {
+    const rawName = uri.split('?')[0].split('/').pop() ?? `file_${index}`;
+    try {
+      return decodeURIComponent(rawName) || `file_${index}`;
+    } catch (_) {
+      return rawName || `file_${index}`;
+    }
+  }
+
+  private messageFileExtension(name: string): string {
+    const dotIndex = name.lastIndexOf('.');
+    return dotIndex >= 0 ? name.substring(dotIndex + 1).toLowerCase() : '';
+  }
+
+  private messageFileType(name: string): string {
+    const extension = this.messageFileExtension(name);
+    if (DMPContainerBridgesModuleImage.imageExtensions.includes(extension)) {
+      return 'image';
+    }
+    if (DMPContainerBridgesModuleImage.videoExtensions.includes(extension)) {
+      return 'video';
+    }
+    return 'file';
+  }
+
+  private successChooseMessageFile(callback: DMPBridgeCallback, tempFiles: Array<Map<string, object>>) {
+    const result = new DMPMap();
+    result.set('tempFiles', tempFiles);
+    result.set('errMsg', 'chooseMessageFile:ok');
+    this.invokeSuccessCallback(callback, result, true);
+  }
+
+  private failChooseMessageFile(callback: DMPBridgeCallback, reason: string) {
+    const result = new DMPMap();
+    const errMsg = `chooseMessageFile:fail ${reason}`;
+    result.set('errMsg', errMsg);
+    this.invokeFailureCallback(callback, result, errMsg, true);
   }
 
   returnImageChoose(path: string, callback: DMPBridgeCallback) {

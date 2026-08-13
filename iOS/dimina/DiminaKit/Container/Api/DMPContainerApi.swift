@@ -82,6 +82,7 @@ public class DMPContainerApi: NSObject {
         _ = ScanAPI(app: app)
         _ = BluetoothAPI(app: app)
         _ = ImageAPI(app: app)
+        _ = MessageFileAPI(app: app)
         _ = VideoAPI(app: app)
         _ = InteractionAPI(app: app)
         _ = MenuAPI(app: app)

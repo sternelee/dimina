@@ -24,15 +24,17 @@ export abstract class DMPContainerBridgesModule {
     }
   }
 
-  invokeSuccessCallback(callback: DMPBridgeCallback, param: DMPMap | undefined | null) {
+  invokeSuccessCallback(callback: DMPBridgeCallback, param: DMPMap | undefined | null,
+    completeCarriesResult: boolean = false) {
     DMPLogger.d('invokeSuccessCallback', param?.toStr() ?? '')
     if (callback) {
       callback(param ? param : new DMPMap(), DMPBridgeCallbackType.Success)
     }
-    this.invokeCompleteCallback(callback, null)
+    this.invokeCompleteCallback(callback, completeCarriesResult ? param : null)
   }
 
-  invokeFailureCallback(callback: DMPBridgeCallback, param: DMPMap | undefined | null, errMsg: string) {
+  invokeFailureCallback(callback: DMPBridgeCallback, param: DMPMap | undefined | null, errMsg: string,
+    completeCarriesResult: boolean = false) {
     DMPLogger.d('invokeFailureCallback', param?.toStr() ?? '', errMsg)
     if (callback) {
       param = param || new DMPMap();
@@ -48,7 +50,7 @@ export abstract class DMPContainerBridgesModule {
       }
       callback(param, DMPBridgeCallbackType.Fail)
     }
-    this.invokeCompleteCallback(callback, null)
+    this.invokeCompleteCallback(callback, completeCarriesResult ? param : null)
   }
 
   abstract getExportMethods(): Array<string>;
@@ -60,7 +62,6 @@ export abstract class DMPContainerBridgesModule {
     }
   }
 }
-
 
 
 

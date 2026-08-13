@@ -178,6 +178,7 @@ const supportedWxApis = [
 	"previewImage",
 	"compressImage",
 	"chooseImage",
+	"chooseMessageFile",
 	"chooseMedia",
 	"chooseContact",
 	"addPhoneContact",

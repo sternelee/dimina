@@ -31,3 +31,11 @@ export function compressImage(opts) {
 export function chooseImage(opts) {
 	return invokeAPI('chooseImage', opts)
 }
+
+/**
+ * 从客户端选择文件。
+ * https://developers.weixin.qq.com/miniprogram/dev/api/media/image/wx.chooseMessageFile.html
+ */
+export function chooseMessageFile(opts) {
+	return invokeAPI('chooseMessageFile', opts)
+}

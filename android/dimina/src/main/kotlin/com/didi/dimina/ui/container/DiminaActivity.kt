@@ -1,6 +1,7 @@
 package com.didi.dimina.ui.container
 
 import android.Manifest
+import android.app.Activity
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
@@ -8,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.res.Resources
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
@@ -210,6 +212,27 @@ class DiminaActivity : ComponentActivity() {
     private lateinit var scanCodeLauncher: ScanCodeLauncher
 
     private var imageChooseCallback: ((List<String>) -> Unit)? = null
+    private var messageFileChooseCallback: ((Boolean, List<Uri>) -> Unit)? = null
+    private val messageFilePickerLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        val callback = messageFileChooseCallback ?: return@registerForActivityResult
+        messageFileChooseCallback = null
+        if (result.resultCode != Activity.RESULT_OK) {
+            callback(false, emptyList())
+            return@registerForActivityResult
+        }
+
+        val uris = buildList {
+            result.data?.clipData?.let { clipData ->
+                for (index in 0 until clipData.itemCount) {
+                    add(clipData.getItemAt(index).uri)
+                }
+            }
+            result.data?.data?.let(::add)
+        }.distinct()
+        callback(uris.isNotEmpty(), uris)
+    }
     private val bluetoothPermissionCallbacks = mutableListOf<(Boolean) -> Unit>()
     private var bluetoothPermissionRequestInFlight = false
     private val bluetoothPermissionLauncher = registerForActivityResult(
@@ -291,6 +314,21 @@ class DiminaActivity : ComponentActivity() {
                     1 -> openSystemGallery(type, count)
                 }
             }
+        }
+    }
+
+    fun handleChooseMessageFile(
+        intent: Intent,
+        callback: (Boolean, List<Uri>) -> Unit,
+    ): Boolean {
+        if (messageFileChooseCallback != null) return false
+        messageFileChooseCallback = callback
+        return try {
+            messageFilePickerLauncher.launch(intent)
+            true
+        } catch (_: Exception) {
+            messageFileChooseCallback = null
+            false
         }
     }
 
