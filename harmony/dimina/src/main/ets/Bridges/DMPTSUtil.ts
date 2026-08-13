@@ -60,4 +60,7 @@ export enum DMPBridgeCallbackType {
   Complete
 }
 
-export type DMPBridgeCallback = (args: DMPMap, cbType: DMPBridgeCallbackType) => void;
+// `callbackId` is reserved for persistent task events (progress, headers, etc.).
+// One-shot success/fail/complete calls omit it and keep their existing routing.
+export type DMPBridgeCallback = (args: DMPMap, cbType: DMPBridgeCallbackType,
+  callbackId?: string) => void;

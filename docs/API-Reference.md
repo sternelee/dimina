@@ -338,6 +338,7 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 - 该表是当前确认的兼容性基线。service 中存在某个 API 入口，不代表四个平台都已完成容器实现。
 - `getUpdateManager` 只负责更新状态通知和重启入口，包下载、校验和动态下发流程请参考[小程序包更新说明](./MiniProgram-Update.md)。
+- `uploadFile` 在 Android、iOS 和 HarmonyOS 上同步返回 `UploadTask`，支持 `abort`、上传进度和响应头监听；Web 暂不支持。基础上传参数 `url`、`filePath`、`name`、`header`、`formData`、`timeout` 已对齐。`enableHttp2`、`enableQuic`、`enableProfile` 的平台加速或性能信息暂不保证。
 - HarmonyOS 系统 socket 的绑定接口本身是异步的；`UDPSocket.bind()` 未指定端口时会先选定并同步返回一个临时端口，最终绑定成功以 `onListening` 为准，端口冲突等失败通过 `onError` 返回。Android 与 iOS 会直接返回内核实际绑定的端口。
 
 ## 第三方扩展 Bridge

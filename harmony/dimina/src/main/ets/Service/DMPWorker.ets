@@ -49,10 +49,13 @@ const serviceToContainer = (t: number, wid: number, msg: string, ab: ArrayBuffer
         if (rawParams !== undefined && rawParams !== null) {
           params = typeof rawParams === 'object' ? DMPMap.createFromObject(rawParams as Object) : rawParams;
         }
-        const callback: DMPBridgeCallback = (args: DMPMap, cbType: DMPBridgeCallbackType) => {
+        const callback: DMPBridgeCallback = (args: DMPMap, cbType: DMPBridgeCallbackType,
+          persistentCallbackId?: string) => {
           if (params instanceof DMPMap) {
-            let id = ''
-            if (cbType == DMPBridgeCallbackType.Success) {
+            let id = persistentCallbackId ?? ''
+            if (persistentCallbackId) {
+              id = persistentCallbackId
+            } else if (cbType == DMPBridgeCallbackType.Success) {
               if (!params.hasKey('success')) {
                 return
               }
