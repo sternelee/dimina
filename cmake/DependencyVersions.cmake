@@ -9,7 +9,7 @@
 # The release workflow verifies that these revisions match upstream master.
 set(DIMINA_QUICKJS_GIT_TAG_DEFAULT "04be246001599f5995fa2f2d8c91a0f198d3f34c")
 set(DIMINA_LIBUV_GIT_TAG_DEFAULT "601a1537bb5628398c2389efbc7eecd062e8aac2")
-set(DIMINA_BROTLI_GIT_TAG_DEFAULT "037b70e2ad03b20480e6407ed5851e0f114b67a7")
+set(DIMINA_BROTLI_GIT_TAG_DEFAULT "8e10eeb3378f6c459dbaf033ca6727e9816afccb")
 
 macro(dimina_resolve_dependency_git_tag dependency_name)
     set(_dimina_git_tag_variable "DIMINA_${dependency_name}_GIT_TAG")
