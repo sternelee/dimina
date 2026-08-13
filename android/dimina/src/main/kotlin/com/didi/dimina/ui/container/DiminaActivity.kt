@@ -558,6 +558,13 @@ class DiminaActivity : ComponentActivity() {
                     return@withContext
                 }
                 appConfig = config
+                // app.json's `networkTimeout.connectSocket` is this mini program's default
+                // connect timeout; the WebSocket state machine needs it before any connectSocket
+                // call can land, so it is published as soon as the config is parsed.
+                com.didi.dimina.api.network.WebSocketManager.shared.updateNetworkTimeout(
+                    appId,
+                    config.app.networkTimeout?.connectSocket,
+                )
                 LogUtils.d(tag, "Successfully loaded app config")
             } catch (e: Exception) {
                 LogUtils.e(tag, "Error reading app config: ${e.message}")
@@ -1435,6 +1442,26 @@ class DiminaActivity : ComponentActivity() {
         isLoading.value = false
     }
 
+    /**
+     * WebSocket 的后台判据挂在 onStart/onStop 而不是 onResume/onPause 上：权限弹窗、系统
+     * 分享面板和对话框式的系统选择器只会让这个 Activity onPause，它仍然可见，小程序也并没有
+     * 进入后台；按 onPause 判定会在用户停留超过后台宽限期时误杀掉全部连接。真正的迁移由
+     * [visibilityTracker] 按 appId 判定，多页面小程序在自己的页面之间跳转不构成前后台变化。
+     */
+    override fun onStart() {
+        super.onStart()
+        if (isMiniProgramInitialized && visibilityTracker.onActivityVisible(miniProgram.appId, this)) {
+            com.didi.dimina.api.network.WebSocketManager.shared.setBackgrounded(miniProgram.appId, false)
+        }
+    }
+
+    override fun onStop() {
+        if (isMiniProgramInitialized && visibilityTracker.onActivityHidden(miniProgram.appId, this)) {
+            com.didi.dimina.api.network.WebSocketManager.shared.setBackgrounded(miniProgram.appId, true)
+        }
+        super.onStop()
+    }
+
     override fun onResume() {
         super.onResume()
         getActiveBridge()?.let {
@@ -2169,6 +2196,9 @@ class DiminaActivity : ComponentActivity() {
     companion object {
         const val MINI_PROGRAM_KEY = "mini_program"
         private val activityRegistry = MiniProgramActivityRegistry<DiminaActivity>()
+
+        /** 小程序前后台判据的唯一真相源，见 [DiminaActivity.onStart]/[DiminaActivity.onStop]。 */
+        private val visibilityTracker = MiniProgramVisibilityTracker<DiminaActivity>()
 
         fun launch(
             context: Context,
