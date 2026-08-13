@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.5.0] 2026-08-13
+
+### 新增
+
+- Android、iOS 和 HarmonyOS 新增原生 WebSocket `SocketTask`，完善连接、消息、关闭、错误及前后台生命周期语义。
+- Android、iOS 和 HarmonyOS 新增 `wx.chooseMessageFile`，支持文件类型、扩展名和数量筛选。
+- 完善 `wx.uploadFile`，支持上传进度与响应头回调。
+
+### 优化
+
+- Web 容器运行时拆分为独立的 `@dimina/fe-container-sdk`，完善多实例隔离、导航恢复及宿主适配能力。
+- 完善 Socket、上传和文件选择的参数校验、异常清理与跨端回调一致性。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.5.0。
+- JSSDK 升级到 1.0.27。
+
 ## [v1.4.2] 2026-07-24
 
 ### 新增
