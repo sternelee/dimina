@@ -96,36 +96,43 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
   }
 
   async chooseMessageFile(data: DMPMap, callback: DMPBridgeCallback) {
-    const countValue = data.get('count');
-    if (typeof countValue !== 'number' || countValue < 0 || countValue > 100 || !Number.isInteger(countValue)) {
+    const countValue: number | undefined = data.getNumber('count');
+    if (countValue === undefined || countValue < 0 || countValue > 100 || !Number.isInteger(countValue)) {
       this.failChooseMessageFile(callback, 'invalid count');
       return;
     }
-    const count = countValue as number;
+    const count: number = countValue;
 
-    const requestedType = data.getString('type') ?? 'all';
+    const requestedType: string = data.getString('type') ?? 'all';
     if (!['all', 'image', 'video', 'file'].includes(requestedType)) {
       this.failChooseMessageFile(callback, 'invalid type');
       return;
     }
 
-    const extensionValue = data.get('extension');
-    if (requestedType === 'file' && extensionValue !== undefined
-      && (!Array.isArray(extensionValue) || !extensionValue.every((value: object) => typeof value === 'string'))) {
+    const extensionValue: Array<Object> | undefined = data.getArray<Object>('extension');
+    if (requestedType === 'file' && data.hasOwnKey('extension') && !Array.isArray(extensionValue)) {
       this.failChooseMessageFile(callback, 'invalid extension');
       return;
     }
-    const extensions = requestedType === 'file'
-      ? ((extensionValue as Array<string> | undefined) ?? [])
-        .map((value: string) => value.trim().replace(/^\./, '').toLowerCase())
-      : [];
-    if (extensions.some((value: string) => value.length === 0)) {
-      this.failChooseMessageFile(callback, 'invalid extension');
-      return;
+    const extensions = new Array<string>();
+    if (requestedType === 'file' && extensionValue !== undefined) {
+      for (let index = 0; index < extensionValue.length; index++) {
+        const value: Object = extensionValue[index];
+        if (typeof value !== 'string') {
+          this.failChooseMessageFile(callback, 'invalid extension');
+          return;
+        }
+        const normalized: string = value.trim().replace(/^\./, '').toLowerCase();
+        if (normalized.length === 0) {
+          this.failChooseMessageFile(callback, 'invalid extension');
+          return;
+        }
+        extensions.push(normalized);
+      }
     }
 
     if (count === 0) {
-      this.successChooseMessageFile(callback, new Array<Map<string, object>>());
+      this.successChooseMessageFile(callback, new Array<DMPMap>());
       return;
     }
 
@@ -152,7 +159,7 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
         fs.mkdirSync(directory, true);
       }
 
-      const tempFiles = new Array<Map<string, object>>();
+      const tempFiles = new Array<DMPMap>();
       const copiedPaths = new Array<string>();
       try {
         for (let index = 0; index < Math.min(uris.length, count); index++) {
@@ -172,12 +179,12 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
           await fs.copy(uri, fileUri.getUriFromPath(localPath));
           copiedPaths.push(localPath);
           const stat = fs.statSync(localPath);
-          const item = new Map<string, object>();
-          item['name'] = name;
-          item['path'] = DMPFileUrlConvertor.vPathFromLocalPath(localPath);
-          item['size'] = stat.size;
-          item['time'] = Math.floor((stat.mtime > 0 ? stat.mtime : Date.now()) / 1000);
-          item['type'] = actualType;
+          const item = new DMPMap();
+          item.set('name', name);
+          item.set('path', DMPFileUrlConvertor.vPathFromLocalPath(localPath));
+          item.set('size', stat.size);
+          item.set('time', Math.floor((stat.mtime > 0 ? stat.mtime : Date.now()) / 1000));
+          item.set('type', actualType);
           tempFiles.push(item);
         }
 
@@ -191,7 +198,9 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
             fs.unlinkSync(path);
           }
         });
-        throw error;
+        const reason: string = error instanceof Error ? error.message : 'cannot read selected file';
+        this.failChooseMessageFile(callback, reason);
+        return;
       }
     } catch (error) {
       const reason = error instanceof Error ? error.message : 'cannot read selected file';
@@ -231,7 +240,7 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
     return 'file';
   }
 
-  private successChooseMessageFile(callback: DMPBridgeCallback, tempFiles: Array<Map<string, object>>) {
+  private successChooseMessageFile(callback: DMPBridgeCallback, tempFiles: Array<DMPMap>) {
     const result = new DMPMap();
     result.set('tempFiles', tempFiles);
     result.set('errMsg', 'chooseMessageFile:ok');
