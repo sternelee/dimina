@@ -21,11 +21,11 @@
   <a href="#参与共建">参与共建</a>
 </p>
 
-Dimina（星河小程序）是滴滴开源的跨端小程序框架：把 WXML、WXSS、JavaScript / TypeScript 小程序源码编译成统一运行时资源包，再由 Android、iOS、Harmony 和 Web 容器加载。既可以把现有小程序作为独立模块嵌入 App，也可以直接使用小程序语法开发跨端页面。
+Dimina（星河小程序）是滴滴开源的跨端小程序框架。它将 WXML、WXSS 与 JavaScript / TypeScript 源码编译为统一资源包，再交由 Android、iOS、Harmony 和 Web 容器加载。你可以把已有小程序作为独立模块嵌入 App，也可以继续使用熟悉的小程序语法开发跨端页面。
 
-## 同一份小程序，三端真实运行
+## 一份小程序，三端真实运行
 
-下面是仓库内同一套“官方组件展示”示例在三个原生平台上的实际效果。Web 端可以直接打开[在线演示](https://didi.github.io/dimina/)体验。
+下图是仓库内同一套“官方组件展示”示例在 Android、iOS 和 Harmony 上的实际运行效果。想直接上手，也可以打开 Web 端的[在线演示](https://didi.github.io/dimina/)。
 
 <table>
   <thead>
@@ -44,22 +44,22 @@ Dimina（星河小程序）是滴滴开源的跨端小程序框架：把 WXML、
   </tbody>
 </table>
 
-## 把小程序变成可嵌入的跨端模块
+## 让小程序成为可嵌入的跨端模块
 
-Dimina 不只是一个 Web 预览器。它包含小程序编译器、逻辑层与视图层运行时、标准组件、原生能力桥接，以及 Android、iOS、Harmony 和 Web 容器。
+Dimina 不止提供 Web 预览。它包含小程序编译器、逻辑与视图运行时、标准组件、原生能力桥接，以及 Android、iOS、Harmony 和 Web 容器。已有小程序可以整体嵌入宿主 App，新页面也能保留熟悉的开发方式。
 
-- **资源离线化**：小程序包由宿主提供并落到本地，减少运行时网络依赖。
-- **逻辑与视图分离**：业务逻辑运行在独立 JS 引擎或 Worker 中，视图由 WebView / Browser 渲染。
-- **统一原生能力**：通过标准 API 与扩展 Bridge 调用宿主能力，无需把平台逻辑散落到业务页面。
-- **面向真实容器**：支持页面预热、路由、生命周期、组件与跨线程消息链路。
+- **资源包可离线**：小程序包由宿主提供并保存在本地，减少运行时网络依赖。
+- **逻辑与视图分开运行**：业务逻辑运行在独立 JS 引擎或 Worker 中，视图交给 WebView / Browser 渲染。
+- **原生能力有统一入口**：标准 API 与扩展 Bridge 负责连接宿主能力，平台逻辑不必散落在业务页面里。
+- **页面语义完整落地**：页面预热、路由、生命周期、组件和跨线程消息均由运行时承接。
 
-## 从源码到运行时
+## 一份源码，如何抵达四端
 
 <p align="center">
   <img src="./assets/readme/runtime.svg" width="100%" alt="Dimina 将小程序源码经 DMCC 编译为资源包，并通过统一运行时契约运行在四个平台">
 </p>
 
-DMCC 负责把小程序源码转换为 Dimina 运行时可以加载的逻辑、视图、样式与配置资源。容器内部通过消息通道连接逻辑层、视图层和原生能力，让同一份小程序语义落到不同平台。
+DMCC 将小程序源码转换为逻辑、视图、样式和配置资源。进入容器后，消息通道会连接逻辑层、视图层与原生能力，让同一套小程序语义在不同平台上保持一致。
 
 ### 平台运行时
 
@@ -72,7 +72,7 @@ DMCC 负责把小程序源码转换为 Dimina 运行时可以加载的逻辑、�
 
 ## 最快上手
 
-如果只想先看效果，直接打开[在线演示](https://didi.github.io/dimina/)。要在本地跑起仓库自带的 Web 示例，需要 Node.js 22+ 与 pnpm 7+：
+想先看看 Dimina 的运行效果，可以直接打开[在线演示](https://didi.github.io/dimina/)。要在本地跑起仓库自带的 Web 示例，请准备 Node.js 22+ 与 pnpm 7+：
 
 ```sh
 git clone https://github.com/didi/dimina.git
@@ -82,17 +82,17 @@ pnpm compile
 pnpm dev
 ```
 
-`pnpm compile` 会编译 `fe/example/` 下的小程序，`pnpm dev` 会启动 Web 容器与代理服务。更多构建、打包和调试命令见[前端工作区说明](./fe/README.md)。
+其中，`pnpm compile` 负责构建 `fe/example/` 下的小程序，`pnpm dev` 会启动 Web 容器与代理服务。更多构建、打包和调试命令见[前端工作区说明](./fe/README.md)。
 
-要把编译后的资源包接入原生应用，请选择对应平台：
+准备把资源包接入原生应用时，可以从对应平台的接入文档开始：
 
 - [Android 接入说明](./android/README.md)
 - [iOS 接入说明](./iOS/README.md)
 - [Harmony 接入说明](./harmony/dimina/README.md)
 
-## 能力、架构与边界
+## 能力边界与延伸阅读
 
-Dimina 正在持续对齐小程序标准与微信小程序主要能力，但尚未覆盖全部 API、组件和特性。评估接入前，请先查看当前能力范围与平台差异。
+Dimina 正在持续对齐小程序标准与微信小程序的主要能力，目前尚未覆盖全部 API、组件和特性。正式接入前，请先确认当前能力范围与平台差异。
 
 | 想了解什么 | 文档入口 |
 | --- | --- |
@@ -104,17 +104,17 @@ Dimina 正在持续对齐小程序标准与微信小程序主要能力，但尚�
 
 ## 参与共建
 
-Dimina 遵循[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)进行设计，欢迎围绕兼容语义、跨端运行时、组件和原生能力一起完善项目。
+Dimina 依照[小程序标准化白皮书](https://www.w3.org/TR/mini-app-white-paper/)设计，也在真实的跨端差异里一点点补齐能力。月溅星河，长路慢慢。若你也在意兼容语义、跨端运行时、组件体验与原生能力，欢迎留下一个问题，或补上一行代码，和我们一起把这条路走稳、走远。
 
-- 问题反馈与功能建议： [Issues](https://github.com/didi/dimina/issues)
-- 提交代码前： [贡献指南](./CONTRIBUTING.md)
+- 遇到问题或有新想法： [提交 Issue](https://github.com/didi/dimina/issues)
+- 准备提交代码： [阅读贡献指南](./CONTRIBUTING.md)
 
 <details open>
-  <summary>加入微信交流群</summary>
+  <summary>来微信交流群聊聊</summary>
   <br>
   <img src="./static/wechat.png" alt="Dimina 微信交流群二维码" width="240">
 </details>
 
 ## 开源协议
 
-Dimina 基于 [Apache License 2.0](./LICENSE) 分发和使用。
+Dimina 使用 [Apache License 2.0](./LICENSE) 开源。

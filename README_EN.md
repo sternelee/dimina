@@ -21,11 +21,11 @@
   <a href="#contributing">Contribute</a>
 </p>
 
-Dimina is Didi's open-source, cross-platform mini program framework. It compiles WXML, WXSS, and JavaScript / TypeScript source into a unified runtime bundle loaded by Android, iOS, Harmony, and Web containers. Embed an existing mini program as an independent module in your app, or build cross-platform screens directly with mini program syntax.
+Dimina is Didi's open-source framework for running mini programs across platforms. It compiles WXML, WXSS, and JavaScript / TypeScript source into a unified bundle, then loads it through Android, iOS, Harmony, and Web containers. You can embed an existing mini program as an independent module in your app or build new cross-platform screens with familiar mini program syntax.
 
-## One mini program, running natively on three platforms
+## One mini program, running on three native platforms
 
-These screenshots show the same “Official Components Showcase” example from this repository running on three native platforms. Try the Web version in the [live demo](https://didi.github.io/dimina/).
+The screenshots below show the same “Official Components Showcase” example running on Android, iOS, and Harmony. To try it yourself, open the [live demo](https://didi.github.io/dimina/) in your browser.
 
 <table>
   <thead>
@@ -44,22 +44,22 @@ These screenshots show the same “Official Components Showcase” example from 
   </tbody>
 </table>
 
-## Turn a mini program into an embeddable cross-platform module
+## Make a mini program an embeddable cross-platform module
 
-Dimina is more than a Web preview. It includes a mini program compiler, separate logic and view runtimes, standard components, native capability bridges, and containers for Android, iOS, Harmony, and Web.
+Dimina goes beyond Web preview. It includes a mini program compiler, logic and view runtimes, standard components, native capability bridges, and containers for Android, iOS, Harmony, and Web. Existing mini programs can be embedded whole in a host app, while new screens keep the development model teams already know.
 
-- **Offline resource bundles**: The host provides mini program packages that are stored locally, reducing runtime network dependencies.
-- **Logic-view separation**: Business logic runs in a dedicated JS engine or Worker while WebView / Browser renders the view.
-- **Unified native capabilities**: Standard APIs and extension bridges expose host capabilities without scattering platform logic across business pages.
-- **Built for real containers**: Supports page preloading, routing, lifecycles, components, and cross-thread messaging.
+- **Offline-ready bundles**: The host provides and stores mini program packages locally, reducing runtime network dependencies.
+- **Separate logic and view runtimes**: Business logic runs in a dedicated JS engine or Worker while WebView / Browser renders the view.
+- **One path to native capabilities**: Standard APIs and extension bridges connect to the host without spreading platform-specific logic across business pages.
+- **Page semantics across containers**: The runtime handles preloading, routing, lifecycles, components, and cross-thread messaging.
 
-## From source to runtime
+## How one codebase reaches four platforms
 
 <p align="center">
   <img src="./assets/readme/runtime-en.svg" width="100%" alt="DMCC compiles mini program source into a runtime bundle loaded by four platform containers">
 </p>
 
-DMCC converts mini program source into logic, view, style, and configuration resources that the Dimina runtime can load. Inside each container, a message channel connects the logic layer, view layer, and native capabilities so the same mini program semantics can run across platforms.
+DMCC converts mini program source into logic, view, style, and configuration resources. Inside each container, a message channel connects the logic layer, view layer, and native capabilities so the same mini program semantics remain consistent across platforms.
 
 ### Platform runtimes
 
@@ -72,7 +72,7 @@ DMCC converts mini program source into logic, view, style, and configuration res
 
 ## Quick start
 
-To explore first, open the [live demo](https://didi.github.io/dimina/). To run the repository's Web examples locally, use Node.js 22+ and pnpm 7+:
+To see Dimina in action, open the [live demo](https://didi.github.io/dimina/). To run the repository's Web examples locally, have Node.js 22+ and pnpm 7+ ready:
 
 ```sh
 git clone https://github.com/didi/dimina.git
@@ -82,17 +82,17 @@ pnpm compile
 pnpm dev
 ```
 
-`pnpm compile` builds the mini programs in `fe/example/`; `pnpm dev` starts the Web container and proxy service. See the [frontend workspace guide](./fe/README.md) for more build, packaging, and debugging commands.
+Here, `pnpm compile` builds the mini programs in `fe/example/`, and `pnpm dev` starts the Web container and proxy service. See the [frontend workspace guide](./fe/README.md) for more build, packaging, and debugging commands.
 
-To integrate compiled bundles into a native app, choose a platform:
+When you are ready to integrate a bundle into a native app, start with the guide for your platform:
 
 - [Android integration guide](./android/README.md)
 - [iOS integration guide](./iOS/README.md)
 - [Harmony integration guide](./harmony/dimina/README.md)
 
-## Capabilities, architecture, and boundaries
+## Capability boundaries and further reading
 
-Dimina continues to align with mini app standards and major WeChat Mini Program capabilities, but it does not yet cover every API, component, or feature. Review the current capability range and platform differences before adopting it.
+Dimina continues to align with mini app standards and major WeChat Mini Program capabilities, but it does not yet cover every API, component, or feature. Before adopting it, review the current capability range and platform differences.
 
 | What you need | Documentation |
 | --- | --- |
@@ -104,17 +104,17 @@ Dimina continues to align with mini app standards and major WeChat Mini Program 
 
 ## Contributing
 
-Dimina is designed in accordance with the [Mini App Standard White Paper](https://www.w3.org/TR/mini-app-white-paper/). Contributions around compatibility semantics, cross-platform runtimes, components, and native capabilities are welcome.
+Dimina follows the [Mini App Standard White Paper](https://www.w3.org/TR/mini-app-white-paper/) and grows by working through real cross-platform differences one by one. Moonlight scatters across a river of stars, and the road ahead stretches on, one patient step at a time. If you care about compatibility semantics, cross-platform runtimes, component behavior, or native capabilities, open an issue or add a line of code. We would be glad to walk that road with you.
 
-- Bug reports and feature requests: [Issues](https://github.com/didi/dimina/issues)
-- Before submitting code: [Contribution Guidelines](./CONTRIBUTING_EN.md)
+- Have a problem or an idea? [Open an issue](https://github.com/didi/dimina/issues)
+- Ready to contribute code? [Read the contribution guidelines](./CONTRIBUTING_EN.md)
 
 <details open>
-  <summary>Join the WeChat community</summary>
+  <summary>Come say hello in our WeChat group</summary>
   <br>
   <img src="./static/wechat.png" alt="QR code for the Dimina WeChat community" width="240">
 </details>
 
 ## License
 
-Dimina is distributed under the [Apache License 2.0](./LICENSE).
+Dimina is open source under the [Apache License 2.0](./LICENSE).
