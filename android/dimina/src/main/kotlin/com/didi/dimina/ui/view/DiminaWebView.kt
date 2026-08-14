@@ -11,6 +11,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.graphics.Insets
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import com.didi.dimina.common.JavaScriptUtils
 import com.didi.dimina.common.LogUtils
 import org.json.JSONObject
@@ -21,6 +24,34 @@ import org.json.JSONObject
 private const val TAG = "DiminaWebView"
 
 private class WebViewReference(var value: WebView? = null)
+
+internal object MiniProgramWindowInsetsPolicy {
+    internal fun withoutTopInset(insets: Insets): Insets =
+        Insets.of(insets.left, 0, insets.right, insets.bottom)
+
+    /**
+     * Mini program custom navigation already uses statusBarHeight to keep controls below the
+     * system status bar. Newer Android WebView versions also expose the same top inset through
+     * CSS safe-area-inset-top, which makes compatible pages reserve the status bar twice.
+     *
+     * Clear only the top status-bar/cutout dimensions before dispatching insets to web content.
+     * Bottom navigation-bar, IME and landscape side insets remain available to the page.
+     */
+    fun apply(insets: WindowInsetsCompat): WindowInsetsCompat {
+        val statusBars = WindowInsetsCompat.Type.statusBars()
+        val displayCutout = WindowInsetsCompat.Type.displayCutout()
+        return WindowInsetsCompat.Builder(insets)
+            .setInsets(statusBars, withoutTopInset(insets.getInsets(statusBars)))
+            .setInsets(displayCutout, withoutTopInset(insets.getInsets(displayCutout)))
+            .build()
+    }
+}
+
+private fun WebView.applyMiniProgramWindowInsetsPolicy() {
+    ViewCompat.setOnApplyWindowInsetsListener(this) { _, insets ->
+        MiniProgramWindowInsetsPolicy.apply(insets)
+    }
+}
 
 @Composable
 fun DiminaWebView(
@@ -81,6 +112,7 @@ fun DiminaWebView(
                     // 传统方式创建WebView（使用WebViewCacheManager中的统一配置）
                     createWebView(context, onPageCompleted, appId)
                 }.apply {
+                    applyMiniProgramWindowInsetsPolicy()
                     webViewReference.value = this
                     onInitReady(this)
                     LogUtils.d(TAG, "WebView initialized with identifier: $webViewIdentifier")
