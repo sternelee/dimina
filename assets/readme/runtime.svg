@@ -8,9 +8,22 @@
         stroke-dasharray: 5 5;
         animation: arrow-flow 0.75s linear infinite;
       }
+      .meteor {
+        animation: meteor-fall 8s linear infinite;
+        will-change: transform, opacity;
+      }
+      .meteor-two { animation-delay: 2.7s; }
+      .meteor-three { animation-delay: 5.4s; }
     }
+    .meteor { opacity: 0; }
     @keyframes arrow-flow {
       to { stroke-dashoffset: -10; }
+    }
+    @keyframes meteor-fall {
+      0%, 5% { opacity: 0; transform: translate(90px, -90px); }
+      8% { opacity: 0.72; }
+      30% { opacity: 0.72; transform: translate(-250px, 250px); }
+      34%, 100% { opacity: 0; transform: translate(-310px, 310px); }
     }
   </style>
 
@@ -22,9 +35,41 @@
     <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M 0 0 L 10 5 L 0 10 z" fill="#0070F3"/>
     </marker>
+    <linearGradient id="meteor-trail" x1="64" y1="0" x2="0" y2="64" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#4AAEFF" stop-opacity="0"/>
+      <stop offset="0.68" stop-color="#4AAEFF" stop-opacity="0.22"/>
+      <stop offset="0.9" stop-color="#86CEFF" stop-opacity="0.58"/>
+      <stop offset="1" stop-color="#DDF4FF" stop-opacity="0.92"/>
+    </linearGradient>
+    <clipPath id="meteor-clip">
+      <rect width="1200" height="520" rx="26"/>
+    </clipPath>
   </defs>
 
   <rect width="1200" height="520" rx="26" fill="#FAFAFA"/>
+  <g id="meteor-shower" clip-path="url(#meteor-clip)" aria-hidden="true">
+    <g class="meteor meteor-one">
+      <g transform="translate(1110 4)">
+        <path d="M64 0 L0 64" fill="none" stroke="url(#meteor-trail)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="0" cy="64" r="5" fill="#9EDCFF" fill-opacity="0.18"/>
+        <circle cx="0" cy="64" r="2.6" fill="#FFF6DE" stroke="#72C7FF" stroke-width="1.2"/>
+      </g>
+    </g>
+    <g class="meteor meteor-two">
+      <g transform="translate(900 -24) scale(0.72)">
+        <path d="M64 0 L0 64" fill="none" stroke="url(#meteor-trail)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="0" cy="64" r="5" fill="#9EDCFF" fill-opacity="0.18"/>
+        <circle cx="0" cy="64" r="2.6" fill="#FFF6DE" stroke="#72C7FF" stroke-width="1.2"/>
+      </g>
+    </g>
+    <g class="meteor meteor-three">
+      <g transform="translate(1180 176) scale(0.58)">
+        <path d="M64 0 L0 64" fill="none" stroke="url(#meteor-trail)" stroke-width="3" stroke-linecap="round"/>
+        <circle cx="0" cy="64" r="5" fill="#9EDCFF" fill-opacity="0.18"/>
+        <circle cx="0" cy="64" r="2.6" fill="#FFF6DE" stroke="#72C7FF" stroke-width="1.2"/>
+      </g>
+    </g>
+  </g>
   <text x="56" y="52" fill="#666666" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" font-weight="700" letter-spacing="1.6">ONE SOURCE · ONE RUNTIME CONTRACT · FOUR TARGETS</text>
   <text x="56" y="86" fill="#000000" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif" font-size="27" font-weight="750">从小程序源码到跨端容器</text>
 
