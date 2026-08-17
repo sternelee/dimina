@@ -1572,25 +1572,70 @@ class Runtime {
 			force: Number.isFinite(touch.force) ? touch.force : 0,
 		})
 		const handlers = new Map()
+		const sendGameTouch = (eventType, touches, changedTouches, timeStamp) => {
+			message.send({
+				type: 'gameTouch',
+				target: 'service',
+				body: {
+					bridgeId,
+					eventType,
+					touches,
+					changedTouches,
+					timeStamp,
+				},
+			})
+		}
 		for (const eventType of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
 			const handler = (event) => {
 				if (event.cancelable) {
 					event.preventDefault()
 				}
-				message.send({
-					type: 'gameTouch',
-					target: 'service',
-					body: {
-						bridgeId,
-						eventType,
-						touches: Array.from(event.touches || [], serializeTouch),
-						changedTouches: Array.from(event.changedTouches || [], serializeTouch),
-						timeStamp: event.timeStamp,
-					},
-				})
+				sendGameTouch(
+					eventType,
+					Array.from(event.touches || [], serializeTouch),
+					Array.from(event.changedTouches || [], serializeTouch),
+					event.timeStamp,
+				)
 			}
 			handlers.set(eventType, handler)
 			canvas.addEventListener(eventType, handler, { passive: false })
+		}
+
+		// 微信开发者工具会把模拟器里的鼠标操作转换成小游戏触摸事件。
+		// Web 容器做同样的兼容。触摸处理器已经 preventDefault，因此移动端
+		// 不会再派发兼容 mouse 事件，也就不会产生一触双发。
+		let mouseActive = false
+		const mouseEventTypes = {
+			mousedown: 'touchstart',
+			mousemove: 'touchmove',
+			mouseup: 'touchend',
+			mouseleave: 'touchcancel',
+		}
+		for (const [mouseType, touchType] of Object.entries(mouseEventTypes)) {
+			const handler = (event) => {
+				if (mouseType === 'mousedown') {
+					if (event.button !== 0) return
+					mouseActive = true
+				}
+				else if (mouseType !== 'mousemove' && !mouseActive) {
+					return
+				}
+
+				if (event.cancelable) event.preventDefault()
+				const touch = serializeTouch({
+					identifier: 0,
+					clientX: event.clientX,
+					clientY: event.clientY,
+					pageX: event.pageX,
+					pageY: event.pageY,
+					force: mouseActive ? 0.5 : 0,
+				})
+				const ended = touchType === 'touchend' || touchType === 'touchcancel'
+				sendGameTouch(touchType, ended ? [] : [touch], [touch], event.timeStamp)
+				if (ended) mouseActive = false
+			}
+			handlers.set(mouseType, handler)
+			canvas.addEventListener(mouseType, handler, { passive: false })
 		}
 
 		document.body.append(canvas)

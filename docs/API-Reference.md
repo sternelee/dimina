@@ -265,8 +265,8 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 | 界面 - 动画   | createAnimation                  | ✓       | ✓   | ✓       | ✓   |
 | 界面 - Canvas | createCanvasContext              | ✓       | ✓   | ✓       | ✓   |
 |               | createOffscreenCanvas            | ✓       | ✓   | ✓       | ✓   |
-|               | createCanvas（小游戏上屏画布）   | ✓       | ✓   | ✓       | ✓   |
-|               | createImage（小游戏图片对象）    | ✓       | ✓   | ✓       | ✓   |
+|               | createCanvas                     | ✓       | ✓   | ✓       | ✓   |
+|               | createImage                      | ✓       | ✓   | ✓       | ✓   |
 |               | canvasToTempFilePath             | ✓       | ✓   | ✓       | ✓   |
 | 设备 - 小游戏触摸 | onTouchStart                   | ✓       | ✓   | ✓       | ✓   |
 |               | offTouchStart                    | ✓       | ✓   | ✓       | ✓   |

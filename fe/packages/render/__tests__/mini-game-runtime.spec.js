@@ -12,7 +12,7 @@ describe('mini game render surface', () => {
 		runtime.canvasNodes.clear()
 	})
 
-	it('mounts one full-screen canvas and forwards touch events to service', () => {
+	it('mounts one full-screen canvas and forwards touch and simulated mouse events to service', () => {
 		runtime.createGameCanvas({
 			bridgeId: 'bridge-game',
 			params: { nodeId: 'game-canvas', width: 390, height: 844, type: '2d' },
@@ -37,6 +37,46 @@ describe('mini game render surface', () => {
 				bridgeId: 'bridge-game',
 				eventType: 'touchstart',
 				touches: [expect.objectContaining({ identifier: 7, clientX: 12, clientY: 34 })],
+			}),
+		}))
+
+		const mouseDown = new Event('mousedown', { cancelable: true })
+		Object.defineProperties(mouseDown, {
+			button: { value: 0 },
+			clientX: { value: 56 },
+			clientY: { value: 78 },
+			pageX: { value: 56 },
+			pageY: { value: 78 },
+		})
+		canvas.dispatchEvent(mouseDown)
+
+		expect(send).toHaveBeenLastCalledWith(expect.objectContaining({
+			type: 'gameTouch',
+			target: 'service',
+			body: expect.objectContaining({
+				eventType: 'touchstart',
+				touches: [expect.objectContaining({ identifier: 0, clientX: 56, clientY: 78 })],
+			}),
+		}))
+
+		const mouseUp = new Event('mouseup', { cancelable: true })
+		Object.defineProperties(mouseUp, {
+			clientX: { value: 56 }, clientY: { value: 78 },
+			pageX: { value: 56 }, pageY: { value: 78 },
+		})
+		canvas.dispatchEvent(mouseUp)
+
+		const hoverMove = new Event('mousemove', { cancelable: true })
+		Object.defineProperties(hoverMove, {
+			clientX: { value: 90 }, clientY: { value: 120 },
+			pageX: { value: 90 }, pageY: { value: 120 },
+		})
+		canvas.dispatchEvent(hoverMove)
+
+		expect(send).toHaveBeenLastCalledWith(expect.objectContaining({
+			body: expect.objectContaining({
+				eventType: 'touchmove',
+				touches: [expect.objectContaining({ clientX: 90, clientY: 120 })],
 			}),
 		}))
 	})
