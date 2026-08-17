@@ -69,6 +69,18 @@ describe('invokeAPI promise-like behavior', () => {
 		await expect(promise).resolves.toEqual(result)
 	})
 
+	it.each(['navigateBackMiniProgram', 'exitMiniProgram'])('returns a promise for %s when called without options', async (apiName) => {
+		const { bridge, callback, invokeAPI } = await loadCommonApi()
+
+		const promise = invokeAPI(apiName)
+		const params = bridge.invoke.mock.calls[0][0].body.params
+		const result = { errMsg: `${apiName}:ok` }
+
+		expect(promise).toBeInstanceOf(Promise)
+		callback.invoke(params.success, result)
+		await expect(promise).resolves.toEqual(result)
+	})
+
 	it('does not promise-wrap task-style APIs', async () => {
 		const { bridge, invokeAPI } = await loadCommonApi()
 

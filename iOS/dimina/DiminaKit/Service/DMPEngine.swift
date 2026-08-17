@@ -9,8 +9,13 @@ import Foundation
 import JavaScriptCore
 
 public class DMPEngine: NSObject {
-    
+
     private var jsContext: JSContext?
+
+    /// Bound to this engine for its entire lifetime. Keeping the resolver
+    /// instance-scoped prevents a second mini program from redirecting the
+    /// opener's invoke/publish bridge to a different (or destroyed) app.
+    private let appResolver: () -> DMPApp?
 
     /// Timer state is engine-scoped. No other mini program can cancel this manager's sources.
     private let timerManager = DMPEngineTimer()
@@ -38,7 +43,8 @@ public class DMPEngine: NSObject {
     
     private var initCompletionHandlers: [() -> Void] = []
     
-    public override init() {
+    public init(appResolver: @escaping () -> DMPApp? = { nil }) {
+        self.appResolver = appResolver
         jsThread = Thread()
         
         super.init()
@@ -119,9 +125,18 @@ public class DMPEngine: NSObject {
         timerManager.registerTimerFunctions(to: context, executor: { [weak self] closure in
             self?.performOnJSThread(closure)
         })
-        DMPEngineInvoke.registerInvoke(to: context)
-        DMPEnginePublish.registerPublish(to: context)
+        let resolver: () -> DMPApp? = { [weak self] in
+            self?.resolveApp()
+        }
+        DMPEngineInvoke.registerInvoke(to: context, appResolver: resolver)
+        DMPEnginePublish.registerPublish(to: context, appResolver: resolver)
         
+    }
+
+    /// The bridge registrations and focused tests share this single lookup so
+    /// invoke and publish cannot accidentally drift back to global state.
+    func resolveApp() -> DMPApp? {
+        return appResolver()
     }
     
     @discardableResult
@@ -146,6 +161,12 @@ public class DMPEngine: NSObject {
             let result = self?.jsContext?.evaluateScript(script)
             DMPLogger.debug("🔴 engine enqueueScript: \(script) result: \(String(describing: result))")
         }
+    }
+
+    /// Enqueue a native completion behind all previously submitted JavaScript
+    /// turns without evaluating another user-controlled script.
+    func enqueueBarrier(_ completion: @escaping () -> Void) {
+        performOnJSThread(completion)
     }
 
     @discardableResult

@@ -28,14 +28,23 @@ class DMPChannelProxy {
             ])
 
             if type == "serviceResourceLoaded" || type == "renderResourceLoaded" {
+                guard let container = app.container else {
+                    DMPLogger.debug("resourceLoaded ignored: runtime container is unavailable")
+                    return DMPMap()
+                }
                 let resourceType: ResourceLoadType =
                     type == "serviceResourceLoaded" ? .serviceLoaded : .renderLoaded
-                app.container!.hasLoadResource(webViewId: webViewId, type: resourceType)
+                container.hasLoadResource(webViewId: webViewId, type: resourceType)
 
-                if app.container!.isResourceLoaded(webViewId: webViewId) {
-                    body.set("scene", DMPScene.fromMainEntry.rawValue)
+                if container.isResourceLoaded(webViewId: webViewId) {
+                    let launchConfig = app.getCurrentLaunchConfig()
+                    body.set("scene", launchConfig?.scene ?? DMPScene.fromMainEntry.rawValue)
+                    if let referrerInfo = launchConfig?.referrerInfo {
+                        body.set("referrerInfo", referrerInfo)
+                    }
 
                     transMsg.set("type", "resourceLoaded")
+                    transMsg.set("body", body.toDictionary())
 
                     Task { @MainActor in
                         await app.service?.postMessage(data: transMsg)
@@ -60,9 +69,18 @@ class DMPChannelProxy {
                     DMPLogger.debug("参数格式错误：name为空")
                     return DMPMap()
                 }
+                guard let container = app.container else {
+                    DMPLogger.debug("invokeAPI ignored: runtime container is unavailable")
+                    return DMPMap()
+                }
 
                 let param: DMPBridgeParam = DMPBridgeParam(value: body.get("params") as Any)
-                return app.container!.callBridgeMethod(methodName: name, webViewId: webViewId, param: param, app: app)
+                return container.callBridgeMethod(
+                    methodName: name,
+                    webViewId: webViewId,
+                    param: param,
+                    app: app
+                )
             } else if type == "domReady" {
                 app.container?.isNavigating = false
                 if let webview = webview {

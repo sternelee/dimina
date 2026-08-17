@@ -546,18 +546,28 @@ public class DMPPageController: UIViewController {
             return
         }
         isClosingMiniProgram = true
-        let appToDestroy = app
 
         dismissMiniProgramMenu()
         navigator?.setCapsuleEnabled(false)
 
-        if let navigator = navigator {
-            navigator.closeMiniProgram {
-                appToDestroy?.destroy()
-            }
-        } else {
-            dismiss(animated: true) {
-                appToDestroy?.destroy()
+        guard let app else {
+            isClosingMiniProgram = false
+            navigator?.setCapsuleEnabled(true)
+            return
+        }
+        Task { @MainActor [weak self] in
+            do {
+                // Capsule close is the UI form of exitMiniProgram. Reuse the
+                // coordinator so it shares active-owner/operation guards,
+                // lifecycle ordering, callback drain, and opener restoration.
+                try await DMPAppManager.sharedInstance().exitMiniProgram(
+                    app,
+                    onAccepted: {}
+                )
+            } catch {
+                self?.isClosingMiniProgram = false
+                self?.navigator?.setCapsuleEnabled(true)
+                DMPLogger.debug("capsule close rejected: \(error.localizedDescription)")
             }
         }
     }

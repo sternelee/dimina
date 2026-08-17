@@ -47,6 +47,7 @@ describe('render resource loader', () => {
 
 		await expect(loader.loadResource({
 			bridgeId: 'bridge-success',
+			resourceLoadId: 'load-success',
 			appId: 'app',
 			pagePath: 'pages/index/index',
 			root: 'main',
@@ -57,7 +58,7 @@ describe('render resource loader', () => {
 		expect(invoke).toHaveBeenCalledWith({
 			type: 'renderResourceLoaded',
 			target: 'service',
-			body: { bridgeId: 'bridge-success' },
+			body: { bridgeId: 'bridge-success', resourceLoadId: 'load-success' },
 		})
 	})
 
@@ -77,6 +78,7 @@ describe('render resource loader', () => {
 
 		await expect(loader.loadResource({
 			bridgeId: 'bridge-failure',
+			resourceLoadId: 'load-failure',
 			appId: 'app',
 			pagePath: 'pages/index/index',
 			root: 'main',
@@ -89,6 +91,7 @@ describe('render resource loader', () => {
 			target: 'service',
 			body: expect.objectContaining({
 				bridgeId: 'bridge-failure',
+				resourceLoadId: 'load-failure',
 				pagePath: 'pages/index/index',
 				errors: [expect.stringContaining('脚本文件加载失败')],
 			}),
@@ -108,6 +111,7 @@ describe('render resource loader', () => {
 
 		await expect(loader.loadResource({
 			bridgeId: 'bridge-module-failure',
+			resourceLoadId: 'load-module-failure',
 			appId: 'app',
 			pagePath: 'pages/index/index',
 			root: 'main',
@@ -116,7 +120,10 @@ describe('render resource loader', () => {
 
 		expect(invoke).toHaveBeenCalledWith(expect.objectContaining({
 			type: 'renderResourceLoadFailed',
-			body: expect.objectContaining({ errors: ['module evaluation failed'] }),
+			body: expect.objectContaining({
+				resourceLoadId: 'load-module-failure',
+				errors: ['module evaluation failed'],
+			}),
 		}))
 		expect(invoke).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'renderResourceLoaded' }))
 	})

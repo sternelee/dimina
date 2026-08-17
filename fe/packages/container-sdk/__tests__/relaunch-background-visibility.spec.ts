@@ -118,12 +118,12 @@ describe('reLaunch() on a backgrounded MiniApp must not start its new bridge as 
 		newBridge.messageInvoke('service', {
 			type: 'serviceResourceLoaded',
 			target: 'service',
-			body: { bridgeId: newBridge.id },
+			body: { bridgeId: newBridge.id, resourceLoadId: newBridge.resourceLoadId },
 		})
 		newBridge.messageInvoke('render', {
 			type: 'renderResourceLoaded',
 			target: 'service',
-			body: { bridgeId: newBridge.id },
+			body: { bridgeId: newBridge.id, resourceLoadId: newBridge.resourceLoadId },
 		})
 
 		const postedTypes = (workerA.postMessage.mock.calls as [PostedMessage][]).map(([message]) => message.type)

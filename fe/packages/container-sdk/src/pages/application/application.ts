@@ -246,6 +246,62 @@ export class Application {
 		return this._enqueue(() => this._dismissView(view, opts))
 	}
 
+	/**
+	 * 冷重启时原位替换栈顶小程序：底下的 opener 始终保持隐藏，避免先 dismiss
+	 * 再 present 造成一次假的 onShow/onHide。新实例会重新创建 Worker/Bridge/页面栈。
+	 */
+	replaceView(
+		currentView: MiniApp,
+		replacement: MiniApp,
+		beforeCommit: () => void | Promise<void> = () => {},
+	): Promise<void> {
+		return this._enqueue(async () => {
+			const index = this.views.indexOf(currentView)
+			if (index === -1 || index !== this.views.length - 1) {
+				throw new Error('[container] replaceView: current view must be active')
+			}
+
+			replacement.parent = this
+			replacement.el.style.zIndex = currentView.el.style.zIndex
+			replacement.el.classList.add('dimina-native-view--instage')
+			currentView.onPresentOut()
+			currentView.el.parentNode?.replaceChild(replacement.el, currentView.el)
+			this.views[index] = replacement
+
+			try {
+				if (this.isSleeping) {
+					replacement.onPresentOut()
+				}
+				else {
+					replacement.onPresentIn()
+				}
+				// 不用普通 viewDidLoad() 的 fire-and-forget 启动：冷重启必须等新
+				// Worker/Bridge 完整就绪后才让旧 runtime 回调成功并进入销毁。
+				await replacement.viewDidLoadForReplacement()
+				await beforeCommit()
+				currentView.queueDestructionLifecycle()
+				await currentView.jscore.flushCallbacks()
+			}
+			catch (error) {
+				this.views[index] = currentView
+				replacement.el.parentNode?.replaceChild(currentView.el, replacement.el)
+				if (!this.isSleeping) {
+					currentView.onPresentIn()
+				}
+				this.safeRestoreColorStyle(currentView)
+				this.safeSyncUrl()
+				throw error
+			}
+
+			try {
+				currentView.destroy()
+			}
+			catch (destroyError) {
+				console.error(`[container] view.destroy() threw during replaceView cleanup for ${currentView.appId}:`, destroyError)
+			}
+		})
+	}
+
 	async _dismissView(view: MiniApp, opts: DismissViewOptions = {}): Promise<void> {
 		if (!this.done) {
 			return

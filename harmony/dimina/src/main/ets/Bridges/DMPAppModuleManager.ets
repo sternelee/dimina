@@ -39,9 +39,10 @@ import { DMPContainerBridgesModuleFile } from './DMPContainerBridgesModule+File'
 import { DMPContainerBridgesModuleCanvas } from './DMPContainerBridgesModule+Canvas';
 import { DMPContainerBridgesModuleLocalNetwork } from './Network/DMPContainerBridgesModule+LocalNetwork';
 import { DMPContainerBridgesModuleScreen } from './DMPContainerBridgesModule+Screen';
+import { DMPDisposableAppModuleManager } from './DMPAppModuleManagerLifecycle';
 
 
-export class DMPAppModuleManager extends DMPModuleManager {
+export class DMPAppModuleManager extends DMPModuleManager implements DMPDisposableAppModuleManager {
   exportModules: Map<string, DMPExportModule>;
   app: DMPApp;
 
@@ -126,5 +127,4 @@ export class DMPAppModuleManager extends DMPModuleManager {
     this.extBridgeModule?.cancelAllSubscriptions();
   }
 }
-
 

@@ -26,12 +26,13 @@ export interface QueryPathResult {
 }
 
 export function queryPath(path: string): QueryPathResult {
-	const parts = path.split('?')
+	const queryIndex = path.indexOf('?')
+	const rawPagePath = queryIndex === -1 ? path : path.slice(0, queryIndex)
 	// pagePath 统一去除前导斜杠：app-config.json 的 modules key 与 AMD module id
 	// 都是无前导斜杠形态，宿主直启 path 与容器内 "/pages/x/y" 写法都在此单点归一，
 	// 否则页面配置查找与 service 模块加载会因写法发散而失败
-	const pagePath = parts[0].replace(/^\/+/, '')
-	const paramStr = parts[1]
+	const pagePath = rawPagePath.replace(/^\/+/, '')
+	const paramStr = queryIndex === -1 ? '' : path.slice(queryIndex + 1)
 
 	const result: QueryPathResult = {
 		query: {},
@@ -42,12 +43,10 @@ export function queryPath(path: string): QueryPathResult {
 		return result
 	}
 
-	const paramList = paramStr.split('&')
-
-	paramList.forEach((param) => {
-		const key = param.split('=')[0]
-		const value = param.split('=')[1]
-
+	// URLSearchParams 保留值中的 `=`，把无值键归一为空字符串，并与
+	// QueryRouter 使用同一套百分号/`+` 解码规则。重复 key 按出现顺序覆盖，
+	// 与旧实现的最后一项生效语义一致。
+	new URLSearchParams(paramStr).forEach((value, key) => {
 		result.query[key] = value
 	})
 

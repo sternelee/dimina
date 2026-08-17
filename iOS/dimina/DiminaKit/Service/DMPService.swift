@@ -8,6 +8,33 @@
 import Foundation
 import JavaScriptCore
 
+/// Runtime-scoped app lookup used by one service engine. The app itself can
+/// outlive a service during restart/close, so a plain weak app reference is
+/// insufficient: a late JavaScript turn from the old engine could otherwise
+/// resolve the app again after its new container/service have been installed.
+private final class DMPServiceAppBinding {
+    private let lock = NSLock()
+    private weak var app: DMPApp?
+    private var isActive = true
+
+    init(app: DMPApp) {
+        self.app = app
+    }
+
+    func resolve() -> DMPApp? {
+        lock.lock()
+        defer { lock.unlock() }
+        return isActive ? app : nil
+    }
+
+    func invalidate() {
+        lock.lock()
+        isActive = false
+        app = nil
+        lock.unlock()
+    }
+}
+
 public class DMPService {
     
     private(set) var engine: DMPEngine
@@ -15,16 +42,14 @@ public class DMPService {
     private var isInitialized: Bool = false
     
     private weak var app: DMPApp?
+    private let appBinding: DMPServiceAppBinding
     
     public init(app: DMPApp) {
+        let appBinding = DMPServiceAppBinding(app: app)
         self.app = app
-        self.engine = DMPEngine()
-        
-        DMPEngineInvoke.registerAppResolver { [weak self] in
-            return self?.app
-        }
-        DMPEnginePublish.registerAppResolver { [weak self] in
-            return self?.app
+        self.appBinding = appBinding
+        self.engine = DMPEngine {
+            appBinding.resolve()
         }
     }
     
@@ -94,9 +119,49 @@ public class DMPService {
         DMPLogger.debug("DMPService: fromContainer data: \(data.toJsonString())")
         engine.enqueueScript("DiminaServiceBridge.onMessage(\(data.toJsonString()))")
     }
+
+    /// Wait until every previously enqueued container message has completed
+    /// its JavaScript turn. Destructive app operations use this barrier after
+    /// success/complete and hide/unload lifecycle delivery, while the old app,
+    /// container, and native API managers are still valid.
+    func drainPendingContainerMessages(timeout: TimeInterval = 1) async {
+        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
+            let lock = NSLock()
+            var completed = false
+            let finish = {
+                lock.lock()
+                guard !completed else {
+                    lock.unlock()
+                    return
+                }
+                completed = true
+                lock.unlock()
+                continuation.resume()
+            }
+
+            engine.enqueueBarrier(finish)
+            DispatchQueue.global(qos: .utility).asyncAfter(deadline: .now() + timeout) {
+                lock.lock()
+                let didTimeout = !completed
+                lock.unlock()
+                if didTimeout {
+                    DMPLogger.debug("service callback drain timed out")
+                }
+                finish()
+            }
+        }
+    }
     
     public func destroy() {
+        invalidateAppBinding()
         isInitialized = false
         engine.destroy()
+    }
+
+    /// Stop this service generation from resolving its app synchronously.
+    /// DMPApp calls this before clearing/replacing runtime fields so a queued
+    /// old-engine invoke cannot observe a half-destroyed or new runtime.
+    func invalidateAppBinding() {
+        appBinding.invalidate()
     }
 }

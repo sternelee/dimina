@@ -3,10 +3,15 @@ import type { MiniApp } from '../pages/miniApp/miniApp.js'
 import type { BridgeMessage } from '../types.js'
 import serviceURL from '@dimina/service?url'
 import mitt from 'mitt'
+import { uuid } from '../utils/util.js'
+
+const CALLBACK_FLUSH_TIMEOUT_MS = 5000
 
 /** worker.onmessage 收到的逻辑线程消息：至少带 method 字段用于事件分发。 */
 interface WorkerEvent {
 	method: string
+	type?: string
+	body?: Record<string, unknown>
 	[key: string]: unknown
 }
 
@@ -23,8 +28,17 @@ export class JSCore {
 	/** appShow/appHide 期望方向与已真正投递方向，见 #flushAppVisibility() 上的说明。 */
 	private desiredAppVisible: boolean | null
 	private sentAppVisible: boolean | null
+	/** 下次 appShow 要携带的进入参数；普通前后台切换不覆盖最近一次进入参数。 */
+	private pendingAppShowOptions: Record<string, unknown> | null
 	/** service 侧 App 实例是否已构造完成，见 notifyServiceReady() 上的说明。 */
 	private serviceReady: boolean
+	/** 等待旧逻辑线程消费完回调的 FIFO barrier。 */
+	private callbackFlushWaiters: Map<string, {
+		resolve: () => void
+		timer: ReturnType<typeof setTimeout>
+	}>
+	/** Worker 启动/执行失败通知，Bridge 用它终止资源就绪等待。 */
+	private workerFailureHandlers: Set<(reason: unknown) => void>
 
 	constructor(parent: MiniApp) {
 		this.parent = parent
@@ -32,7 +46,10 @@ export class JSCore {
 		this.event = mitt<JSCoreEvents>()
 		this.desiredAppVisible = null
 		this.sentAppVisible = null
+		this.pendingAppShowOptions = null
 		this.serviceReady = false
+		this.callbackFlushWaiters = new Map()
+		this.workerFailureHandlers = new Set()
 	}
 
 	async init(): Promise<void> {
@@ -49,8 +66,24 @@ export class JSCore {
 		// 监听逻辑线程的消息
 		this.worker.onmessage = (e: MessageEvent<WorkerEvent>) => {
 			const msg = e.data
+			if (msg.type === 'callbacksFlushed') {
+				const requestId = msg.body?.requestId
+				if (typeof requestId === 'string') {
+					this.#finishCallbackFlush(requestId)
+				}
+				return
+			}
 			this.event.emit(msg.method as keyof JSCoreEvents, msg as unknown as BridgeMessage)
 		}
+		// Worker 已崩溃或消息无法反序列化时，ACK 永远不会到达。此时
+		// callbacks 也已无法挽回，必须放行销毁提交，避免卡住整个容器的跨 app 队列。
+		this.worker.onerror = event => this.#notifyWorkerFailure(event)
+		this.worker.onmessageerror = event => this.#notifyWorkerFailure(event)
+	}
+
+	onWorkerFailure(handler: (reason: unknown) => void): () => void {
+		this.workerFailureHandlers.add(handler)
+		return () => this.workerFailureHandlers.delete(handler)
 	}
 
 	/**
@@ -85,7 +118,14 @@ export class JSCore {
 	 * sentPageVisible/#flushPageVisibility() 是同一套模式，只是就绪判据换成了
 	 * service 侧 App 是否已构造，而不是某个具体页面的双线程资源是否都已加载。
 	 */
-	appShow(): void {
+	queueAppShowOptions(options: Record<string, unknown>): void {
+		this.pendingAppShowOptions = { ...options }
+	}
+
+	appShow(options?: Record<string, unknown>): void {
+		if (options) {
+			this.queueAppShowOptions(options)
+		}
 		this.desiredAppVisible = true
 		this.#flushAppVisibility()
 	}
@@ -99,15 +139,71 @@ export class JSCore {
 		if (
 			!this.serviceReady
 			|| this.desiredAppVisible === null
-			|| this.sentAppVisible === this.desiredAppVisible
+			|| (
+				this.sentAppVisible === this.desiredAppVisible
+				&& !(this.desiredAppVisible && this.pendingAppShowOptions)
+			)
 		) {
 			return
 		}
 		this.postMessage({
 			type: this.desiredAppVisible ? 'appShow' : 'appHide',
-			body: {},
+			body: this.desiredAppVisible ? (this.pendingAppShowOptions ?? {}) : {},
 		})
+		if (this.desiredAppVisible) {
+			this.pendingAppShowOptions = null
+		}
 		this.sentAppVisible = this.desiredAppVisible
+	}
+
+	/**
+	 * 等逻辑线程按 FIFO 消费完此前投递的 triggerCallback。销毁型 API 在收到
+	 * barrier 回包之前不能 terminate Worker，否则 success/complete 可能永远不执行。
+	 */
+	flushCallbacks(): Promise<void> {
+		if (!this.worker) {
+			return Promise.resolve()
+		}
+		const requestId = uuid()
+		return new Promise((resolve) => {
+			const timer = setTimeout(() => {
+				console.warn('[container] flushCallbacks timed out; continuing destructive mini program operation')
+				this.#finishCallbackFlush(requestId)
+			}, CALLBACK_FLUSH_TIMEOUT_MS)
+			this.callbackFlushWaiters.set(requestId, { resolve, timer })
+			try {
+				this.postMessage({
+					type: 'flushCallbacks',
+					body: { requestId },
+				})
+			}
+			catch {
+				this.#finishCallbackFlush(requestId)
+			}
+		})
+	}
+
+	#finishCallbackFlush(requestId: string): void {
+		const waiter = this.callbackFlushWaiters.get(requestId)
+		if (!waiter) {
+			return
+		}
+		clearTimeout(waiter.timer)
+		this.callbackFlushWaiters.delete(requestId)
+		waiter.resolve()
+	}
+
+	#finishAllCallbackFlushes(): void {
+		for (const requestId of [...this.callbackFlushWaiters.keys()]) {
+			this.#finishCallbackFlush(requestId)
+		}
+	}
+
+	#notifyWorkerFailure(reason: unknown): void {
+		this.#finishAllCallbackFlushes()
+		for (const handler of [...this.workerFailureHandlers]) {
+			handler(reason)
+		}
 	}
 
 	/**
@@ -152,10 +248,13 @@ export class JSCore {
 	 * 释放 Web Worker。并发场景下 destroy() 可能先于 init() 创建 worker，判空避免解引用 null。
 	 */
 	destroy(): void {
+		this.#notifyWorkerFailure(new Error('mini program worker was destroyed'))
 		this.worker?.terminate()
 		this.worker = null
 		this.desiredAppVisible = null
 		this.sentAppVisible = null
+		this.pendingAppShowOptions = null
 		this.serviceReady = false
+		this.workerFailureHandlers.clear()
 	}
 }

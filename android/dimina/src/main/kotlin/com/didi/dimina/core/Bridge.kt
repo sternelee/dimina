@@ -43,6 +43,8 @@ class Bridge(
     private var desiredPageVisible: Boolean? = null
     @Volatile
     private var sentPageVisible: Boolean? = null
+    @Volatile
+    private var pendingAppShowOptions: JSONObject? = null
 
     /**
      * Bridge 初始化逻辑
@@ -116,14 +118,19 @@ class Bridge(
                 // 发送 loadResource 消息
                 options.jscore.postMessage(
                     "loadResource",
-                    mapOf(
-                        "bridgeId" to id,
-                        "resourceLoadId" to currentResourceLoadId,
-                        "appId" to options.appId,
-                        "pagePath" to options.pathInfo.pagePath,
-                        "root" to options.root,
-                        "baseUrl" to PathUtils.WEBVIEW_JSAPP_BASE_URL
-                    )
+                    JSONObject().apply {
+                        put("bridgeId", id)
+                        put("resourceLoadId", currentResourceLoadId)
+                        put("appId", options.appId)
+                        put("pagePath", options.pathInfo.pagePath)
+                        put("query", options.pathInfo.query ?: JSONObject())
+                        put("scene", options.scene)
+                        put("root", options.root)
+                        put("baseUrl", PathUtils.WEBVIEW_JSAPP_BASE_URL)
+                        options.referrerInfo?.let {
+                            put("referrerInfo", JSONObject(it.toString()))
+                        }
+                    }
                 )
 
                 LogUtils.d(tag, "Bridge started and resources loaded in background thread")
@@ -164,6 +171,9 @@ class Bridge(
                 put("pagePath", options.pathInfo.pagePath)
                 put("scene", options.scene)
                 put("query", options.pathInfo.query)
+                options.referrerInfo?.let {
+                    put("referrerInfo", JSONObject(it.toString()))
+                }
                 // Copy all properties from original body
                 for (key in body.keys()) {
                     put(key, body.get(key))
@@ -266,15 +276,26 @@ class Bridge(
         }
         options.jscore.postMessage(msg.toString())
         if (msg.optString("type") == "resourceLoaded") {
+            flushPendingAppShow()
             flushPageVisibility()
         }
     }
 
-    fun appShow() {
-        if (!isResourceLoaded()) {
-            return
+    fun appShow(enterOptions: JSONObject? = null) {
+        val pending = synchronized(this) {
+            if (enterOptions != null) {
+                pendingAppShowOptions = JSONObject(enterOptions.toString())
+            }
+            if (!isResourceLoaded()) {
+                return
+            }
+            pendingAppShowOptions.also { pendingAppShowOptions = null }
         }
-        options.jscore.postMessage(type="appShow")
+        if (pending == null) {
+            options.jscore.postMessage(type = "appShow")
+        } else {
+            postAppShow(pending)
+        }
     }
 
     fun appHide() {
@@ -308,6 +329,26 @@ class Bridge(
         sentPageVisible = visible
     }
 
+    private fun flushPendingAppShow() {
+        val pending = synchronized(this) {
+            if (!isResourceLoaded()) return
+            pendingAppShowOptions.also { pendingAppShowOptions = null }
+        } ?: return
+        postAppShow(pending)
+    }
+
+    private fun postAppShow(enterOptions: JSONObject) {
+        val body = JSONObject(enterOptions.toString()).apply {
+            if (!has("pagePath")) {
+                put("pagePath", options.pathInfo.pagePath)
+            }
+            if (!has("query")) {
+                put("query", options.pathInfo.query ?: JSONObject())
+            }
+        }
+        options.jscore.postMessage("appShow", body)
+    }
+
     fun destroy(keepHandler: Boolean = false) {
         parent.clearNativeComponents(this)
         val wasResourceLoaded = isResourceLoaded()
@@ -319,6 +360,7 @@ class Bridge(
             resourceLoadId = null
             desiredPageVisible = null
             sentPageVisible = null
+            pendingAppShowOptions = null
         }
 
         // 发送页面卸载消息

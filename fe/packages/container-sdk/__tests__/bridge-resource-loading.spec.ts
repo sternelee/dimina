@@ -28,6 +28,7 @@ describe('Bridge resource loading protocol', () => {
 			query: {},
 		})
 		bridge.id = 'bridge-visible'
+		bridge.resourceLoadId = 'load-visible'
 
 		bridge.pageShow()
 		expect(jscore.postMessage).not.toHaveBeenCalled()
@@ -35,12 +36,12 @@ describe('Bridge resource loading protocol', () => {
 		bridge.messageInvoke('service', {
 			type: 'serviceResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: bridge.resourceLoadId },
 		})
 		bridge.messageInvoke('render', {
 			type: 'renderResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: bridge.resourceLoadId },
 		})
 
 		expect(jscore.postMessage.mock.calls.map(([message]) => message.type)).toEqual([
@@ -58,18 +59,19 @@ describe('Bridge resource loading protocol', () => {
 			query: {},
 		})
 		bridge.id = 'bridge-hidden'
+		bridge.resourceLoadId = 'load-hidden'
 
 		bridge.pageShow()
 		bridge.pageHide()
 		bridge.messageInvoke('service', {
 			type: 'serviceResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: bridge.resourceLoadId },
 		})
 		bridge.messageInvoke('render', {
 			type: 'renderResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: bridge.resourceLoadId },
 		})
 		bridge.pageHide()
 
@@ -105,12 +107,12 @@ describe('Bridge resource loading protocol', () => {
 		bridge.messageInvoke('service', {
 			type: 'serviceResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: bridge.resourceLoadId },
 		})
 		bridge.messageInvoke('render', {
 			type: 'renderResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: bridge.resourceLoadId },
 		})
 
 		expect(jscore.postMessage.mock.calls.map(([message]) => message.type)).toEqual([
@@ -161,6 +163,7 @@ describe('Bridge resource loading protocol', () => {
 			query: {},
 		})
 		bridge.id = 'bridge-failure'
+		bridge.resourceLoadId = 'load-failure'
 		bridge.serviceResource = true
 		bridge.renderResource = true
 
@@ -169,6 +172,7 @@ describe('Bridge resource loading protocol', () => {
 			target: 'service',
 			body: {
 				bridgeId: bridge.id,
+				resourceLoadId: bridge.resourceLoadId,
 				errors: ['script failed'],
 			},
 		})
@@ -179,6 +183,7 @@ describe('Bridge resource loading protocol', () => {
 			type: 'resourceLoadFailed',
 			body: {
 				bridgeId: bridge.id,
+				resourceLoadId: 'load-failure',
 				pagePath: 'pages/index/index',
 				scene: 1001,
 				query: {},
@@ -196,8 +201,31 @@ describe('Bridge resource loading protocol', () => {
 			query: {},
 		})
 		bridge.id = 'bridge-duplicate-resource'
+		bridge.resourceLoadId = 'load-duplicate'
 
 		for (const type of ['serviceResourceLoaded', 'renderResourceLoaded', 'renderResourceLoaded']) {
+			bridge.messageInvoke('render', {
+				type,
+				target: 'service',
+				body: { bridgeId: bridge.id, resourceLoadId: bridge.resourceLoadId },
+			})
+		}
+
+		expect(jscore.postMessage.mock.calls.map(([message]) => message.type)).toEqual(['resourceLoaded'])
+	})
+
+	it('rejects resource acknowledgements that omit the current load generation', () => {
+		const jscore = { postMessage: vi.fn(), notifyServiceReady: vi.fn() }
+		const bridge = createBridge({
+			jscore,
+			pagePath: 'pages/index/index',
+			scene: 1001,
+			query: {},
+		})
+		bridge.id = 'bridge-missing-load-id'
+		bridge.resourceLoadId = 'load-current'
+
+		for (const type of ['serviceResourceLoaded', 'renderResourceLoaded']) {
 			bridge.messageInvoke('render', {
 				type,
 				target: 'service',
@@ -205,7 +233,8 @@ describe('Bridge resource loading protocol', () => {
 			})
 		}
 
-		expect(jscore.postMessage.mock.calls.map(([message]) => message.type)).toEqual(['resourceLoaded'])
+		expect(bridge.isResourceLoaded()).toBe(false)
+		expect(jscore.postMessage).not.toHaveBeenCalled()
 	})
 
 	it('drops late resource acknowledgements after an in-flight bridge is destroyed', () => {
@@ -217,18 +246,20 @@ describe('Bridge resource loading protocol', () => {
 			query: {},
 		})
 		bridge.id = 'bridge-destroyed-during-load'
+		bridge.resourceLoadId = 'load-destroyed'
+		const destroyedResourceLoadId = bridge.resourceLoadId
 		bridge.pageShow()
 		bridge.destroy()
 
 		bridge.messageInvoke('service', {
 			type: 'serviceResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: destroyedResourceLoadId },
 		})
 		bridge.messageInvoke('render', {
 			type: 'renderResourceLoaded',
 			target: 'service',
-			body: { bridgeId: bridge.id },
+			body: { bridgeId: bridge.id, resourceLoadId: destroyedResourceLoadId },
 		})
 
 		expect(jscore.postMessage).not.toHaveBeenCalled()

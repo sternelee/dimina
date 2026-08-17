@@ -12,14 +12,38 @@ class Runtime {
 		this.app = undefined
 		this.defaultApp = {}
 		this.appLaunchOptions = {}
+		this.appEnterOptions = {}
 		this.instances = {}
 		this.pageStates = new Map()
 	}
 
 	setAppLaunchOptions(options) {
 		if (!this.app) {
-			this.appLaunchOptions = options
+			this.appLaunchOptions = this.normalizeAppOptions(options)
+			this.appEnterOptions = this.appLaunchOptions
 		}
+	}
+
+	normalizeAppOptions(options = {}) {
+		const { pagePath, path = pagePath, ...rest } = options || {}
+		const normalized = {
+			...rest,
+			path,
+		}
+		for (const key of Object.keys(normalized)) {
+			if (normalized[key] === undefined) {
+				delete normalized[key]
+			}
+		}
+		return normalized
+	}
+
+	getAppLaunchOptions() {
+		return this.appLaunchOptions
+	}
+
+	getAppEnterOptions() {
+		return this.appEnterOptions
 	}
 
 	getApp(options = {}) {
@@ -79,7 +103,7 @@ class Runtime {
 			return
 		}
 
-		const { scene, pagePath: path, query } = opts || {}
+		const appOptions = this.normalizeAppOptions(opts)
 		const appModule = loader.getAppModule()
 
 		if (!appModule) {
@@ -93,15 +117,16 @@ class Runtime {
 		// 覆盖合并到 App 配置中，随后为下一次声明重置占位对象。
 		Object.assign(appModule.moduleInfo, this.defaultApp)
 		this.defaultApp = {}
-		this.app = new App(appModule, {
-			scene,
-			path,
-			query,
-		})
+		this.appLaunchOptions = appOptions
+		this.appEnterOptions = appOptions
+		this.app = new App(appModule, appOptions)
 	}
 
-	appShow() {
-		this.app?.appShow()
+	appShow(options) {
+		if (options && Object.keys(options).length > 0) {
+			this.appEnterOptions = this.normalizeAppOptions(options)
+		}
+		this.app?.appShow(this.appEnterOptions)
 	}
 
 	appHide() {

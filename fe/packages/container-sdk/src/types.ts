@@ -43,6 +43,12 @@ export interface PageStackEntry {
 	query?: Record<string, string>
 }
 
+/** 由另一个小程序打开/返回时传给 App.onLaunch/App.onShow 的来源信息。 */
+export interface MiniProgramReferrerInfo {
+	appId: string
+	extraData?: unknown
+}
+
 /**
  * 页面栈变化时把当前小程序路由信息同步到浏览器地址栏的适配器。
  * 默认实现（QueryRouter）会无条件 history.replaceState 改写地址栏 query，
@@ -222,6 +228,7 @@ export interface BridgeOptions {
 	pagePath: string
 	query?: Record<string, string>
 	scene?: number
+	referrerInfo?: MiniProgramReferrerInfo
 	root?: string
 	pages?: string[]
 	configInfo: import('./utils/util.js').MergedPageConfig

@@ -38,9 +38,23 @@ public class DMPApp {
 
     @MainActor
     public func launch(launchConfig: DMPLaunchConfig) async {
+        _ = await performLaunch(launchConfig: launchConfig)
+    }
+
+    /// Same cold-launch path as `launch`, but reports whether the runtime was
+    /// actually prepared. Cross-mini-program navigation uses this to roll the
+    /// opener back into the foreground when target startup fails.
+    @MainActor
+    @discardableResult
+    func launchForMiniProgramNavigation(launchConfig: DMPLaunchConfig) async -> Bool {
+        return await performLaunch(launchConfig: launchConfig)
+    }
+
+    @MainActor
+    private func performLaunch(launchConfig: DMPLaunchConfig) async -> Bool {
         guard !isLaunching else {
             DMPLogger.debug("launch skipped: app is already launching")
-            return
+            return false
         }
 
         isLaunching = true
@@ -49,10 +63,17 @@ public class DMPApp {
         }
 
         guard await prepareRuntimeForLaunch(initializeContainer: true) else {
-            return
+            return false
+        }
+
+        let entryPath = resolvedEntryPath(for: launchConfig)
+        guard bundleAppConfig?.isContainsPage(pagePath: entryPath) == true else {
+            DMPLogger.debug("launch rejected: page is not declared: \(entryPath)")
+            return false
         }
 
         await openPage(launchConfig: launchConfig)
+        return true
     }
 
     @MainActor
@@ -124,6 +145,10 @@ public class DMPApp {
     public func getBundleAppConfig() -> DMPBundleAppConfig? {
         return bundleAppConfig
     }
+
+    func getCurrentLaunchConfig() -> DMPLaunchConfig? {
+        return currentLaunchConfig
+    }
     
     public func getContainer() -> DMPContainer? {
         return container
@@ -150,6 +175,10 @@ public class DMPApp {
         DMPUIManager.shared.prepareUI()
         container = DMPContainer(app: self)
         containerApi = DMPContainerApi.create(app: self)
+        // appWithConfig is called before the target container exists, so its
+        // early replay cannot install host APIs. Replay whenever a fresh
+        // container is created, including full-runtime restart.
+        DMPAppManager.sharedInstance().applyPendingExtModules(to: self)
     }
 
     @MainActor
@@ -209,20 +238,70 @@ public class DMPApp {
         // 微信规则显示返回首页按钮）；未指定时回退到应用首页
         // 路径入口经 DMPUtil.normalizePagePath 统一去前导斜杠，与
         // DMPBundleAppConfig.entryPagePath 及页面栈 key 同口径
-        let requestedEntry = launchConfig.appEntryPath?.trimmingCharacters(in: .whitespaces) ?? ""
-        let normalizedEntry = DMPUtil.normalizePagePath(requestedEntry)
-        newLaunchConfig.appEntryPath = normalizedEntry.isEmpty
-            ? (self.bundleAppConfig?.entryPagePath ?? "")
-            : normalizedEntry
+        newLaunchConfig.appEntryPath = resolvedEntryPath(for: launchConfig)
         currentLaunchConfig = newLaunchConfig
         await navigator?.launch(to: newLaunchConfig.appEntryPath ?? "", query: newLaunchConfig.query)
+    }
+
+    private func resolvedEntryPath(for launchConfig: DMPLaunchConfig) -> String {
+        let requestedEntry = launchConfig.appEntryPath?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let normalizedEntry = DMPUtil.normalizePagePath(requestedEntry)
+        return normalizedEntry.isEmpty
+            ? (bundleAppConfig?.entryPagePath ?? "")
+            : normalizedEntry
     }
 
     @MainActor
     public func applyUpdate() async {
         var launchConfig = currentLaunchConfig ?? DMPLaunchConfig()
         launchConfig.isRelaunch = true
-        await restart(launchConfig: launchConfig)
+        do {
+            _ = try await DMPAppManager.sharedInstance().restartMiniProgramRuntime(
+                self,
+                launchConfig: launchConfig,
+                onAccepted: {}
+            )
+        } catch {
+            DMPLogger.debug("applyUpdate restart rejected: \(error.localizedDescription)")
+        }
+    }
+
+    /// Restart the complete mini-program runtime at the caller-supplied path.
+    /// Existing scene/referrer options are retained, while path/query are
+    /// replaced. This intentionally goes through service/render/container
+    /// teardown plus `DMPNavigator.reloadMiniProgram`, not page-level relaunch.
+    @MainActor
+    @discardableResult
+    public func restartMiniProgram(
+        path: String,
+        onAccepted: @escaping () -> Void
+    ) async -> Bool {
+        do {
+            return try await DMPAppManager.sharedInstance().restartMiniProgram(
+                self,
+                path: path,
+                onAccepted: onAccepted
+            )
+        } catch {
+            DMPLogger.debug("restartMiniProgram rejected: \(error.localizedDescription)")
+            return false
+        }
+    }
+
+    func makeRestartLaunchConfig(path: String) -> DMPLaunchConfig? {
+        let urlData = DMPUtil.queryPath(path: path)
+        guard let pagePath = urlData["pagePath"] as? String, !pagePath.isEmpty else {
+            return nil
+        }
+        guard bundleAppConfig?.isContainsPage(pagePath: pagePath) == true else {
+            return nil
+        }
+        var launchConfig = currentLaunchConfig ?? DMPLaunchConfig()
+        launchConfig.appEntryPath = pagePath
+        launchConfig.query = urlData["query"] as? [String: Any]
+        launchConfig.isRelaunch = true
+        return launchConfig
     }
 
     /// Cold-reload the current mini program from its configured entry page.
@@ -236,14 +315,31 @@ public class DMPApp {
             query: nil,
             isRelaunch: true
         )
-        await restart(launchConfig: launchConfig)
+        do {
+            _ = try await DMPAppManager.sharedInstance().restartMiniProgramRuntime(
+                self,
+                launchConfig: launchConfig,
+                onAccepted: {}
+            )
+        } catch {
+            DMPLogger.debug("reEnter restart rejected: \(error.localizedDescription)")
+        }
     }
 
     @MainActor
-    private func restart(launchConfig: DMPLaunchConfig) async {
+    @discardableResult
+    func restartRuntime(
+        launchConfig: DMPLaunchConfig,
+        onAccepted: (() -> Void)? = nil
+    ) async -> Bool {
+        let entryPath = resolvedEntryPath(for: launchConfig)
+        guard bundleAppConfig?.isContainsPage(pagePath: entryPath) == true else {
+            DMPLogger.debug("restart rejected: page is not declared: \(entryPath)")
+            return false
+        }
         guard !isLaunching, !isDestroyed else {
             DMPLogger.debug("restart skipped: app is launching or destroyed")
-            return
+            return false
         }
 
         isLaunching = true
@@ -251,22 +347,67 @@ public class DMPApp {
             isLaunching = false
         }
 
-        await navigator?.reloadMiniProgram(animated: false) {
+        return await navigator?.reloadMiniProgram(
+            animated: false,
+            onAccepted: {
+                // The callback id belongs to the old service. Enqueue success
+                // and complete at this commit point, before presentation-out
+                // lifecycle and all old-runtime teardown.
+                onAccepted?()
+            }
+        ) {
+            await self.service?.drainPendingContainerMessages()
             BluetoothAPIManager.shared.clearApp(self.appId)
             LocalNetworkAPIManager.shared.clearApp(self.appId)
+            NetworkAPI.clearApp(self.appId)
+            DMPWebSocketManager.shared.disposeOwner(appId: self.appId)
+            let registeredExtModules = self.container?.extModules ?? [:]
             self.container?.resetForReload()
 
             self.service?.destroy()
             self.service = nil
             self.render = nil
+            self.container = nil
+            self.containerApi = nil
             self.bundleAppConfig = nil
             self.currentLaunchConfig = nil
 
-            guard await self.prepareRuntimeForLaunch(initializeContainer: false) else {
+            guard await self.prepareRuntimeForLaunch(initializeContainer: true) else {
                 return nil
             }
+            registeredExtModules.forEach { moduleName, handler in
+                self.container?.registerExtModule(moduleName, handler: handler)
+            }
             return launchConfig
+        } ?? false
+    }
+
+    func notifyAppHide() {
+        DMPChannelProxy.containerToService(
+            msg: DMPMap(["type": "appHide", "body": [String: Any]()]),
+            app: self
+        )
+    }
+
+    func notifyAppShow(scene: Int? = nil, referrerInfo: [String: Any]? = nil) {
+        var body: [String: Any] = [:]
+        if let pageRecord = navigator?.getTopPageRecord() {
+            body["path"] = pageRecord.pagePath
+            body["query"] = pageRecord.query ?? [:]
+        } else if let path = currentLaunchConfig?.appEntryPath {
+            body["path"] = path
+            body["query"] = currentLaunchConfig?.query ?? [:]
         }
+        body["scene"] = scene
+            ?? currentLaunchConfig?.scene
+            ?? DMPScene.fromMainEntry.rawValue
+        if let referrerInfo = referrerInfo ?? currentLaunchConfig?.referrerInfo {
+            body["referrerInfo"] = referrerInfo
+        }
+        DMPChannelProxy.containerToService(
+            msg: DMPMap(["type": "appShow", "body": body]),
+            app: self
+        )
     }
 
     /// 注册第三方扩展 bridge 模块。
@@ -289,9 +430,15 @@ public class DMPApp {
         DMPLogger.debug("app destroy")
         BluetoothAPIManager.shared.clearApp(appId)
         LocalNetworkAPIManager.shared.clearApp(appId)
+        NetworkAPI.clearApp(appId)
 
         let serviceToDestroy = service
         let containerToDestroy = container
+
+        // Invalidate the engine -> app generation before making any runtime
+        // field nil. The app can still be strongly held by its caller while
+        // asynchronous engine teardown is pending.
+        serviceToDestroy?.invalidateAppBinding()
 
         service = nil
         container = nil

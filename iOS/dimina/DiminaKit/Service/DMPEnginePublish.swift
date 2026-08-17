@@ -10,20 +10,17 @@ import JavaScriptCore
 
 public class DMPEnginePublish {
 
-    private static var appResolver: (() -> DMPApp?)?
-    
-    public static func registerAppResolver(_ resolver: @escaping () -> DMPApp?) {
-        appResolver = resolver
-    }
-    
-    public static func registerPublish(to context: JSContext) {
+    public static func registerPublish(
+        to context: JSContext,
+        appResolver: @escaping () -> DMPApp? = { nil }
+    ) {
         // 定义publish函数
         let publish: @convention(block) (Int, JSValue) -> Void = { webViewId, d in     
             DMPLogger.debug("🔵 DiminaServiceBridge.publish调用: webViewId=\(webViewId), data=\(d)")
 
             if let dict = d.toDictionary() {
                 if let jsonString = DMPUtil.jsonEncode(from: dict) {
-                    let app = appResolver?()
+                    let app = appResolver()
                     DMPChannelProxy.serviceToRender(msg: jsonString, webViewId: webViewId, app: app);
                 }
             }

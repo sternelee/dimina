@@ -83,15 +83,23 @@ export class DMPNavigator {
     const callback: DMPBridgeCallback = (_, cbType: DMPBridgeCallbackType) => {
       DMPLogger.d(Tags.LAUNCH, "loadSubPackage end");
       if (cbType == DMPBridgeCallbackType.Success) {
-        this.openPage(stackId, pagePath, params, launchConfig.openType, launchConfig?.customLaunchPageCallBack)
+        const routeStarted = this.openPage(stackId, pagePath, params, launchConfig.openType,
+          launchConfig?.customLaunchPageCallBack)
+        this.settleLaunch(launchConfig, routeStarted)
       }
       if (cbType == DMPBridgeCallbackType.Fail) {
+        this.settleLaunch(launchConfig, false)
         promptAction.showToast({ message: '子包加载失败', duration: 1, alignment: Alignment.Center })
       }
       DMPLogger.d(Tags.NAVIGATOR, 'loadSubPackage callback result=' + cbType)
     }
     DMPLogger.d(Tags.LAUNCH, "loadSubPackage start");
-    this.loadSubPackage(pagePath, callback)
+    try {
+      this.loadSubPackage(pagePath, callback)
+    } catch (error) {
+      DMPLogger.e(Tags.NAVIGATOR, `loadSubPackage failed: ${(error as Error).message}`)
+      this.settleLaunch(launchConfig, false)
+    }
 
   }
 
@@ -391,15 +399,18 @@ export class DMPNavigator {
   //打开页面
   private openPage(stackId: number, pagePath: string, params: DMPMap,
     openType: DMPOpenType = DMPOpenType.NavigateTo,
-    customLaunchPageCallBack?: (record: DMPPageRecord, path: String, stackId: number, isRelaunch?: boolean) => void) {
-    DMPLogger.i(Tags.LAUNCH, "openPage");
-    DMPLogger.d(Tags.LAUNCH, "notify page.onHide start");
-    this.pageLifecycle.onHide(this.app.currentWebViewId)
-    DMPLogger.d(Tags.LAUNCH, "notify page.onHide end");
-    const pageRecord = this.preLoadPage(pagePath, params)
-    pageRecord.ownsRouterEntry = DMPPageRecord.computeOwnsRouterEntry(!!customLaunchPageCallBack)
-
+    customLaunchPageCallBack?: (record: DMPPageRecord, path: String, stackId: number,
+      isRelaunch?: boolean) => void): boolean {
     try {
+      DMPLogger.i(Tags.LAUNCH, "openPage");
+      DMPLogger.d(Tags.LAUNCH, "notify page.onHide start");
+      this.pageLifecycle.onHide(this.app.currentWebViewId)
+      DMPLogger.d(Tags.LAUNCH, "notify page.onHide end");
+      const pageRecord = this.preLoadPage(pagePath, params)
+      // A preloaded record does not own a shared NavPathStack slot yet. Keep it false until
+      // DRouter.start returns successfully so failure cleanup cannot pop a host-owned route.
+      pageRecord.ownsRouterEntry = false
+
       if (customLaunchPageCallBack) {
         customLaunchPageCallBack(pageRecord, pagePath, stackId, this.app.getLaunchConfig()?.isRelaunch)
       } else {
@@ -410,13 +421,20 @@ export class DMPNavigator {
           .putExtra("stackId", stackId)
           .setNavMode(openType)
           .start()
+        pageRecord.ownsRouterEntry = DMPPageRecord.computeOwnsRouterEntry(false)
       }
+      this.pageLifecycle.onShow(pageRecord.webViewId)
+      return true
     } catch (err) {
       DMPLogger.e(Tags.NAVIGATOR, `msg: ${(err as BusinessError).message}`)
+      return false
     }
+  }
 
-    this.pageLifecycle.onShow(pageRecord.webViewId)
-
+  private settleLaunch(launchConfig: DMPLaunchConfig, success: boolean): void {
+    const completion = launchConfig.completion
+    launchConfig.completion = undefined
+    completion?.(success)
   }
 
   private popPageRecord() {
@@ -451,6 +469,9 @@ export class DMPNavigator {
     const pageRecord =
       new DMPPageRecord(newWebViewId, currentPageRecord?.webViewId ?? -1, pagePath, this.app.appIndex,
         webViewNodeController)
+    // preLoadPage pushes before resource loading; keep cleanup conservative if loading throws
+    // before openPage can attempt DRouter.start.
+    pageRecord.ownsRouterEntry = false
     pageRecord.params = params
     const navStyle = this.app.bundleManager.getJsAppModuleConfig()!.getPageConfigNext(pagePath)
     pageRecord.pageStyle = new DMPPageStyle(navStyle ?? new DMPMap(), this.app.appIndex)

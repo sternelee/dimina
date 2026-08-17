@@ -7,6 +7,10 @@ import dmpWebSocketGlobalListenerReplayTest from './DMPWebSocketGlobalListenerRe
 import dmpWebSocketDiminaBehaviorTest from './DMPWebSocketDiminaBehaviorTest.test';
 import dmpWebSocketJourneyBehaviorTest from './DMPWebSocketJourneyBehaviorTest.test';
 import dmpWebSocketSettlerAndHeaderBehaviorTest from './DMPWebSocketSettlerAndHeaderBehaviorTest.test';
+import dmpMiniProgramPresentationStackTest from './DMPMiniProgramPresentationStack.test';
+import dmpAppModuleManagerLifecycleTest from './DMPAppModuleManagerLifecycle.test';
+import dmpWorkerFlushBarrierTest from './DMPWorkerFlushBarrier.test';
+import dmpMiniProgramNavigationCallbackTest from './DMPMiniProgramNavigationCallback.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -18,4 +22,8 @@ export default function testsuite() {
   dmpWebSocketDiminaBehaviorTest();
   dmpWebSocketJourneyBehaviorTest();
   dmpWebSocketSettlerAndHeaderBehaviorTest();
+  dmpMiniProgramPresentationStackTest();
+  dmpAppModuleManagerLifecycleTest();
+  dmpWorkerFlushBarrierTest();
+  dmpMiniProgramNavigationCallbackTest();
 }

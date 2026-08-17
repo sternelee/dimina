@@ -26,7 +26,12 @@ public class DMPNavigator: NSObject {
 
     // 页面记录
     private var pageRecords: [DMPPageRecord] = []
+    @MainActor private var pageRouteOperationDepth = 0
     private weak var tabBarContainerController: DMPTabBarContainerController?
+    // 跨小程序打开时，目标和 opener 共用同一个 UINavigationController。
+    // 这个快照是目标小程序的导航边界：close/reload/relaunch 只能处理
+    // 快照之后追加的页面，不能把 opener 的页面当成自己的宿主根页清掉。
+    private var miniProgramBaseViewControllers: [UIViewController]?
     // 胶囊属于小程序容器，而不是某个页面。固定挂在 UINavigationController.view
     // 上可避免 push/pop 时新旧页面各携带一份胶囊参与转场。
     private var capsuleView: UIView?
@@ -40,8 +45,47 @@ public class DMPNavigator: NSObject {
     }
 
     public func setup(navigationController: UINavigationController) {
+        miniProgramBaseViewControllers = nil
+        attach(to: navigationController)
+    }
+
+    func setup(
+        navigationController: UINavigationController,
+        preserving baseViewControllers: [UIViewController]
+    ) {
+        miniProgramBaseViewControllers = baseViewControllers
+        attach(to: navigationController)
+    }
+
+    func reactivate() {
+        guard let navigationController else { return }
+        attach(to: navigationController)
+    }
+
+    /// The navigation controller is shared while one mini program presents
+    /// another. Only the navigator currently installed as its associated owner
+    /// may mutate that stack; suspended opener runtimes remain alive and can
+    /// otherwise issue stale route calls from timers or async callbacks.
+    @MainActor
+    func isActiveNavigationOwner() -> Bool {
+        guard let navigationController else { return false }
+        return (objc_getAssociatedObject(
+            navigationController,
+            &navigatorAssociationKey
+        ) as? DMPNavigator) === self
+    }
+
+    @MainActor
+    func hasPageRouteOperationInProgress() -> Bool {
+        return pageRouteOperationDepth > 0
+    }
+
+    private func attach(to navigationController: UINavigationController) {
         capsuleView?.removeFromSuperview()
         capsuleView = nil
+        navigationController.view.subviews
+            .filter { $0.accessibilityIdentifier == "dimina.navigation.capsule" }
+            .forEach { $0.removeFromSuperview() }
         self.navigationController = navigationController
 
         objc_setAssociatedObject(
@@ -219,20 +263,61 @@ public class DMPNavigator: NSObject {
         return app?.getBundleAppConfig()?.getTabBarIndex(pagePath: pagePath) ?? -1
     }
 
-    private func currentTabBarContainer() -> DMPTabBarContainerController? {
+    func currentTabBarContainer() -> DMPTabBarContainerController? {
         if let tabBarContainerController {
             return tabBarContainerController
         }
-
-        return navigationController?.viewControllers.first {
+        guard let navigationController else { return nil }
+        return ownedViewControllers(in: navigationController).first {
             $0 is DMPTabBarContainerController
         } as? DMPTabBarContainerController
     }
 
     private func hostViewControllers(in navigationController: UINavigationController) -> [UIViewController] {
+        if let miniProgramBaseViewControllers {
+            return miniProgramBaseViewControllers
+        }
         return Array(navigationController.viewControllers.prefix {
             !($0 is DMPPageController) && !($0 is DMPTabBarContainerController)
         })
+    }
+
+    private func ownedViewControllers(in navigationController: UINavigationController) -> [UIViewController] {
+        let hostControllers = hostViewControllers(in: navigationController)
+        let hostIdentifiers = Set(hostControllers.map(ObjectIdentifier.init))
+        return navigationController.viewControllers.filter {
+            !hostIdentifiers.contains(ObjectIdentifier($0))
+        }
+    }
+
+    @MainActor
+    func suspendForMiniProgramNavigation() {
+        guard isActiveNavigationOwner() else { return }
+        setCapsuleVisible(false)
+        notifyPresentOut()
+    }
+
+    /// Deliver the app/page presentation-out lifecycle while the old service
+    /// is still alive. Callers decide the API callback commit point, then this
+    /// method keeps App.onHide ahead of the current Page.onHide like the shared
+    /// runtime's MiniApp.onPresentOut().
+    @MainActor
+    private func notifyPresentOut() {
+        guard isActiveNavigationOwner() else { return }
+        app?.notifyAppHide()
+        if let record = pageRecords.last {
+            pageLifecycle?.onHide(webviewId: record.webViewId)
+        }
+    }
+
+    @MainActor
+    func resumeAfterMiniProgramNavigation() {
+        guard isActiveNavigationOwner() else { return }
+        if let record = pageRecords.last {
+            pageLifecycle?.onShow(webviewId: record.webViewId)
+        }
+        setCapsuleVisible(true)
+        bringCapsuleToFront()
     }
 
     private func clearMiniProgramPageState() {
@@ -291,6 +376,12 @@ public class DMPNavigator: NSObject {
             DMPLogger.debug("导航控制器未设置")
             return
         }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("launch skipped: navigator is not the active owner")
+            return
+        }
+        pageRouteOperationDepth += 1
+        defer { pageRouteOperationDepth -= 1 }
 
         navigationController.view.endEditing(true)
         pageLifecycle?.onHide(webviewId: app!.getCurrentWebViewId())
@@ -311,6 +402,7 @@ public class DMPNavigator: NSObject {
             guard let pageRecord = await tabBarController.prepareInitialTab() else {
                 return
             }
+            guard isActiveNavigationOwner() else { return }
 
             pageRecords.append(pageRecord)
             tabBarContainerController = tabBarController
@@ -343,6 +435,7 @@ public class DMPNavigator: NSObject {
         pageRecords.append(pageRecord)
 
         await app?.service?.loadSubPackage(pagePath: path)
+        guard isActiveNavigationOwner() else { return }
 
         if showsLaunchLoading {
             pageController.preparePageLoading(in: navigationController)
@@ -361,6 +454,12 @@ public class DMPNavigator: NSObject {
             DMPLogger.debug("导航控制器未设置")
             return
         }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("navigateTo skipped: navigator is not the active owner")
+            return
+        }
+        pageRouteOperationDepth += 1
+        defer { pageRouteOperationDepth -= 1 }
 
         navigationController.view.endEditing(true)
         if isTabBarPage(path) {
@@ -391,6 +490,11 @@ public class DMPNavigator: NSObject {
         DMPLogger.debug("navigateTo: Creating page controller for path: \(path), isRoot: false")
 
         await app?.service?.loadSubPackage(pagePath: path)
+        guard isActiveNavigationOwner() else {
+            pageRecords.removeAll { $0 === pageRecord }
+            pageController.destroy()
+            return
+        }
 
         navigationController.pushViewController(pageController, animated: animated)
 
@@ -402,6 +506,10 @@ public class DMPNavigator: NSObject {
     public func navigateBack(delta: Int = 1, animated: Bool = true, destroy: Bool = true) {
         guard let navigationController = navigationController else {
             DMPLogger.debug("导航控制器未设置")
+            return
+        }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("navigateBack skipped: navigator is not the active owner")
             return
         }
 
@@ -416,7 +524,8 @@ public class DMPNavigator: NSObject {
 
         // 计算要返回的目标控制器索引
         let currentIndex = navigationController.viewControllers.count - 1
-        let targetIndex = max(currentIndex - delta, 0)
+        let targetFloor = miniProgramBaseViewControllers?.count ?? 0
+        let targetIndex = max(currentIndex - max(delta, 1), targetFloor)
 
         // 如果目标是根控制器，直接返回到根
         if targetIndex == 0 {
@@ -430,7 +539,13 @@ public class DMPNavigator: NSObject {
         }
 
         // 处理返回逻辑
-        for _ in 0..<delta {
+        let removalCount: Int
+        if miniProgramBaseViewControllers != nil {
+            removalCount = min(max(delta, 1), max(pageRecords.count - 1, 0))
+        } else {
+            removalCount = max(delta, 1)
+        }
+        for _ in 0..<removalCount {
             if navigationController.viewControllers.count <= 1 || pageRecords.isEmpty {
                 break
             }
@@ -455,6 +570,10 @@ public class DMPNavigator: NSObject {
     /// 的内页）redirect 只会替换栈顶、栈底仍在，须 relaunch 清整栈
     @MainActor
     public func navigateHome() async {
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("navigateHome skipped: navigator is not the active owner")
+            return
+        }
         guard let entryPagePath = app?.getBundleAppConfig()?.entryPagePath, !entryPagePath.isEmpty else {
             return
         }
@@ -473,6 +592,12 @@ public class DMPNavigator: NSObject {
             DMPLogger.debug("导航控制器未设置")
             return
         }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("redirectTo skipped: navigator is not the active owner")
+            return
+        }
+        pageRouteOperationDepth += 1
+        defer { pageRouteOperationDepth -= 1 }
 
         navigationController.view.endEditing(true)
         if isTabBarPage(path) {
@@ -512,6 +637,11 @@ public class DMPNavigator: NSObject {
             pageRecords.append(pageRecord)
 
             await app?.service?.loadSubPackage(pagePath: path)
+            guard isActiveNavigationOwner() else {
+                pageRecords.removeAll { $0 === pageRecord }
+                pageController.destroy()
+                return
+            }
 
             let viewControllers = [pageController]
             navigationController.setViewControllers(viewControllers, animated: false)
@@ -558,12 +688,19 @@ public class DMPNavigator: NSObject {
             DMPLogger.debug("导航控制器未设置")
             return
         }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("relaunch skipped: navigator is not the active owner")
+            return
+        }
+        pageRouteOperationDepth += 1
+        defer { pageRouteOperationDepth -= 1 }
 
         navigationController.view.endEditing(true)
         let hostControllers = hostViewControllers(in: navigationController)
         clearMiniProgramPageState()
 
         await launch(to: path, query: query, animated: false, showsLaunchLoading: false)
+        guard isActiveNavigationOwner() else { return }
 
         guard let newRootController = navigationController.topViewController else {
             return
@@ -578,37 +715,49 @@ public class DMPNavigator: NSObject {
     /// and launching the new root page. Unlike `relaunch`, this is an app-level
     /// cold reload and intentionally runs the launch-loading path again.
     @MainActor
+    @discardableResult
     func reloadMiniProgram(
         animated: Bool = false,
+        onAccepted: @MainActor () -> Void = {},
         prepareRuntime: @MainActor () async -> DMPLaunchConfig?
-    ) async {
+    ) async -> Bool {
         guard let navigationController = navigationController else {
             DMPLogger.debug("导航控制器未设置")
-            return
+            return false
         }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("reload skipped: navigator is not the active owner")
+            return false
+        }
+        pageRouteOperationDepth += 1
+        defer { pageRouteOperationDepth -= 1 }
 
         navigationController.view.endEditing(true)
         let hostControllers = hostViewControllers(in: navigationController)
-        let pageControllers = navigationController.viewControllers.compactMap {
+        let pageControllers = ownedViewControllers(in: navigationController).compactMap {
             $0 as? DMPPageController
         }
 
-        // Lifecycle and WebView teardown must still reach the old service.
+        // API success/complete and presentation-out lifecycle must all reach
+        // the old service before its engine is destroyed in prepareRuntime.
+        onAccepted()
+        notifyPresentOut()
         clearMiniProgramPageState()
         pageControllers.forEach { $0.destroy() }
 
         guard let launchConfig = await prepareRuntime() else {
-            return
+            return false
         }
         await app?.openPage(launchConfig: launchConfig)
 
         guard let newRootController = navigationController.topViewController else {
-            return
+            return false
         }
         navigationController.setViewControllers(
             hostControllers + [newRootController],
             animated: animated
         )
+        return true
     }
 
     @MainActor
@@ -620,8 +769,14 @@ public class DMPNavigator: NSObject {
             completion()
             return
         }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("close skipped: navigator is not the active owner")
+            completion()
+            return
+        }
 
         navigationController.view.endEditing(true)
+        notifyPresentOut()
         setCapsuleVisible(false)
         let hostControllers = hostViewControllers(in: navigationController)
         clearMiniProgramPageState()
@@ -644,6 +799,12 @@ public class DMPNavigator: NSObject {
             DMPLogger.debug("导航控制器未设置")
             return false
         }
+        guard isActiveNavigationOwner() else {
+            DMPLogger.debug("switchTab skipped: navigator is not the active owner")
+            return false
+        }
+        pageRouteOperationDepth += 1
+        defer { pageRouteOperationDepth -= 1 }
 
         guard let tabBarConfig = app?.getBundleAppConfig()?.tabBar else {
             DMPLogger.debug("switchTab failed: tabBar config not found")
@@ -683,6 +844,7 @@ public class DMPNavigator: NSObject {
             guard let currentRecord = await tabBarController.selectTab(index: targetIndex, query: query) else {
                 return false
             }
+            guard isActiveNavigationOwner() else { return false }
 
             updateRootTabRecord(currentRecord)
 
@@ -708,6 +870,10 @@ public class DMPNavigator: NSObject {
         )
 
         guard let pageRecord = await tabBarController.prepareInitialTab() else {
+            return false
+        }
+        guard isActiveNavigationOwner() else {
+            tabBarController.destroy()
             return false
         }
 

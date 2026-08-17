@@ -5,6 +5,8 @@ import chalk from 'chalk'
 import { WebView } from '../pages/webview/webview.js'
 import { uuid } from '../utils/util.js'
 
+const RESOURCE_READY_TIMEOUT_MS = 15000
+
 /** Bridge.start(options) 的可选启动参数：透传 visible 覆盖 desiredPageVisible 缺省值。 */
 export interface BridgeStartOptions {
 	visible?: boolean
@@ -23,6 +25,13 @@ export class Bridge {
 	resourceLoadId!: string | null
 	desiredPageVisible!: boolean | null
 	sentPageVisible!: boolean | null
+	private resourceReadyWaiter: {
+		resourceLoadId: string
+		resolve: () => void
+		reject: (error: Error) => void
+		timer: ReturnType<typeof setTimeout>
+		unsubscribeWorkerFailure: () => void
+	} | null
 
 	constructor(opts: BridgeOptions & { jscore: JSCore }) {
 		this.id = `bridge_${uuid()}`
@@ -30,6 +39,7 @@ export class Bridge {
 		this.webview = null
 		this.jscore = opts.jscore
 		this.parent = null
+		this.resourceReadyWaiter = null
 		this.resetStatus()
 	}
 
@@ -92,7 +102,19 @@ export class Bridge {
 		if (body.bridgeId && body.bridgeId !== this.id) {
 			return
 		}
-		if (body.resourceLoadId && body.resourceLoadId !== this.resourceLoadId) {
+		const isResourceLifecycleMessage = type === 'serviceResourceLoaded'
+			|| type === 'renderResourceLoaded'
+			|| type === 'renderResourceLoadFailed'
+		if (
+			isResourceLifecycleMessage
+			&& (
+				typeof body.resourceLoadId !== 'string'
+				|| body.resourceLoadId !== this.resourceLoadId
+			)
+		) {
+			return
+		}
+		if (!isResourceLifecycleMessage && body.resourceLoadId && body.resourceLoadId !== this.resourceLoadId) {
 			return
 		}
 
@@ -142,6 +164,11 @@ export class Bridge {
 			this.jscore.postMessage(transMsg)
 			if (transMsg.type === 'resourceLoaded') {
 				this.#flushPageVisibility()
+				this.#resolveResourceReady()
+			}
+			else if (transMsg.type === 'resourceLoadFailed') {
+				const errors = Array.isArray(body.errors) ? body.errors.map(String).join('; ') : ''
+				this.#rejectResourceReady(new Error(errors || `render resource load failed: ${this.opts.pagePath}`))
 			}
 		}
 		else if (target === 'container') {
@@ -158,6 +185,7 @@ export class Bridge {
 	 * 启动资源加载
 	 */
 	start(options: BridgeStartOptions = {}): void {
+		this.#rejectResourceReady(new Error('resource load was superseded'))
 		this.resourceLoadId = uuid()
 		if (Object.prototype.hasOwnProperty.call(options, 'visible')) {
 			this.desiredPageVisible = options.visible ?? null
@@ -189,6 +217,7 @@ export class Bridge {
 				pagePath: this.opts.pagePath,
 				scene: this.opts.scene,
 				query: this.opts.query,
+				referrerInfo: this.opts.referrerInfo,
 				root: this.opts.root,
 				baseUrl: this.parent?.getResourceBaseUrl?.() ?? '/',
 				hostEnv: this.parent!.getHostEnvSnapshot(),
@@ -206,7 +235,68 @@ export class Bridge {
 		}
 	}
 
+	/**
+	 * 冷重启的事务门：只有 service 与 render 都回报当次 resourceLoadId
+	 * 就绪才提交。Worker 失败、渲染资源失败或超时都 reject，让 Application
+	 * 恢复旧 runtime，不会先回调 ok 再留下空实例。
+	 */
+	startAndWait(options: BridgeStartOptions = {}): Promise<void> {
+		this.start(options)
+		if (this.isResourceLoaded()) {
+			return Promise.resolve()
+		}
+		const expectedResourceLoadId = this.resourceLoadId
+		if (!expectedResourceLoadId) {
+			return Promise.reject(new Error('resource load did not start'))
+		}
+		return new Promise((resolve, reject) => {
+			const unsubscribeWorkerFailure = this.jscore.onWorkerFailure((reason) => {
+				const detail = reason instanceof Error ? reason.message : 'worker failed while loading resources'
+				this.#rejectResourceReady(new Error(detail))
+			})
+			const timer = setTimeout(() => {
+				this.#rejectResourceReady(new Error(`resource load timed out: ${this.opts.pagePath}`))
+			}, RESOURCE_READY_TIMEOUT_MS)
+			this.resourceReadyWaiter = {
+				resourceLoadId: expectedResourceLoadId,
+				resolve,
+				reject,
+				timer,
+				unsubscribeWorkerFailure,
+			}
+			// 保护测试替身或宿主桥接同步回包的非标准情形。
+			this.#resolveResourceReady()
+		})
+	}
+
+	#resolveResourceReady(): void {
+		const waiter = this.resourceReadyWaiter
+		if (
+			!waiter
+			|| waiter.resourceLoadId !== this.resourceLoadId
+			|| !this.isResourceLoaded()
+		) {
+			return
+		}
+		this.resourceReadyWaiter = null
+		clearTimeout(waiter.timer)
+		waiter.unsubscribeWorkerFailure()
+		waiter.resolve()
+	}
+
+	#rejectResourceReady(error: Error): void {
+		const waiter = this.resourceReadyWaiter
+		if (!waiter) {
+			return
+		}
+		this.resourceReadyWaiter = null
+		clearTimeout(waiter.timer)
+		waiter.unsubscribeWorkerFailure()
+		waiter.reject(error)
+	}
+
 	resetStatus(): void {
+		this.#rejectResourceReady(new Error('resource load state was reset'))
 		this.destroyed = false
 		this.serviceResource = false
 		this.renderResource = false
@@ -295,6 +385,7 @@ export class Bridge {
 
 	destroy(): void {
 		const wasResourceLoaded = this.isResourceLoaded()
+		this.#rejectResourceReady(new Error('bridge was destroyed before resources became ready'))
 		this.destroyed = true
 		this.serviceResource = false
 		this.renderResource = false

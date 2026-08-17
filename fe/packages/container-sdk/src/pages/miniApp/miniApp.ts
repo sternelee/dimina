@@ -1,5 +1,5 @@
 import type { Application } from '../application/application.js'
-import type { BridgeOptions, PageStackEntry, StorageAdapter } from '../../types.js'
+import type { BridgeOptions, MiniProgramReferrerInfo, PageStackEntry, StorageAdapter } from '../../types.js'
 import type { ApiParams, SocketEventName } from '../../core/webSocketManager.js'
 import type { AppWindowConfig, MergedPageConfig, PageConfig } from '../../utils/util.js'
 import { LAUNCH_SCREEN_MIN_MS, MODAL_GUARD_MS, WAIT_TRANSITION_TIMEOUT_MS } from '../../constants/animation.js'
@@ -57,6 +57,9 @@ interface ApiCallbackOptions {
 export interface MiniAppOptions {
 	appId: string
 	scene?: number
+	referrerInfo?: MiniProgramReferrerInfo
+	/** 打开当前小程序的直接来源；仅容器内部用于 navigateBackMiniProgram。 */
+	opener?: MiniApp | null
 	name?: string
 	logo?: string
 	pagePath: string
@@ -194,9 +197,20 @@ interface TabBarBadgeOptions extends TabBarIndexOptions {
 }
 
 interface NavigateToMiniProgramOptions extends ApiCallbackOptions {
-	appId: string
+	appId?: string
 	path?: string
-	scene?: number
+	extraData?: unknown
+	envVersion?: 'develop' | 'trial' | 'release'
+	noRelaunchIfPathUnchanged?: boolean
+	shortLink?: string
+}
+
+interface NavigateBackMiniProgramOptions extends ApiCallbackOptions {
+	extraData?: unknown
+}
+
+interface RestartMiniProgramOptions extends ApiCallbackOptions {
+	path?: string
 }
 
 interface ExtCallParams {
@@ -213,6 +227,7 @@ export class MiniApp {
 	id: string
 	parent: Application | null
 	appId: string
+	opener: MiniApp | null
 	appConfig: MiniAppConfig | null
 	navigator: Navigator
 	jscore: JSCore
@@ -249,6 +264,8 @@ export class MiniApp {
 	/** showModal 期间锁定的、承载当前页面内容的渲染 iframe window；未锁定时为 null。 */
 	_modalPageTouchTarget: Window | null
 	_destroyed: boolean
+	/** Whether every live page has already queued its terminal Page.onUnload. */
+	_destructionLifecycleQueued: boolean
 	/** destroy() 时 abort，用于打断在途的 bridge.init()（见 frameLoaded 的 AbortSignal 用法）。 */
 	_destroyAbortController: AbortController
 	customTabBar: boolean = false
@@ -261,6 +278,7 @@ export class MiniApp {
 		this.id = `mini_app_${uuid()}`
 		this.parent = null
 		this.appId = opts.appId
+		this.opener = opts.opener ?? null
 		this.appConfig = null
 		this.navigator = new Navigator()
 		this.jscore = new JSCore(this)
@@ -292,6 +310,7 @@ export class MiniApp {
 		this._modalPageTouchTarget = null
 		this._modalPageTouchTarget = null
 		this._destroyed = false
+		this._destructionLifecycleQueued = false
 		this._destroyAbortController = new AbortController()
 	}
 
@@ -622,12 +641,16 @@ export class MiniApp {
 		onComplete?.()
 	}
 
-	viewDidLoad(): void {
+	_prepareViewForLoad(): void {
 		this.initPageFrame()
 		this.webviewsContainer = this.el.querySelector<HTMLElement>('.dimina-mini-app__webviews')
 		this.showLaunchScreen()
 		this.bindMoreEvent()
 		this.bindCloseEvent()
+	}
+
+	viewDidLoad(): void {
+		this._prepareViewForLoad()
 		// initApp() 是 fire-and-forget：真实初始化失败必须落日志并通知宿主，
 		// 否则 openApp 照常 resolve、页面却空白，宿主收不到任何信号。
 		this.initApp().catch((error: unknown) => {
@@ -642,7 +665,16 @@ export class MiniApp {
 		})
 	}
 
-	async initApp(): Promise<void> {
+	/**
+	 * restartMiniProgram 的替换实例要把初始化结果作为事务提交点：
+	 * 新 Worker/Bridge 未真正就绪前保留旧 runtime，失败则由 Application 原位回滚。
+	 */
+	async viewDidLoadForReplacement(): Promise<void> {
+		this._prepareViewForLoad()
+		await this.initApp(false, true)
+	}
+
+	async initApp(removeFailedViewOnError = true, waitForInitialResources = false): Promise<void> {
 		// 与 navigateTo/redirectTo/navigateBack/switchTab/reLaunch 共享同一把忙锁：
 		// 静默恢复阶段还有 createBridge() 挂在半空中时，并发的导航调用必须被这道锁
 		// 挡住，不能在 restore 还没收尾的 navigator 上直接继续操作。
@@ -677,6 +709,17 @@ export class MiniApp {
 			this._initTabBar()
 
 			const entryPagePath = this.appInfo.pagePath || this.appConfig!.app.entryPagePath
+			// navigateToMiniProgram 允许省略 path。配置加载后把真实入口回填到实例元数据，
+			// 让后续 restart/referrer/宿主读取都看到实际页面，而不是永久保留空字符串。
+			if (!this.appInfo.pagePath) {
+				this.appInfo.pagePath = entryPagePath
+			}
+			if (
+				waitForInitialResources
+				&& !this.appConfig!.app.pages.some(path => this._normalizePagePath(path) === this._normalizePagePath(entryPagePath))
+			) {
+				throw new Error(`[container] page is not declared in app config: ${entryPagePath}`)
+			}
 
 			// 4. 读取页面配置
 			const pageConfig = this.appConfig!.modules[entryPagePath]
@@ -715,7 +758,13 @@ export class MiniApp {
 			}
 
 			const isRestoringPageStack = (this.appInfo.restoreStack?.length ?? 0) > 1
-			entryPageBridge.start({ visible: !isRestoringPageStack && this.isPresentedTop() })
+			const startOptions = { visible: !isRestoringPageStack && this.isPresentedTop() }
+			if (waitForInitialResources) {
+				await entryPageBridge.startAndWait(startOptions)
+			}
+			else {
+				entryPageBridge.start(startOptions)
+			}
 
 			// 7. 若携带额外的恢复栈（刷新后恢复场景），静默重建后续页面
 			if (isRestoringPageStack) {
@@ -769,7 +818,9 @@ export class MiniApp {
 				// （见 destroy() 自身契约）；那不能顶替这里真正要上抛的启动失败原因。
 				console.error(`[container] destroy() threw during initApp failure cleanup for ${this.appId}:`, destroyError)
 			}
-			await this.parent?.removeFailedView(this)
+			if (removeFailedViewOnError) {
+				await this.parent?.removeFailedView(this)
+			}
 			throw error
 		}
 		finally {
@@ -865,6 +916,7 @@ export class MiniApp {
 			pagePath,
 			query,
 			scene,
+			referrerInfo: opts.referrerInfo ?? this.appInfo.referrerInfo,
 			pages,
 			root,
 		})
@@ -872,6 +924,10 @@ export class MiniApp {
 		bridge.parent = this
 		await bridge.init(this._destroyAbortController.signal)
 		return bridge
+	}
+
+	queueAppShowOptions(options: Record<string, unknown>): void {
+		this.jscore.queueAppShowOptions(options)
 	}
 
 	onPresentIn(): void {
@@ -889,6 +945,22 @@ export class MiniApp {
 		this.webSocketManager.onAppHide()
 		this.jscore.appHide()
 		currentBridge?.pageHide()
+	}
+
+	/**
+	 * Queue Page.onUnload for every live stack/tab page before the caller's FIFO callback barrier.
+	 * Bridge destruction does not remove the iframe DOM, so exit animations can still finish while
+	 * the old service runtime drains these terminal lifecycle messages.
+	 */
+	queueDestructionLifecycle(): void {
+		if (this._destructionLifecycleQueued) {
+			return
+		}
+		this._destructionLifecycleQueued = true
+		const bridges = new Set([...this.navigator.getStack(), ...this.navigator.getTabBridges()])
+		for (const bridge of bridges) {
+			bridge.destroy()
+		}
 	}
 
 	initPageFrame(): void {
@@ -2019,21 +2091,78 @@ export class MiniApp {
 		onComplete?.()
 	}
 
-	async navigateToMiniProgram(opts: NavigateToMiniProgramOptions): Promise<void> {
-		const { appId, path, scene = 1037 } = opts
+	async navigateToMiniProgram(opts: NavigateToMiniProgramOptions = {}): Promise<void> {
 		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
 		try {
-			await this.parent!.appManager.openApp(
-				{ appId, path: path!, scene },
-				this.parent!,
-			)
-			onSuccess?.({ errMsg: 'navigateToMiniProgram:ok' })
+			await this.parent!.appManager.navigateToMiniProgram(opts, this)
+			const result = { errMsg: 'navigateToMiniProgram:ok' }
+			onSuccess?.(result)
+			onComplete?.(result)
 		}
 		catch (error) {
-			onFail?.({ errMsg: `navigateToMiniProgram:fail ${getErrorMessage(error)}` })
+			const result = { errMsg: `navigateToMiniProgram:fail ${getErrorMessage(error)}` }
+			onFail?.(result)
+			onComplete?.(result)
 		}
-		finally {
-			onComplete?.()
+	}
+
+	async navigateBackMiniProgram(opts: NavigateBackMiniProgramOptions = {}): Promise<void> {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		let committed = false
+		try {
+			await this.parent!.appManager.navigateBackMiniProgram(this, opts.extraData, async () => {
+				committed = true
+				const result = { errMsg: 'navigateBackMiniProgram:ok' }
+				onSuccess?.(result)
+				onComplete?.(result)
+			})
+		}
+		catch (error) {
+			if (!committed) {
+				const result = { errMsg: `navigateBackMiniProgram:fail ${getErrorMessage(error)}` }
+				onFail?.(result)
+				onComplete?.(result)
+			}
+		}
+	}
+
+	async exitMiniProgram(opts: ApiCallbackOptions = {}): Promise<void> {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		let committed = false
+		try {
+			await this.parent!.appManager.exitMiniProgram(this, async () => {
+				committed = true
+				const result = { errMsg: 'exitMiniProgram:ok' }
+				onSuccess?.(result)
+				onComplete?.(result)
+			})
+		}
+		catch (error) {
+			if (!committed) {
+				const result = { errMsg: `exitMiniProgram:fail ${getErrorMessage(error)}` }
+				onFail?.(result)
+				onComplete?.(result)
+			}
+		}
+	}
+
+	async restartMiniProgram(opts: RestartMiniProgramOptions = {}): Promise<void> {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		let committed = false
+		try {
+			await this.parent!.appManager.restartMiniProgram(this, opts.path ?? '', async () => {
+				committed = true
+				const result = { errMsg: 'restartMiniProgram:ok' }
+				onSuccess?.(result)
+				onComplete?.(result)
+			})
+		}
+		catch (error) {
+			if (!committed) {
+				const result = { errMsg: `restartMiniProgram:fail ${getErrorMessage(error)}` }
+				onFail?.(result)
+				onComplete?.(result)
+			}
 		}
 	}
 
@@ -2065,6 +2194,9 @@ export class MiniApp {
 
 	destroy(): void {
 		this._destroyed = true
+		// Destructive APIs call this before their flush barrier. Keep this idempotent fallback for
+		// non-API cleanup paths so Bridge-owned resources are never silently skipped.
+		this.queueDestructionLifecycle()
 		// 打断在途的 bridge.init()：不再等一个必然不会触发 load 的 iframe 握手。
 		this._destroyAbortController.abort()
 		this.webSocketManager.destroy()

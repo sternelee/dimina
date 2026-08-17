@@ -65,6 +65,9 @@ class MiniApp private constructor() {
     // Map to store Bridge instances for each MiniProgram
     private val bridgeListMap = mutableMapOf<String, MutableList<Bridge>>()
 
+    // One-shot App.onShow options for a mini program revealed by navigateBackMiniProgram.
+    private val pendingAppShowOptions = mutableMapOf<String, JSONObject>()
+
     companion object {
         @Volatile
         private var instance: MiniApp = MiniApp()
@@ -90,6 +93,19 @@ class MiniApp private constructor() {
 
         DiminaActivity.launch(context, miniProgram)
     }
+
+    @Synchronized
+    fun setPendingAppShowOptions(appId: String, options: JSONObject) {
+        pendingAppShowOptions[appId] = JSONObject(options.toString())
+    }
+
+    @Synchronized
+    fun consumePendingAppShowOptions(appId: String): JSONObject? {
+        return pendingAppShowOptions.remove(appId)
+    }
+
+    @Synchronized
+    fun isRunning(appId: String): Boolean = jsCoreMap.containsKey(appId)
 
     /**
      * Get the JsCore instance for a specific MiniProgram
@@ -296,6 +312,9 @@ class MiniApp private constructor() {
     ): JSValue? {
 
         var isAsyncMethod = false
+        var afterComplete: (() -> Unit)? = null
+        var completeCarriesResult = false
+        var callbackResult: JSONObject? = null
         try {
             LogUtils.d(tag, "Invoking API: $apiName with params: $params")
 
@@ -303,6 +322,9 @@ class MiniApp private constructor() {
             val result = apiRegistry.invoke(context, appId, apiName, params, responseCallback)
             if (result is AsyncResult) {
                 isAsyncMethod = true
+                afterComplete = result.afterComplete
+                completeCarriesResult = result.completeCarriesResult
+                callbackResult = result.value
                 val errorMsg = result.value.optString("errMsg", "")
                 if (errorMsg.isNotEmpty()) {
                     if (errorMsg.endsWith(":ok")) {
@@ -321,13 +343,22 @@ class MiniApp private constructor() {
             e.printStackTrace()
             LogUtils.e(tag, "Error invoking API: ${e.message}")
             if (isAsyncMethod) {
-                ApiUtils.invokeFail(params,  JSONObject().apply {
+                val failureResult = JSONObject().apply {
                     put("errMsg", "$apiName:fail ${e.message}")
-                }, responseCallback)
+                }
+                callbackResult = failureResult
+                ApiUtils.invokeFail(params, failureResult, responseCallback)
             }
         } finally {
             if (isAsyncMethod) {
-                ApiUtils.invokeComplete(params, responseCallback)
+                ApiUtils.invokeComplete(
+                    params,
+                    responseCallback,
+                    callbackResult.takeIf { completeCarriesResult },
+                )
+                afterComplete?.let { action ->
+                    jsCoreMap[appId]?.postAfterMessages(action) ?: action()
+                }
             }
         }
         return null
@@ -403,20 +434,23 @@ class MiniApp private constructor() {
      */
     fun clear(appId: String) {
         updateCheckRegistry.reset(appId)
+        synchronized(this) {
+            pendingAppShowOptions.remove(appId)
+        }
         // Silently tear down this owner's WebSocket connections/timers/listeners first,
         // ahead of JsCore.destroy(), so no transport event can race into a dying JsCore.
         com.didi.dimina.api.network.WebSocketManager.shared.disposeOwner(appId)
 
         // 清理第三方扩展的持续订阅
-        apiRegistry.clearExtSubscriptions()
+        apiRegistry.clearExtSubscriptions(appId)
         bluetoothApi.clearApp(appId)
         localNetworkApi.clearApp(appId)
 
-        // Clear JsCore for this appId
-        jsCoreMap[appId]?.let { jsCore ->
-            LogUtils.d(tag, "Destroying JsCore for appId: $appId")
-            jsCore.destroy()
-            jsCoreMap.remove(appId)
+        // Detach this generation immediately so a rapid reopen creates a fresh runtime, but place
+        // native engine destruction behind lifecycle messages already queued by Bridge.destroy().
+        jsCoreMap.remove(appId)?.let { jsCore ->
+            LogUtils.d(tag, "Scheduling JsCore destruction for appId: $appId")
+            jsCore.destroyAfterMessages()
         }
 
         // Clear Bridge list for this appId
@@ -430,15 +464,19 @@ class MiniApp private constructor() {
      */
     fun clearAll() {
         updateCheckRegistry.resetAll()
+        synchronized(this) {
+            pendingAppShowOptions.clear()
+        }
         // Silently tear down every owner's WebSocket state before destroying JsCore instances.
         com.didi.dimina.api.network.WebSocketManager.shared.disposeAll()
 
-        // Destroy all JsCore instances
-        jsCoreMap.forEach { (appId, jsCore) ->
-            LogUtils.d(tag, "Destroying JsCore for appId: $appId")
-            jsCore.destroy()
-        }
+        // Detach every generation before scheduling its own FIFO-safe destruction.
+        val jsCoresToDestroy = jsCoreMap.toMap()
         jsCoreMap.clear()
+        jsCoresToDestroy.forEach { (appId, jsCore) ->
+            LogUtils.d(tag, "Scheduling JsCore destruction for appId: $appId")
+            jsCore.destroyAfterMessages()
+        }
 
         // Clear all Bridge lists
         bridgeListMap.clear()

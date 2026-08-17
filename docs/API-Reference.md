@@ -181,6 +181,8 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 局域网能力要求宿主允许网络和局域网访问。Android 宿主需要声明 `INTERNET`，使用多播发现时还需要 `CHANGE_WIFI_MULTICAST_STATE`；调用 `TCPSocket.bindWifi` 还需要申请 `ACCESS_FINE_LOCATION`，Android 13 及以上同时需要 `NEARBY_WIFI_DEVICES`。iOS 宿主需要提供 `NSLocalNetworkUsageDescription`，使用 mDNS 时还必须在 `NSBonjourServices` 中列出业务实际使用的服务类型；HarmonyOS 宿主需要声明 `ohos.permission.INTERNET`。`TCPSocket.bindWifi` 是微信仅在 Android 提供的能力。
 
+跨小程序导航从宿主已打包的目标资源中按 `appId` 解析入口；当前 `envVersion` 仅支持 `release`，不解析 `shortLink`。`navigateToMiniProgram` 可省略 `path` 并使用目标首页；Web 端支持 `noRelaunchIfPathUnchanged`，原生端在该值为 `true` 时会明确返回不支持。`navigateBackMiniProgram` 仅能返回直接打开当前实例的来源小程序，`restartMiniProgram` 必须提供 `path` 且会重建完整运行时。
+
 | 分类          | API 名称                         | Android | iOS | Harmony | Web |
 | ------------- | -------------------------------- | ------- | --- | ------- | --- |
 | 基础          | env                              | ✓       | ✓   | ✓       | ✓   |
@@ -229,6 +231,10 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 |               | redirectTo                       | ✓       | ✓   | ✓       | ✓   |
 |               | navigateTo                       | ✓       | ✓   | ✓       | ✓   |
 |               | navigateBack                     | ✓       | ✓   | ✓       | ✓   |
+|               | navigateToMiniProgram            | ✓       | ✓   | ✓       | ✓   |
+|               | navigateBackMiniProgram          | ✓       | ✓   | ✓       | ✓   |
+|               | exitMiniProgram                  | ✓       | ✓   | ✓       | ✓   |
+|               | restartMiniProgram               | ✓       | ✓   | ✓       | ✓   |
 | 界面 - 交互   | showToast                        | ✓       | ✓   | ✓       | ✓   |
 |               | showModal                        | ✓       | ✓   | ✓       | ✓   |
 |               | showLoading                      | ✓       | ✓   | ✓       | ✓   |

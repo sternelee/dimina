@@ -638,14 +638,15 @@ class DiminaActivity : ComponentActivity() {
                         val entryPageBridge = createBridge(
                             BridgeOptions(
                                 pathInfo = pathInfo,
-                                scene = 1001,
+                                scene = miniProgram.scene,
                                 jscore = miniApp.getJsCore(appId, this@DiminaActivity),
                                 webview = webView,
                                 isRoot = true,
                                 root = pageConfig?.root ?: "main",
                                 appId = miniProgram.appId,
                                 pages = appConfig.app.pages,
-                                configInfo = mergedPageConfig
+                                configInfo = mergedPageConfig,
+                                referrerInfo = getLaunchReferrerInfo(),
                             )
                         )
                         // Add bridge to MiniApp's bridge list for this appId
@@ -1325,14 +1326,15 @@ class DiminaActivity : ComponentActivity() {
             val tabBridge = createBridge(
                 BridgeOptions(
                     pathInfo = state.pathInfo,
-                    scene = 1001,
+                    scene = miniProgram.scene,
                     jscore = miniApp.getJsCore(miniProgram.appId, this@DiminaActivity),
                     webview = webView,
                     isRoot = index == selectedTabIndex.intValue,
                     root = state.root,
                     appId = miniProgram.appId,
                     pages = appConfig.app.pages,
-                    configInfo = state.configInfo
+                    configInfo = state.configInfo,
+                    referrerInfo = getLaunchReferrerInfo(),
                 ),
                 setAsActive = index == selectedTabIndex.intValue
             )
@@ -1503,7 +1505,7 @@ class DiminaActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         getActiveBridge()?.let {
-            it.appShow()
+            it.appShow(miniApp.consumePendingAppShowOptions(miniProgram.appId))
             it.pageShow()
         }
     }
@@ -1785,6 +1787,55 @@ class DiminaActivity : ComponentActivity() {
         }
     }
 
+    /** Opens a resolved bundled mini program as a new root above this one. */
+    fun navigateToMiniProgram(target: MiniProgram) {
+        miniApp.openApp(this, target)
+    }
+
+    /**
+     * Returns to the mini program that opened this one. The Android task stack reveals the opener;
+     * [MiniApp] supplies exactly one fresh App.onShow payload when its top Activity resumes.
+     */
+    fun navigateBackMiniProgram(extraData: JSONObject): Boolean {
+        if (!queueOpenerReturn(extraData)) return false
+        closeMiniProgram()
+        return true
+    }
+
+    fun exitMiniProgram() {
+        // exit has no return extraData, but revealing a live opener is still scene 1038
+        // ("returned from another mini program"). Queue it before closing this Activity;
+        // MiniApp consumes the payload exactly once when the opener resumes.
+        queueOpenerReturn(extraData = null)
+        closeMiniProgram()
+    }
+
+    private fun queueOpenerReturn(extraData: JSONObject?): Boolean {
+        val openerAppId = miniProgram.openerAppId ?: return false
+        if (!miniApp.isRunning(openerAppId)) return false
+        val referrerInfo = JSONObject().apply {
+            put("appId", miniProgram.appId)
+            if (extraData != null) {
+                put("extraData", JSONObject(extraData.toString()))
+            }
+        }
+        miniApp.setPendingAppShowOptions(
+            openerAppId,
+            JSONObject().apply {
+                put(
+                    "scene",
+                    com.didi.dimina.api.route.MiniProgramRouteContract.SCENE_RETURNED_FROM_MINI_PROGRAM,
+                )
+                put("referrerInfo", referrerInfo)
+            },
+        )
+        return true
+    }
+
+    fun restartMiniProgram(path: String) {
+        coldRestartMiniProgram(miniProgram.copy(root = true, path = path))
+    }
+
     private fun reenterMiniProgram() {
         val entryPagePath = getDefaultEntryPagePath() ?: miniProgram.path
         val reentryProgram = miniProgram.copy(root = true, path = entryPagePath)
@@ -1828,6 +1879,17 @@ class DiminaActivity : ComponentActivity() {
             return null
         }
         return appConfig.app.entryPagePath ?: appConfig.app.pages.firstOrNull()
+    }
+
+    private fun getLaunchReferrerInfo(): JSONObject? {
+        val openerAppId = miniProgram.openerAppId ?: return null
+        val extraData = miniProgram.referrerExtraData
+            ?.let { runCatching { JSONObject(it) }.getOrNull() }
+            ?: JSONObject()
+        return JSONObject().apply {
+            put("appId", openerAppId)
+            put("extraData", extraData)
+        }
     }
 
     /**

@@ -54,8 +54,8 @@ export class App {
 		invokeSafely(this, this.onShow, [this.options], 'onShow')
 	}
 
-	appShow() {
-		invokeSafely(this, this.onShow, [this.options], 'onShow')
+	appShow(options = this.options) {
+		invokeSafely(this, this.onShow, [options], 'onShow')
 	}
 
 	appHide() {

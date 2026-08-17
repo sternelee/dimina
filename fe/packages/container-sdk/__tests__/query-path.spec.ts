@@ -24,4 +24,14 @@ describe('queryPath leading-slash normalization', () => {
 		expect(pagePath).toBe('pages/detail/detail')
 		expect(query).toEqual({ id: '1', from: 'share' })
 	})
+
+	it('preserves equals signs, empty values, and decodes query components', () => {
+		const { pagePath, query } = queryPath('/pages/detail/detail?token=a%3Db&flag&name=hello+world')
+		expect(pagePath).toBe('pages/detail/detail')
+		expect(query).toEqual({
+			token: 'a=b',
+			flag: '',
+			name: 'hello world',
+		})
+	})
 })

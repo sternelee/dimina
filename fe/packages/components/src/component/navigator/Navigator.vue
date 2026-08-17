@@ -145,7 +145,7 @@ function clicked(event) {
 			invokeNavigationAPI('navigateBackMiniProgram', { extraData: props.extraData }, event)
 		}
 		else if (openType === 'exit') {
-			invokeNavigationAPI('exit', {}, event)
+			invokeNavigationAPI('exitMiniProgram', {}, event)
 		}
 		return
 	}

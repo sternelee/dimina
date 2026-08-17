@@ -1,5 +1,5 @@
 import { DMPAppConfig, DMPLaunchType } from './config/DMPAppConfig'
-import { DMPCustomConfig, DMPLaunchConfig, DMPOpenType } from './config/DMPLaunchConfig'
+import { DMPCustomConfig, DMPLaunchConfig, DMPOpenType, DMPScene } from './config/DMPLaunchConfig'
 import { DMPFileManager } from '../Bundle/Util/DMPFileManager'
 import { DMPService } from '../Service/DMPService'
 import { DMPRender } from '../Render/DMPRender'
@@ -32,6 +32,7 @@ import { DMPAppLifecycle } from './DMPAppLifecycle'
 import { DMPDeviceUtil } from '../Utils/DMPDeviceUtils'
 import { DMPRemoteUpdateManager } from '../Bundle/DMPRemoteUpdateManager'
 import { DMPWebSocketManager } from '../Bridges/Network/DMPWebSocketManager'
+import { DMPAppModuleManagerLifecycle } from '../Bridges/DMPAppModuleManagerLifecycle'
 export type DMPBundleUpdateCallback = () => void;
 
 export interface DMPAppInitOptions {
@@ -49,8 +50,9 @@ export class DMPApp {
   private static _apiNamespaces: string[] = []
   private _containerBridges: DMPBridges = new DMPBridges()
   private static _entryContext: DMPEntryContext
-  private _appModuleManager: DMPAppModuleManager = new DMPAppModuleManager(this)
+  private _appModuleManagerLifecycle: DMPAppModuleManagerLifecycle
   private _mapManager: DMPMapManager = new DMPMapManager(this)
+  private _runtimeGeneration: number = 0
   private _webViewCachePool: DMPWebViewCachePool = new DMPWebViewCachePool(this)
   private _service: DMPService
   private _engineStatus: StatusMonitor<EngineStatus> = new StatusMonitor()
@@ -70,6 +72,10 @@ export class DMPApp {
   constructor(appConfig: DMPAppConfig, appIndex: number) {
     this.appIndex = appIndex;
     this.appConfig = appConfig
+    this._appModuleManagerLifecycle = new DMPAppModuleManagerLifecycle(
+      new DMPAppModuleManager(this),
+      (): DMPAppModuleManager => new DMPAppModuleManager(this)
+    )
     this._service = new DMPService(this.appIndex)
     this._bundleManager = new DMPBundleManager(this);
   }
@@ -91,7 +97,7 @@ export class DMPApp {
   }
 
   public get appModuleManager(): DMPAppModuleManager {
-    return this._appModuleManager
+    return this._appModuleManagerLifecycle.manager as DMPAppModuleManager
   }
 
   private _bundleManager: DMPBundleManager
@@ -120,6 +126,10 @@ export class DMPApp {
 
   public get engineStatus(): StatusMonitor<EngineStatus> {
     return this._engineStatus
+  }
+
+  public get runtimeGeneration(): number {
+    return this._runtimeGeneration
   }
 
   private _bottomSafeHeight = -1
@@ -225,14 +235,28 @@ export class DMPApp {
     if (config) {
       nextLaunchConfig.appEntryPath = config.appEntryPath
       nextLaunchConfig.query = config.query
+      nextLaunchConfig.scene = config.scene
+      nextLaunchConfig.referrerInfo = config.referrerInfo
+      nextLaunchConfig.firstDomReadyListener = config.firstDomReadyListener
+      // Keep the current config object so host custom page mounting survives, but hand the new
+      // runtime its own one-shot route completion used by restartMiniProgram.
+      nextLaunchConfig.completion = config.completion
     }
+    this.notifyMiniProgramHide()
     this.navigatorManager.closeAllNavigators(false)
+    // pageUnload and any terminal API callback are queued to the Worker. Drain them before
+    // terminating the old runtime; a fixed timeout cannot provide this ordering guarantee.
+    await this._service.flush()
     this.destroyEngine()
     this.resetAndStartDimina(nextLaunchConfig)
   }
 
   resetAndStartDimina(config: DMPLaunchConfig) {
     this.onUpdateResults = []
+    this._runtimeGeneration++
+    // destroyEngine disposes app-scoped native listeners. A cold restart must use a fresh bridge
+    // module graph; the lifecycle also replays host ext modules registered on this DMPApp.
+    this._appModuleManagerLifecycle.rebuild()
     this._service = new DMPService(this.appIndex);
     this._render = new DMPRender(this);
     this._container = new DMPContainer(this);
@@ -257,12 +281,17 @@ export class DMPApp {
 
 
   async startDimina(context: common.UIAbilityContext, launchConfig: DMPLaunchConfig) {
-    this.startPackageLoader(context)
+    this.startPackageLoader(context, launchConfig).catch((error: Error) => {
+      DMPLogger.e(Tags.LAUNCH, `startDimina failed: ${error.message}`)
+      this._engineStatus.setStatus(EngineStatus.STOP)
+      this.settleLaunchCompletion(launchConfig, false)
+    })
     this.launch(launchConfig)
   }
 
-  async startPackageLoader(context: common.UIAbilityContext) {
+  async startPackageLoader(context: common.UIAbilityContext, launchConfig?: DMPLaunchConfig) {
     DMPLogger.i(Tags.LAUNCH, 'startPackageLoader start')
+    const generation = this._runtimeGeneration
     if (this._engineStatus.currentStatus != EngineStatus.RUN &&
       this._engineStatus.currentStatus != EngineStatus.LOADING) { // 已经启动jsEngine
       this._engineStatus.setStatus(EngineStatus.LOADING)
@@ -273,22 +302,49 @@ export class DMPApp {
         new DMPBundleInstallConfig(DMPContextUtils.getUIAbilityContext(), this.appConfig.appId, this.appIndex);
       installConfig.launchAppType = this.appConfig.launchAppType;
 
-      let waitLaunchBundleReady = async (config: DMPBundleLoadInfo) => {
-        DMPLogger.i(Tags.LAUNCH, "launchBundleReady: launchType: " + DMPLaunchType[installConfig.launchAppType]);
-        await this._bundleManager.loadConfigFile()
-        this._service.updateWorkerAppData();
-        await this.startEngineService()
-        await this.startMainService()
-        this.startRemoteUpdateCheck()
+      const failLaunch = (code: number, errMsg: string): void => {
+        if (generation !== this._runtimeGeneration) {
+          return
+        }
+        DMPLogger.e(Tags.LAUNCH, `startPackageLoader failed code=${code} errMsg=${errMsg}`)
+        this._engineStatus.setStatus(EngineStatus.STOP)
+        this.settleLaunchCompletion(launchConfig, false)
+      }
 
-        this._engineStatus.setStatus(EngineStatus.RUN)
+      let waitLaunchBundleReady = async (config: DMPBundleLoadInfo) => {
+        try {
+          if (generation !== this._runtimeGeneration) {
+            return
+          }
+          DMPLogger.i(Tags.LAUNCH,
+            "launchBundleReady: launchType: " + DMPLaunchType[installConfig.launchAppType]);
+          await this._bundleManager.loadConfigFile()
+          if (generation !== this._runtimeGeneration) {
+            return
+          }
+          this._service.updateWorkerAppData();
+          await this.startEngineService()
+          if (generation !== this._runtimeGeneration) {
+            return
+          }
+          await this.startMainService()
+          if (generation !== this._runtimeGeneration) {
+            return
+          }
+          this.startRemoteUpdateCheck()
+
+          this._engineStatus.setStatus(EngineStatus.RUN)
+        } catch (error) {
+          failLaunch(-1, (error as Error).message)
+        }
       };
 
       const loadComplete = (config: DMPBundleLoadInfo) => {
 
       }
+      const loadError = (code: number, errMsg: string) => failLaunch(code, errMsg)
       //安装小程序包
-      this._bundleManager.install(installConfig, waitLaunchBundleReady, loadComplete)
+      await this._bundleManager.install(installConfig, waitLaunchBundleReady, loadComplete, loadError)
     }
   }
 
@@ -307,8 +363,24 @@ export class DMPApp {
     }
   }
 
-  public closeDimina() {
+  private settleLaunchCompletion(launchConfig: DMPLaunchConfig | undefined, success: boolean): void {
+    if (!launchConfig) {
+      return
+    }
+    const completion = launchConfig.completion
+    launchConfig.completion = undefined
+    completion?.(success)
+  }
+
+  public async closeDimina(afterPagesClosed?: () => Promise<void>) {
+    this.notifyMiniProgramHide()
     this.navigatorManager.closeAllNavigators(false)
+    if (afterPagesClosed) {
+      // The callback uses the old service runtime, so it must run after page unload is queued
+      // but before destroyEngine terminates that Worker.
+      await afterPagesClosed()
+    }
+    await this._service.flush()
     this.destroyEngine()
     this.destroyApp()
     DMPLogger.i(Tags.LAUNCH, 'Doing something in closeApp')
@@ -316,6 +388,47 @@ export class DMPApp {
 
   public hiApp() {
     DMPLogger.i(Tags.LAUNCH, 'Doing something in closeApp')
+  }
+
+  /** Hide only this mini program; unlike DMPAppLifecycle this never broadcasts to every pooled app. */
+  public notifyMiniProgramHide() {
+    const bridgeId = this.currentWebViewId
+    if (bridgeId > 0) {
+      DMPChannelProxyNext.ContainerToService(new DMPMap({
+        type: 'pageHide',
+        body: { bridgeId }
+      }), this.appIndex)
+    }
+    DMPChannelProxyNext.ContainerToService(new DMPMap({
+      type: 'appHide',
+      body: { bridgeId }
+    }), this.appIndex)
+  }
+
+  /** Reveal only this mini program and update App.onShow/GetEnterOptionsSync data. */
+  public notifyMiniProgramShow(scene: DMPScene, referrerInfo?: DMPMap) {
+    const record = this.navigatorManager.getActivePageRecord()
+    const bridgeId = record?.webViewId ?? -1
+    const body = new DMPMap({
+      bridgeId,
+      scene,
+      path: record?.pagePath ?? '',
+      pagePath: record?.pagePath ?? '',
+      query: record?.params?.get('query') ?? new DMPMap()
+    })
+    if (referrerInfo) {
+      body.set('referrerInfo', referrerInfo)
+    }
+    DMPChannelProxyNext.ContainerToService(new DMPMap({
+      type: 'appShow',
+      body
+    }), this.appIndex)
+    if (bridgeId > 0) {
+      DMPChannelProxyNext.ContainerToService(new DMPMap({
+        type: 'pageShow',
+        body: { bridgeId }
+      }), this.appIndex)
+    }
   }
 
   public showStack(stackId: number) {
@@ -345,12 +458,14 @@ export class DMPApp {
    * @param handler     模块处理函数，参见 DMPExtModuleHandler
    */
   registerExtModule(moduleName: string, handler: DMPExtModuleHandler): void {
-    this._appModuleManager.registerExtModule(moduleName, handler);
+    this._appModuleManagerLifecycle.registerExtModule(moduleName, handler);
   }
 
   destroyEngine() {
+    // Invalidate bundle/bootstrap callbacks and delayed cache work before disposing their owners.
+    this._runtimeGeneration++
     // 销毁前取消所有 extOnBridge 订阅，防止内存泄漏
-    this._appModuleManager.dispose();
+    this._appModuleManagerLifecycle.disposeCurrent();
     // 先于 service 销毁：静默清理该 appId 全部 WebSocket 连接/监听/定时器，杜绝事件竞入将死引擎
     DMPWebSocketManager.sharedInstance().disposeOwner(this.appConfig.appId);
     this._service.destroy()
@@ -358,7 +473,7 @@ export class DMPApp {
   }
 
   destroyApp() {
-    DMPAppManager.sharedInstance().exitApp(this.appConfig.appId)
+    DMPAppManager.sharedInstance().exitApp(this.appConfig.appId, this.appIndex)
   }
 
   invokeUpdateResult() {
@@ -442,7 +557,7 @@ export class DMPApp {
       this._service.executeScript(`globalThis.__diminaApiNamespaces = ${json}`)
     }
     // 注入已注册的 API 名字，使 service 层的 wx 对象能枚举到它们
-    const registeredApis = this._appModuleManager.getAllRegisteredApiNames()
+    const registeredApis = this.appModuleManager.getAllRegisteredApiNames()
     if (registeredApis.length > 0) {
       const apisJson = JSON.stringify(registeredApis)
       this._service.executeScript(`globalThis.__diminaRegisteredApis = ${apisJson}`)
@@ -464,10 +579,6 @@ export class DMPApp {
 
   private launchInner(launchConfig: DMPLaunchConfig) {
     DMPLogger.i(Tags.LAUNCH, "launchInner start");
-    if (launchConfig.completion) {
-      launchConfig.completion(true)
-      launchConfig.completion = undefined
-    }
     if (!launchConfig.appEntryPath) {
       launchConfig.appEntryPath = this.bundleManager.getBundleInfo().currentJsAppBundleConfig?.path;
     }

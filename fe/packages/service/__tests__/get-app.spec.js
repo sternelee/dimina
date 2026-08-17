@@ -9,6 +9,7 @@ describe('getApp', () => {
 		runtime.app = undefined
 		runtime.defaultApp = {}
 		runtime.appLaunchOptions = {}
+		runtime.appEnterOptions = {}
 		runtime.instances = {}
 		runtime.pageStates.clear()
 		delete loader.staticModules.app

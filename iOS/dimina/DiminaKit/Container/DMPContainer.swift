@@ -79,15 +79,39 @@ public class DMPContainer {
         else { return DMPMap() }
 
         let root = config.getRootPackage(pagePath: pagePath)
+        let launchConfig = app.getCurrentLaunchConfig()
+        let body = Self.makeResourceBody(
+            webViewId: webViewId,
+            appId: app.getAppId(),
+            pagePath: pagePath,
+            root: root,
+            launchConfig: launchConfig
+        )
         return DMPMap([
             "type": "loadResource",
-            "body": [
-                "bridgeId": webViewId,
-                "appId": app.getAppId(),
-                "pagePath": pagePath,
-                "root": root,
-            ],
+            "body": body,
         ])
+    }
+
+    static func makeResourceBody(
+        webViewId: Int,
+        appId: String,
+        pagePath: String,
+        root: String,
+        launchConfig: DMPLaunchConfig?
+    ) -> [String: Any] {
+        var body: [String: Any] = [
+            "bridgeId": webViewId,
+            "appId": appId,
+            "pagePath": pagePath,
+            "query": launchConfig?.query ?? [:],
+            "root": root,
+            "scene": launchConfig?.scene ?? DMPScene.fromMainEntry.rawValue,
+        ]
+        if let referrerInfo = launchConfig?.referrerInfo {
+            body["referrerInfo"] = referrerInfo
+        }
+        return body
     }
 
     func loadResourceService(webViewId: Int, pagePath: String) async {
@@ -115,41 +139,7 @@ public class DMPContainer {
     ) -> DMPAPIResult {
         let moduleName = "DMPContainerBridgesModule"
         DMPLogger.debug("Bridge call: module=\(moduleName), method=\(methodName)")
-        var callback: DMPBridgeCallback = { _, _ in }
-
-        if param.isAsync {
-            var callbackIds = (success: "", fail: "", complete: "")
-            let map = param.getMap()
-
-            callbackIds.success = map["success"] as? String ?? ""
-            callbackIds.fail = map["fail"] as? String ?? ""
-            callbackIds.complete = map["complete"] as? String ?? ""
-
-            callback = {
-                [weak self] (args: DMPMap, cbType: DMPBridgeCallbackType) in
-                guard let self = self else { return }
-
-                let callbackId: String = {
-                    switch cbType {
-                    case .success: return callbackIds.success
-                    case .fail: return callbackIds.fail
-                    case .complete: return callbackIds.complete
-                    }
-                }()
-
-                guard !callbackId.isEmpty else { return }
-
-                let message = DMPMap([
-                    "type": "triggerCallback",
-                    "body": [
-                        "id": callbackId,
-                        "args": args.toDictionary(),
-                    ],
-                ])
-
-                DMPChannelProxy.containerToService(msg: message, app: self.getApp())
-            }
-        }
+        let callback = makeBridgeCallback(param: param)
 
         let env = DMPBridgeEnv(
             appIndex: self.app?.getAppIndex() ?? 0,
@@ -194,6 +184,37 @@ public class DMPContainer {
 
         DMPLogger.debug("Bridge invoke error: 未找到方法: \(methodName)")
         return DMPSyncResult(["error": "未找到方法: \(methodName)"])
+    }
+
+    func makeBridgeCallback(param: DMPBridgeParam) -> DMPBridgeCallback {
+        guard param.isAsync else { return { _, _ in } }
+
+        let map = param.getMap()
+        let callbackIds = (
+            success: map["success"] as? String ?? "",
+            fail: map["fail"] as? String ?? "",
+            complete: map["complete"] as? String ?? ""
+        )
+        return { [weak self] args, callbackType in
+            guard let self else { return }
+            let callbackId: String = {
+                switch callbackType {
+                case .success: return callbackIds.success
+                case .fail: return callbackIds.fail
+                case .complete: return callbackIds.complete
+                }
+            }()
+            guard !callbackId.isEmpty else { return }
+
+            let message = DMPMap([
+                "type": "triggerCallback",
+                "body": [
+                    "id": callbackId,
+                    "args": args.toDictionary(),
+                ],
+            ])
+            DMPChannelProxy.containerToService(msg: message, app: self.getApp())
+        }
     }
 
     /// 处理 extOnBridge：启动持续订阅，保存取消函数

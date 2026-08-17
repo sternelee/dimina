@@ -22,8 +22,18 @@ public class NetworkAPI: DMPContainerApi {
     private static let UPLOAD = "uploadFile"
     private static let ABORT_UPLOAD = "uploadFileTaskAbort"
 
+    private struct UploadTaskKey: Hashable {
+        let appId: String
+        let taskId: String
+    }
+
+    private struct UploadTaskEntry {
+        let ownerToken: UUID
+        var request: UploadRequest?
+    }
+
     private static let uploadTaskLock = NSLock()
-    private static var uploadTasks: [String: UploadRequest] = [:]
+    private static var uploadTasks: [UploadTaskKey: UploadTaskEntry] = [:]
     
     /**
      * Bridge method for HTTP request
@@ -258,6 +268,11 @@ public class NetworkAPI: DMPContainerApi {
             }
         }
         
+        // Upload progress/header events bypass the normal container callback,
+        // so bind them to this runtime-owned task token. Restart/exit removes
+        // the token before a new service is installed and late events drop.
+        let ownerToken = NetworkAPI.activateUploadTask(appId: env.appId, taskId: taskId)
+
         // 发起文件上传
         let uploadRequest = DMPNetwork.shared.uploadFile(
             url: url,
@@ -269,6 +284,8 @@ public class NetworkAPI: DMPContainerApi {
             progress: { completedBytes, totalBytes in
                 NetworkAPI.pushUploadEvent(
                     appId: env.appId,
+                    taskId: taskId,
+                    ownerToken: ownerToken,
                     callbackId: progressCallbackId,
                     payload: NetworkAPI.uploadProgressPayload(
                         completedBytes: completedBytes,
@@ -279,12 +296,18 @@ public class NetworkAPI: DMPContainerApi {
             headersReceived: { responseHeaders in
                 NetworkAPI.pushUploadEvent(
                     appId: env.appId,
+                    taskId: taskId,
+                    ownerToken: ownerToken,
                     callbackId: headersCallbackId,
                     payload: DMPMap(["header": responseHeaders])
                 )
             },
             success: { (responseData, statusCode) in
-                NetworkAPI.removeUploadTask(taskId: taskId)
+                NetworkAPI.removeUploadTask(
+                    appId: env.appId,
+                    taskId: taskId,
+                    ownerToken: ownerToken
+                )
                 let resultMap = DMPMap()
                 
                 // 设置响应数据
@@ -299,22 +322,31 @@ public class NetworkAPI: DMPContainerApi {
                                               completeCarriesResult: true)
             },
             fail: { (errMsg) in
-                NetworkAPI.removeUploadTask(taskId: taskId)
+                NetworkAPI.removeUploadTask(
+                    appId: env.appId,
+                    taskId: taskId,
+                    ownerToken: ownerToken
+                )
                 // 返回失败结果
                 DMPContainerApi.invokeFailure(callback: callback, param: nil, errMsg: errMsg,
                                               completeCarriesResult: true)
             }
         )
-        NetworkAPI.storeUploadTask(uploadRequest, taskId: taskId)
+        NetworkAPI.storeUploadTask(
+            uploadRequest,
+            appId: env.appId,
+            taskId: taskId,
+            ownerToken: ownerToken
+        )
         
         return DMPAsyncResult()
     }
 
     @BridgeMethod(ABORT_UPLOAD)
-    var abortUploadFile: DMPBridgeMethodHandler = { param, _, _ in
+    var abortUploadFile: DMPBridgeMethodHandler = { param, env, _ in
         let taskId = param.getMap().getString(key: "taskId") ?? ""
         if !taskId.isEmpty {
-            NetworkAPI.abortUploadTask(taskId: taskId)
+            NetworkAPI.abortUploadTask(appId: env.appId, taskId: taskId)
         }
         return DMPNoneResult()
     }
@@ -335,8 +367,15 @@ public class NetworkAPI: DMPContainerApi {
         ])
     }
 
-    private static func pushUploadEvent(appId: String, callbackId: String, payload: DMPMap) {
+    private static func pushUploadEvent(
+        appId: String,
+        taskId: String,
+        ownerToken: UUID,
+        callbackId: String,
+        payload: DMPMap
+    ) {
         guard !callbackId.isEmpty,
+              isUploadTaskActive(appId: appId, taskId: taskId, ownerToken: ownerToken),
               let app = DMPAppManager.sharedInstance().existApp(appId: appId) else { return }
         let message = DMPMap([
             "type": "triggerCallback",
@@ -345,22 +384,73 @@ public class NetworkAPI: DMPContainerApi {
         DMPChannelProxy.containerToService(msg: message, app: app)
     }
 
-    private static func storeUploadTask(_ task: UploadRequest, taskId: String) {
+    static func activateUploadTask(appId: String, taskId: String) -> UUID {
+        let key = UploadTaskKey(appId: appId, taskId: taskId)
+        let ownerToken = UUID()
         uploadTaskLock.lock()
-        uploadTasks[taskId] = task
+        let previousTask = uploadTasks.updateValue(
+            UploadTaskEntry(ownerToken: ownerToken, request: nil),
+            forKey: key
+        )?.request
+        uploadTaskLock.unlock()
+        previousTask?.cancel()
+        return ownerToken
+    }
+
+    private static func storeUploadTask(
+        _ task: UploadRequest,
+        appId: String,
+        taskId: String,
+        ownerToken: UUID
+    ) {
+        let key = UploadTaskKey(appId: appId, taskId: taskId)
+        uploadTaskLock.lock()
+        if uploadTasks[key]?.ownerToken == ownerToken {
+            uploadTasks[key]?.request = task
+            uploadTaskLock.unlock()
+        } else {
+            uploadTaskLock.unlock()
+            task.cancel()
+        }
+    }
+
+    static func isUploadTaskActive(
+        appId: String,
+        taskId: String,
+        ownerToken: UUID
+    ) -> Bool {
+        let key = UploadTaskKey(appId: appId, taskId: taskId)
+        uploadTaskLock.lock()
+        let isActive = uploadTasks[key]?.ownerToken == ownerToken
+        uploadTaskLock.unlock()
+        return isActive
+    }
+
+    private static func removeUploadTask(appId: String, taskId: String, ownerToken: UUID) {
+        let key = UploadTaskKey(appId: appId, taskId: taskId)
+        uploadTaskLock.lock()
+        if uploadTasks[key]?.ownerToken == ownerToken {
+            uploadTasks.removeValue(forKey: key)
+        }
         uploadTaskLock.unlock()
     }
 
-    private static func removeUploadTask(taskId: String) {
+    private static func abortUploadTask(appId: String, taskId: String) {
+        let key = UploadTaskKey(appId: appId, taskId: taskId)
         uploadTaskLock.lock()
-        uploadTasks.removeValue(forKey: taskId)
-        uploadTaskLock.unlock()
-    }
-
-    private static func abortUploadTask(taskId: String) {
-        uploadTaskLock.lock()
-        let task = uploadTasks.removeValue(forKey: taskId)
+        let task = uploadTasks.removeValue(forKey: key)?.request
         uploadTaskLock.unlock()
         task?.cancel()
+    }
+
+    /// Cancel and detach every upload event source owned by one mini-program
+    /// runtime. Removing entries before cancel makes any racing progress or
+    /// header callback fail its owner-token check.
+    static func clearApp(_ appId: String) {
+        uploadTaskLock.lock()
+        let matchingKeys = uploadTasks.keys.filter { $0.appId == appId }
+        let tasks = matchingKeys.compactMap { uploadTasks.removeValue(forKey: $0)?.request }
+        uploadTaskLock.unlock()
+        tasks.forEach { $0.cancel() }
     }
 }

@@ -21,11 +21,11 @@ class Service {
 
 	init() {
 		this.message.on('loadResource', (msg) => {
-			const { appId, bridgeId, pagePath, root = '.', baseUrl = '/', hostEnv: hostEnvSnapshot, query, resourceLoadId, scene } = msg
+			const { appId, bridgeId, pagePath, root = '.', baseUrl = '/', hostEnv: hostEnvSnapshot, query, resourceLoadId, scene, referrerInfo } = msg
 			if (hostEnvSnapshot) {
 				hostEnv.init(hostEnvSnapshot)
 			}
-			runtime.setAppLaunchOptions({ scene, pagePath, query })
+			runtime.setAppLaunchOptions({ scene, pagePath, query, referrerInfo })
 			loader.loadResource({ appId, bridgeId, pagePath, root, baseUrl, resourceLoadId })
 		})
 
@@ -58,6 +58,18 @@ class Service {
 		this.message.on('triggerCallback', (msg) => {
 			const { id, args } = msg
 			callback.invoke(id, args)
+		})
+
+		// destructive container APIs (navigateBackMiniProgram / exitMiniProgram /
+		// restartMiniProgram) must not terminate this worker before their callbacks
+		// have actually run. Worker messages from one sender are FIFO, so replying to
+		// this barrier proves every earlier triggerCallback has been consumed.
+		this.message.on('flushCallbacks', ({ requestId }) => {
+			this.message.invoke({
+				type: 'callbacksFlushed',
+				target: 'container',
+				body: { requestId },
+			})
 		})
 
 		// A built-in component lives in the render thread, while container API
@@ -145,8 +157,8 @@ class Service {
 			page?.sendInitialData()
 		})
 
-		this.message.on('appShow', () => {
-			runtime.appShow()
+		this.message.on('appShow', (options) => {
+			runtime.appShow(options)
 		})
 
 		this.message.on('appHide', () => {

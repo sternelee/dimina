@@ -11,7 +11,18 @@ export class FakeWorker {
 		this.options = options
 		this.onmessage = null
 		this.onerror = null
-		this.postMessage = vi.fn()
+		this.onmessageerror = null
+		this.postMessage = vi.fn((message) => {
+			if (message?.type === 'flushCallbacks') {
+				queueMicrotask(() => this.onmessage?.({
+					data: {
+						method: 'invoke',
+						type: 'callbacksFlushed',
+						body: { requestId: message.body?.requestId },
+					},
+				}))
+			}
+		})
 		this.terminate = vi.fn()
 		this.addEventListener = vi.fn()
 		this.removeEventListener = vi.fn()

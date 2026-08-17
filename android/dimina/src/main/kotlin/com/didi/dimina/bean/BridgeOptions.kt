@@ -35,4 +35,5 @@ data class BridgeOptions(
     val appId: String,
     val pages: List<String>,
     var configInfo: MergedPageConfig,
+    val referrerInfo: JSONObject? = null,
 )

@@ -241,4 +241,15 @@ class DMPResourceManager {
 
         return appItems
     }
+
+    /// Resolve a launchable mini program from the app bundle. Cross-app
+    /// navigation deliberately uses this source of truth instead of inventing
+    /// a config from the caller-provided appId.
+    static func getDMPAppConfig(appId: String) -> DMPAppConfig? {
+        let normalizedAppId = appId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalizedAppId.isEmpty else {
+            return nil
+        }
+        return getDMPAppConfigs().first(where: { $0.appId == normalizedAppId })
+    }
 }

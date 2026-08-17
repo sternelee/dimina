@@ -69,6 +69,11 @@ export class DMPService {
     this.executeScript(script)
   }
 
+  /** Wait until the service Worker has executed every script queued so far. */
+  public flush(): Promise<void> {
+    return this.ww.flush()
+  }
+
   public updateWorkerAppData() {
     const app: DMPApp | undefined = DMPAppManager.sharedInstance().getApp(this.appIndex);
     if (app) {

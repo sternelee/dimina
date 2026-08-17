@@ -11,6 +11,8 @@ import {
   EvalPayload,
   initPayload,
   WorkerAppData,
+  WorkerFlushRequest,
+  WorkerFlushResponse,
   WorkerRequest,
   WorkerResponse
 } from './DMPSendableObjects';
@@ -150,6 +152,13 @@ workerPort.onmessage = async (e: MessageEvents) => {
       case 'evalJSAb': {
         let request: AbPayload = e.data as AbPayload;
         jsEngine.evalJSAb(request.ab);
+      }
+        break;
+      case 'flush': {
+        // Worker messages are FIFO. Reaching this command guarantees all previously posted
+        // triggerCallback/page lifecycle scripts have already executed in QuickJS.
+        const flushRequest = e.data as WorkerFlushRequest;
+        workerPort.postMessage(new WorkerFlushResponse(flushRequest.requestId));
       }
         break;
       case 'destroy': {
