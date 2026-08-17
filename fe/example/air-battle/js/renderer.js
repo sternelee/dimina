@@ -216,6 +216,7 @@ function drawParticle(ctx, particle) {
 
 function drawHud(ctx, game) {
   const top = game.topInset
+  const rightTop = Math.max(top + 18, (Number(game.menuBottom) || top) + 8)
   ctx.save()
   ctx.fillStyle = 'rgba(5, 12, 31, 0.58)'
   roundedRect(ctx, 14, top + 12, 138, 52, 14)
@@ -235,10 +236,10 @@ function drawHud(ctx, game) {
   ctx.textAlign = 'right'
   ctx.fillStyle = 'rgba(185, 246, 255, 0.75)'
   ctx.font = '11px sans-serif'
-  ctx.fillText(`WAVE ${game.wave}`, game.width - 18, top + 29)
+  ctx.fillText(`WAVE ${game.wave}`, game.width - 18, rightTop + 11)
   ctx.fillStyle = COLORS.white
   ctx.font = 'bold 15px sans-serif'
-  ctx.fillText(`BEST ${String(game.highScore).padStart(6, '0')}`, game.width - 18, top + 50)
+  ctx.fillText(`BEST ${String(game.highScore).padStart(6, '0')}`, game.width - 18, rightTop + 32)
 
   const heartY = top + 82
   for (let i = 0; i < game.player.maxHp; i += 1) {
@@ -255,11 +256,11 @@ function drawHud(ctx, game) {
   if (game.rapidFire > 0) {
     ctx.globalAlpha = 1
     ctx.fillStyle = 'rgba(5, 12, 31, 0.7)'
-    roundedRect(ctx, game.width - 105, top + 70, 87, 24, 12)
+    roundedRect(ctx, game.width - 105, rightTop + 50, 87, 24, 12)
     ctx.fill()
     ctx.fillStyle = COLORS.cyan
     ctx.font = 'bold 11px sans-serif'
-    ctx.fillText(`RAPID ${Math.ceil(game.rapidFire)}s`, game.width - 29, top + 86)
+    ctx.fillText(`RAPID ${Math.ceil(game.rapidFire)}s`, game.width - 29, rightTop + 66)
   }
   ctx.restore()
 }

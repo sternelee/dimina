@@ -9,16 +9,25 @@ const renderer = require('./renderer')
 
 function getScreenSize(canvas) {
   let info = {}
+  let menuRect = {}
   try {
     info = wx.getSystemInfoSync() || {}
   }
   catch (error) {
     console.warn('[Dimina Air Battle] getSystemInfoSync failed', error)
   }
+  try {
+    menuRect = wx.getMenuButtonBoundingClientRect() || {}
+  }
+  catch (error) {
+    console.warn('[Dimina Air Battle] getMenuButtonBoundingClientRect failed', error)
+  }
+  const topInset = Math.max(0, Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 0)
   return {
     width: Math.max(300, Number(info.windowWidth) || Number(canvas.width) || 375),
     height: Math.max(450, Number(info.windowHeight) || Number(canvas.height) || 667),
-    topInset: Math.max(0, Number(info.safeArea && info.safeArea.top) || Number(info.statusBarHeight) || 0),
+    topInset,
+    menuBottom: Math.max(topInset, Number(menuRect.bottom) || 0),
   }
 }
 
@@ -37,6 +46,7 @@ class AirBattleGame {
     this.width = size.width
     this.height = size.height
     this.topInset = size.topInset
+    this.menuBottom = size.menuBottom
     this.canvas.width = this.width
     this.canvas.height = this.height
     this.ctx = canvas.getContext('2d')
