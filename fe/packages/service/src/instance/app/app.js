@@ -1,7 +1,8 @@
 import { isFunction } from '@dimina/common'
+import { emitAppHide, emitAppShow, setAppErrorHandler } from '../../core/app-events'
 import { invokeSafely } from '../../core/safe-callback'
 
-const lifecycleMethods = ['onLaunch', 'onShow', 'onHide']
+const lifecycleMethods = ['onLaunch', 'onShow', 'onHide', 'onError']
 const reservedProperties = ['globalData']
 
 export class App {
@@ -15,6 +16,7 @@ export class App {
 		this.initGlobalData()
 		this.initLifecycle()
 		this.initCustomMethods()
+		setAppErrorHandler(this.onError)
 		this.invokeSomeLifecycle()
 	}
 
@@ -52,13 +54,16 @@ export class App {
 	invokeSomeLifecycle() {
 		invokeSafely(this, this.onLaunch, [this.options], 'onLaunch')
 		invokeSafely(this, this.onShow, [this.options], 'onShow')
+		emitAppShow(this.options)
 	}
 
 	appShow(options = this.options) {
 		invokeSafely(this, this.onShow, [options], 'onShow')
+		emitAppShow(options)
 	}
 
 	appHide() {
 		invokeSafely(this, this.onHide, [], 'onHide')
+		emitAppHide()
 	}
 }

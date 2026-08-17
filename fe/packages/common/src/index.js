@@ -1,5 +1,5 @@
 // 从 core/amd 导入
-export { modDefine, modRequire } from './core/amd'
+export { hasModule, modDefine, modRequire } from './core/amd'
 
 // 从 core/callback 导入
 export { default as callback } from './core/callback'

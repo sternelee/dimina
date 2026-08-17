@@ -1,6 +1,7 @@
 /* eslint-disable no-undef */
 import { isWebWorker } from '@dimina/common'
 import mitt from 'mitt'
+import { reportAppError } from './app-events'
 import { decodeDataFunctions, encodeDataFunctions } from './data-function'
 
 class Message {
@@ -22,10 +23,16 @@ class Message {
 	}
 
 	handleMsg(msg) {
-		const decodedMsg = decodeDataFunctions(msg)
-		console.log('[service] receive msg: ', isWebWorker ? decodedMsg : JSON.stringify(decodedMsg))
-		const { type, body } = decodedMsg
-		this.event.emit(type, body)
+		try {
+			const decodedMsg = decodeDataFunctions(msg)
+			console.log('[service] receive msg: ', isWebWorker ? decodedMsg : JSON.stringify(decodedMsg))
+			const { type, body } = decodedMsg
+			this.event.emit(type, body)
+		}
+		catch (error) {
+			reportAppError(error)
+			console.error('[service] message handler error:', error)
+		}
 	}
 
 	// 向逻辑层注册消息监听

@@ -1,4 +1,4 @@
-import { isWebWorker, modRequire } from '@dimina/common'
+import { hasModule, isWebWorker, modRequire } from '@dimina/common'
 import { AppModule } from '../instance/app/app-module'
 import { ComponentModule } from '../instance/component/component-module'
 import { PageModule } from '../instance/page/page-module'
@@ -27,7 +27,12 @@ class Loader {
 		}
 		// 防止 App 声明周期调用的 API 找不到对应的 Bridge
 		router.setInitId(bridgeId)
-		modRequire('app')
+		// 独立分包不会打包主包 app 模块。与微信运行库一致，此时允许
+		// 分包依赖通过 getApp({ allowDefault: true }) 使用默认 App；等主包
+		// app 模块真正加载后，runtime 会把默认对象合并进正式 App 实例。
+		if (hasModule('app')) {
+			modRequire('app')
+		}
 		modRequire(pagePath)
 
 		message.invoke({

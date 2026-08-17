@@ -13,6 +13,12 @@ export const env = {
 // JS 层内置支持的API列表
 const builtInAPIs = new Set([
 	'nextTick',
+	'onError',
+	'offError',
+	'onAppShow',
+	'onAppHide',
+	'offAppShow',
+	'offAppHide',
 	'getUpdateManager',
 	'UpdateManager',
 	...updateManagerAPINames.map(name => `UpdateManager.${name}`),

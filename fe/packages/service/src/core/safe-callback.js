@@ -1,4 +1,5 @@
 import { isFunction } from '@dimina/common'
+import { reportAppError } from './app-events'
 
 const reportingErrors = new WeakSet()
 
@@ -18,6 +19,7 @@ function reportCallbackError(ctx, error, label) {
 		}
 	}
 
+	reportAppError(error)
 	console.error(`[service] ${label} error:`, error)
 }
 
@@ -42,6 +44,7 @@ export function invokeSafely(ctx, callback, args = [], label = 'callback', repor
 			reportCallbackError(ctx, error, label)
 		}
 		else {
+			reportAppError(error)
 			console.error(`[service] ${label} error:`, error)
 		}
 		return undefined

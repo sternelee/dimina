@@ -1,4 +1,6 @@
 import { isFunction } from '@dimina/common'
+import { reportAppError } from './app-events'
+import { invokeSafely } from './safe-callback'
 import { App } from '../instance/app/app'
 import { Component } from '../instance/component/component'
 import { ComponentModule } from '../instance/component/component-module'
@@ -91,7 +93,18 @@ class Runtime {
 
 	async dispatchEvent({ instance, bridgeId, moduleId, methodName, event }) {
 		if (isFunction(instance[methodName])) {
-			return await instance[methodName](event)
+			const result = invokeSafely(instance, instance[methodName], [event], `event ${methodName}`)
+			try {
+				return await result
+			}
+			catch (error) {
+				if (isFunction(instance.componentError)) {
+					instance.componentError(error)
+				}
+				reportAppError(error)
+				console.error(`[service] event ${methodName} error:`, error)
+				return undefined
+			}
 		}
 		console.warn(`[service] triggerEvent ${bridgeId} ${moduleId}, is: ${instance.is}, method: ${methodName} is not exist`)
 	}
@@ -674,6 +687,7 @@ class Runtime {
 		if (instance.__type__ === ComponentModule.type) {
 			instance.componentError(error)
 		}
+		reportAppError(error)
 	}
 
 	componentRouteDone(opts) {
