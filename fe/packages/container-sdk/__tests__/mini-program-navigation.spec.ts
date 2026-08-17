@@ -48,6 +48,7 @@ describe('mini program container navigation APIs', () => {
 		const container = createContainer({ mount })
 		const source = await container.openApp({ appId: 'source-app', path: ENTRY_PAGE_PATH })
 		await waitForReady(source)
+		source.jscore.notifyServiceReady()
 		const sourceWorker = source.jscore.worker as unknown as FakeWorker
 
 		await source.navigateToMiniProgram({
@@ -63,6 +64,11 @@ describe('mini program container navigation APIs', () => {
 		const [loadResource] = messagesOfType(targetWorker, 'loadResource')
 
 		expect(container.application.views).toEqual([source, target])
+		// Issue #44: source 只进入后台，不能因为另一个小程序被呈现就销毁运行时。
+		expect(container.application.appManager.getAppById('source-app')).toBe(source)
+		expect(source.jscore.worker).toBe(sourceWorker)
+		expect(sourceWorker.terminate).not.toHaveBeenCalled()
+		expect(messagesOfType(sourceWorker, 'appHide')).toHaveLength(1)
 		expect(target.opener).toBe(source)
 		expect(loadResource.body).toMatchObject({
 			pagePath: ENTRY_PAGE_PATH,
@@ -97,6 +103,9 @@ describe('mini program container navigation APIs', () => {
 		})
 
 		expect(container.application.views).toEqual([source])
+		expect(container.application.appManager.getAppById('back-source')).toBe(source)
+		expect(source.jscore.worker).toBe(sourceWorker)
+		expect(sourceWorker.terminate).not.toHaveBeenCalled()
 		expect(container.application.appManager.getAppById('back-target')).toBeNull()
 		expect(targetWorker.terminate).toHaveBeenCalledTimes(1)
 		expect(messagesOfType(sourceWorker, 'appShow').at(-1)?.body).toEqual({

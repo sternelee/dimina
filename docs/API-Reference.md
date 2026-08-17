@@ -183,6 +183,8 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 跨小程序导航从宿主已打包的目标资源中按 `appId` 解析入口；当前 `envVersion` 仅支持 `release`，不解析 `shortLink`。`navigateToMiniProgram` 可省略 `path` 并使用目标首页；Web 端支持 `noRelaunchIfPathUnchanged`，原生端在该值为 `true` 时会明确返回不支持。`navigateBackMiniProgram` 仅能返回直接打开当前实例的来源小程序，`restartMiniProgram` 必须提供 `path` 且会重建完整运行时。
 
+跨小程序呈现采用“一个前台实例 + 后台实例栈”：A 打开 B 时，A 只触发 App/Page Hide，逻辑引擎、页面栈和宿主订阅继续保留；B 返回或退出后恢复同一个 A 实例并触发 App/Page Show。详细生命周期、销毁边界和系统后台限制见[多小程序运行](./Multi-Mini-Program.md)。
+
 | 分类          | API 名称                         | Android | iOS | Harmony | Web |
 | ------------- | -------------------------------- | ------- | --- | ------- | --- |
 | 基础          | env                              | ✓       | ✓   | ✓       | ✓   |

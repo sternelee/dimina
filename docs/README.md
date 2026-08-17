@@ -11,6 +11,7 @@ Dimina（星河小程序）由 DMCC 编译器、逻辑层与渲染层运行时�
 | 了解 Dimina 如何工作 | [架构总览](./Architecture-Diagram.md) | [实现细节](./Architecture-Details.md) |
 | 判断某项能力是否可用 | [能力参考](./API-Reference.md) | 对应平台的 SDK 接入文档 |
 | 排查页面或组件初始化时序 | [生命周期](./Architecture-Lifecycle.md) | `service` / `render` 运行时源码与测试 |
+| 接入多小程序切换与后台保留 | [多小程序运行](./Multi-Mini-Program.md) | 跨小程序导航 API 与各端 AppManager |
 | 接入内置包或远程更新 | [小程序包更新](./MiniProgram-Update.md) | 对应平台的 Bundle Loader 实现 |
 | 查看 WebSocket API、事件与平台限制 | [WebSocket 能力](./websocket-architecture.md) | 对应平台的 Manager 与校验源码 |
 | 参与前端框架开发 | [前端工程说明](../fe/README.md) | [贡献指南](../CONTRIBUTING.md) |
@@ -21,8 +22,9 @@ Dimina（星河小程序）由 DMCC 编译器、逻辑层与渲染层运行时�
 2. [实现细节](./Architecture-Details.md)：编译器产物结构、双线程模型、通信通道与页面容器。
 3. [生命周期](./Architecture-Lifecycle.md)：App、页面和组件的关键调用时机与约束。
 4. [能力参考](./API-Reference.md)：模板标签、内置组件、API 和扩展 Bridge 的支持状态。
-5. [小程序包更新](./MiniProgram-Update.md)：内置包、远程 manifest、校验、安装与 `wx.getUpdateManager()`。
-6. [WebSocket 能力](./websocket-architecture.md)：公开 API、`SocketTask` 方法、事件数据、连接规则与平台限制。
+5. [多小程序运行](./Multi-Mini-Program.md)：多运行时登记、前后台切换、返回协议与保留边界。
+6. [小程序包更新](./MiniProgram-Update.md)：内置包、远程 manifest、校验、安装与 `wx.getUpdateManager()`。
+7. [WebSocket 能力](./websocket-architecture.md)：公开 API、`SocketTask` 方法、事件数据、连接规则与平台限制。
 
 ## 平台接入
 
