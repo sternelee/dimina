@@ -721,12 +721,14 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
     }
 
     func testBundledTargetConfigIsResolvedByResourceManager() throws {
+        // Use a checked-in shared/jsapp fixture. Locally installed mini programs
+        // are gitignored and therefore do not exist in a clean CI checkout.
         let config = try XCTUnwrap(
-            DMPResourceManager.getDMPAppConfig(appId: "wxbaf4b47de04f1d8b")
+            DMPResourceManager.getDMPAppConfig(appId: "wxe5f52902cf4de896")
         )
 
-        XCTAssertEqual(config.appId, "wxbaf4b47de04f1d8b")
-        XCTAssertEqual(config.path, "pages/home/home")
+        XCTAssertEqual(config.appId, "wxe5f52902cf4de896")
+        XCTAssertEqual(config.path, "page/tabBar/component/index")
     }
 
     func testContainerReloadResetClearsTransientLoadingAndNavigationState() {
