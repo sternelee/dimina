@@ -39,6 +39,15 @@ describe('mini game render surface', () => {
 				touches: [expect.objectContaining({ identifier: 7, clientX: 12, clientY: 34 })],
 			}),
 		}))
+		send.mockClear()
+
+		const hoverBeforeMouseDown = new Event('mousemove', { cancelable: true })
+		Object.defineProperties(hoverBeforeMouseDown, {
+			clientX: { value: 40 }, clientY: { value: 60 },
+			pageX: { value: 40 }, pageY: { value: 60 },
+		})
+		canvas.dispatchEvent(hoverBeforeMouseDown)
+		expect(send).not.toHaveBeenCalled()
 
 		const mouseDown = new Event('mousedown', { cancelable: true })
 		Object.defineProperties(mouseDown, {

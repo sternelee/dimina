@@ -1605,6 +1605,7 @@ class Runtime {
 		// Web 容器做同样的兼容。触摸处理器已经 preventDefault，因此移动端
 		// 不会再派发兼容 mouse 事件，也就不会产生一触双发。
 		let mouseActive = false
+		let mouseHoverEnabled = false
 		const mouseEventTypes = {
 			mousedown: 'touchstart',
 			mousemove: 'touchmove',
@@ -1616,6 +1617,10 @@ class Runtime {
 				if (mouseType === 'mousedown') {
 					if (event.button !== 0) return
 					mouseActive = true
+					mouseHoverEnabled = true
+				}
+				else if (mouseType === 'mousemove' && !mouseHoverEnabled) {
+					return
 				}
 				else if (mouseType !== 'mousemove' && !mouseActive) {
 					return
