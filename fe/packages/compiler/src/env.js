@@ -29,6 +29,9 @@ const STYLE_ISOLATION_VALUES = new Set([
 	'apply-shared',
 	'shared',
 ])
+const MINI_PROGRAM_RUNTIME_TYPE = 'miniProgram'
+const MINI_GAME_RUNTIME_TYPE = 'game'
+const MINI_GAME_ENTRY_PATH = 'game'
 
 // 保留扩展名：所有内置类型 + 逻辑(.js/.ts) + 配置(.json)。自定义项不得占用，
 // 否则会跨角色串编（如 template:['js'] 会把页面逻辑文件当成模板解析）。
@@ -232,8 +235,27 @@ function getProjectConfig() {
 }
 
 function storeAppConfig() {
-	const filePath = `${pathInfo.workPath}/app.json`
+	const runtimeType = detectRuntimeType()
+	const configFileName = runtimeType === MINI_GAME_RUNTIME_TYPE ? 'game.json' : 'app.json'
+	const filePath = `${pathInfo.workPath}/${configFileName}`
 	const content = parseContentByPath(filePath)
+	if (runtimeType === MINI_GAME_RUNTIME_TYPE) {
+		// 小游戏没有页面路由和 app.json。对下游维持统一的 app-config.json
+		// 形状，同时保留 game.json 原始字段，入口由 runtimeType 明确区分。
+		configInfo.runtimeType = MINI_GAME_RUNTIME_TYPE
+		configInfo.appInfo = {
+			...content,
+			runtimeType: MINI_GAME_RUNTIME_TYPE,
+			entryPagePath: MINI_GAME_ENTRY_PATH,
+			pages: [MINI_GAME_ENTRY_PATH],
+			window: {
+				backgroundColor: content.backgroundColor || '#000000',
+				navigationStyle: 'custom',
+			},
+		}
+		return
+	}
+
 	const newObj = {}
 	for (const key in content) {
 		if (Object.prototype.hasOwnProperty.call(content, key)) {
@@ -248,7 +270,36 @@ function storeAppConfig() {
 			}
 		}
 	}
+	configInfo.runtimeType = MINI_PROGRAM_RUNTIME_TYPE
+	newObj.runtimeType = MINI_PROGRAM_RUNTIME_TYPE
 	configInfo.appInfo = newObj
+}
+
+function detectRuntimeType() {
+	const compileType = configInfo.projectInfo?.compileType
+	const hasMiniProgramConfig = fs.existsSync(path.join(pathInfo.workPath, 'app.json'))
+	const hasMiniGameConfig = fs.existsSync(path.join(pathInfo.workPath, 'game.json'))
+	const hasMiniGameEntry = ['game.js', 'game.ts']
+		.some(fileName => fs.existsSync(path.join(pathInfo.workPath, fileName)))
+
+	if (compileType === 'game') {
+		return MINI_GAME_RUNTIME_TYPE
+	}
+	if (compileType === 'miniprogram') {
+		return MINI_PROGRAM_RUNTIME_TYPE
+	}
+	if (!hasMiniProgramConfig && hasMiniGameConfig && hasMiniGameEntry) {
+		return MINI_GAME_RUNTIME_TYPE
+	}
+	return MINI_PROGRAM_RUNTIME_TYPE
+}
+
+function getRuntimeType() {
+	return configInfo.runtimeType || MINI_PROGRAM_RUNTIME_TYPE
+}
+
+function isMiniGame() {
+	return getRuntimeType() === MINI_GAME_RUNTIME_TYPE
 }
 
 function getContentByPath(path) {
@@ -263,6 +314,11 @@ function parseContentByPath(path) {
  * 收集页面 json 信息
  */
 function storePageConfig() {
+	if (isMiniGame()) {
+		configInfo.pageInfo = {}
+		configInfo.componentInfo = {}
+		return
+	}
 	const { pages, subPackages } = configInfo.appInfo
 	configInfo.pageInfo = {}
 	configInfo.componentInfo = {}
@@ -349,6 +405,9 @@ function storeCustomTabBarConfig() {
  * @param {*} pages
  */
 function collectionPageJson(pages, root) {
+	if (!Array.isArray(pages)) {
+		return
+	}
 	pages.forEach((pagePath) => {
 		let np = pagePath
 		if (root) {
@@ -608,6 +667,17 @@ function transSubDir(name) {
  * 获取页面及其配置信息，并生成id（输出的 json 文件没有 id)
  */
 function getPages() {
+	if (isMiniGame()) {
+		return {
+			mainPages: [{
+				id: uuid(MINI_GAME_ENTRY_PATH),
+				path: MINI_GAME_ENTRY_PATH,
+				game: true,
+				usingComponents: {},
+			}],
+			subPages: {},
+		}
+	}
 	// 获取所有页面路径
 	const { pages, subPackages = [], usingComponents: globalComponents = {} } = getAppConfigInfo()
 	const pageInfo = getPageConfigInfo()
@@ -691,6 +761,22 @@ function getFileDependencyKind(filePath) {
 
 function createInitialDependencyGraph() {
 	const graph = new DependencyGraph()
+	if (isMiniGame()) {
+		graph.addNode(MINI_GAME_ENTRY_PATH, { type: MINI_GAME_RUNTIME_TYPE, entry: true })
+		for (const fileName of [
+			'game.json',
+			'game.js',
+			'game.ts',
+			'project.config.json',
+			'project.private.config.json',
+		]) {
+			const filePath = path.resolve(getWorkPath(), fileName)
+			if (fs.existsSync(filePath)) {
+				graph.addFile(MINI_GAME_ENTRY_PATH, filePath, getFileDependencyKind(filePath))
+			}
+		}
+		return graph
+	}
 	graph.addNode('app', { type: 'app' })
 	for (const fileName of [
 		'app.json',
@@ -790,6 +876,7 @@ export {
 	getPageConfigInfo,
 	getPages,
 	getProjectConfig,
+	getRuntimeType,
 	getStyleExts,
 	getTargetPath,
 	getTemplateDirectivePrefixes,
@@ -797,6 +884,7 @@ export {
 	getViewScriptExts,
 	getViewScriptTags,
 	getWorkPath,
+	isMiniGame,
 	resetStoreInfo,
 	resolveAppAlias,
 	storeInfo,

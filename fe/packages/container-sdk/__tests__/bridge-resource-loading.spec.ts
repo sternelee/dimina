@@ -131,6 +131,7 @@ describe('Bridge resource loading protocol', () => {
 			root: 'main',
 			scene: 1001,
 			query: {},
+			runtimeType: 'game',
 		})
 		bridge.webview = { postMessage: vi.fn() } as unknown as WebView
 		bridge.parent = {
@@ -144,12 +145,14 @@ describe('Bridge resource loading protocol', () => {
 			type: 'loadResource',
 			body: expect.objectContaining({
 				baseUrl: 'https://cdn.example.com/apps/',
+				runtimeType: 'game',
 			}),
 		}))
 		expect(jscore.postMessage).toHaveBeenCalledWith(expect.objectContaining({
 			type: 'loadResource',
 			body: expect.objectContaining({
 				baseUrl: 'https://cdn.example.com/apps/',
+				runtimeType: 'game',
 			}),
 		}))
 	})

@@ -62,6 +62,26 @@ describe('render resource loader', () => {
 		})
 	})
 
+	it('acknowledges a mini game without loading page view or style resources', async () => {
+		const append = vi.spyOn(document.head, 'append')
+		await expect(loader.loadResource({
+			bridgeId: 'bridge-game',
+			resourceLoadId: 'load-game',
+			appId: 'game-app',
+			pagePath: 'game',
+			root: 'main',
+			baseUrl: '/',
+			runtimeType: 'game',
+		})).resolves.toBe(true)
+
+		expect(append).not.toHaveBeenCalled()
+		expect(window.modRequire).not.toHaveBeenCalled()
+		expect(invoke).toHaveBeenCalledWith(expect.objectContaining({
+			type: 'renderResourceLoaded',
+			body: { bridgeId: 'bridge-game', resourceLoadId: 'load-game' },
+		}))
+	})
+
 	it('reports a failure and never evaluates or acknowledges an incomplete page', async () => {
 		vi.spyOn(console, 'error').mockImplementation(() => {})
 		vi.spyOn(document.head, 'append').mockImplementation((element) => {

@@ -185,9 +185,21 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 跨小程序呈现采用“一个前台实例 + 后台实例栈”：A 打开 B 时，A 只触发 App/Page Hide，逻辑引擎、页面栈和宿主订阅继续保留；B 返回或退出后恢复同一个 A 实例并触发 App/Page Show。详细生命周期、销毁边界和系统后台限制见[多小程序运行](./Multi-Mini-Program.md)。
 
+微信小游戏通过 `app.runtimeType = "game"` 进入无 Page/WXML 的 Canvas 运行模式。下表中的小游戏入口、Canvas、触摸和前后台事件由共享 Service/Render 实现，四端容器负责透传运行类型。当前专属能力边界见[微信小游戏运行](./Mini-Game.md)。
+
 | 分类          | API 名称                         | Android | iOS | Harmony | Web |
 | ------------- | -------------------------------- | ------- | --- | ------- | --- |
 | 基础          | env                              | ✓       | ✓   | ✓       | ✓   |
+| 基础 - 应用事件 | onError                         | ✓       | ✓   | ✓       | ✓   |
+|               | offError                         | ✓       | ✓   | ✓       | ✓   |
+|               | onAppShow                        | ✓       | ✓   | ✓       | ✓   |
+|               | offAppShow                       | ✓       | ✓   | ✓       | ✓   |
+|               | onAppHide                        | ✓       | ✓   | ✓       | ✓   |
+|               | offAppHide                       | ✓       | ✓   | ✓       | ✓   |
+| 基础 - 小游戏生命周期 | onShow                       | ✓       | ✓   | ✓       | ✓   |
+|               | offShow                          | ✓       | ✓   | ✓       | ✓   |
+|               | onHide                           | ✓       | ✓   | ✓       | ✓   |
+|               | offHide                          | ✓       | ✓   | ✓       | ✓   |
 |               | canIUse                          | ✓       | ✓   | ✓       | ✗   |
 | 基础 - 更新   | getUpdateManager                 | ✓       | ✓   | ✓       | ✓   |
 | 基础 - 系统   | openSystemBluetoothSetting       | ✓       | ✗   | ✗       | ✗   |
@@ -253,7 +265,17 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 | 界面 - 动画   | createAnimation                  | ✓       | ✓   | ✓       | ✓   |
 | 界面 - Canvas | createCanvasContext              | ✓       | ✓   | ✓       | ✓   |
 |               | createOffscreenCanvas            | ✓       | ✓   | ✓       | ✓   |
+|               | createCanvas（小游戏上屏画布）   | ✓       | ✓   | ✓       | ✓   |
+|               | createImage（小游戏图片对象）    | ✓       | ✓   | ✓       | ✓   |
 |               | canvasToTempFilePath             | ✓       | ✓   | ✓       | ✓   |
+| 设备 - 小游戏触摸 | onTouchStart                   | ✓       | ✓   | ✓       | ✓   |
+|               | offTouchStart                    | ✓       | ✓   | ✓       | ✓   |
+|               | onTouchMove                      | ✓       | ✓   | ✓       | ✓   |
+|               | offTouchMove                     | ✓       | ✓   | ✓       | ✓   |
+|               | onTouchEnd                       | ✓       | ✓   | ✓       | ✓   |
+|               | offTouchEnd                      | ✓       | ✓   | ✓       | ✓   |
+|               | onTouchCancel                    | ✓       | ✓   | ✓       | ✓   |
+|               | offTouchCancel                   | ✓       | ✓   | ✓       | ✓   |
 | WXML          | createSelectorQuery              | ✓       | ✓   | ✓       | ✓   |
 |               | createIntersectionObserver       | ✓       | ✓   | ✓       | ✓   |
 | 网络          | request                          | ✓       | ✓   | ✓       | ✓   |

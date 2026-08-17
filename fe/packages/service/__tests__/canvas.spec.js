@@ -4,10 +4,14 @@ import router from '../src/core/router.js'
 import { createSelectorQuery } from '../src/api/core/wxml/selector-query/index.js'
 import {
 	canvasToTempFilePath,
+	createCanvas,
 	createCanvasContext,
 	createContext,
 	createOffscreenCanvas,
 } from '../src/api/core/ui/canvas/index.js'
+import { resetMiniGameCanvas } from '../src/api/core/ui/canvas/canvas-node.js'
+import { createImage } from '../src/api/core/media/image/index.js'
+import hostEnv from '../src/core/host-env.js'
 
 describe('canvas api', () => {
 	function installWebGLCapabilities(overrides = {}) {
@@ -46,8 +50,35 @@ describe('canvas api', () => {
 	}
 
 	beforeEach(() => {
+		resetMiniGameCanvas()
 		router.setInitId('page_test')
 		globalThis.DiminaServiceBridge.publish = vi.fn()
+	})
+
+	it('uses the first createCanvas call as the screen canvas and later calls as offscreen canvases', () => {
+		hostEnv.init({ systemInfo: { windowWidth: 390, windowHeight: 844 } })
+		const screen = createCanvas()
+		const offscreen = createCanvas({ width: 64, height: 32 })
+
+		expect(screen).toMatchObject({ width: 390, height: 844, offscreen: false })
+		expect(offscreen).toMatchObject({ width: 64, height: 32, offscreen: true })
+		expect(globalThis.DiminaServiceBridge.publish.mock.calls.map(([, msg]) => msg.body.name))
+			.toEqual(['createGameCanvas', 'createOffscreenCanvas'])
+	})
+
+	it('does not consume the screen canvas when createImage is called first', async () => {
+		createImage()
+		const screen = createCanvas({ width: 120, height: 80 })
+
+		expect(screen).toMatchObject({ width: 120, height: 80, offscreen: false })
+		expect(globalThis.DiminaServiceBridge.publish.mock.calls.slice(0, 2).map(([, msg]) => msg.body.name))
+			.toEqual(['createOffscreenCanvas', 'createGameCanvas'])
+
+		await Promise.resolve()
+		const flushMessage = globalThis.DiminaServiceBridge.publish.mock.calls
+			.map(([, message]) => message)
+			.find(message => message.body.name === 'canvasNodeFlush')
+		expect(flushMessage.body.params.operations.map(operation => operation.op)).toEqual(['createImage'])
 	})
 
 	it('should record drawing actions', () => {

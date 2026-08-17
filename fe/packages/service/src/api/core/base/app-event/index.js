@@ -55,6 +55,24 @@ export function offAppHide(callback) {
 	offAppHideEvent(callback)
 }
 
+// 微信小游戏使用 wx.onShow/wx.onHide；事件源与小程序的
+// wx.onAppShow/wx.onAppHide 相同，别名共用同一组监听。
+export function onShow(callback) {
+	onAppShowEvent(callback)
+}
+
+export function offShow(callback) {
+	offAppShowEvent(callback)
+}
+
+export function onHide(callback) {
+	onAppHideEvent(callback)
+}
+
+export function offHide(callback) {
+	offAppHideEvent(callback)
+}
+
 /**
  * 监听未处理的 Promise 拒绝事件。该事件与 App.onUnhandledRejection 的回调时机与参数一致。
  * https://developers.weixin.qq.com/miniprogram/dev/api/base/app/app-event/wx.onUnhandledRejection.html

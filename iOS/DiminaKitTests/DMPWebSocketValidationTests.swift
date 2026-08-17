@@ -615,6 +615,42 @@ final class DMPBundleAppConfigNetworkTimeoutTests: XCTestCase {
     }
 }
 
+// MARK: - Mini Game runtime entry
+
+final class DMPMiniGameRuntimeConfigTests: XCTestCase {
+    func test_gameRuntimeTypeAndEntryAreParsedWithoutPageModules() throws {
+        let config = try XCTUnwrap(DMPBundleAppConfig.fromJsonString(json: #"""
+        {
+            "app":{"runtimeType":"game","entryPagePath":"game","pages":["game"]},
+            "modules":{}
+        }
+        """#))
+
+        XCTAssertEqual(config.runtimeType, "game")
+        XCTAssertEqual(config.entryPagePath, "game")
+        XCTAssertFalse(config.isContainsPage(pagePath: "game"))
+    }
+
+    func test_missingRuntimeTypeDefaultsToMiniProgram() {
+        let config = DMPBundleAppConfig(data: ["app": ["pages": ["pages/index/index"]]])
+        XCTAssertEqual(config.runtimeType, "miniProgram")
+    }
+
+    func test_resourceBodyForwardsGameRuntimeTypeToSharedRuntime() {
+        let body = DMPContainer.makeResourceBody(
+            webViewId: 9,
+            appId: "game-app",
+            pagePath: "game",
+            root: "main",
+            runtimeType: "game",
+            launchConfig: DMPLaunchConfig(scene: 1001)
+        )
+
+        XCTAssertEqual(body["runtimeType"] as? String, "game")
+        XCTAssertEqual(body["pagePath"] as? String, "game")
+    }
+}
+
 // MARK: - loadResource is gated on app.json being parsed
 
 /// `DMPContainer.createResourceMessage` bails out to an empty `DMPMap` when

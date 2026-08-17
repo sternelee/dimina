@@ -98,19 +98,18 @@ export class AppManager {
 		if (path) {
 			({ pagePath, query } = queryPath(path))
 		}
-		else if (!opts.allowDefaultPath) {
+		else if (!opts.allowDefaultPath && restoreStack?.length) {
 			// path 省略时入口页取 restoreStack[0]；前导斜杠归一规则与 queryPath 一致。
 			const entry = restoreStack?.[0]
 			const entryPagePath = typeof entry?.pagePath === 'string' ? entry.pagePath.replace(/^\/+/, '') : ''
-			if (!entryPagePath) {
-				throw new Error('[container] openApp: options.path or a non-empty restoreStack (with restoreStack[0].pagePath) is required')
-			}
+			if (!entryPagePath)
+				throw new Error('[container] openApp: restoreStack[0].pagePath must be a non-empty string')
 			pagePath = entryPagePath
 			query = entry!.query ?? {}
 		}
 		else {
-			// navigateToMiniProgram 官方允许省略 path；留空到 MiniApp.initApp() 读取
-			// 目标 app-config.json 的 entryPagePath，不能拿来源小程序路径代填。
+			// path 省略时留空到 MiniApp.initApp() 读取目标 app-config.json 的
+			// entryPagePath；小游戏借此使用固定 game 入口。
 			pagePath = ''
 			query = {}
 		}

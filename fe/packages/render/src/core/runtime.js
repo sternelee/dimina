@@ -614,6 +614,13 @@ class Runtime {
 			observer.disconnect()
 		}
 		this.performanceObservers.clear()
+		for (const node of this.canvasNodes.values()) {
+			node.cleanup?.()
+		}
+		for (const frameId of this.canvasRafIds.values()) {
+			cancelAnimationFrame(frameId)
+		}
+		this.canvasRafIds.clear()
 	}
 
 	syncReactiveState(state, nextState = {}) {
@@ -1534,6 +1541,71 @@ class Runtime {
 		if (type === 'webgl' || type === 'experimental-webgl' || type === 'webgl2') {
 			this.publishCanvasCapabilities(bridgeId)
 		}
+	}
+
+	createGameCanvas({ bridgeId, params }) {
+		const { nodeId, width = 300, height = 150, type = '2d' } = params
+		const existing = this.canvasNodes.get(nodeId)
+		if (existing) {
+			return
+		}
+
+		const canvas = document.createElement('canvas')
+		canvas.width = width
+		canvas.height = height
+		canvas.setAttribute('data-dimina-game-canvas', '')
+		Object.assign(canvas.style, {
+			display: 'block',
+			position: 'fixed',
+			inset: '0',
+			width: '100%',
+			height: '100%',
+			touchAction: 'none',
+		})
+
+		const serializeTouch = (touch) => ({
+			identifier: touch.identifier,
+			clientX: touch.clientX,
+			clientY: touch.clientY,
+			pageX: touch.pageX,
+			pageY: touch.pageY,
+			force: Number.isFinite(touch.force) ? touch.force : 0,
+		})
+		const handlers = new Map()
+		for (const eventType of ['touchstart', 'touchmove', 'touchend', 'touchcancel']) {
+			const handler = (event) => {
+				if (event.cancelable) {
+					event.preventDefault()
+				}
+				message.send({
+					type: 'gameTouch',
+					target: 'service',
+					body: {
+						bridgeId,
+						eventType,
+						touches: Array.from(event.touches || [], serializeTouch),
+						changedTouches: Array.from(event.changedTouches || [], serializeTouch),
+						timeStamp: event.timeStamp,
+					},
+				})
+			}
+			handlers.set(eventType, handler)
+			canvas.addEventListener(eventType, handler, { passive: false })
+		}
+
+		document.body.append(canvas)
+		this.canvasNodes.set(nodeId, {
+			canvas,
+			type,
+			contexts: new Map(),
+			cleanup: () => {
+				for (const [eventType, handler] of handlers) {
+					canvas.removeEventListener(eventType, handler)
+				}
+				canvas.remove()
+			},
+		})
+		this.publishCanvasCapabilities(bridgeId)
 	}
 
 	resolveCanvasArg(value) {

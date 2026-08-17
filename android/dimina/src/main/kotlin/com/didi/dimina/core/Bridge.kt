@@ -98,6 +98,7 @@ class Bridge(
                 "bridgeId" to id,
                 "resourceLoadId" to currentResourceLoadId,
                 "appId" to options.appId,
+                "runtimeType" to options.runtimeType,
                 "pagePath" to options.pathInfo.pagePath,
                 "root" to options.root,
                 "baseUrl" to PathUtils.WEBVIEW_JSAPP_BASE_URL
@@ -122,6 +123,7 @@ class Bridge(
                         put("bridgeId", id)
                         put("resourceLoadId", currentResourceLoadId)
                         put("appId", options.appId)
+                        put("runtimeType", options.runtimeType)
                         put("pagePath", options.pathInfo.pagePath)
                         put("query", options.pathInfo.query ?: JSONObject())
                         put("scene", options.scene)

@@ -88,8 +88,8 @@ export interface StorageAdapter {
 export interface OpenAppOptions {
 	appId: string
 	/**
-	 * 入口页路径（可带 query，如 'pages/index/index?a=1'）。省略时取
-	 * restoreStack[0]；同时提供时以 path 为准；两者都缺失则 openApp reject。
+	 * 入口路径（可带 query，如 'pages/index/index?a=1'）。省略时优先取
+	 * restoreStack[0]，否则读取 app-config.json 的 entryPagePath；小游戏入口为 game。
 	 */
 	path?: string
 	scene?: number
@@ -225,6 +225,7 @@ export type RenderFrameWindow = Window & { DiminaRenderBridge: DiminaRenderBridg
  */
 export interface BridgeOptions {
 	appId: string
+	runtimeType?: 'miniProgram' | 'game'
 	pagePath: string
 	query?: Record<string, string>
 	scene?: number

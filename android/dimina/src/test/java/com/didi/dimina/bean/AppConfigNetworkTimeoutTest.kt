@@ -94,4 +94,20 @@ class AppConfigNetworkTimeoutTest {
         assertEquals(3000, timeout.uploadFile)
         assertEquals(4000, timeout.downloadFile)
     }
+
+    @Test
+    fun miniGameRuntimeTypeAndEntryAreDecodedWithoutPageModules() {
+        val config = json.decodeFromString<AppConfig>(
+            """{"app":{"runtimeType":"game","entryPagePath":"game","pages":["game"]},"modules":{}}""",
+        )
+
+        assertEquals("game", config.app.runtimeType)
+        assertEquals("game", config.app.entryPagePath)
+        assertEquals(emptyMap<String, PageModule>(), config.modules)
+    }
+
+    @Test
+    fun missingRuntimeTypeKeepsMiniProgramCompatibility() {
+        assertEquals("miniProgram", decode().app.runtimeType)
+    }
 }

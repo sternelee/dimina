@@ -200,6 +200,10 @@
 	box-sizing: border-box;
 }
 
+.dimina-native-view--game .dimina-mini-app__webviews {
+	padding-bottom: 0;
+}
+
 .dimina-mini-app-menu__mask {
 	position: fixed;
 	top: 0;

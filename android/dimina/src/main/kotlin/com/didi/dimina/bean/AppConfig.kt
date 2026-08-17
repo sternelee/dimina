@@ -15,6 +15,7 @@ data class AppConfig(
 data class App(
     val entryPagePath: String? = null,
     val pages: List<String>,
+    val runtimeType: String = "miniProgram",
     val window: WindowConfig? = null,
     val tabBar: TabBarConfig? = null,
     val subPackages: List<SubPackage>? = null,

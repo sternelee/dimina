@@ -612,7 +612,8 @@ class DiminaActivity : ComponentActivity() {
 
             // 3.读取页面配置
             val entryPagePath =
-                miniProgram.path ?: getDefaultEntryPagePath() ?: run {
+                (if (appConfig.app.runtimeType == "game") null else miniProgram.path)
+                    ?: getDefaultEntryPagePath() ?: run {
                     withContext(Dispatchers.Main) { finish() }
                     return@withContext
                 }
@@ -644,6 +645,7 @@ class DiminaActivity : ComponentActivity() {
                                 isRoot = true,
                                 root = pageConfig?.root ?: "main",
                                 appId = miniProgram.appId,
+                                runtimeType = appConfig.app.runtimeType,
                                 pages = appConfig.app.pages,
                                 configInfo = mergedPageConfig,
                                 referrerInfo = getLaunchReferrerInfo(),
@@ -1332,6 +1334,7 @@ class DiminaActivity : ComponentActivity() {
                     isRoot = index == selectedTabIndex.intValue,
                     root = state.root,
                     appId = miniProgram.appId,
+                    runtimeType = appConfig.app.runtimeType,
                     pages = appConfig.app.pages,
                     configInfo = state.configInfo,
                     referrerInfo = getLaunchReferrerInfo(),

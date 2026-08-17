@@ -1,4 +1,10 @@
 import { invokeAPI } from '@/api/common'
+import { createMiniGameImage } from '@/api/core/ui/canvas/canvas-node'
+
+/** 创建小游戏图片对象，可作为 CanvasRenderingContext2D.drawImage 的图片源。 */
+export function createImage() {
+	return createMiniGameImage()
+}
 
 /**
  * 保存图片到系统相册

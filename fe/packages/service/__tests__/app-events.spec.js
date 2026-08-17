@@ -4,9 +4,13 @@ import {
 	offAppHide,
 	offAppShow,
 	offError,
+	offHide,
+	offShow,
 	onAppHide,
 	onAppShow,
 	onError,
+	onHide,
+	onShow,
 } from '../src/api/core/base/app-event'
 import { canIUse } from '../src/api/core/base'
 import { resetAppEvents } from '../src/core/app-events'
@@ -34,10 +38,27 @@ describe('application-level events', () => {
 		expect(onAppHide(listener)).toBeUndefined()
 		expect(offAppHide(listener)).toBeUndefined()
 
-		for (const name of ['onError', 'offError', 'onAppShow', 'onAppHide', 'offAppShow', 'offAppHide']) {
+		for (const name of ['onError', 'offError', 'onAppShow', 'onAppHide', 'offAppShow', 'offAppHide', 'onShow', 'offShow', 'onHide', 'offHide']) {
 			expect(canIUse(name)).toBe(true)
 		}
 		expect(globalThis.DiminaServiceBridge.invoke).not.toHaveBeenCalled()
+	})
+
+	it('shares mini game onShow/onHide aliases with application visibility events', () => {
+		const calls = []
+		const show = options => calls.push(['show', options])
+		const hide = () => calls.push(['hide'])
+		onShow(show)
+		onHide(hide)
+		const app = createApp()
+		app.appHide()
+		expect(calls).toEqual([['show', app.options], ['hide']])
+
+		offShow(show)
+		offHide(hide)
+		app.appShow()
+		app.appHide()
+		expect(calls).toHaveLength(2)
 	})
 
 	it('runs App.onShow first, then every wx.onAppShow listener with the same options', () => {

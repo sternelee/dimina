@@ -10,7 +10,7 @@ import { artCode, resetAssetCache } from './common/utils.js'
 import { workerPool } from './common/worker-pool.js'
 import { NpmBuilder } from './common/npm-builder.js'
 import { compileConfig } from './core/index.js'
-import { getAppConfigInfo, getAppId, getAppName, getAppStyleScopeId, getPages, getTargetPath, getWorkPath, storeInfo } from './env.js'
+import { getAppConfigInfo, getAppId, getAppName, getAppStyleScopeId, getPages, getTargetPath, getWorkPath, isMiniGame, storeInfo } from './env.js'
 
 let isPrinted = false
 const previousCompatibilityWarnings = new Map()
@@ -86,12 +86,13 @@ export default async function build(targetPath, workPath, useAppIdDir = true, op
 				title: `编译项目 · ${path.basename(path.resolve(workPath))}`,
 				task: (ctx, task) => {
 					const allPages = getPages()
+					const miniGame = isMiniGame()
 					ctx.allPages = allPages
 					ctx.pages = filterPagesByEntries(allPages, affectedEntries)
 					ctx.compatibilityWarnings = new Set()
 					const compileTasks = []
 
-					if (enabledStages.has('view')) {
+					if (enabledStages.has('view') && !miniGame) {
 						compileTasks.push({
 							title: '编译视图',
 							rendererOptions: { outputBar: true, persistentOutput: false },
@@ -110,7 +111,7 @@ export default async function build(targetPath, workPath, useAppIdDir = true, op
 							},
 						})
 					}
-					if (enabledStages.has('style')) {
+					if (enabledStages.has('style') && !miniGame) {
 						compileTasks.push({
 							title: '编译样式',
 							rendererOptions: { outputBar: true, persistentOutput: false },

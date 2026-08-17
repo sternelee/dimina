@@ -21,6 +21,8 @@ const container = createContainer({
 })
 
 await container.openApp({ appId: 'wx92269e3b2f304afc', path: 'example/index' })
+// path 可省略：普通小程序取 app-config 首页，小游戏取 game 入口
+await container.openApp({ appId: 'wx-game-app-id' })
 ```
 
 - 包以预构建 `dist/`（ESM）分发；`CreateContainerOptions` / `ContainerInstance` / `ShellAdapter` 等契约类型随包导出，TS 宿主可直接 `import type`。
@@ -46,6 +48,7 @@ resourceBaseUrl/
 加载规则：
 
 - `openApp({appId, path})` 请求 `${resourceBaseUrl}${appId}/main/app-config.json`，`path` 必须是其 `app.pages` 数组里的一项。请求 404 / 网络失败 / JSON 非法不会静默空白，走 `onAppLaunchError` 通知宿主。
+- `path` 省略时读取 `app.entryPagePath`；`app.runtimeType === 'game'` 时固定进入小游戏 `game` 入口，只加载 `logic.js`，不请求页面视图或样式文件。
 - `pageFrameUrl`（缺省 `resourceBaseUrl/pageFrame.html`）是另一份独立资源，不在 `{appId}/` 目录下。
 - `getAppInfo(appId)` 返回的 `{name, logo}` 仅用于展示（如启动屏文案），与 `app-config.json` 加载互不依赖。
 
@@ -98,7 +101,7 @@ const container = createContainer({
 | 成员 | 说明 |
 |---|---|
 | `application` | 导航栈应用实例（挂载在 `mount` 下） |
-| `openApp({appId, path?, scene?, destroy?, restoreStack?})` | 打开/前置小程序；同 appId 二次打开复用缓存实例；`destroy: true` 先销毁其他 appId 的实例；resolve 为打开的 miniApp 实例。`path` 省略时入口页取 `restoreStack[0]`（pagePath + query 对象直传，`QueryRouter.parse()` 的 `stack` 可直接回传）；两者都缺失则 reject |
+| `openApp({appId, path?, scene?, destroy?, restoreStack?})` | 打开/前置小程序或小游戏；同 appId 二次打开复用缓存实例；`destroy: true` 先销毁其他 appId 的实例；resolve 为打开的 miniApp 实例。`path` 省略时优先取 `restoreStack[0]`，否则读取 `app-config.json` 的 `entryPagePath`；小游戏使用 `game` 入口 |
 | `closeApp(miniApp?)` | 关闭（不销毁）当前/指定小程序 |
 | `registerExtModule(name, handler)` | 注册第三方扩展 bridge 模块 |
 | `registerApi(name, handler)` | 容器级注册/覆盖 API（小程序侧经 `wx.xxx` / 命名空间调用），对已打开和之后打开的小程序都生效；`this` 为触发调用的 miniApp 实例 |

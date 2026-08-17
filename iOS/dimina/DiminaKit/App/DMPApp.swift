@@ -67,7 +67,8 @@ public class DMPApp {
         }
 
         let entryPath = resolvedEntryPath(for: launchConfig)
-        guard bundleAppConfig?.isContainsPage(pagePath: entryPath) == true else {
+        guard bundleAppConfig?.runtimeType == "game"
+                || bundleAppConfig?.isContainsPage(pagePath: entryPath) == true else {
             DMPLogger.debug("launch rejected: page is not declared: \(entryPath)")
             return false
         }
@@ -244,6 +245,9 @@ public class DMPApp {
     }
 
     private func resolvedEntryPath(for launchConfig: DMPLaunchConfig) -> String {
+        if bundleAppConfig?.runtimeType == "game" {
+            return bundleAppConfig?.entryPagePath ?? "game"
+        }
         let requestedEntry = launchConfig.appEntryPath?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
         let normalizedEntry = DMPUtil.normalizePagePath(requestedEntry)

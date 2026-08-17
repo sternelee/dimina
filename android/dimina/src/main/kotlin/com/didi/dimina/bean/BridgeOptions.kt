@@ -33,6 +33,7 @@ data class BridgeOptions(
     val isRoot: Boolean,
     var root: String,
     val appId: String,
+    val runtimeType: String = "miniProgram",
     val pages: List<String>,
     var configInfo: MergedPageConfig,
     val referrerInfo: JSONObject? = null,

@@ -5,8 +5,8 @@ import { installFetchMock } from './fixtures/mock-fetch.js'
 
 // 契约：openApp({ appId, restoreStack }) 可以省略 path —— 宿主刷新恢复时手里只有
 // QueryRouter.parse() 给出的 { appId, stack }，不该再自己把 stack[0] 拼回 "pagePath?query"
-// 字符串。restoreStack[0] 就是入口页；path 仍在时按旧行为优先；两者都给不出入口页时
-// 必须 reject 而不是静默用一个错的默认页面打开。
+// 字符串。restoreStack[0] 就是入口页；path 仍在时按旧行为优先；两者都没有时读取
+// app-config.json 的 entryPagePath（小游戏由此使用 game 入口）。
 //
 // 断言面：openApp resolve 出的 miniApp 上的 appId / pagePath / query 字段（不是拼出来的
 // URL 字符串），这三者就是宿主接下来渲染地址栏、做前端路由要用的东西。
@@ -92,26 +92,54 @@ describe('openApp path optional when restoreStack is provided', () => {
 		expect(miniApp.query).toEqual({ keep: 'fromPath' })
 	}, 10000)
 
-	it('rejects with a [container]-prefixed, path-mentioning error when neither path nor restoreStack is provided', async () => {
+	it('uses app-config entryPagePath when neither path nor restoreStack is provided', async () => {
 		installFetchMock()
 		const container = createContainer({ mount })
 
-		const error = await rejectionOf(container.openApp({ appId: 'wx-missing-both' }))
-
-		expect(error).toBeInstanceOf(Error)
-		expect(error.message.startsWith('[container]')).toBe(true)
-		expect(error.message).toMatch(/path/i)
+		const miniApp = await container.openApp({ appId: 'wx-missing-both' })
+		await vi.waitFor(() => expect(miniApp.pagePath).toBe('pages/index/index'))
 	}, 10000)
 
-	it('rejects when restoreStack is an empty array and path is omitted', async () => {
+	it('detects a mini game from app-config and launches its game entry', async () => {
+		const gameConfig = {
+			app: {
+				runtimeType: 'game',
+				entryPagePath: 'game',
+				pages: ['game'],
+				window: { navigationStyle: 'custom' },
+			},
+			modules: {},
+		}
+		globalThis.fetch = vi.fn(() => Promise.resolve({
+			ok: true,
+			status: 200,
+			text: () => Promise.resolve(JSON.stringify(gameConfig)),
+		})) as typeof fetch
+		const container = createContainer({ mount })
+
+		const miniApp = await container.openApp({ appId: 'wx-game' })
+		await vi.waitFor(() => {
+			expect(miniApp.runtimeType).toBe('game')
+			expect(miniApp.pagePath).toBe('game')
+			expect(miniApp.el.classList.contains('dimina-native-view--game')).toBe(true)
+			const loadMessage = FakeWorker.instances
+				.flatMap(worker => worker.postMessage.mock.calls)
+				.map(([message]) => message)
+				.find(message => message?.type === 'loadResource')
+			expect(loadMessage?.body).toMatchObject({
+				appId: 'wx-game',
+				pagePath: 'game',
+				runtimeType: 'game',
+			})
+		}, { timeout: 8000 })
+	}, 10000)
+
+	it('uses app-config entryPagePath when restoreStack is empty and path is omitted', async () => {
 		installFetchMock()
 		const container = createContainer({ mount })
 
-		const error = await rejectionOf(container.openApp({ appId: 'wx-empty-stack', restoreStack: [] }))
-
-		expect(error).toBeInstanceOf(Error)
-		expect(error.message.startsWith('[container]')).toBe(true)
-		expect(error.message).toMatch(/path/i)
+		const miniApp = await container.openApp({ appId: 'wx-empty-stack', restoreStack: [] })
+		await vi.waitFor(() => expect(miniApp.pagePath).toBe('pages/index/index'))
 	}, 10000)
 
 	it('rejects when restoreStack[0].pagePath is empty and path is omitted', async () => {

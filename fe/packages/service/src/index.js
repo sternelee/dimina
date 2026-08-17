@@ -1,6 +1,7 @@
 import { callback, uuid } from '@dimina/common'
 import { navigateBack, navigateTo, redirectTo, reLaunch, switchTab } from './api/core/route'
 import env from './core/env'
+import { emitGameTouch } from './core/game-events'
 import hostEnv from './core/host-env'
 import loader from './core/loader'
 import message from './core/message'
@@ -21,16 +22,24 @@ class Service {
 
 	init() {
 		this.message.on('loadResource', (msg) => {
-			const { appId, bridgeId, pagePath, root = '.', baseUrl = '/', hostEnv: hostEnvSnapshot, query, resourceLoadId, scene, referrerInfo } = msg
+			const { appId, bridgeId, pagePath, root = '.', baseUrl = '/', hostEnv: hostEnvSnapshot, query, resourceLoadId, runtimeType, scene, referrerInfo } = msg
 			if (hostEnvSnapshot) {
 				hostEnv.init(hostEnvSnapshot)
 			}
+			runtime.setRuntimeType(runtimeType)
 			runtime.setAppLaunchOptions({ scene, pagePath, query, referrerInfo })
-			loader.loadResource({ appId, bridgeId, pagePath, root, baseUrl, resourceLoadId })
+			const loaded = loader.loadResource({ appId, bridgeId, pagePath, root, baseUrl, resourceLoadId, runtimeType })
+			if (loaded && runtime.isMiniGame()) {
+				runtime.gameLaunch()
+			}
 		})
 
 		this.message.on('hostEnvUpdate', (patch) => {
 			hostEnv.update(patch)
+		})
+
+		this.message.on('gameTouch', ({ eventType, ...event }) => {
+			emitGameTouch(eventType, event)
 		})
 
 		// 来自 components/events.js
@@ -123,6 +132,9 @@ class Service {
 		// 双线程资源就绪后创建首个页面实例
 		this.message.on('resourceLoaded', (msg) => {
 			const { bridgeId, pagePath, query, stackId } = msg
+			if (runtime.isMiniGame()) {
+				return
+			}
 
 			const module = loader.getModuleByPath(pagePath)
 			if (!module) {

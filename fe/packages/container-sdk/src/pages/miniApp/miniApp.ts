@@ -89,6 +89,7 @@ interface TabBarConfig {
 interface AppConfigApp {
 	entryPagePath: string
 	pages: string[]
+	runtimeType?: 'miniProgram' | 'game'
 	window?: AppWindowConfig
 	tabBar?: TabBarConfig
 	networkTimeout?: {
@@ -229,6 +230,7 @@ export class MiniApp {
 	appId: string
 	opener: MiniApp | null
 	appConfig: MiniAppConfig | null
+	runtimeType: 'miniProgram' | 'game'
 	navigator: Navigator
 	jscore: JSCore
 	webviewsContainer: HTMLElement | null
@@ -280,6 +282,7 @@ export class MiniApp {
 		this.appId = opts.appId
 		this.opener = opts.opener ?? null
 		this.appConfig = null
+		this.runtimeType = 'miniProgram'
 		this.navigator = new Navigator()
 		this.jscore = new JSCore(this)
 		this.webviewsContainer = null
@@ -704,11 +707,15 @@ export class MiniApp {
 			}
 
 			this.appConfig = JSON.parse(configContent)
+			this.runtimeType = this.appConfig?.app?.runtimeType === 'game' ? 'game' : 'miniProgram'
+			this.el.classList.toggle('dimina-native-view--game', this.runtimeType === 'game')
 
 			// 缓存 tabBar 配置（list、color 等），并渲染 tabBar 容器；后续仅做选中态/可见性切换
 			this._initTabBar()
 
-			const entryPagePath = this.appInfo.pagePath || this.appConfig!.app.entryPagePath
+			const entryPagePath = this.runtimeType === 'game'
+				? (this.appConfig!.app.entryPagePath || 'game')
+				: (this.appInfo.pagePath || this.appConfig!.app.entryPagePath)
 			// navigateToMiniProgram 允许省略 path。配置加载后把真实入口回填到实例元数据，
 			// 让后续 restart/referrer/宿主读取都看到实际页面，而不是永久保留空字符串。
 			if (!this.appInfo.pagePath) {
@@ -913,6 +920,7 @@ export class MiniApp {
 			configInfo,
 			isRoot,
 			appId,
+			runtimeType: this.runtimeType,
 			pagePath,
 			query,
 			scene,

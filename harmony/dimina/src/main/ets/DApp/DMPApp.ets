@@ -579,11 +579,15 @@ export class DMPApp {
 
   private launchInner(launchConfig: DMPLaunchConfig) {
     DMPLogger.i(Tags.LAUNCH, "launchInner start");
+    const appModuleConfig = this.bundleManager.getJsAppModuleConfig()
+    if (appModuleConfig.runtimeType === 'game') {
+      launchConfig.appEntryPath = appModuleConfig.entryPagePath || 'game'
+    }
     if (!launchConfig.appEntryPath) {
       launchConfig.appEntryPath = this.bundleManager.getBundleInfo().currentJsAppBundleConfig?.path;
     }
     if (!launchConfig.appEntryPath) {
-      launchConfig.appEntryPath = this.bundleManager.getJsAppModuleConfig().entryPagePath
+      launchConfig.appEntryPath = appModuleConfig.entryPagePath
     }
     // 启动页路径统一去除前导斜杠：宿主 launchConfig / bundle config 的写法不受控，
     // 而 app-config 的 modules / tabBar key 均无前导斜杠。页面内路由都经

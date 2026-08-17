@@ -85,6 +85,7 @@ public class DMPContainer {
             appId: app.getAppId(),
             pagePath: pagePath,
             root: root,
+            runtimeType: config.runtimeType,
             launchConfig: launchConfig
         )
         return DMPMap([
@@ -98,6 +99,7 @@ public class DMPContainer {
         appId: String,
         pagePath: String,
         root: String,
+        runtimeType: String = "miniProgram",
         launchConfig: DMPLaunchConfig?
     ) -> [String: Any] {
         var body: [String: Any] = [
@@ -106,6 +108,7 @@ public class DMPContainer {
             "pagePath": pagePath,
             "query": launchConfig?.query ?? [:],
             "root": root,
+            "runtimeType": runtimeType,
             "scene": launchConfig?.scene ?? DMPScene.fromMainEntry.rawValue,
         ]
         if let referrerInfo = launchConfig?.referrerInfo {

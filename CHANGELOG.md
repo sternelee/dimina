@@ -5,6 +5,7 @@
 ### 新增
 
 - Android、iOS、HarmonyOS 和 Web 支持多个不同 `appId` 的小程序运行时并存；跨小程序跳转时保留来源实例及其后台任务，返回时恢复原实例。
+- Android、iOS、HarmonyOS 和 Web 支持微信小游戏 `game.js` 入口，新增上屏 Canvas、图片、动画帧、触摸及小游戏前后台事件基础能力。
 
 ### 优化
 

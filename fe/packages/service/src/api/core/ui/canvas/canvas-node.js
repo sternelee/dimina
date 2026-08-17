@@ -1,4 +1,5 @@
 import { callback, isFunction, uuid } from '@dimina/common'
+import hostEnv from '@/core/host-env'
 import message from '@/core/message'
 import router from '@/core/router'
 
@@ -64,6 +65,8 @@ const WEBGL_DEFAULT_CONTEXT_ATTRIBUTES = {
 }
 
 const webglCapabilitiesByBridge = new Map()
+let miniGameScreenCanvas = null
+let miniGameImageCanvas = null
 
 const WEBGL_CONSTANTS = {
 	DEPTH_BUFFER_BIT: 0x00000100,
@@ -1551,4 +1554,64 @@ export function createOffscreenCanvas(options = {}) {
 		offscreen: true,
 		webglCapabilities: getWebGLCapabilities(bridgeId),
 	})
+}
+
+/**
+ * 创建小游戏画布。微信小游戏中第一次调用 wx.createCanvas() 得到上屏画布，
+ * 后续调用得到离屏画布；入口 game.js 不依赖 Page/WXML。
+ */
+export function createCanvas(options = {}) {
+	if (miniGameScreenCanvas) {
+		return createOffscreenCanvas(options)
+	}
+
+	const systemInfo = hostEnv.getSystemInfo() || {}
+	const width = normalizeCanvasDimension(options.width, systemInfo.windowWidth || 300)
+	const height = normalizeCanvasDimension(options.height, systemInfo.windowHeight || 150)
+	const type = options.type || '2d'
+	const nodeId = makeResourceId('game_canvas')
+	const bridgeId = getCurrentBridgeId()
+	sendCanvasMessage(bridgeId, 'createGameCanvas', {
+		nodeId,
+		width,
+		height,
+		type,
+	})
+	miniGameScreenCanvas = new CanvasNode({
+		nodeId,
+		bridgeId,
+		width,
+		height,
+		type,
+		webglCapabilities: getWebGLCapabilities(bridgeId),
+	})
+	return miniGameScreenCanvas
+}
+
+export function createMiniGameImage() {
+	// 图片资源存放在 Render 的全局 Canvas 资源表中，不需要占用小游戏的
+	// 首个上屏 Canvas。这样业务即使先 wx.createImage()，第一次显式
+	// wx.createCanvas() 仍严格得到上屏画布，符合微信小游戏语义。
+	miniGameImageCanvas ||= createOffscreenCanvas({ width: 1, height: 1, type: '2d' })
+	return miniGameImageCanvas.createImage()
+}
+
+export function installMiniGameGlobals() {
+	globalThis.GameGlobal = globalThis
+	globalThis.global = globalThis
+	globalThis.requestAnimationFrame = (callback) => {
+		if (!miniGameScreenCanvas) {
+			throw new Error('requestAnimationFrame requires wx.createCanvas() first')
+		}
+		return miniGameScreenCanvas.requestAnimationFrame(callback)
+	}
+	globalThis.cancelAnimationFrame = (requestId) => {
+		miniGameScreenCanvas?.cancelAnimationFrame(requestId)
+	}
+}
+
+// 仅供 runtime 重建和单元测试清理同一个 service 上下文中的全局状态。
+export function resetMiniGameCanvas() {
+	miniGameScreenCanvas = null
+	miniGameImageCanvas = null
 }

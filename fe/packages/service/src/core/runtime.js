@@ -1,5 +1,5 @@
 import { isFunction } from '@dimina/common'
-import { reportAppError } from './app-events'
+import { emitAppHide, emitAppShow, reportAppError } from './app-events'
 import { invokeSafely } from './safe-callback'
 import { App } from '../instance/app/app'
 import { Component } from '../instance/component/component'
@@ -17,6 +17,16 @@ class Runtime {
 		this.appEnterOptions = {}
 		this.instances = {}
 		this.pageStates = new Map()
+		this.runtimeType = 'miniProgram'
+		this.gameLaunched = false
+	}
+
+	setRuntimeType(runtimeType) {
+		this.runtimeType = runtimeType === 'game' ? 'game' : 'miniProgram'
+	}
+
+	isMiniGame() {
+		return this.runtimeType === 'game'
 	}
 
 	setAppLaunchOptions(options) {
@@ -139,11 +149,29 @@ class Runtime {
 		if (options && Object.keys(options).length > 0) {
 			this.appEnterOptions = this.normalizeAppOptions(options)
 		}
-		this.app?.appShow(this.appEnterOptions)
+		if (this.app) {
+			this.app.appShow(this.appEnterOptions)
+		}
+		else if (this.isMiniGame() && this.gameLaunched) {
+			emitAppShow(this.appEnterOptions)
+		}
 	}
 
 	appHide() {
-		this.app?.appHide()
+		if (this.app) {
+			this.app.appHide()
+		}
+		else if (this.isMiniGame() && this.gameLaunched) {
+			emitAppHide()
+		}
+	}
+
+	gameLaunch() {
+		if (!this.isMiniGame() || this.gameLaunched) {
+			return
+		}
+		this.gameLaunched = true
+		emitAppShow(this.appEnterOptions)
 	}
 
 	stackShow(stackId) {

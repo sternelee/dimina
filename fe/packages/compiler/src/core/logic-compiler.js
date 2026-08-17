@@ -7,7 +7,7 @@ import MagicString from 'magic-string'
 import { transform } from 'esbuild'
 import { getWxMemberName, takeCompatibilityWarnings, warnUnsupportedWxApi } from '../common/compatibility.js'
 import { collectAssets, hasCompileInfo, resolveAssetSourcePath } from '../common/utils.js'
-import { getAppConfigInfo, getAppId, getComponent, getContentByPath, getDependencyGraph, getNpmResolver, getTargetPath, getWorkPath, resetStoreInfo, resolveAppAlias } from '../env.js'
+import { getAppConfigInfo, getAppId, getComponent, getContentByPath, getDependencyGraph, getNpmResolver, getTargetPath, getWorkPath, isMiniGame, resetStoreInfo, resolveAppAlias } from '../env.js'
 import { mergeSourcemap, remapSourcemap } from './sourcemap.js'
 
 // 用于缓存已处理的模块
@@ -119,7 +119,7 @@ ${module.code}
  */
 async function compileJS(pages, root, mainCompileRes, progress) {
 	const compileRes = []
-	if (!root) {
+	if (!root && !isMiniGame()) {
 		await buildJSByPath(root, { path: 'app' }, compileRes, mainCompileRes, false)
 	}
 

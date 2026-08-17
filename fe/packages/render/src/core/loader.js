@@ -7,7 +7,11 @@ class Loader {
 	}
 
 	async loadResource(opts) {
-		const { bridgeId, appId, pagePath, root, baseUrl, resourceLoadId } = opts
+		const { bridgeId, appId, pagePath, root, baseUrl, resourceLoadId, runtimeType } = opts
+		if (runtimeType === 'game') {
+			this.reportResourceLoaded({ bridgeId, resourceLoadId })
+			return true
+		}
 
 		const filename = pagePath.replace(/\//g, '_')
 		const appStyleResourcePath = `${baseUrl}${appId}/main/app.css`
@@ -41,6 +45,11 @@ class Loader {
 			return false
 		}
 
+		this.reportResourceLoaded({ bridgeId, resourceLoadId })
+		return true
+	}
+
+	reportResourceLoaded({ bridgeId, resourceLoadId }) {
 		message.invoke({
 			type: 'renderResourceLoaded',
 			target: 'service',
@@ -49,7 +58,6 @@ class Loader {
 				resourceLoadId,
 			},
 		})
-		return true
 	}
 
 	reportResourceLoadFailed({ bridgeId, pagePath, errors, resourceLoadId }) {

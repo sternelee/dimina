@@ -27,6 +27,7 @@ export class DMPBundleAppConfigNext {
   sitemapLocation: string;
   subPackages: SubPackageConfig[];
   _entryPagePath: string;
+  runtimeType: string;
   moduleMaps: Map<string, ModuleConfig>
   tabBar?: DMPTabBarConfig;
 
@@ -41,6 +42,7 @@ export class DMPBundleAppConfigNext {
     this.sitemapLocation = this.app['sitemapLocation'];
     this.subPackages = this.app['subPackages'];
     this._entryPagePath = this.app['entryPagePath'];
+    this.runtimeType = this.app['runtimeType'] === 'game' ? 'game' : 'miniProgram';
 
     // Parse tabBar config
     if (this.app['tabBar']) {

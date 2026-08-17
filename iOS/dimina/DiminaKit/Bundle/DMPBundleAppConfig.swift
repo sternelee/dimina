@@ -17,6 +17,7 @@ public class DMPBundleAppConfig {
     var sitemapLocation: String
     var subPackages: [SubPackageConfig]
     var _entryPagePath: String
+    let runtimeType: String
     var moduleMaps: [String: ModuleConfig]
     
     init(data: [String: Any]) {
@@ -30,6 +31,7 @@ public class DMPBundleAppConfig {
         self.sitemapLocation = self.app["sitemapLocation"] as? String ?? ""
         self.subPackages = self.app["subPackages"] as? [SubPackageConfig] ?? []
         self._entryPagePath = self.app["entryPagePath"] as? String ?? ""
+        self.runtimeType = self.app["runtimeType"] as? String == "game" ? "game" : "miniProgram"
         
         // 初始化 moduleMaps
         var maps = [String: ModuleConfig]()
