@@ -66,6 +66,7 @@ class AirBattleGame {
     this.spawnClock = 0
     this.shotClock = 0
     this.rapidFire = 0
+    this.ignoreActivationTouch = false
 
     this.player = this.createPlayer()
     this.stars = this.createStars()
@@ -432,19 +433,32 @@ class AirBattleGame {
   }
 
   handleTouchStart(event) {
+    const touch = this.getTouch(event)
     if (this.state === 'title' || this.state === 'gameover') {
+      const button = this.state === 'title'
+        ? renderer.getTitleButtonRect(this)
+        : renderer.getGameOverButtonRect(this)
+      if (!touch || !renderer.containsPoint(button, Number(touch.clientX), Number(touch.clientY))) {
+        return
+      }
+      this.ignoreActivationTouch = true
       this.startRound()
+      return
     }
-    this.movePlayerFromTouch(this.getTouch(event))
+    this.movePlayerFromTouch(touch)
   }
 
   handleTouchMove(event) {
-    if (this.state === 'running') {
+    if (this.state === 'running' && !this.ignoreActivationTouch) {
       this.movePlayerFromTouch(this.getTouch(event))
     }
   }
 
   handleTouchEnd(event) {
+    if (this.ignoreActivationTouch) {
+      this.ignoreActivationTouch = false
+      return
+    }
     if (this.state === 'running') {
       this.movePlayerFromTouch(this.getTouch(event))
     }

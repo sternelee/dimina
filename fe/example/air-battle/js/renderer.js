@@ -214,6 +214,25 @@ function drawParticle(ctx, particle) {
   ctx.restore()
 }
 
+function getTitleButtonRect(game) {
+  const centerX = game.width / 2
+  const centerY = game.height * 0.42
+  return { x: centerX - 102, y: centerY + 36, width: 204, height: 54 }
+}
+
+function getGameOverButtonRect(game) {
+  const centerX = game.width / 2
+  const centerY = game.height * 0.44
+  return { x: centerX - 92, y: centerY + 83, width: 184, height: 50 }
+}
+
+function containsPoint(rect, x, y) {
+  return x >= rect.x
+    && x <= rect.x + rect.width
+    && y >= rect.y
+    && y <= rect.y + rect.height
+}
+
 function drawHud(ctx, game) {
   const top = game.topInset
   const rightTop = Math.max(top + 18, (Number(game.menuBottom) || top) + 8)
@@ -268,6 +287,7 @@ function drawHud(ctx, game) {
 function drawTitle(ctx, game) {
   const centerX = game.width / 2
   const centerY = game.height * 0.42
+  const button = getTitleButtonRect(game)
   ctx.save()
   ctx.fillStyle = 'rgba(61, 123, 255, 0.14)'
   ctx.beginPath()
@@ -291,7 +311,7 @@ function drawTitle(ctx, game) {
   ctx.fillText('移动战机 · 自动射击 · 坚持到更高波次', centerX, centerY - 25)
 
   ctx.fillStyle = 'rgba(89, 230, 255, 0.16)'
-  roundedRect(ctx, centerX - 102, centerY + 36, 204, 54, 27)
+  roundedRect(ctx, button.x, button.y, button.width, button.height, button.height / 2)
   ctx.fill()
   ctx.strokeStyle = COLORS.cyan
   ctx.lineWidth = 1.5
@@ -311,6 +331,7 @@ function drawTitle(ctx, game) {
 function drawGameOver(ctx, game) {
   const centerX = game.width / 2
   const centerY = game.height * 0.44
+  const button = getGameOverButtonRect(game)
   ctx.save()
   ctx.fillStyle = 'rgba(3, 8, 24, 0.72)'
   ctx.fillRect(0, 0, game.width, game.height)
@@ -330,7 +351,7 @@ function drawGameOver(ctx, game) {
   ctx.fillText(String(game.score), centerX, centerY + 48)
 
   ctx.fillStyle = 'rgba(89, 230, 255, 0.16)'
-  roundedRect(ctx, centerX - 92, centerY + 83, 184, 50, 25)
+  roundedRect(ctx, button.x, button.y, button.width, button.height, button.height / 2)
   ctx.fill()
   ctx.strokeStyle = COLORS.cyan
   ctx.stroke()
@@ -349,4 +370,7 @@ module.exports = {
   drawHud,
   drawTitle,
   drawGameOver,
+  getTitleButtonRect,
+  getGameOverButtonRect,
+  containsPoint,
 }
