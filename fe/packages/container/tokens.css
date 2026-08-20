@@ -1,0 +1,45 @@
+:root {
+	--color-paper: oklch(98.5% 0.004 250);
+	--color-paper-raised: oklch(99.2% 0.003 250);
+	--color-ink: oklch(24% 0.02 258);
+	--color-ink-muted: oklch(47% 0.014 257);
+	--color-rule: oklch(89% 0.007 250);
+	--color-rule-muted: oklch(24% 0.02 258 / 0.06);
+	--color-accent: oklch(58% 0.2 256);
+	--color-accent-shadow: oklch(58% 0.2 256 / 0.38);
+	--color-focus: oklch(52% 0.21 256);
+	--color-device-island: oklch(19% 0.008 258);
+	--color-transparent: oklch(0% 0 0 / 0);
+
+	--font-display: "Songti SC", STSong, SimSun, "Noto Serif CJK SC", serif;
+	--font-body: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Microsoft YaHei", sans-serif;
+	--font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, monospace;
+
+	--space-xs: 0.25rem;
+	--space-sm: 0.5rem;
+	--space-md: 0.75rem;
+	--space-lg: 1rem;
+	--space-xl: 1.5rem;
+	--space-2xl: 2rem;
+	--space-3xl: 3rem;
+	--space-4xl: 4rem;
+
+	--text-xs: 0.5625rem;
+	--text-sm: 0.75rem;
+	--text-body: 0.875rem;
+	--text-title: clamp(1.625rem, 2.5vi, 2.25rem);
+	--text-vertical: clamp(1.5625rem, 2.6vi, 2.4375rem);
+
+	--ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+	--ease-in: cubic-bezier(0.7, 0, 0.84, 0);
+	--ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+	--dur-short: 140ms;
+	--dur-medium: 240ms;
+
+	--rule-hairline: 1px;
+	--radius-orbit: 50%;
+	--size-logo: 7.25rem;
+	--size-hit: 2.75rem;
+	--shadow-device: 0 1.875rem 2.625rem oklch(24% 0.02 258 / 0.14);
+	--filter-orbit: drop-shadow(0 0 0.625rem var(--color-accent-shadow));
+}

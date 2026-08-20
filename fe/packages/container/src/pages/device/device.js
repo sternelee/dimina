@@ -1,6 +1,12 @@
 import tpl from './device.html?raw'
+import '../../../tokens.css'
+import './device-stage.scss'
 import './device.scss'
 import diminaLogo from '@/assets/dimina-logo.png'
+
+const ORBIT_LIGHT_FOLLOW_FACTOR = 0.08
+const ORBIT_LIGHT_INNER_THRESHOLD = 0.75
+const ORBIT_LIGHT_SETTLE_THRESHOLD = 0.1
 
 export class Device {
 	constructor() {
@@ -61,23 +67,57 @@ export class Device {
 
 	bindStageGlow() {
 		const stage = this.root.querySelector('.device-stage')
+		const orbit = this.root.querySelector('.device-stage__orbit')
 		let pendingPointer = null
 		let pointerFrame = 0
+		let orbitLightAngle = 45
+		let targetOrbitLightAngle = orbitLightAngle
+
+		const renderPointer = () => {
+			if (pendingPointer) {
+				const { pointerX, pointerY } = pendingPointer
+				const orbitRect = orbit.getBoundingClientRect()
+				const centerX = orbitRect.left + orbitRect.width / 2
+				const centerY = orbitRect.top + orbitRect.height / 2
+				const deltaX = pointerX - centerX
+				const deltaY = pointerY - centerY
+				const orbitRadius = Math.min(orbitRect.width, orbitRect.height) / 2
+
+				// 旧版光斑只有靠近环线时才会明显影响光弧；忽略圆心附近的极角抖动。
+				if (Math.hypot(deltaX, deltaY) >= orbitRadius * ORBIT_LIGHT_INNER_THRESHOLD) {
+					const angle = Math.atan2(deltaY, deltaX) * 180 / Math.PI + 90
+					const shortestTurn = (angle - targetOrbitLightAngle + 540) % 360 - 180
+					targetOrbitLightAngle += shortestTurn
+				}
+				pendingPointer = null
+			}
+
+			const remainingTurn = targetOrbitLightAngle - orbitLightAngle
+			if (Math.abs(remainingTurn) <= ORBIT_LIGHT_SETTLE_THRESHOLD) {
+				orbitLightAngle = targetOrbitLightAngle
+				stage.style.setProperty('--orbit-light-angle', `${orbitLightAngle.toFixed(2)}deg`)
+				pointerFrame = 0
+				return
+			}
+
+			orbitLightAngle += remainingTurn * ORBIT_LIGHT_FOLLOW_FACTOR
+			stage.style.setProperty('--orbit-light-angle', `${orbitLightAngle.toFixed(2)}deg`)
+			pointerFrame = requestAnimationFrame(renderPointer)
+		}
+
 		const syncPointer = ({ x: pointerX, y: pointerY }) => {
 			pendingPointer = { pointerX, pointerY }
 			if (pointerFrame) {
 				return
 			}
 
-			pointerFrame = requestAnimationFrame(() => {
-				const { pointerX, pointerY } = pendingPointer
-				const x = pointerX.toFixed(2)
-				const y = pointerY.toFixed(2)
-				stage.style.setProperty('--x', x)
-				stage.style.setProperty('--y', y)
-				pointerFrame = 0
-			})
+			pointerFrame = requestAnimationFrame(renderPointer)
 		}
+		const stageRect = stage.getBoundingClientRect()
+		syncPointer({
+			x: stageRect.left + stageRect.width * 0.62,
+			y: stageRect.top + stageRect.height * 0.24,
+		})
 		this.root.addEventListener('pointermove', syncPointer)
 	}
 
