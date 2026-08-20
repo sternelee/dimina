@@ -14,7 +14,7 @@
     "dev": "concurrently --kill-others-on-fail \"pnpm start:proxy\" \"pnpm start:dev\"",
     "dev:native": "pnpm --filter container serve",
     "start:proxy": "pnpm --filter server dev",
-    "start:dev": "pnpm --filter fe-container-sdk build --mode development && pnpm --filter container... --parallel dev --mode development",
+    "start:dev": "pnpm --filter @dimina/fe-container-sdk^... build --mode development && pnpm --filter @dimina/container dev --mode development",
     "preview": "concurrently --kill-others-on-fail \"pnpm start:proxy\" \"pnpm preview:container\"",
     "preview:container": "pnpm --dir ./packages/container preview",
     "generate:sdk": "node ./scripts/generate-sdk.js",

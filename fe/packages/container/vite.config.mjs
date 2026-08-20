@@ -10,7 +10,12 @@ function isVConsoleEvalWarning(warning) {
 	return warning?.code === 'EVAL' && (message.includes('vconsole') || id.includes('vconsole'))
 }
 
-export default defineConfig(({ mode }) => {
+export default defineConfig(({ command, mode }) => {
+	const useContainerSdkSource = command === 'serve' && mode === 'development'
+	const containerSdkSource = resolve(__dirname, '../container-sdk/src')
+	const containerSdkEntry = resolve(containerSdkSource, 'index.ts')
+	const pageFrameEntry = resolve(containerSdkSource, 'pages/pageFrame/pageFrame.ts')
+
 	return {
 		base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/',
 		server: {
@@ -20,14 +25,23 @@ export default defineConfig(({ mode }) => {
 			__DEV__: mode !== 'production',
 		},
 		resolve: {
-			extensions: ['.js', '.scss'],
-			alias: {
-				'@': resolve(__dirname, 'src'),
-				'@images': '/images',
+			extensions: ['.js', '.ts', '.scss'],
+			alias: [
+				...(useContainerSdkSource
+					? [
+						// container 的源码入口会同时导入 SDK 脚本与对应 CSS；映射到同一个
+						// 源码入口可复用入口自身的 SCSS 副作用，并由 Vite 去重模块执行。
+						{ find: /^@dimina\/fe-container-sdk\/pageFrame(?:\.css)?$/, replacement: pageFrameEntry },
+						{ find: /^@dimina\/fe-container-sdk\/style\.css$/, replacement: containerSdkEntry },
+						{ find: /^@dimina\/fe-container-sdk$/, replacement: containerSdkEntry },
+					]
+					: []),
+				{ find: '@', replacement: resolve(__dirname, 'src') },
+				{ find: '@images', replacement: '/images' },
 				...(mode === 'test'
-					? { '@dimina/service?url': resolve(__dirname, '__tests__/fixtures/service-worker-url.js') }
-					: {}),
-			},
+					? [{ find: '@dimina/service?url', replacement: resolve(__dirname, '__tests__/fixtures/service-worker-url.js') }]
+					: []),
+			],
 		},
 		css: {
 			preprocessorOptions: {
