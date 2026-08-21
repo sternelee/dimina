@@ -2449,8 +2449,12 @@ export class MiniApp {
 	getSystemInfoSync() {
 		const viewport = this.parent!.el.querySelector<HTMLElement>('.dimina-native-webview__root')
 		const viewportRect = viewport?.getBoundingClientRect()
-		const width = viewportRect?.width || this.el.clientWidth || 375
-		const height = viewportRect?.height || this.el.clientHeight || 667
+		// getBoundingClientRect() 会包含宿主舞台的 CSS transform。在桌面端按比例
+		// 缩放设备预览时，它返回的是屏幕上的视觉尺寸，而小游戏事件坐标仍属于
+		// iframe 的逻辑视口。优先使用布局尺寸，确保 wx.getSystemInfoSync()、
+		// wx.createCanvas() 和浏览器输入事件处于同一个坐标系。
+		const width = viewport?.clientWidth || viewportRect?.width || this.el.clientWidth || 375
+		const height = viewport?.clientHeight || viewportRect?.height || this.el.clientHeight || 667
 		const statusBarHeight = this._getStatusBarRect().height || 0
 
 		return {
