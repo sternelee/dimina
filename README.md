@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="./assets/readme/hero.svg" width="100%" alt="Dimina 星河小程序：将小程序源码编译并运行在 Android、iOS、Harmony 和 Web">
+  <img src="./assets/hero.svg" width="100%" alt="Dimina 星河小程序：将小程序源码编译并运行在 Android、iOS、Harmony 和 Web">
 </p>
 
 <p align="center">
@@ -56,7 +56,7 @@ Dimina 不止提供 Web 预览。它包含小程序编译器、逻辑与视图�
 ## 一份源码，如何抵达四端
 
 <p align="center">
-  <img src="./assets/readme/runtime.svg" width="100%" alt="Dimina 将小程序源码经 DMCC 编译为资源包，并通过统一运行时契约运行在四个平台">
+  <img src="./assets/runtime.svg" width="100%" alt="Dimina 将小程序源码经 DMCC 编译为资源包，并通过统一运行时契约运行在四个平台">
 </p>
 
 DMCC 将小程序源码转换为逻辑、视图、样式和配置资源。进入容器后，消息通道会连接逻辑层、视图层与原生能力，让同一套小程序语义在不同平台上保持一致。

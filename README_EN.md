@@ -3,7 +3,7 @@
 </p>
 
 <p align="center">
-  <img src="./assets/readme/hero-en.svg" width="100%" alt="Dimina compiles mini program source for Android, iOS, Harmony, and Web">
+  <img src="./assets/hero-en.svg" width="100%" alt="Dimina compiles mini program source for Android, iOS, Harmony, and Web">
 </p>
 
 <p align="center">
@@ -56,7 +56,7 @@ Dimina goes beyond Web preview. It includes a mini program compiler, logic and v
 ## How one codebase reaches four platforms
 
 <p align="center">
-  <img src="./assets/readme/runtime-en.svg" width="100%" alt="DMCC compiles mini program source into a runtime bundle loaded by four platform containers">
+  <img src="./assets/runtime-en.svg" width="100%" alt="DMCC compiles mini program source into a runtime bundle loaded by four platform containers">
 </p>
 
 DMCC converts mini program source into logic, view, style, and configuration resources. Inside each container, a message channel connects the logic layer, view layer, and native capabilities so the same mini program semantics remain consistent across platforms.
