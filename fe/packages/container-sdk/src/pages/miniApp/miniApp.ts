@@ -6,6 +6,7 @@ import { LAUNCH_SCREEN_MIN_MS, MODAL_GUARD_MS, WAIT_TRANSITION_TIMEOUT_MS } from
 import { Bridge } from '../../core/bridge.js'
 import { JSCore } from '../../core/jscore.js'
 import { WebSocketManager } from '../../core/webSocketManager.js'
+import { saveWebFile } from '../../core/webFileSystem.js'
 import { resolveStorageAdapter } from '../../config.js'
 import { mergePageConfig, queryPath, readFile, sleep, uuid } from '../../utils/util.js'
 import { Navigator } from './navigator.js'
@@ -173,6 +174,11 @@ interface StorageKeyOptions extends ApiCallbackOptions {
 
 interface SetStorageOptions extends StorageKeyOptions {
 	data: unknown
+}
+
+interface SaveFileOptions extends ApiCallbackOptions {
+	tempFilePath?: string
+	filePath?: string
 }
 
 interface SetTabBarStyleOptions extends ApiCallbackOptions {
@@ -2936,6 +2942,32 @@ export class MiniApp {
 			onFail?.({ errMsg: `getClipboardData:fail ${getErrorMessage(error)}` })
 			onComplete?.()
 		}
+	}
+
+	/**
+	 * Persist a temporary Web resource in this mini program's private file area.
+	 * The quoted method name lets invokeApi dispatch the FileSystemManager bridge name directly.
+	 */
+	'FileSystemManager.saveFile'(opts: SaveFileOptions = {}): void {
+		const { tempFilePath = '', filePath, success, fail, complete } = opts
+		const onSuccess = this.createCallbackFunction(success)
+		const onFail = this.createCallbackFunction(fail)
+		const onComplete = this.createCallbackFunction(complete)
+
+		saveWebFile({
+			appId: this.appId,
+			tempFilePath,
+			filePath,
+			resourceBaseUrl: this.getResourceBaseUrl(),
+		}).then((savedFilePath) => {
+			const result = { savedFilePath, errMsg: 'FileSystemManager.saveFile:ok' }
+			onSuccess?.(result)
+			onComplete?.(result)
+		}).catch((error) => {
+			const result = { errMsg: `FileSystemManager.saveFile:fail ${getErrorMessage(error)}` }
+			onFail?.(result)
+			onComplete?.(result)
+		})
 	}
 
 	setStorage(opts: SetStorageOptions): void {

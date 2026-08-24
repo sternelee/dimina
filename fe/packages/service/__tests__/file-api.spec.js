@@ -33,6 +33,17 @@ describe('file api service adapter', () => {
 		expect(canIUse('FileSystemManager.saveFile')).toBe(true)
 	})
 
+	it('forwards saveFile through the shared FileSystemManager bridge contract', () => {
+		const options = {
+			tempFilePath: 'difile://tmp/report.pdf',
+			filePath: 'difile://usr/reports/report.pdf',
+		}
+
+		getFileSystemManager().saveFile(options)
+
+		expect(invokeAPI).toHaveBeenCalledWith('FileSystemManager.saveFile', options)
+	})
+
 	it('encodes ArrayBuffer payloads before forwarding writes to native', () => {
 		const fsm = getFileSystemManager()
 		const data = new Uint8Array([104, 105]).buffer

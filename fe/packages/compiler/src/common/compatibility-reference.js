@@ -44,6 +44,8 @@ const supportedBuiltinComponents = [
 
 const supportedWxApis = [
 	"env",
+	"getFileSystemManager",
+	"FileSystemManager.saveFile",
 	"onError",
 	"offError",
 	"onAppShow",
