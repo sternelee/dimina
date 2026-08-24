@@ -33,6 +33,7 @@ import { DMPDeviceUtil } from '../Utils/DMPDeviceUtils'
 import { DMPRemoteUpdateManager } from '../Bundle/DMPRemoteUpdateManager'
 import { DMPWebSocketManager } from '../Bridges/Network/DMPWebSocketManager'
 import { DMPAppModuleManagerLifecycle } from '../Bridges/DMPAppModuleManagerLifecycle'
+import { DMPAppRuntimeLifecycle } from './utils/DMPAppRuntimeLifecycle'
 export type DMPBundleUpdateCallback = () => void;
 
 export interface DMPAppInitOptions {
@@ -53,6 +54,9 @@ export class DMPApp {
   private _appModuleManagerLifecycle: DMPAppModuleManagerLifecycle
   private _mapManager: DMPMapManager = new DMPMapManager(this)
   private _runtimeGeneration: number = 0
+  private _runtimeLifecycle: DMPAppRuntimeLifecycle = new DMPAppRuntimeLifecycle()
+  private _closeInProgress?: Promise<void>
+  private _deferredLaunchConfigs: DMPLaunchConfig[] = []
   private _webViewCachePool: DMPWebViewCachePool = new DMPWebViewCachePool(this)
   private _service: DMPService
   private _engineStatus: StatusMonitor<EngineStatus> = new StatusMonitor()
@@ -252,6 +256,11 @@ export class DMPApp {
   }
 
   resetAndStartDimina(config: DMPLaunchConfig) {
+    this.rebuildRuntime()
+    this.startDimina(DMPContextUtils.getUIAbilityContext(), config);
+  }
+
+  private rebuildRuntime() {
     this.onUpdateResults = []
     this._runtimeGeneration++
     // destroyEngine disposes app-scoped native listeners. A cold restart must use a fresh bridge
@@ -264,7 +273,26 @@ export class DMPApp {
     this._mapManager = new DMPMapManager(this);
     this._webViewCachePool = new DMPWebViewCachePool(this);
     this._engineStatus = new StatusMonitor();
-    this.startDimina(DMPContextUtils.getUIAbilityContext(), config);
+    this._runtimeLifecycle.markReady()
+    const deferredLaunchConfigs = this._deferredLaunchConfigs.splice(0)
+    deferredLaunchConfigs.forEach((launchConfig: DMPLaunchConfig): void => {
+      this.launchWhenRuntimeReady(launchConfig)
+    })
+  }
+
+  private restoreRuntimeIfDestroyed(): void {
+    if (!this._runtimeLifecycle.isDestroyed) {
+      return
+    }
+
+    const appManager = DMPAppManager.sharedInstance()
+    appManager.restoreExitedApp(this)
+    try {
+      this.rebuildRuntime()
+    } catch (error) {
+      appManager.exitApp(this.appConfig.appId, this.appIndex)
+      throw error as Error
+    }
   }
 
   updateApp() {
@@ -291,6 +319,11 @@ export class DMPApp {
 
   async startPackageLoader(context: common.UIAbilityContext, launchConfig?: DMPLaunchConfig) {
     DMPLogger.i(Tags.LAUNCH, 'startPackageLoader start')
+    const closeInProgress = this._closeInProgress
+    if (closeInProgress) {
+      await closeInProgress
+    }
+    this.restoreRuntimeIfDestroyed()
     const generation = this._runtimeGeneration
     if (this._engineStatus.currentStatus != EngineStatus.RUN &&
       this._engineStatus.currentStatus != EngineStatus.LOADING) { // 已经启动jsEngine
@@ -350,6 +383,21 @@ export class DMPApp {
 
   //启动页面
   launch(launchConfig: DMPLaunchConfig) {
+    if (this._runtimeLifecycle.shouldDeferLaunch()) {
+      this._deferredLaunchConfigs.push(launchConfig)
+      return
+    }
+    try {
+      this.restoreRuntimeIfDestroyed()
+    } catch (error) {
+      DMPLogger.e(Tags.LAUNCH, `launch failed: ${(error as Error).message}`)
+      this.settleLaunchCompletion(launchConfig, false)
+      return
+    }
+    this.launchWhenRuntimeReady(launchConfig)
+  }
+
+  private launchWhenRuntimeReady(launchConfig: DMPLaunchConfig) {
     if (this._engineStatus.currentStatus == EngineStatus.RUN) {
       this.launchInner(launchConfig)
     } else {
@@ -372,7 +420,31 @@ export class DMPApp {
     completion?.(success)
   }
 
-  public async closeDimina(afterPagesClosed?: () => Promise<void>) {
+  public closeDimina(afterPagesClosed?: () => Promise<void>): Promise<void> {
+    if (this._runtimeLifecycle.isDestroyed) {
+      this.destroyApp()
+      return Promise.resolve()
+    }
+    if (!this._runtimeLifecycle.beginClose()) {
+      return this._closeInProgress ?? Promise.resolve()
+    }
+
+    const closeOperation = this.performClose(afterPagesClosed)
+    this._closeInProgress = closeOperation.then((): void => {
+      this._closeInProgress = undefined
+    }, (error: Error): void => {
+      this._runtimeLifecycle.cancelClose()
+      this._closeInProgress = undefined
+      const deferredLaunchConfigs = this._deferredLaunchConfigs.splice(0)
+      deferredLaunchConfigs.forEach((launchConfig: DMPLaunchConfig): void => {
+        this.settleLaunchCompletion(launchConfig, false)
+      })
+      throw error
+    })
+    return this._closeInProgress
+  }
+
+  private async performClose(afterPagesClosed?: () => Promise<void>) {
     this.notifyMiniProgramHide()
     this.navigatorManager.closeAllNavigators(false)
     if (afterPagesClosed) {
@@ -462,8 +534,12 @@ export class DMPApp {
   }
 
   destroyEngine() {
+    if (this._runtimeLifecycle.isDestroyed) {
+      return
+    }
     // Invalidate bundle/bootstrap callbacks and delayed cache work before disposing their owners.
     this._runtimeGeneration++
+    this._runtimeLifecycle.markDestroyed()
     // 销毁前取消所有 extOnBridge 订阅，防止内存泄漏
     this._appModuleManagerLifecycle.disposeCurrent();
     // 先于 service 销毁：静默清理该 appId 全部 WebSocket 连接/监听/定时器，杜绝事件竞入将死引擎

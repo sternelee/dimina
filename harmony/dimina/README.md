@@ -113,6 +113,10 @@ launchConfig.openType = DMPOpenType.NavigateTo
 this.app.launch(launchConfig)
 ```
 
+`DMPApp` 可以由宿主持有，但 `closeDimina()` 会释放其 Worker、页面和原生监听。再次打开同一实例时，
+仍需按上述顺序调用 `startPackageLoader()` 和 `launch()`；SDK 会重新注册应用并完整重建临时运行态。
+如果宿主自行维护 appId 到实例的映射，不要在已有新实例运行时复用更早关闭的同 appId 实例。
+
 ### 调试模式与 vConsole
 
 当 `appConfig.isDebugMode = true`，或当前 HAP 为 debug 包时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。

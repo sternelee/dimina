@@ -72,6 +72,30 @@ export class DMPAppManager {
     return newApp
   }
 
+  /**
+   * Re-register a retained DMPApp shell after closeDimina removed its destroyed runtime.
+   * Reusing the original appIndex is safe because indices are monotonic and cold re-entry already
+   * rebuilds every app-indexed runtime resource. Never replace a different active instance.
+   */
+  restoreExitedApp(app: DMPApp): void {
+    const appAtIndex = this.appPools.get(app.appIndex)
+    if (appAtIndex === app) {
+      return
+    }
+    if (appAtIndex) {
+      throw new Error(`restoreExitedApp: appIndex ${app.appIndex} is already active`)
+    }
+
+    const appWithSameId = this.existApp(app.appConfig.appId)
+    if (appWithSameId) {
+      throw new Error(`restoreExitedApp: appId ${app.appConfig.appId} is already active`)
+    }
+    if (!this.miniProgramPresentations.ensureRoot(app.appIndex, app.appConfig.appId)) {
+      throw new Error('restoreExitedApp: another mini program is currently presented')
+    }
+    this.appPools.set(app.appIndex, app)
+  }
+
   existApp(appId: string): DMPApp | null {
     let result: DMPApp | null = null
     this.appPools.forEach((app) => {
