@@ -31,6 +31,8 @@ internal object VideoTranscoder {
     ) {
         require(source.isFile) { "file does not exist" }
         require(resolution > 0.0 && resolution <= 1.0) { "invalid resolution" }
+        require(bitrateKbps in 1..Int.MAX_VALUE / 1_000) { "invalid bitrate" }
+        require(fps == null || fps > 0) { "invalid fps" }
 
         val retriever = MediaMetadataRetriever()
         val sourceHeight = try {

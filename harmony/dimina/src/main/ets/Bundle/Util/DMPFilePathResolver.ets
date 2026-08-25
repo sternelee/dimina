@@ -12,29 +12,37 @@ const TEMP_PREFIX = 'tmp';
  */
 export class DMPFilePathResolver {
   static userRoot(appId: string): string {
-    const root = `${DMPContextUtils.getUIAbilityContext().filesDir}/dimina-file-system/${appId}/${USER_PREFIX}`;
-    this.ensureDirectory(root);
-    return this.normalizeAbsolutePath(root);
+    const safeAppId = DMPFilePathResolver.normalizeAppId(appId);
+    const root = `${DMPContextUtils.getUIAbilityContext().filesDir}/dimina-file-system/${safeAppId}/${USER_PREFIX}`;
+    DMPFilePathResolver.ensureDirectory(root);
+    return DMPFilePathResolver.normalizeAbsolutePath(root);
   }
 
   static tempRoot(appId: string): string {
-    const root = `${DMPContextUtils.getUIAbilityContext().cacheDir}/dimina-file-system/${appId}/${TEMP_PREFIX}`;
-    this.ensureDirectory(root);
-    return this.normalizeAbsolutePath(root);
+    const safeAppId = DMPFilePathResolver.normalizeAppId(appId);
+    const root = `${DMPContextUtils.getUIAbilityContext().cacheDir}/dimina-file-system/${safeAppId}/${TEMP_PREFIX}`;
+    DMPFilePathResolver.ensureDirectory(root);
+    return DMPFilePathResolver.normalizeAbsolutePath(root);
+  }
+
+  static legacyTempRoot(appId: string): string {
+    const safeAppId = DMPFilePathResolver.normalizeAppId(appId);
+    const root = `${DMPContextUtils.getUIAbilityContext().filesDir}/dimina/${safeAppId}/resource/tmp`;
+    return DMPFilePathResolver.normalizeAbsolutePath(root);
   }
 
   static resolve(rawPath: string, appId: string, packageRoot?: string): string {
     if (!rawPath) {
       throw new Error('missing file path');
     }
-    const userRoot = this.userRoot(appId);
-    const tempRoot = this.tempRoot(appId);
+    const userRoot = DMPFilePathResolver.userRoot(appId);
+    const tempRoot = DMPFilePathResolver.tempRoot(appId);
     let candidate = rawPath;
 
-    if (rawPath.startsWith(`${VIRTUAL_PREFIX}${USER_PREFIX}`)) {
+    if (rawPath === `${VIRTUAL_PREFIX}${USER_PREFIX}` || rawPath.startsWith(`${VIRTUAL_PREFIX}${USER_PREFIX}/`)) {
       const relative = rawPath.substring(`${VIRTUAL_PREFIX}${USER_PREFIX}`.length).replace(/^\/+/, '');
       candidate = `${userRoot}/${relative}`;
-    } else if (rawPath.startsWith(`${VIRTUAL_PREFIX}${TEMP_PREFIX}`)) {
+    } else if (rawPath === `${VIRTUAL_PREFIX}${TEMP_PREFIX}` || rawPath.startsWith(`${VIRTUAL_PREFIX}${TEMP_PREFIX}/`)) {
       const relative = rawPath.substring(`${VIRTUAL_PREFIX}${TEMP_PREFIX}`.length).replace(/^\/+/, '');
       candidate = `${tempRoot}/${relative}`;
     } else if (rawPath.startsWith(VIRTUAL_PREFIX)) {
@@ -43,17 +51,18 @@ export class DMPFilePathResolver {
       if (!packageRoot) {
         throw new Error(`permission denied, open ${rawPath}`);
       }
-      return this.resolvePackagePath(rawPath, packageRoot);
+      return DMPFilePathResolver.resolvePackagePath(rawPath, packageRoot);
     }
 
-    const path = this.normalizeAbsolutePath(candidate);
-    const normalizedPackageRoot = packageRoot ? this.normalizeAbsolutePath(packageRoot) : '';
-    const allowedRoot = [userRoot, tempRoot, normalizedPackageRoot]
-      .find((root: string) => root.length > 0 && this.isWithin(path, root));
+    const path = DMPFilePathResolver.normalizeAbsolutePath(candidate);
+    const normalizedPackageRoot = packageRoot ? DMPFilePathResolver.normalizeAbsolutePath(packageRoot) : '';
+    const legacyTempRoot = DMPFilePathResolver.legacyTempRoot(appId);
+    const allowedRoot = [userRoot, tempRoot, legacyTempRoot, normalizedPackageRoot]
+      .find((root: string) => root.length > 0 && DMPFilePathResolver.isWithin(path, root));
     if (!allowedRoot) {
       throw new Error(`permission denied, open ${rawPath}`);
     }
-    this.assertNoSymbolicLinks(path, allowedRoot);
+    DMPFilePathResolver.assertNoSymbolicLinks(path, allowedRoot);
     return path;
   }
 
@@ -64,15 +73,15 @@ export class DMPFilePathResolver {
   }
 
   private static resolvePackagePath(rawPath: string, packageRoot: string): string {
-    const relative = this.normalizeRelativePath(rawPath);
-    const root = this.normalizeAbsolutePath(packageRoot);
-    const direct = this.normalizeAbsolutePath(`${root}/${relative}`);
-    const main = this.normalizeAbsolutePath(`${root}/main/${relative}`);
+    const relative = DMPFilePathResolver.normalizeRelativePath(rawPath);
+    const root = DMPFilePathResolver.normalizeAbsolutePath(packageRoot);
+    const direct = DMPFilePathResolver.normalizeAbsolutePath(`${root}/${relative}`);
+    const main = DMPFilePathResolver.normalizeAbsolutePath(`${root}/main/${relative}`);
     const candidate = fs.accessSync(direct) ? direct : main;
-    if (!this.isWithin(candidate, root)) {
+    if (!DMPFilePathResolver.isWithin(candidate, root)) {
       throw new Error(`permission denied, open ${rawPath}`);
     }
-    this.assertNoSymbolicLinks(candidate, root);
+    DMPFilePathResolver.assertNoSymbolicLinks(candidate, root);
     return candidate;
   }
 
@@ -85,6 +94,13 @@ export class DMPFilePathResolver {
       throw new Error('invalid file path');
     }
     return segments.join('/');
+  }
+
+  private static normalizeAppId(appId: string): string {
+    if (!/^[A-Za-z0-9._-]+$/.test(appId)) {
+      throw new Error('invalid app id');
+    }
+    return appId;
   }
 
   private static normalizeAbsolutePath(path: string): string {

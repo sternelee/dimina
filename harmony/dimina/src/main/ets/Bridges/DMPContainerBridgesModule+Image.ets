@@ -2,7 +2,7 @@ import { DMPMap } from '../Utils/DMPMap'
 import { DMPContainerBridgesModule } from './DMPContainerBridgesModule'
 
 import { DMPBridgeCallback } from './DMPTSUtil'
-import { bundleManager, common } from '@kit.AbilityKit'
+import { common } from '@kit.AbilityKit'
 import { BusinessError } from '@ohos.base'
 import fs from '@ohos.file.fs'
 import fileIo from '@ohos.file.fs'
@@ -21,6 +21,7 @@ import { DMPOpenType } from '../DApp/config/DMPLaunchConfig'
 import picker from '@ohos.file.picker'
 import { fileUri } from '@kit.CoreFileKit'
 import { request } from '@kit.BasicServicesKit'
+import { DMPFilePathResolver } from '../Bundle/Util/DMPFilePathResolver'
 
 export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
   getExportMethods(): string[] {
@@ -67,7 +68,7 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
     const count: number = data.getNumber('count') ?? 9;
     const source = sourceType[0] ?? 'album';
     if ('album' == source) {
-      let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseImage';
+      const path = this.mediaTempDirectory('chooseImage');
       PhotoPicker.selectPhotos(DMPContextUtils.getUIAbilityContext(), path, count).then((photoModels) => {
         if (photoModels != null) {
           const tempfilePaths = new Array<string>()
@@ -90,7 +91,7 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
     } else if ('camera' == source) {
       try {
         // 这里是处理文件名 , 应该是系统有bug , 无法使用 saveuri , 需要选择后保存
-        let path =DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseImage';
+        const path = this.mediaTempDirectory('chooseImage');
 
         CameraPicker.takePhoto(getContext() as common.UIAbilityContext, path,
           camera.CameraPosition.CAMERA_POSITION_BACK).then((result) => {
@@ -168,10 +169,7 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
         return;
       }
 
-      const directory = `${DMPContextUtils.getUIAbilityContext().cacheDir}/chooseMessageFile`;
-      if (!fs.accessSync(directory)) {
-        fs.mkdirSync(directory, true);
-      }
+      const directory = this.mediaTempDirectory('chooseMessageFile');
 
       const tempFiles = new Array<DMPMap>();
       const copiedPaths = new Array<string>();
@@ -294,67 +292,62 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
   }
 
   async saveImage(data: DMPMap, callback: DMPBridgeCallback) {
-    let filePath: string = data.get('filePath')
     try {
-      const bundleInfo =
-        bundleManager.getBundleInfoForSelfSync(bundleManager.BundleFlag.GET_BUNDLE_INFO_WITH_APPLICATION)
-
-      filePath = this.getRealSandBoxPath(filePath, bundleInfo.name)
-      let srcFileUris: Array<string> = [filePath];
+      const filePath = this.resolvePackagedMediaPath(data.getString('filePath') ?? '');
+      if (!fs.accessSync(filePath)) {
+        throw new Error('invalid filePath');
+      }
+      const srcFileUris: Array<string> = [fileUri.getUriFromPath(filePath)];
       // 指定待保存照片的创建选项，包括文件后缀和照片类型，标题和照片子类型可选
-      let photoCreationConfigs: Array<photoAccessHelper.PhotoCreationConfig> = [
+      const photoCreationConfigs: Array<photoAccessHelper.PhotoCreationConfig> = [
         {
-          fileNameExtension: 'jpg',
+          fileNameExtension: this.pathExtension(filePath, 'jpg'),
           photoType: photoAccessHelper.PhotoType.IMAGE,
           subtype: photoAccessHelper.PhotoSubtype.DEFAULT, // 可选
         }
       ];
-      let phAccessHelper = photoAccessHelper.getPhotoAccessHelper(DMPContextUtils.getUIAbilityContext());
+      const phAccessHelper = photoAccessHelper.getPhotoAccessHelper(DMPContextUtils.getUIAbilityContext());
       // 基于弹窗授权的方式获取媒体库的目标uri
-      let desFileUris: Array<string> = await phAccessHelper.showAssetsCreationDialog(srcFileUris, photoCreationConfigs);
+      const desFileUris: Array<string> = await phAccessHelper.showAssetsCreationDialog(srcFileUris, photoCreationConfigs);
+      if (desFileUris.length === 0) {
+        throw new Error('cancel');
+      }
       // 将来源于应用沙箱的照片内容写入媒体库的目标uri
-      let desFile: fileIo.File = await fileIo.open(desFileUris[0], fileIo.OpenMode.WRITE_ONLY);
-      let srcFile: fileIo.File = await fileIo.open(filePath, fileIo.OpenMode.READ_ONLY);
-      await fileIo.copyFile(srcFile.fd, desFile.fd);
-      fileIo.closeSync(srcFile);
-      fileIo.closeSync(desFile);
+      const desFile: fileIo.File = await fileIo.open(desFileUris[0], fileIo.OpenMode.WRITE_ONLY);
+      const srcFile: fileIo.File = await fileIo.open(filePath, fileIo.OpenMode.READ_ONLY | fileIo.OpenMode.NOFOLLOW);
+      try {
+        await fileIo.copyFile(srcFile.fd, desFile.fd);
+      } finally {
+        fileIo.closeSync(srcFile);
+        fileIo.closeSync(desFile);
+      }
 
       this.invokeSuccessCallback(callback, null)
-    } catch (err) {
+    } catch (error) {
       this.invokeFailureCallback(callback, null, '保存相册失败')
-      DMPLogger.e(`victor failed to create asset by dialog successfully errCode is: ${err.code}, ${err.message}`);
+      DMPLogger.e(`saveImageToPhotosAlbum failed: ${error}`);
     }
-  }
-
-  getRealSandBoxPath(filePath: string, bundleName: string): string {
-    // 定义需要检查的前缀
-    const prefixes = ['difile://', 'file:///', 'file://', '/'];
-
-    for (const prefix of prefixes) {
-      if (filePath.startsWith(prefix)) {
-        filePath = filePath.slice(prefix.length);
-        break;
-      }
-    }
-
-    return `file://${bundleName}/${filePath}`;
   }
 
   previewImage(data: DMPMap, callback: DMPBridgeCallback) {
-    const urls: [string] = data.get('urls');
+    const urls: string[] = data.getArray<string>('urls') ?? [];
     const currentUrl: string = data.get('current');
-    const showmenu: boolean = data.get('showmenu') ?? true;
     let index = urls.indexOf(currentUrl)
     if (index === -1) {
       index = 0
     }
-    DRouter.getInstance()
-      .build(DMPPhotoPreview.ROUTE_NAME)
-      .putExtra("urls", urls)
-      .putExtra("index", index)
-      .setNavMode(DMPOpenType.NavigateTo)
-      .start()
-    this.invokeSuccessCallback(callback, null)
+    try {
+      const resolvedUrls = urls.map((url: string) => this.resolvePackagedMediaPath(url));
+      DRouter.getInstance()
+        .build(DMPPhotoPreview.ROUTE_NAME)
+        .putExtra("urls", resolvedUrls)
+        .putExtra("index", index)
+        .setNavMode(DMPOpenType.NavigateTo)
+        .start()
+      this.invokeSuccessCallback(callback, null)
+    } catch (error) {
+      this.invokeFailureCallback(callback, null, `previewImage:fail ${error}`);
+    }
   }
 
   previewMedia(data: DMPMap, callback: DMPBridgeCallback) {
@@ -363,33 +356,37 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
       this.invokeFailureCallback(callback, null, 'previewMedia:fail sources is required');
       return;
     }
-    const sources = new Array<DMPMap>();
-    rawSources.forEach((source: Object) => {
-      const item = new DMPMap(source);
-      const url = item.getString('url') ?? '';
-      if (url) {
-        item.set('url', this.resolvePackagedMediaPath(url));
-        const poster = item.getString('poster') ?? '';
-        if (poster) {
-          item.set('poster', this.resolvePackagedMediaPath(poster));
+    try {
+      const sources = new Array<DMPMap>();
+      rawSources.forEach((source: Object) => {
+        const item = new DMPMap(source);
+        const url = item.getString('url') ?? '';
+        if (url) {
+          item.set('url', this.resolvePackagedMediaPath(url));
+          const poster = item.getString('poster') ?? '';
+          if (poster) {
+            item.set('poster', this.resolvePackagedMediaPath(poster));
+          }
+          sources.push(item);
         }
-        sources.push(item);
+      });
+      if (sources.length === 0) {
+        this.invokeFailureCallback(callback, null, 'previewMedia:fail invalid sources');
+        return;
       }
-    });
-    if (sources.length === 0) {
-      this.invokeFailureCallback(callback, null, 'previewMedia:fail invalid sources');
-      return;
+      const current = data.getNumber('current') ?? 0;
+      DRouter.getInstance()
+        .build(DMPPhotoPreview.ROUTE_NAME)
+        .putExtra('sources', sources)
+        .putExtra('index', Math.max(0, Math.min(current, sources.length - 1)))
+        .setNavMode(DMPOpenType.NavigateTo)
+        .start();
+      const result = new DMPMap();
+      result.set('errMsg', 'previewMedia:ok');
+      this.invokeSuccessCallback(callback, result, true);
+    } catch (error) {
+      this.invokeFailureCallback(callback, null, `previewMedia:fail ${error}`);
     }
-    const current = data.getNumber('current') ?? 0;
-    DRouter.getInstance()
-      .build(DMPPhotoPreview.ROUTE_NAME)
-      .putExtra('sources', sources)
-      .putExtra('index', Math.max(0, Math.min(current, sources.length - 1)))
-      .setNavMode(DMPOpenType.NavigateTo)
-      .start();
-    const result = new DMPMap();
-    result.set('errMsg', 'previewMedia:ok');
-    this.invokeSuccessCallback(callback, result, true);
   }
 
   private async resolveImagePath(src: string): Promise<string> {
@@ -399,10 +396,9 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
     if (!src.startsWith('http://') && !src.startsWith('https://')) {
       return this.resolvePackagedMediaPath(src);
     }
-    const context = DMPContextUtils.getUIAbilityContext();
     const suffix = this.pathExtension(src, 'img');
-    const localPath = `${context.tempDir}/image_info_${Date.now()}.${suffix}`;
-    const task = await request.downloadFile(context, { url: src, filePath: localPath });
+    const localPath = `${this.mediaTempDirectory('remoteImage')}/image_info_${Date.now()}.${suffix}`;
+    const task = await request.downloadFile(DMPContextUtils.getUIAbilityContext(), { url: src, filePath: localPath });
     await new Promise<void>((resolve, reject) => {
       task.on('complete', () => resolve());
       task.on('fail', (errorCode: number) => reject(new Error(`download failed: ${errorCode}`)));
@@ -411,21 +407,20 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
   }
 
   private resolvePackagedMediaPath(src: string): string {
-    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('file://')) {
-      return DMPFileUrlConvertor.localPathFromVPath(src);
+    if (src.startsWith('http://') || src.startsWith('https://')) {
+      return src;
     }
-    if (DMPFileUrlConvertor.isDifilePath(src) || src.startsWith('/')) {
-      return DMPFileUrlConvertor.localPathFromVPath(src);
-    }
-    const cleanPath = src.split('?')[0].split('#')[0];
-    const segments = cleanPath.split('/').filter((segment: string) => segment.length > 0);
-    if (segments.length === 0 || segments.some((segment: string) => segment === '.' || segment === '..' || segment.includes('\\'))) {
-      throw new Error('invalid package path');
-    }
-    const root = this.app.bundleManager.getCurrentJSAppDir();
-    const relativePath = segments.join('/');
-    const direct = `${root}/${relativePath}`;
-    return fs.accessSync(direct) ? direct : `${root}/main/${relativePath}`;
+    return DMPFilePathResolver.resolve(src, this.currentAppId(), this.app.bundleManager.getCurrentJSAppDir());
+  }
+
+  private currentAppId(): string {
+    return this.appData.appId || this.app?.appConfig?.appId || 'default';
+  }
+
+  private mediaTempDirectory(name: string): string {
+    const directory = `${DMPFilePathResolver.tempRoot(this.currentAppId())}/${name}`;
+    DMPFilePathResolver.ensureDirectory(directory);
+    return directory;
   }
 
   private pathExtension(path: string, fallback: string): string {
@@ -448,15 +443,23 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
 
   compressImage(data: DMPMap, callback: DMPBridgeCallback) {
     const dataQuality: number = data.get('quality');
-    const url = DMPFileUrlConvertor.localPathFromVPath(data.get('src'));
+    let url = '';
+    try {
+      url = this.resolvePackagedMediaPath(data.getString('src') ?? '');
+      if (!fs.accessSync(url)) {
+        throw new Error('invalid src');
+      }
+    } catch (error) {
+      this.invokeFailureCallback(callback, null, `compressImage:fail ${error}`);
+      return;
+    }
     let quality = 80
     if (dataQuality > 0 && dataQuality < 100) {
       quality = dataQuality
     }
 
-    const context = DMPContextUtils.getUIAbilityContext();
     const timestamp = new Date().getTime().toString();
-    const localPath: string = `${context.tempDir}/${timestamp}.jpg`;
+    const localPath: string = `${this.mediaTempDirectory('compressedImage')}/${timestamp}.jpg`;
     const imageSourceApi = image.createImageSource(url);
     let packOpts: image.PackingOption = { format: "image/jpeg", quality: quality };
     const imagePackerApi = image.createImagePacker();

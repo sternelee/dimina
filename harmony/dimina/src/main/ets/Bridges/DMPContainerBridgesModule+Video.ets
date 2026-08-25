@@ -235,11 +235,18 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
     if (resolution <= 0 || resolution > 1) {
       throw new Error('invalid resolution');
     }
-    if ((data.getNumber('fps') ?? 0) > 0) {
+    const requestedFps = data.getNumber('fps');
+    if (requestedFps !== undefined && requestedFps <= 0) {
+      throw new Error('invalid fps');
+    }
+    if (requestedFps !== undefined) {
       throw new Error('fps is not supported on HarmonyOS');
     }
     const quality = data.getString('quality') ?? 'medium';
     const requestedBitrate = data.getNumber('bitrate');
+    if (requestedBitrate !== undefined && requestedBitrate <= 0) {
+      throw new Error('invalid bitrate');
+    }
     const qualityBitrate = quality === 'low' ? 1000000 : quality === 'high' ? 4000000 : 2000000;
     const width = Math.floor(Number(metadata.videoWidth ?? '0') * resolution);
     const height = Math.floor(Number(metadata.videoHeight ?? '0') * resolution);
@@ -258,6 +265,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
     const destination = fs.openSync(outputPath,
       fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.NOFOLLOW);
     let transcoder: media.AVTranscoder | undefined;
+    let transcodeError: Error | undefined;
     try {
       transcoder = await media.createAVTranscoder();
       transcoder.fdSrc = { fd: source.fd, offset: 0, length: fs.statSync(src).size };
@@ -267,19 +275,30 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
         transcoder!.on('error', (error: BusinessError) => reject(error));
         transcoder!.prepare(config).then(() => transcoder!.start()).catch((error: BusinessError) => reject(error));
       });
-      return outputPath;
     } catch (error) {
+      transcodeError = error instanceof Error ? error : new Error(`${error}`);
+    } finally {
+      try {
+        if (transcoder) {
+          await transcoder.release();
+        }
+      } catch (error) {
+        transcodeError = transcodeError ?? (error instanceof Error ? error : new Error(`${error}`));
+      } finally {
+        try {
+          fs.closeSync(source);
+        } finally {
+          fs.closeSync(destination);
+        }
+      }
+    }
+    if (transcodeError) {
       if (fs.accessSync(outputPath)) {
         fs.unlinkSync(outputPath);
       }
-      throw error;
-    } finally {
-      if (transcoder) {
-        await transcoder.release();
-      }
-      fs.closeSync(source);
-      fs.closeSync(destination);
+      throw transcodeError;
     }
+    return outputPath;
   }
 
   chooseMedia(data: DMPMap, callback: DMPBridgeCallback, webViewId: number) {

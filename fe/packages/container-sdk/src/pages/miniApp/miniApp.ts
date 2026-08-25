@@ -3069,7 +3069,7 @@ export class MiniApp {
 		const onWindowFocus = () => {
 			focusFallbackTimer = setTimeout(() => {
 				if (!pickerSettled && !input.files?.length) settleCancel()
-			}, 0)
+			}, 300)
 		}
 		const settleResult = (result: Record<string, unknown>, success: boolean) => {
 			if (resultSettled) return
@@ -3266,7 +3266,7 @@ export class MiniApp {
 				document.removeEventListener('visibilitychange', this._wakeLockVisibilityHandler)
 				this._wakeLockVisibilityHandler = null
 			}
-			void (this._wakeLockRequest ?? Promise.resolve()).then(() => this._releaseWakeLock()).then(() => {
+			void (this._wakeLockRequest ?? Promise.resolve()).catch(() => {}).then(() => this._releaseWakeLock()).then(() => {
 				finish({ errMsg: 'setKeepScreenOn:ok' }, true)
 			}).catch(error => finish({ errMsg: `setKeepScreenOn:fail ${getErrorMessage(error)}` }, false))
 			return
@@ -3275,7 +3275,14 @@ export class MiniApp {
 		this._installWakeLockVisibilityHandler()
 		void this._requestWakeLock().then(() => {
 			finish({ errMsg: 'setKeepScreenOn:ok' }, true)
-		}).catch(error => finish({ errMsg: `setKeepScreenOn:fail ${getErrorMessage(error)}` }, false))
+		}).catch((error) => {
+			this._keepScreenOnRequested = false
+			if (this._wakeLockVisibilityHandler) {
+				document.removeEventListener('visibilitychange', this._wakeLockVisibilityHandler)
+				this._wakeLockVisibilityHandler = null
+			}
+			finish({ errMsg: `setKeepScreenOn:fail ${getErrorMessage(error)}` }, false)
+		})
 	}
 
 	private _installWakeLockVisibilityHandler(): void {

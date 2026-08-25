@@ -7,6 +7,7 @@ import { http } from '@kit.NetworkKit';
 import { DMPMap } from '@didi-dimina/dimina/ets/Utils/DMPMap';
 import { DMPContextUtils } from '../../Utils/DMPContextUtils';
 import { DMPFileUrlConvertor } from '../../Bundle/Util/DMPFileUrlConvertor';
+import { DMPFilePathResolver } from '../../Bundle/Util/DMPFilePathResolver';
 export class DMPContainerBridgesModuleHttp extends DMPContainerBridgesModule {
   private uploadTasks: Map<string, http.HttpRequest> = new Map();
   private uploadCallbacks: Map<string, DMPBridgeCallback> = new Map();
@@ -61,27 +62,32 @@ export class DMPContainerBridgesModuleHttp extends DMPContainerBridgesModule {
 
   downloadFile(data: DMPMap, callback: DMPBridgeCallback) {
     const url: string = data.get('url')
-    let context = DMPContextUtils.getUIAbilityContext()
+    const context = DMPContextUtils.getUIAbilityContext()
     const timestamp = new Date().getTime().toString();
-    const fileType: string = this.getTypeFromFile(url)
-    const localPath: string = `${context.tempDir}/${timestamp}.` + fileType
+    const fileType: string = this.safeExtension(url, 'tmp')
+    const directory = `${DMPFilePathResolver.tempRoot(this.currentAppId())}/downloadFile`;
+    DMPFilePathResolver.ensureDirectory(directory);
+    const localPath: string = `${directory}/${timestamp}.${fileType}`
     try {
       request.downloadFile(context, {
         url: url,
         filePath: localPath
       }).then((downloadTask) => {
         downloadTask.on('complete', () => {
-          const tempFilePath =  DMPFileUrlConvertor.localPathFromVPath(localPath)
+          const tempFilePath = DMPFileUrlConvertor.vPathFromLocalPath(localPath)
           const params = new DMPMap()
           params.set('tempFilePath', tempFilePath)
           params.set('statusCode', 200)
           this.invokeSuccessCallback(callback, params)
         })
+        downloadTask.on('fail', (errorCode: number) => {
+          this.invokeFailureCallback(callback, null, `downloadFile:fail ${errorCode}`)
+        })
       }).catch((err: BusinessError) => {
-        this.invokeFailureCallback(callback, null, '')
+        this.invokeFailureCallback(callback, null, `downloadFile:fail ${err.message}`)
       });
     } catch (err) {
-      this.invokeFailureCallback(callback, null, '')
+      this.invokeFailureCallback(callback, null, `downloadFile:fail ${err}`)
     }
 
   }
@@ -103,7 +109,8 @@ export class DMPContainerBridgesModuleHttp extends DMPContainerBridgesModule {
     }
 
     try {
-      const filePath = DMPFileUrlConvertor.localPathFromVPath(virtualFilePath);
+      const filePath = DMPFilePathResolver.resolve(
+        virtualFilePath, this.currentAppId(), this.app.bundleManager.getCurrentJSAppDir());
       const fileName = this.getNameFromFile(filePath);
       const multiFormDataList: Array<http.MultiFormData> = [];
       const rawFormData: object | undefined = param.getObject('formData');
@@ -183,6 +190,17 @@ export class DMPContainerBridgesModuleHttp extends DMPContainerBridgesModule {
     } catch (error) {
       this.finishUpload(taskId, callback, false, `uploadFile:fail ${String(error)}`);
     }
+  }
+
+  private currentAppId(): string {
+    return this.appData.appId || this.app?.appConfig?.appId || 'default';
+  }
+
+  private safeExtension(path: string, fallback: string): string {
+    const cleanPath = path.split('?')[0].split('#')[0];
+    const dotIndex = cleanPath.lastIndexOf('.');
+    const extension = dotIndex >= 0 ? cleanPath.substring(dotIndex + 1).toLowerCase() : '';
+    return /^[a-z0-9]{1,10}$/.test(extension) ? extension : fallback;
   }
 
   uploadFileTaskAbort(param: DMPMap, _callback: DMPBridgeCallback): void {

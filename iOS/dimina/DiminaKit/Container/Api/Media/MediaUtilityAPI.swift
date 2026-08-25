@@ -164,13 +164,13 @@ public final class MediaUtilityAPI: DMPContainerApi {
         let quality = map.getString(key: "quality") ?? "medium"
         let bitrate = (map.get("bitrate") as? NSNumber)?.intValue
         let fps = (map.get("fps") as? NSNumber)?.intValue
-        if let bitrate, bitrate <= 0 {
+        if let bitrate, bitrate <= 0 || bitrate > Int.max / 1_000 {
             DMPContainerApi.invokeFailure(callback: callback, param: nil,
                                           errMsg: "compressVideo:fail invalid bitrate",
                                           completeCarriesResult: true)
             return DMPAsyncResult()
         }
-        if let fps, fps <= 0 {
+        if let fps, fps <= 0 || fps > Int(Int32.max / 2) {
             DMPContainerApi.invokeFailure(callback: callback, param: nil,
                                           errMsg: "compressVideo:fail invalid fps",
                                           completeCarriesResult: true)

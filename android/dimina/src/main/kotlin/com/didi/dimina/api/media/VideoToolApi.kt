@@ -123,8 +123,12 @@ class VideoToolApi : BaseApiHandler() {
             ?: return failure(COMPRESS_VIDEO, "invalid src")
         if (!source.isFile) return failure(COMPRESS_VIDEO, "file does not exist")
 
+        val requestedBitrate = params.optInt("bitrate", 0)
+        if (params.has("bitrate") && requestedBitrate <= 0) return failure(COMPRESS_VIDEO, "invalid bitrate")
+        val requestedFps = params.optInt("fps", 0)
+        if (params.has("fps") && requestedFps <= 0) return failure(COMPRESS_VIDEO, "invalid fps")
         val output = File.createTempFile("VIDEO_${System.currentTimeMillis()}", ".mp4", PathUtils.appTempRoot(activity, appId))
-        val bitrateKbps = params.optInt("bitrate", 0).takeIf { it > 0 } ?: when (params.optString("quality", "medium")) {
+        val bitrateKbps = requestedBitrate.takeIf { it > 0 } ?: when (params.optString("quality", "medium")) {
             "low" -> 1_000
             "high" -> 4_000
             else -> 2_000
@@ -136,7 +140,7 @@ class VideoToolApi : BaseApiHandler() {
                 output = output,
                 resolution = resolution,
                 bitrateKbps = bitrateKbps,
-                fps = params.optInt("fps", 0).takeIf { it > 0 },
+                fps = requestedFps.takeIf { it > 0 },
                 onCompleted = {
                     val result = JSONObject().apply {
                         put("tempFilePath", PathUtils.pathToVirtual(output))
