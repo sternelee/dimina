@@ -58,6 +58,7 @@ export class DMPPermissionUtils {
       // 授权成功
     }).catch((err: BusinessError) => {
       DMPLogger.e('', `checkPermissions Failed to request permissions from user. Code is ${err.code}, message is ${err.message}`);
+      onResult(false)
     })
   }
 }

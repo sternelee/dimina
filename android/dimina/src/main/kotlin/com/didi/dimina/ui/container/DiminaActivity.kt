@@ -387,7 +387,10 @@ class DiminaActivity : ComponentActivity() {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
         } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            arrayOf(
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            )
         }
         if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
             callback(true)
@@ -401,9 +404,16 @@ class DiminaActivity : ComponentActivity() {
 
     fun handleNearbyWifiPermission(callback: (Boolean) -> Unit) {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.NEARBY_WIFI_DEVICES, Manifest.permission.ACCESS_FINE_LOCATION)
+            arrayOf(
+                Manifest.permission.NEARBY_WIFI_DEVICES,
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            )
         } else {
-            arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+            arrayOf(
+                Manifest.permission.ACCESS_COARSE_LOCATION,
+                Manifest.permission.ACCESS_FINE_LOCATION,
+            )
         }
         if (permissions.all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }) {
             callback(true)

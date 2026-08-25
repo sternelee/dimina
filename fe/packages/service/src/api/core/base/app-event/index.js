@@ -72,21 +72,3 @@ export function onHide(callback) {
 export function offHide(callback) {
 	offAppHideEvent(callback)
 }
-
-/**
- * 监听未处理的 Promise 拒绝事件。该事件与 App.onUnhandledRejection 的回调时机与参数一致。
- * https://developers.weixin.qq.com/miniprogram/dev/api/base/app/app-event/wx.onUnhandledRejection.html
- */
-export function onUnhandledRejection() {}
-
-/**
- * 监听小程序要打开的页面不存在事件。该事件与 App.onPageNotFound 的回调时机一致。
- * https://developers.weixin.qq.com/miniprogram/dev/api/base/app/app-event/wx.onPageNotFound.html
- */
-export function onPageNotFound() {}
-
-/**
- * 小程序隐藏API - onAppRoute(eventListener) | 微信开放社区
- * https://developers.weixin.qq.com/community/develop/article/doc/00006c80998d182690edbb60c56413
- */
-export function onAppRoute() {}

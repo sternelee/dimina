@@ -366,6 +366,7 @@ public class DMPApp {
             NetworkAPI.clearApp(self.appId)
             NetworkTypeAPI.clearApp(self.appId)
             ScreenAPI.clearApp(self.appId)
+            FileAPI.clearOpenFiles(appId: self.appId)
             DMPWebSocketManager.shared.disposeOwner(appId: self.appId)
             let registeredExtModules = self.container?.extModules ?? [:]
             self.container?.resetForReload()
@@ -439,6 +440,7 @@ public class DMPApp {
         NetworkAPI.clearApp(appId)
         NetworkTypeAPI.clearApp(appId)
         ScreenAPI.clearApp(appId)
+        FileAPI.clearOpenFiles(appId: appId)
 
         let serviceToDestroy = service
         let containerToDestroy = container

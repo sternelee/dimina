@@ -31,10 +31,12 @@ const DOCUMENT_MIME_TYPES = new Map<string, string>([
 ]);
 
 class OpenedFile {
+  ownerAppId: string;
   file: fs.File;
   path: string;
 
-  constructor(file: fs.File, path: string) {
+  constructor(ownerAppId: string, file: fs.File, path: string) {
+    this.ownerAppId = ownerAppId;
     this.file = file;
     this.path = path;
   }
@@ -329,7 +331,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   closeSync(data: DMPMap | string): void {
     const fd = this.stringParam(data, 'fd');
     const opened = DMPContainerBridgesModuleFile.openedFiles.get(fd);
-    if (!opened) {
+    if (!opened || opened.ownerAppId !== this.currentAppId()) {
       throw new Error('bad file descriptor');
     }
     fs.closeSync(opened.file);
@@ -417,7 +419,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
       fs.truncateSync(path, 0);
     }
     const fd = `${Date.now()}_${Math.random()}`;
-    DMPContainerBridgesModuleFile.openedFiles.set(fd, new OpenedFile(file, path));
+    DMPContainerBridgesModuleFile.openedFiles.set(fd, new OpenedFile(this.currentAppId(), file, path));
     return fd;
   }
 
@@ -716,10 +718,24 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   private opened(data: DMPMap): OpenedFile {
     const fd = data.getString('fd') ?? '';
     const opened = DMPContainerBridgesModuleFile.openedFiles.get(fd);
-    if (!opened) {
+    if (!opened || opened.ownerAppId !== this.currentAppId()) {
       throw new Error('bad file descriptor');
     }
     return opened;
+  }
+
+  dispose(): void {
+    const ownerAppId: string = this.currentAppId();
+    DMPContainerBridgesModuleFile.openedFiles.forEach((opened: OpenedFile, fd: string) => {
+      if (opened.ownerAppId === ownerAppId) {
+        DMPContainerBridgesModuleFile.openedFiles.delete(fd);
+        try {
+          fs.closeSync(opened.file);
+        } catch (_error) {
+          // The descriptor may already have been closed explicitly by the mini program.
+        }
+      }
+    });
   }
 
   private statObject(path: string): DMPMap {

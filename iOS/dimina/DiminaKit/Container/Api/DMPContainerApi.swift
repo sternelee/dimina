@@ -127,12 +127,10 @@ public class DMPContainerApi: NSObject {
     
     /// 统一的回调处理方法。
     ///
-    /// `completeCarriesResult` 打开时，`complete` 收到的是与 `success` / `fail` 同一份结果对象，
-    /// 而不是一个新建的空 map —— 这样 `complete: res => res.errMsg` 才拿得到东西。默认关闭：
-    /// `complete` 缺结果是全 API 面的问题，逐个 API 核对语义不属于本次 socket 改动的范围，
-    /// 所以这里只给出接线口，由已经核对过的调用方显式打开。
+    /// 默认让 `complete` 收到与 `success` / `fail` 同一份结果对象，保证
+    /// `complete: res => res.errMsg` 与小程序回调契约一致。
     public static func invokeCallback(_ callback: DMPBridgeCallback?, type: DMPBridgeCallbackType, param: DMPMap?,
-                                      errMsg: String? = nil, completeCarriesResult: Bool = false) {
+                                      errMsg: String? = nil, completeCarriesResult: Bool = true) {
         guard let callback = callback else { return }
         
         let finalParam = param ?? DMPMap()
@@ -167,13 +165,13 @@ public class DMPContainerApi: NSObject {
     
     // 成功回调（静态方法）
     public static func invokeSuccess(callback: DMPBridgeCallback?, param: DMPMap?,
-                                     completeCarriesResult: Bool = false) {
+                                     completeCarriesResult: Bool = true) {
         invokeCallback(callback, type: .success, param: param, completeCarriesResult: completeCarriesResult)
     }
 
     // 失败回调（静态方法）
     public static func invokeFailure(callback: DMPBridgeCallback?, param: DMPMap?, errMsg: String,
-                                     completeCarriesResult: Bool = false) {
+                                     completeCarriesResult: Bool = true) {
         invokeCallback(callback, type: .fail, param: param, errMsg: errMsg,
                        completeCarriesResult: completeCarriesResult)
     }

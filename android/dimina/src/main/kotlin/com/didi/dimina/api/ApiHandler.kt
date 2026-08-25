@@ -17,10 +17,10 @@ data class AsyncResult @JvmOverloads constructor(
      */
     val afterComplete: (() -> Unit)? = null,
     /**
-     * Whether `complete` must receive the same result object as success/fail. Keep the default
-     * false for existing APIs whose callback shape has not opted into this contract.
+     * Whether `complete` receives the same result object as success/fail. This is the mini-program
+     * callback contract; callers may opt out only for a deliberately different internal protocol.
      */
-    val completeCarriesResult: Boolean = false,
+    val completeCarriesResult: Boolean = true,
 ) : APIResult()
 data class NoneResult(val value: Any? = null) : APIResult()
 

@@ -30,7 +30,10 @@ public class DMPEngineInvoke {
                 app: app
             )
 
-            if let syncResult = result as? DMPSyncResult {
+            if let errorResult = result as? DMPErrorResult {
+                context.exception = JSValue(newErrorFromMessage: errorResult.message, in: context)
+                return JSValue(undefinedIn: context)
+            } else if let syncResult = result as? DMPSyncResult {
                 return DMPBridgeParam.from(rawValue: syncResult.value).getJSValue(context: context)
             } else {
                 return JSValue(nullIn: context)

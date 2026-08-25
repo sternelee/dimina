@@ -8,6 +8,7 @@ import { DMPLogger } from '../EventTrack/DMPLogger';
 import { promptAction } from '@kit.ArkUI';
 import { DMPContextUtils } from '../Utils/DMPContextUtils';
 import { DMPPermissionUtils } from '../Utils/DMPPermissionUtils';
+import { BusinessError } from '@kit.BasicServicesKit';
 
 export class DMPContainerBridgesModuleClipBoard extends DMPContainerBridgesModule {
   TAG: string = 'DMPContainerBridgesModuleClipBoard'
@@ -27,7 +28,7 @@ export class DMPContainerBridgesModuleClipBoard extends DMPContainerBridgesModul
     let systemPasteboard: pasteboard.SystemPasteboard = pasteboard.getSystemPasteboard();
     if (content) { // 数据不为空覆盖
       let clip = pasteboard.createData(pasteboard.MIMETYPE_TEXT_PLAIN, content)
-      systemPasteboard.setData(clip).then((res) => {
+      systemPasteboard.setData(clip).then((_res) => {
         const disableToast = data.getBoolean('disableToast')
         if (!disableToast) {
           promptAction.showToast({
@@ -37,11 +38,19 @@ export class DMPContainerBridgesModuleClipBoard extends DMPContainerBridgesModul
         }
         this.invokeSuccessCallback(callback, null)
         DMPLogger.i(`${this.TAG}  写剪切板成功-->${content}`)
+      }).catch((err: BusinessError) => {
+        DMPLogger.e(`${this.TAG} 写剪切板失败-->${err.message}`)
+        this.invokeFailureCallback(callback, null, `setClipboardData:fail ${err.message}`)
       })
     } else { // 数据为空 清除
-      this.invokeSuccessCallback(callback, null)
-      systemPasteboard.clearData(() => {
-        DMPLogger.i(`${this.TAG}  清楚剪切板成功-->${content}`)
+      systemPasteboard.clearData((err?: BusinessError) => {
+        if (err) {
+          DMPLogger.e(`${this.TAG} 清除剪切板失败-->${err.message}`)
+          this.invokeFailureCallback(callback, null, `setClipboardData:fail ${err.message}`)
+          return
+        }
+        DMPLogger.i(`${this.TAG} 清除剪切板成功`)
+        this.invokeSuccessCallback(callback, null)
       })
     }
   }
@@ -58,6 +67,7 @@ export class DMPContainerBridgesModuleClipBoard extends DMPContainerBridgesModul
         systemPasteboard.getData((err, res) => {
           if (err) {
             DMPLogger.e(`checkPermissions 读剪切板 失败-->${err.message}`)
+            this.invokeFailureCallback(callback, null, `getClipboardData:fail ${err.message}`)
             return;
           }
           let text = res.getPrimaryText()
@@ -67,6 +77,8 @@ export class DMPContainerBridgesModuleClipBoard extends DMPContainerBridgesModul
           result.set('code', 0)
           this.invokeSuccessCallback(callback, result)
         })
+      } else {
+        this.invokeFailureCallback(callback, null, 'getClipboardData:fail permission denied')
       }
     });
   }
@@ -93,12 +105,13 @@ export class DMPContainerBridgesModuleClipBoard extends DMPContainerBridgesModul
    */
   readClipboardData(data: DMPMap, callback: DMPBridgeCallback) {
     let validInterval: number | undefined = data.getNumber('validInterval')
-    if (validInterval && (systemDateTime.getTime(false) - this.mReadClipboardStartTime) > validInterval) {
+    const now: number = systemDateTime.getTime(false)
+    if (!validInterval || (now - this.mReadClipboardStartTime) > validInterval) {
+      this.mReadClipboardStartTime = now
       this.getClipboardData(data, callback)
     } else {
-
+      this.invokeFailureCallback(callback, null, 'readClipboardData:fail request too frequent')
     }
-    this.mReadClipboardStartTime = systemDateTime.getTime(false)
   }
 
 

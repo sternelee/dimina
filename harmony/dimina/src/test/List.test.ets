@@ -12,6 +12,7 @@ import dmpAppModuleManagerLifecycleTest from './DMPAppModuleManagerLifecycle.tes
 import dmpWorkerFlushBarrierTest from './DMPWorkerFlushBarrier.test';
 import dmpMiniProgramNavigationCallbackTest from './DMPMiniProgramNavigationCallback.test';
 import dmpAppRuntimeLifecycleTest from './DMPAppRuntimeLifecycle.test';
+import dmpContainerCallbackContractTest from './DMPContainerCallbackContract.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -28,4 +29,5 @@ export default function testsuite() {
   dmpWorkerFlushBarrierTest();
   dmpMiniProgramNavigationCallbackTest();
   dmpAppRuntimeLifecycleTest();
+  dmpContainerCallbackContractTest();
 }

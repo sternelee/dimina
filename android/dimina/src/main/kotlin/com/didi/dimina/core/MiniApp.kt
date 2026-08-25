@@ -61,6 +61,7 @@ class MiniApp private constructor() {
     private val bluetoothApi = BluetoothApi()
     private val localNetworkApi = LocalNetworkApi()
     private val deviceNetworkApi = com.didi.dimina.api.device.NetworkApi()
+    private val fileApi = FileApi()
     private val updateCheckRegistry = UpdateCheckRegistry()
 
     // Map to store JsCore instances for each MiniProgram
@@ -276,7 +277,7 @@ class MiniApp private constructor() {
         StorageApi().registerWith(apiRegistry)
 
         // file
-        FileApi().registerWith(apiRegistry)
+        fileApi.registerWith(apiRegistry)
     }
 
     /**
@@ -355,6 +356,9 @@ class MiniApp private constructor() {
                 }
                 callbackResult = failureResult
                 ApiUtils.invokeFail(params, failureResult, responseCallback)
+            } else {
+                // JNI 会把 ERROR 类型转换为 JS_ThrowInternalError，保持同步 API 的抛错语义。
+                return JSValue.createError("$apiName:fail ${e.message ?: "operation failed"}")
             }
         } finally {
             if (isAsyncMethod) {
@@ -453,6 +457,7 @@ class MiniApp private constructor() {
         bluetoothApi.clearApp(appId)
         localNetworkApi.clearApp(appId)
         deviceNetworkApi.clearApp(appId)
+        fileApi.clearApp(appId)
 
         // Detach this generation immediately so a rapid reopen creates a fresh runtime, but place
         // native engine destruction behind lifecycle messages already queued by Bridge.destroy().
@@ -478,6 +483,7 @@ class MiniApp private constructor() {
         // Silently tear down every owner's WebSocket state before destroying JsCore instances.
         com.didi.dimina.api.network.WebSocketManager.shared.disposeAll()
         deviceNetworkApi.clearAll()
+        fileApi.clearAll()
 
         // Detach every generation before scheduling its own FIFO-safe destruction.
         val jsCoresToDestroy = jsCoreMap.toMap()
@@ -497,6 +503,7 @@ class MiniApp private constructor() {
     }
 
     fun destroy() {
+        fileApi.clearAll()
         // Clear API resources
         apiRegistry.clear()
     }

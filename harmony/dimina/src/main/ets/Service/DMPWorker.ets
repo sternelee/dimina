@@ -162,6 +162,7 @@ workerPort.onmessage = async (e: MessageEvents) => {
       }
         break;
       case 'destroy': {
+        workerModuleManager?.dispose();
         jsEngine.destroy();
       }
         break;

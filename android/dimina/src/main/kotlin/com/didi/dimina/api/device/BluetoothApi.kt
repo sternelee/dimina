@@ -845,7 +845,10 @@ class BluetoothApi : BaseApiHandler() {
     private fun hasBluetoothPermission(context: Context): Boolean {
         val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        } else arrayOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
         return permissions.all { ContextCompat.checkSelfPermission(context, it) == PackageManager.PERMISSION_GRANTED }
     }
 

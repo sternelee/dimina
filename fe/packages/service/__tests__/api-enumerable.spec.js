@@ -171,4 +171,15 @@ describe('globalApi enumerability contract', () => {
 			expect(Object.keys(globalApi)).not.toContain(name)
 		}
 	})
+
+	it('does not expose unimplemented application event listeners as callable APIs', () => {
+		const unimplementedEvents = ['onUnhandledRejection', 'onPageNotFound', 'onAppRoute']
+		registerEnumerableApiNames(unimplementedEvents)
+
+		for (const name of unimplementedEvents) {
+			expect(globalApi[name]).toBeUndefined()
+			expect(name in globalApi).toBe(false)
+			expect(Object.keys(globalApi)).not.toContain(name)
+		}
+	})
 })

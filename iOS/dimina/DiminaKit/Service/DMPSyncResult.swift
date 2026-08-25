@@ -12,6 +12,16 @@ public class DMPSyncResult: DMPAPIResult {
     }
 }
 
+/// A synchronous bridge failure. The JavaScriptCore adapter converts it into a thrown JS Error
+/// instead of exposing an error-shaped dictionary as a successful return value.
+public class DMPErrorResult: DMPAPIResult {
+    public let message: String
+
+    public init(_ message: String) {
+        self.message = message
+    }
+}
+
 /// Explicit async result marker, aligned with Android's AsyncResult semantics.
 /// The actual payload should be delivered through success/fail/complete callbacks.
 public class DMPAsyncResult: DMPAPIResult {

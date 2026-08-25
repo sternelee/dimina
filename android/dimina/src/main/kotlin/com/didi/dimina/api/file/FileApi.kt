@@ -22,7 +22,60 @@ import java.io.FileOutputStream
 import java.io.RandomAccessFile
 import java.security.MessageDigest
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
 import java.util.zip.ZipFile
+
+internal class OpenFileRegistry {
+    internal data class Entry(
+        val ownerAppId: String,
+        val file: File,
+        val handle: RandomAccessFile,
+    )
+
+    private val entries = ConcurrentHashMap<String, Entry>()
+
+    fun add(ownerAppId: String, file: File, handle: RandomAccessFile): String {
+        val fd = UUID.randomUUID().toString()
+        entries[fd] = Entry(ownerAppId, file, handle)
+        return fd
+    }
+
+    fun get(ownerAppId: String, fd: String): Entry {
+        val entry = entries[fd]
+        if (entry == null || entry.ownerAppId != ownerAppId) {
+            throw IllegalArgumentException("bad file descriptor")
+        }
+        return entry
+    }
+
+    fun close(ownerAppId: String, fd: String) {
+        val entry = get(ownerAppId, fd)
+        if (!entries.remove(fd, entry)) {
+            throw IllegalArgumentException("bad file descriptor")
+        }
+        entry.handle.close()
+    }
+
+    fun closeOwner(ownerAppId: String) {
+        entries.entries
+            .filter { it.value.ownerAppId == ownerAppId }
+            .forEach { (fd, entry) ->
+                if (entries.remove(fd, entry)) {
+                    runCatching { entry.handle.close() }
+                }
+            }
+    }
+
+    fun closeAll() {
+        entries.entries.forEach { (fd, entry) ->
+            if (entries.remove(fd, entry)) {
+                runCatching { entry.handle.close() }
+            }
+        }
+    }
+
+    internal fun size(): Int = entries.size
+}
 
 class FileApi : BaseApiHandler() {
     private companion object {
@@ -46,10 +99,9 @@ class FileApi : BaseApiHandler() {
             "pdf" to "application/pdf",
         )
 
-        data class OpenFile(val file: File, val handle: RandomAccessFile)
-
-        val OPEN_FILES = mutableMapOf<String, OpenFile>()
     }
+
+    private val openFiles = OpenFileRegistry()
 
     override val apiNames = setOf(
         SAVE_FILE_TO_DISK,
@@ -121,22 +173,22 @@ class FileApi : BaseApiHandler() {
                 "accessSync" -> syncVoid { accessSync(activity, appId, stringParam(params, "path")) }
                 "appendFile" -> asyncOkOrFail(apiName) { appendFileSync(activity, appId, params); JSONObject() }
                 "appendFileSync" -> syncVoid { appendFileSync(activity, appId, params) }
-                "close" -> asyncOkOrFail(apiName) { closeSync(params); JSONObject() }
-                "closeSync" -> syncVoid { closeSync(params) }
+                "close" -> asyncOkOrFail(apiName) { closeSync(appId, params); JSONObject() }
+                "closeSync" -> syncVoid { closeSync(appId, params) }
                 "copyFile" -> asyncOkOrFail(apiName) { copyFileSync(activity, appId, params); JSONObject() }
                 "copyFileSync" -> syncVoid { copyFileSync(activity, appId, params) }
-                "fstat" -> asyncOkOrFail(apiName) { JSONObject().put("stats", fstatSync(params)) }
-                "fstatSync" -> SyncResult(JSValue.createObject(fstatSync(params).toString()))
-                "ftruncate" -> asyncOkOrFail(apiName) { ftruncateSync(params); JSONObject() }
-                "ftruncateSync" -> syncVoid { ftruncateSync(params) }
+                "fstat" -> asyncOkOrFail(apiName) { JSONObject().put("stats", fstatSync(appId, params)) }
+                "fstatSync" -> SyncResult(JSValue.createObject(fstatSync(appId, params).toString()))
+                "ftruncate" -> asyncOkOrFail(apiName) { ftruncateSync(appId, params); JSONObject() }
+                "ftruncateSync" -> syncVoid { ftruncateSync(appId, params) }
                 "getFileInfo" -> asyncOkOrFail(apiName) { getFileInfo(activity, appId, params) }
                 "getSavedFileList" -> asyncOkOrFail(apiName) { getSavedFileList(activity, appId) }
                 "mkdir" -> asyncOkOrFail(apiName) { mkdirSync(activity, appId, params); JSONObject() }
                 "mkdirSync" -> syncVoid { mkdirSync(activity, appId, params) }
                 "open" -> asyncOkOrFail(apiName) { JSONObject().put("fd", openSync(activity, appId, params)) }
                 "openSync" -> SyncResult(JSValue.createString(openSync(activity, appId, params)))
-                "read" -> asyncOkOrFail(apiName) { readSync(params) }
-                "readSync" -> SyncResult(JSValue.createObject(readSync(params).toString()))
+                "read" -> asyncOkOrFail(apiName) { readSync(appId, params) }
+                "readSync" -> SyncResult(JSValue.createObject(readSync(appId, params).toString()))
                 "readCompressedFile" -> asyncOkOrFail(apiName) { JSONObject().put("data", readCompressedFileSync(activity, appId, params)) }
                 "readCompressedFileSync" -> SyncResult(JSValue.createObject(readCompressedFileSync(activity, appId, params).toString()))
                 "readdir" -> asyncOkOrFail(apiName) { JSONObject().put("files", readdirSync(activity, appId, pathParam(params))) }
@@ -158,8 +210,8 @@ class FileApi : BaseApiHandler() {
                 "unlink" -> asyncOkOrFail(apiName) { unlinkPath(activity, appId, pathParam(params)); JSONObject() }
                 "unlinkSync" -> syncVoid { unlinkPath(activity, appId, stringParam(params, "filePath")) }
                 "unzip" -> asyncOkOrFail(apiName) { unzip(activity, appId, params); JSONObject() }
-                "write" -> asyncOkOrFail(apiName) { writeSync(params) }
-                "writeSync" -> SyncResult(JSValue.createObject(writeSync(params).toString()))
+                "write" -> asyncOkOrFail(apiName) { writeSync(appId, params) }
+                "writeSync" -> SyncResult(JSValue.createObject(writeSync(appId, params).toString()))
                 "writeFile" -> asyncOkOrFail(apiName) { writeFileSync(activity, appId, params); JSONObject() }
                 "writeFileSync" -> syncVoid { writeFileSync(activity, appId, params) }
                 else -> super.handleAction(activity, appId, apiName, params, responseCallback)
@@ -171,6 +223,14 @@ class FileApi : BaseApiHandler() {
                 fail(apiName, e.message ?: "operation failed")
             }
         }
+    }
+
+    fun clearApp(appId: String) {
+        openFiles.closeOwner(appId)
+    }
+
+    fun clearAll() {
+        openFiles.closeAll()
     }
 
     private fun asyncOkOrFail(apiName: String, block: () -> JSONObject): APIResult {
@@ -473,29 +533,28 @@ class FileApi : BaseApiHandler() {
         val raf = RandomAccessFile(file, mode)
         if (flag.startsWith("a")) raf.seek(raf.length())
         if (flag == "w" || flag == "w+") raf.setLength(0)
-        val fd = UUID.randomUUID().toString()
-        OPEN_FILES[fd] = OpenFile(file, raf)
-        return fd
+        return openFiles.add(appId, file, raf)
     }
 
-    private fun openedFile(params: JSONObject): OpenFile {
+    private fun openedFile(appId: String, params: JSONObject): OpenFileRegistry.Entry {
         val fd = params.optString("fd")
-        return OPEN_FILES[fd] ?: throw IllegalArgumentException("bad file descriptor")
+        return openFiles.get(appId, fd)
     }
 
-    private fun closeSync(params: JSONObject) {
+    private fun closeSync(appId: String, params: JSONObject) {
         val fd = params.optString("fd").ifBlank { params.optString("args") }
-        OPEN_FILES.remove(fd)?.handle?.close() ?: throw IllegalArgumentException("bad file descriptor")
+        openFiles.close(appId, fd)
     }
 
-    private fun fstatSync(params: JSONObject): JSONObject = statObject(openedFile(params).file)
+    private fun fstatSync(appId: String, params: JSONObject): JSONObject =
+        statObject(openedFile(appId, params).file)
 
-    private fun ftruncateSync(params: JSONObject) {
-        openedFile(params).handle.setLength(params.optLong("length", 0L))
+    private fun ftruncateSync(appId: String, params: JSONObject) {
+        openedFile(appId, params).handle.setLength(params.optLong("length", 0L))
     }
 
-    private fun readSync(params: JSONObject): JSONObject {
-        val file = openedFile(params).handle
+    private fun readSync(appId: String, params: JSONObject): JSONObject {
+        val file = openedFile(appId, params).handle
         val length = params.optInt("length", params.optInt("arrayBufferLength", 0)).let {
             if (it <= 0) (file.length() - file.filePointer).toInt() else it
         }
@@ -507,8 +566,8 @@ class FileApi : BaseApiHandler() {
             .put(ARRAY_BUFFER_BASE64_KEY, Base64.encodeToString(bytes.copyOf(count), Base64.NO_WRAP))
     }
 
-    private fun writeSync(params: JSONObject): JSONObject {
-        val file = openedFile(params).handle
+    private fun writeSync(appId: String, params: JSONObject): JSONObject {
+        val file = openedFile(appId, params).handle
         if (params.has("position")) file.seek(params.optLong("position"))
         val offset = params.optInt("offset", 0)
         val allBytes = if (params.has("arrayBuffer")) dataBytes(params, "arrayBuffer") else dataBytes(params)

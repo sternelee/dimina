@@ -11,6 +11,10 @@ const blockedPublicApiNames = new Set([
 	'offSocketMessage',
 	'offSocketError',
 	'offSocketClose',
+	// 这些事件尚未接入真实事件源，不能以空函数或 native 注册名对外伪装成可用能力。
+	'onUnhandledRejection',
+	'onPageNotFound',
+	'onAppRoute',
 ])
 for (const f of Object.values(apiInfo)) {
 	for (const [k, v] of Object.entries(f)) {

@@ -93,11 +93,17 @@ class SettingApi : BaseApiHandler() {
     private fun permissionsForScope(scope: String): Array<String>? = when (scope) {
         "scope.camera" -> arrayOf(Manifest.permission.CAMERA)
         "scope.record" -> arrayOf(Manifest.permission.RECORD_AUDIO)
-        "scope.userLocation" -> arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        "scope.userLocation" -> arrayOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
         "scope.addPhoneContact" -> arrayOf(Manifest.permission.WRITE_CONTACTS)
         "scope.bluetooth" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
-        } else arrayOf(Manifest.permission.ACCESS_FINE_LOCATION)
+        } else arrayOf(
+            Manifest.permission.ACCESS_COARSE_LOCATION,
+            Manifest.permission.ACCESS_FINE_LOCATION,
+        )
         "scope.writePhotosAlbum" -> if (Build.VERSION.SDK_INT <= Build.VERSION_CODES.P) {
             arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
         } else emptyArray()

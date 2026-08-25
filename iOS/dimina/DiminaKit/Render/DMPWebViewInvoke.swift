@@ -58,7 +58,11 @@ public class DMPWebViewInvoke {
                         var resultJson = "null"
 
                         // 根据返回值类型生成适当的JS表示
-                        if let syncResult = result as? DMPSyncResult, let value = syncResult.value {
+                        if let errorResult = result as? DMPErrorResult {
+                            resultJson = DMPUtil.jsonEncode(from: [
+                                "__diminaBridgeError": errorResult.message
+                            ]) ?? "null"
+                        } else if let syncResult = result as? DMPSyncResult, let value = syncResult.value {
                             // DMPAPIResult sync result - convert value to JSON
                             if let resultStr = value as? String,
                                let strData = try? JSONSerialization.data(withJSONObject: [resultStr]),
@@ -106,7 +110,7 @@ public class DMPWebViewInvoke {
                     return Promise.resolve(null);
                 }
 
-                return new Promise(function(resolve) {
+                return new Promise(function(resolve, reject) {
                     if (!window.webkit || !window.webkit.messageHandlers || !window.webkit.messageHandlers.invokeHandler) {
                         console.error('DiminaRenderBridge.invoke: native handler not ready');
                         resolve(null);
@@ -117,8 +121,12 @@ public class DMPWebViewInvoke {
 
                     // 设置一次性回调函数
                     window[callbackId] = function(result) {
-                        resolve(result);
                         delete window[callbackId];
+                        if (result && result.__diminaBridgeError) {
+                            reject(new Error(result.__diminaBridgeError));
+                            return;
+                        }
+                        resolve(result);
                     };
 
                     // 直接发送字符串消息到Native

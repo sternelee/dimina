@@ -10,6 +10,88 @@ import XCTest
 @MainActor
 final class DMPNavigatorCapsuleTests: XCTestCase {
 
+    func testCompleteReceivesTheSameResultObjectByDefault() {
+        let result = DMPMap(["errMsg": "example:ok"])
+        var callbacks: [(DMPBridgeCallbackType, DMPMap)] = []
+
+        DMPContainerApi.invokeSuccess(callback: { args, type in
+            callbacks.append((type, args))
+        }, param: result)
+
+        XCTAssertEqual(callbacks.map(\.0), [.success, .complete])
+        XCTAssertTrue(callbacks[0].1 === result)
+        XCTAssertTrue(callbacks[1].1 === result)
+    }
+
+    func testFileSystemSyncFailureReturnsThrowableBridgeResult() throws {
+        _ = DMPContainerApi.create()
+        let handler = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.accessSync"))
+
+        let result = handler(
+            DMPBridgeParam(value: ["path": "difile://usr/definitely-missing"]),
+            DMPBridgeEnv(appIndex: 0, appId: "sync-error-test", webViewId: 0),
+            nil
+        )
+
+        let errorResult = try XCTUnwrap(result as? DMPErrorResult)
+        XCTAssertTrue(errorResult.message.contains("FileSystemManager:fail"))
+    }
+
+    func testOpenFileDescriptorsAreOwnerScopedAndClearedWithTheApp() throws {
+        _ = DMPContainerApi.create()
+        let appId = "file-owner-\(UUID().uuidString)"
+        let ownerEnv = DMPBridgeEnv(appIndex: 0, appId: appId, webViewId: 0)
+        let otherEnv = DMPBridgeEnv(appIndex: 1, appId: "other-\(appId)", webViewId: 0)
+        let filePath = "difile://usr/handle.txt"
+        let write = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.writeFileSync"))
+        let open = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.openSync"))
+        let fstat = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.fstatSync"))
+        let unlink = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.unlinkSync"))
+
+        _ = write(DMPBridgeParam(value: ["filePath": filePath, "data": "content", "encoding": "utf8"]), ownerEnv, nil)
+        let openResult = try XCTUnwrap(open(
+            DMPBridgeParam(value: ["filePath": filePath, "flag": "r"]), ownerEnv, nil
+        ) as? DMPSyncResult)
+        let fd = try XCTUnwrap(openResult.value as? String)
+
+        XCTAssertTrue(fstat(DMPBridgeParam(value: ["fd": fd]), otherEnv, nil) is DMPErrorResult)
+        FileAPI.clearOpenFiles(appId: appId)
+        XCTAssertTrue(fstat(DMPBridgeParam(value: ["fd": fd]), ownerEnv, nil) is DMPErrorResult)
+
+        _ = unlink(DMPBridgeParam(value: ["filePath": filePath]), ownerEnv, nil)
+    }
+
+    func testGeneratedSaveFilePathsNeverOverwriteEarlierSaves() throws {
+        _ = DMPContainerApi.create()
+        let appId = "save-file-\(UUID().uuidString)"
+        let env = DMPBridgeEnv(appIndex: 0, appId: appId, webViewId: 0)
+        let tempPath = "difile://tmp/same-name.txt"
+        let write = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.writeFileSync"))
+        let save = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.saveFileSync"))
+        let read = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.readFileSync"))
+        let unlink = try XCTUnwrap(DMPContainerApi.getHandler(for: "FileSystemManager.unlinkSync"))
+
+        _ = write(DMPBridgeParam(value: ["filePath": tempPath, "data": "first", "encoding": "utf8"]), env, nil)
+        let first = try XCTUnwrap((save(
+            DMPBridgeParam(value: ["tempFilePath": tempPath]), env, nil
+        ) as? DMPSyncResult)?.value as? String)
+        _ = write(DMPBridgeParam(value: ["filePath": tempPath, "data": "second", "encoding": "utf8"]), env, nil)
+        let second = try XCTUnwrap((save(
+            DMPBridgeParam(value: ["tempFilePath": tempPath]), env, nil
+        ) as? DMPSyncResult)?.value as? String)
+
+        XCTAssertNotEqual(first, second)
+        XCTAssertEqual((read(
+            DMPBridgeParam(value: ["filePath": first, "encoding": "utf8"]), env, nil
+        ) as? DMPSyncResult)?.value as? String, "first")
+        XCTAssertEqual((read(
+            DMPBridgeParam(value: ["filePath": second, "encoding": "utf8"]), env, nil
+        ) as? DMPSyncResult)?.value as? String, "second")
+
+        _ = unlink(DMPBridgeParam(value: ["filePath": first]), env, nil)
+        _ = unlink(DMPBridgeParam(value: ["filePath": second]), env, nil)
+    }
+
     func testSetupInstallsOneContainerOwnedCapsule() {
         let navigationController = UINavigationController()
         navigationController.loadViewIfNeeded()

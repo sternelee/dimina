@@ -81,6 +81,7 @@ public class FileAPI: DMPContainerApi {
     private static let DOCUMENT_TYPES: Set<String> = ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf"]
 
     private struct OpenFile {
+        let ownerAppId: String
         let handle: FileHandle
         let path: String
     }
@@ -93,6 +94,7 @@ public class FileAPI: DMPContainerApi {
     }
 
     private static var openFiles: [String: OpenFile] = [:]
+    private static let openFilesLock = NSLock()
 
     @BridgeMethod(SAVE_FILE_TO_DISK)
     var saveFileToDisk: DMPBridgeMethodHandler = { param, env, callback in
@@ -192,13 +194,13 @@ public class FileAPI: DMPContainerApi {
 
     @BridgeMethod(PREFIX + "close")
     var close: DMPBridgeMethodHandler = { param, env, callback in FileAPI.async(name: PREFIX + "close", param: param, env: env, callback: callback) {
-        try FileAPI.closeSync(param: param)
+        try FileAPI.closeSync(param: param, appId: env.appId)
         return [:]
     }}
 
     @BridgeMethod(PREFIX + "closeSync")
-    var closeSync: DMPBridgeMethodHandler = { param, _, _ in FileAPI.sync {
-        try FileAPI.closeSync(param: param)
+    var closeSync: DMPBridgeMethodHandler = { param, env, _ in FileAPI.sync {
+        try FileAPI.closeSync(param: param, appId: env.appId)
         return nil
     }}
 
@@ -216,21 +218,21 @@ public class FileAPI: DMPContainerApi {
 
     @BridgeMethod(PREFIX + "fstat")
     var fstat: DMPBridgeMethodHandler = { param, env, callback in FileAPI.async(name: PREFIX + "fstat", param: param, env: env, callback: callback) {
-        ["stats": try FileAPI.fstatSync(param: param)]
+        ["stats": try FileAPI.fstatSync(param: param, appId: env.appId)]
     }}
 
     @BridgeMethod(PREFIX + "fstatSync")
-    var fstatSync: DMPBridgeMethodHandler = { param, _, _ in FileAPI.sync { try FileAPI.fstatSync(param: param) }}
+    var fstatSync: DMPBridgeMethodHandler = { param, env, _ in FileAPI.sync { try FileAPI.fstatSync(param: param, appId: env.appId) }}
 
     @BridgeMethod(PREFIX + "ftruncate")
     var ftruncate: DMPBridgeMethodHandler = { param, env, callback in FileAPI.async(name: PREFIX + "ftruncate", param: param, env: env, callback: callback) {
-        try FileAPI.ftruncateSync(param: param)
+        try FileAPI.ftruncateSync(param: param, appId: env.appId)
         return [:]
     }}
 
     @BridgeMethod(PREFIX + "ftruncateSync")
-    var ftruncateSync: DMPBridgeMethodHandler = { param, _, _ in FileAPI.sync {
-        try FileAPI.ftruncateSync(param: param)
+    var ftruncateSync: DMPBridgeMethodHandler = { param, env, _ in FileAPI.sync {
+        try FileAPI.ftruncateSync(param: param, appId: env.appId)
         return nil
     }}
 
@@ -266,11 +268,11 @@ public class FileAPI: DMPContainerApi {
 
     @BridgeMethod(PREFIX + "read")
     var read: DMPBridgeMethodHandler = { param, env, callback in FileAPI.async(name: PREFIX + "read", param: param, env: env, callback: callback) {
-        try FileAPI.readSync(param: param)
+        try FileAPI.readSync(param: param, appId: env.appId)
     }}
 
     @BridgeMethod(PREFIX + "readSync")
-    var readSync: DMPBridgeMethodHandler = { param, _, _ in FileAPI.sync { try FileAPI.readSync(param: param) }}
+    var readSync: DMPBridgeMethodHandler = { param, env, _ in FileAPI.sync { try FileAPI.readSync(param: param, appId: env.appId) }}
 
     @BridgeMethod(PREFIX + "readCompressedFile")
     var readCompressedFile: DMPBridgeMethodHandler = { param, env, callback in FileAPI.async(name: PREFIX + "readCompressedFile", param: param, env: env, callback: callback) {
@@ -381,11 +383,11 @@ public class FileAPI: DMPContainerApi {
 
     @BridgeMethod(PREFIX + "write")
     var write: DMPBridgeMethodHandler = { param, env, callback in FileAPI.async(name: PREFIX + "write", param: param, env: env, callback: callback) {
-        try FileAPI.writeSync(param: param)
+        try FileAPI.writeSync(param: param, appId: env.appId)
     }}
 
     @BridgeMethod(PREFIX + "writeSync")
-    var writeSync: DMPBridgeMethodHandler = { param, _, _ in FileAPI.sync { try FileAPI.writeSync(param: param) }}
+    var writeSync: DMPBridgeMethodHandler = { param, env, _ in FileAPI.sync { try FileAPI.writeSync(param: param, appId: env.appId) }}
 
     @BridgeMethod(PREFIX + "writeFile")
     var writeFile: DMPBridgeMethodHandler = { param, env, callback in FileAPI.async(name: PREFIX + "writeFile", param: param, env: env, callback: callback) {
@@ -423,7 +425,7 @@ public class FileAPI: DMPContainerApi {
         do {
             return DMPSyncResult(try block())
         } catch {
-            return DMPSyncResult(["errMsg": "fail \(message(error))"])
+            return DMPErrorResult("FileSystemManager:fail \(message(error))")
         }
     }
 
@@ -590,24 +592,35 @@ public class FileAPI: DMPContainerApi {
         if flag == "w" || flag == "w+" { try handle.truncate(atOffset: 0) }
         if flag.hasPrefix("a") { try handle.seekToEnd() }
         let fd = UUID().uuidString
-        openFiles[fd] = OpenFile(handle: handle, path: url.path)
+        openFilesLock.lock()
+        openFiles[fd] = OpenFile(ownerAppId: env.appId, handle: handle, path: url.path)
+        openFilesLock.unlock()
         return fd
     }
 
-    private static func opened(_ param: DMPBridgeParam) throws -> OpenFile {
+    private static func opened(_ param: DMPBridgeParam, appId: String) throws -> OpenFile {
         let fd = param.getMap().getString(key: "fd") ?? stringParam(param, key: "fd")
-        guard let file = openFiles[fd] else { throw FileError.message("bad file descriptor") }
+        openFilesLock.lock()
+        let file = openFiles[fd]
+        openFilesLock.unlock()
+        guard let file, file.ownerAppId == appId else { throw FileError.message("bad file descriptor") }
         return file
     }
 
-    private static func closeSync(param: DMPBridgeParam) throws {
+    private static func closeSync(param: DMPBridgeParam, appId: String) throws {
         let fd = param.getMap().getString(key: "fd") ?? stringParam(param, key: "fd")
-        guard let file = openFiles.removeValue(forKey: fd) else { throw FileError.message("bad file descriptor") }
+        openFilesLock.lock()
+        let file = openFiles[fd]
+        if file?.ownerAppId == appId {
+            openFiles.removeValue(forKey: fd)
+        }
+        openFilesLock.unlock()
+        guard let file, file.ownerAppId == appId else { throw FileError.message("bad file descriptor") }
         try file.handle.close()
     }
 
-    private static func readSync(param: DMPBridgeParam) throws -> [String: Any] {
-        let file = try opened(param)
+    private static func readSync(param: DMPBridgeParam, appId: String) throws -> [String: Any] {
+        let file = try opened(param, appId: appId)
         let map = param.getMap()
         if let position = map.getInt(key: "position") { try file.handle.seek(toOffset: UInt64(position)) }
         let length = map.getInt(key: "length") ?? map.getInt(key: "arrayBufferLength") ?? Int.max
@@ -615,8 +628,8 @@ public class FileAPI: DMPContainerApi {
         return ["bytesRead": data.count, ARRAY_BUFFER_BASE64_KEY: data.base64EncodedString()]
     }
 
-    private static func writeSync(param: DMPBridgeParam) throws -> [String: Any] {
-        let file = try opened(param)
+    private static func writeSync(param: DMPBridgeParam, appId: String) throws -> [String: Any] {
+        let file = try opened(param, appId: appId)
         let map = param.getMap()
         if let position = map.getInt(key: "position") { try file.handle.seek(toOffset: UInt64(position)) }
         let key = map.get("arrayBuffer") != nil ? "arrayBuffer" : "data"
@@ -625,18 +638,35 @@ public class FileAPI: DMPContainerApi {
         return ["bytesWritten": data.count]
     }
 
-    private static func fstatSync(param: DMPBridgeParam) throws -> [String: Any] {
-        try stat(path: opened(param).path)
+    private static func fstatSync(param: DMPBridgeParam, appId: String) throws -> [String: Any] {
+        try stat(path: opened(param, appId: appId).path)
     }
 
-    private static func ftruncateSync(param: DMPBridgeParam) throws {
-        try opened(param).handle.truncate(atOffset: UInt64(param.getMap().getInt(key: "length") ?? 0))
+    private static func ftruncateSync(param: DMPBridgeParam, appId: String) throws {
+        try opened(param, appId: appId).handle.truncate(atOffset: UInt64(param.getMap().getInt(key: "length") ?? 0))
+    }
+
+    static func clearOpenFiles(appId: String) {
+        openFilesLock.lock()
+        let owned = openFiles.filter { $0.value.ownerAppId == appId }
+        owned.keys.forEach { openFiles.removeValue(forKey: $0) }
+        openFilesLock.unlock()
+        owned.values.forEach { try? $0.handle.close() }
+    }
+
+    static func clearAllOpenFiles() {
+        openFilesLock.lock()
+        let files = Array(openFiles.values)
+        openFiles.removeAll()
+        openFilesLock.unlock()
+        files.forEach { try? $0.handle.close() }
     }
 
     private static func saveFileSync(param: DMPBridgeParam, env: DMPBridgeEnv) throws -> String {
         let map = param.getMap()
         let temp = try resolve(env: env, path: map.getString(key: "tempFilePath") ?? "")
-        let dest = try resolve(env: env, path: map.getString(key: "filePath") ?? "\(VIRTUAL_PREFIX)\(USER_PREFIX)/saved/\(Int(Date().timeIntervalSince1970))_\(temp.lastPathComponent)")
+        let generatedPath = "\(VIRTUAL_PREFIX)\(USER_PREFIX)/saved/\(UUID().uuidString)-\(temp.lastPathComponent)"
+        let dest = try resolve(env: env, path: map.getString(key: "filePath") ?? generatedPath)
         try FileManager.default.createDirectory(at: dest.deletingLastPathComponent(), withIntermediateDirectories: true, attributes: nil)
         if FileManager.default.fileExists(atPath: dest.path) { try FileManager.default.removeItem(at: dest) }
         try FileManager.default.moveItem(at: temp, to: dest)

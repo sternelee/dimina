@@ -9,6 +9,7 @@ import { WorkerAppData } from '../Service/DMPSendableObjects';
 export class DMPWorkerModuleManager extends DMPModuleManager {
   exportModules: Map<string, DMPExportModule>;
   app: WorkerAppData;
+  private fileModule: DMPContainerBridgesModuleFile;
 
   constructor(app: WorkerAppData) {
     super();
@@ -18,11 +19,15 @@ export class DMPWorkerModuleManager extends DMPModuleManager {
     this.exportModules['DMPContainerBridgesModule'] = module
     this.registerModule(new DMPContainerBridgesModuleHttp(app))
     this.registerModule(new DMPContainerBridgesModuleStorage(app))
-    this.registerModule(new DMPContainerBridgesModuleFile(app))
+    this.fileModule = new DMPContainerBridgesModuleFile(app)
+    this.registerModule(this.fileModule)
 
   }
-}
 
+  dispose(): void {
+    this.fileModule.dispose()
+  }
+}
 
 
 
