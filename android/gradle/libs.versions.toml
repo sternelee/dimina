@@ -20,7 +20,7 @@ orgJson = "20250107"
 uiTooling = "1.8.2"
 webkit = "1.15.0"
 zxingAndroidEmbedded = "4.3.0"
-media3 = "1.11.0"
+media3 = "1.9.2"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
