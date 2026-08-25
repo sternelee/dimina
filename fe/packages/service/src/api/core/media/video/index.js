@@ -20,6 +20,21 @@ export function chooseMedia(opts) {
 	return invokeAPI('chooseMedia', opts)
 }
 
+/** 获取视频信息。 */
+export function getVideoInfo(opts) {
+	return invokeAPI('getVideoInfo', opts)
+}
+
+/** 保存视频到系统相册。 */
+export function saveVideoToPhotosAlbum(opts) {
+	return invokeAPI('saveVideoToPhotosAlbum', opts)
+}
+
+/** 压缩视频。 */
+export function compressVideo(opts) {
+	return invokeAPI('compressVideo', opts)
+}
+
 class VideoContext {
 	constructor(opts) {
 		this.opts = opts

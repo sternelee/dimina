@@ -19,9 +19,12 @@ import com.didi.dimina.api.device.ContactApi
 import com.didi.dimina.api.device.KeyboardApi
 import com.didi.dimina.api.device.PhoneApi
 import com.didi.dimina.api.device.ScanApi
+import com.didi.dimina.api.device.ScreenApi
 import com.didi.dimina.api.device.VibrateAPI
 import com.didi.dimina.api.media.ImageApi
 import com.didi.dimina.api.media.VideoApi
+import com.didi.dimina.api.media.VideoToolApi
+import com.didi.dimina.api.openapi.SettingApi
 import com.didi.dimina.api.network.LocalNetworkApi
 import com.didi.dimina.api.route.RouteApi
 import com.didi.dimina.api.storage.StorageApi
@@ -57,6 +60,7 @@ class MiniApp private constructor() {
     private val apiRegistry = ApiRegistry()
     private val bluetoothApi = BluetoothApi()
     private val localNetworkApi = LocalNetworkApi()
+    private val deviceNetworkApi = com.didi.dimina.api.device.NetworkApi()
     private val updateCheckRegistry = UpdateCheckRegistry()
 
     // Map to store JsCore instances for each MiniProgram
@@ -239,14 +243,17 @@ class MiniApp private constructor() {
         KeyboardApi().registerWith(apiRegistry)
         PhoneApi().registerWith(apiRegistry)
         ContactApi().registerWith(apiRegistry)
-        com.didi.dimina.api.device.NetworkApi().registerWith(apiRegistry)
+        deviceNetworkApi.registerWith(apiRegistry)
         VibrateAPI().registerWith(apiRegistry)
         ScanApi().registerWith(apiRegistry)
+        ScreenApi().registerWith(apiRegistry)
         bluetoothApi.registerWith(apiRegistry)
 
         // media
         ImageApi().registerWith(apiRegistry)
         VideoApi().registerWith(apiRegistry)
+        VideoToolApi().registerWith(apiRegistry)
+        SettingApi().registerWith(apiRegistry)
 
         // route
         RouteApi().registerWith(apiRegistry)
@@ -445,6 +452,7 @@ class MiniApp private constructor() {
         apiRegistry.clearExtSubscriptions(appId)
         bluetoothApi.clearApp(appId)
         localNetworkApi.clearApp(appId)
+        deviceNetworkApi.clearApp(appId)
 
         // Detach this generation immediately so a rapid reopen creates a fresh runtime, but place
         // native engine destruction behind lifecycle messages already queued by Bridge.destroy().
@@ -469,6 +477,7 @@ class MiniApp private constructor() {
         }
         // Silently tear down every owner's WebSocket state before destroying JsCore instances.
         com.didi.dimina.api.network.WebSocketManager.shared.disposeAll()
+        deviceNetworkApi.clearAll()
 
         // Detach every generation before scheduling its own FIFO-safe destruction.
         val jsCoresToDestroy = jsCoreMap.toMap()

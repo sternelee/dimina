@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.MotionEvent
 import android.view.View
 import android.view.WindowInsets
@@ -255,6 +256,29 @@ class DiminaActivity : ComponentActivity() {
         nearbyWifiPermissionCallbacks.clear()
         callbacks.forEach { it(granted) }
     }
+    private data class AuthorizationRequest(
+        val permissions: Array<String>,
+        val callback: (Boolean) -> Unit,
+    )
+    private val authorizationPermissionQueue = java.util.ArrayDeque<AuthorizationRequest>()
+    private var activeAuthorizationRequest: AuthorizationRequest? = null
+    private val authorizationPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { result ->
+        val request = activeAuthorizationRequest
+        activeAuthorizationRequest = null
+        request?.callback?.invoke(request.permissions.all { permission ->
+            result[permission] == true || ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED
+        })
+        launchNextAuthorizationRequest()
+    }
+    private var openSettingsCallback: (() -> Unit)? = null
+    private val openSettingsLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        openSettingsCallback?.invoke()
+        openSettingsCallback = null
+    }
     
     private var adjustBottom = 0.0
     private var preserveMiniAppOnDestroy = false
@@ -302,7 +326,7 @@ class DiminaActivity : ComponentActivity() {
 
         if (allowCamera && !allowAlbum) {
             // 只允许相机
-            openSystemCamera()
+            openSystemCamera(type)
         } else if (allowAlbum && !allowCamera) {
             // 只允许相册
             openSystemGallery(type, count)
@@ -310,7 +334,7 @@ class DiminaActivity : ComponentActivity() {
             // 设置ActionSheet的状态和回调
             showActionSheet(listOf("拍摄", "从相册选择")) { index ->
                 when (index) {
-                    0 -> openSystemCamera()
+                    0 -> openSystemCamera(type)
                     1 -> openSystemGallery(type, count)
                 }
             }
@@ -387,6 +411,39 @@ class DiminaActivity : ComponentActivity() {
         nearbyWifiPermissionLauncher.launch(permissions)
     }
 
+    fun handleAuthorization(permissions: Array<String>, callback: (Boolean) -> Unit) {
+        authorizationPermissionQueue.addLast(AuthorizationRequest(permissions, callback))
+        launchNextAuthorizationRequest()
+    }
+
+    private fun launchNextAuthorizationRequest() {
+        if (activeAuthorizationRequest != null) return
+        val request = authorizationPermissionQueue.pollFirst() ?: return
+        if (request.permissions.isEmpty() || request.permissions.all {
+                ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED
+            }) {
+            request.callback(true)
+            launchNextAuthorizationRequest()
+            return
+        }
+        activeAuthorizationRequest = request
+        authorizationPermissionLauncher.launch(request.permissions)
+    }
+
+    fun handleOpenAppSettings(callback: () -> Unit): Boolean {
+        if (openSettingsCallback != null) return false
+        openSettingsCallback = callback
+        return runCatching {
+            openSettingsLauncher.launch(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS).apply {
+                data = Uri.fromParts("package", packageName, null)
+            })
+            true
+        }.getOrElse {
+            openSettingsCallback = null
+            false
+        }
+    }
+
     private fun openSystemGallery(type: MediaType, maxCount: Int) {
         // Set the maximum number of images that can be selected
         maxImageCount.intValue = maxCount
@@ -394,8 +451,8 @@ class DiminaActivity : ComponentActivity() {
         mediaType.value = type
     }
 
-    private fun openSystemCamera() {
-        mediaType.value = MediaType.CAMERA
+    private fun openSystemCamera(type: MediaType) {
+        mediaType.value = if (type == MediaType.VIDEO) MediaType.CAMERA_VIDEO else MediaType.CAMERA
     }
 
 

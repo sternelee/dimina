@@ -12,7 +12,7 @@ const userLocationScope = 'scope.userLocation' // 定位权限
 const writePhotosAlbumScope = 'scope.writePhotosAlbum' //相册权限
 const cameraScope = 'scope.camera' // 相机权限
 const recordScope = 'scope.record' // 录音权限
-const contactScope = 'scope.contact' // 通讯录权限
+const contactScope = 'scope.addPhoneContact' // 通讯录权限
 
 const supportPermissionMap = new Map<string, Permissions>([
   [userLocationScope, "ohos.permission.LOCATION"],
@@ -28,47 +28,54 @@ export class DMPContainerBridgesModuleOpenSetting extends DMPContainerBridgesMod
   }
 
 
-  getSetting(data: DMPMap, callback: DMPBridgeCallback) {
+  getSetting(_data: DMPMap, callback: DMPBridgeCallback) {
+    this.querySetting('getSetting').then((result: DMPMap) => {
+      this.invokeSuccessCallback(callback, result, true);
+    }).catch((err: BusinessError) => {
+      this.invokeFailureCallback(callback, null, `getSetting:fail ${err.message}`)
+    });
+  }
 
-    const scope = new Map<string, number>();
+  private async querySetting(apiName: string): Promise<DMPMap> {
+    const scope = new DMPMap();
 
-    getPermissionStatus('ohos.permission.CAMERA')// 相机权限
+    return getPermissionStatus('ohos.permission.CAMERA')// 相机权限
       .then((cameraStatus) => {
-        scope[cameraScope] = cameraStatus;
-        return getPermissionStatus('ohos.permission.READ_MEDIA'); // 相册权限
+        scope.set(cameraScope, cameraStatus);
+        return getPermissionStatus('ohos.permission.WRITE_IMAGEVIDEO'); // 相册权限
       })
       .then((albumStatus) => {
-        scope[writePhotosAlbumScope] = albumStatus;
+        scope.set(writePhotosAlbumScope, albumStatus);
         return getPermissionStatus('ohos.permission.LOCATION'); // 定位权限
       })
       .then((locationStatus) => {
-        scope[userLocationScope] = locationStatus;
+        scope.set(userLocationScope, locationStatus);
         return getPermissionStatus('ohos.permission.READ_CONTACTS'); // 通讯录权限
       })
       .then((contactStatus) => {
-        scope[contactScope] = contactStatus;
+        scope.set(contactScope, contactStatus);
         return getPermissionStatus('ohos.permission.MICROPHONE'); // 麦克风权限
       })
       .then((recordStatus) => {
-        scope[recordScope] = recordStatus;
+        scope.set(recordScope, recordStatus);
         const result = new DMPMap();
-        result.set('authSetting', scope);
-        this.invokeSuccessCallback(callback, result);
-      })
-      .catch((err: BusinessError) => {
-        this.invokeFailureCallback(callback, null, '获取失败')
-      })
+        result.set('authSetting', scope.toObject<object>());
+        result.set('errMsg', `${apiName}:ok`);
+        return result;
+      });
   }
 
-  openSetting(data: DMPMap, callback: DMPBridgeCallback) {
+  async openSetting(_data: DMPMap, callback: DMPBridgeCallback) {
     let context = DMPContextUtils.getUIAbilityContext()
-    context.startAbility({
-      bundleName: 'com.huawei.hmos.settings',
-      abilityName: 'com.huawei.hmos.settings.MainAbility',
-      // 根据”设置”应用配置的界面信息，选择不同的uri
-      // uri: 'wifi_entry'
-    })
-    this.invokeSuccessCallback(callback, null)
+    try {
+      await context.startAbilityForResult({
+        bundleName: 'com.huawei.hmos.settings',
+        abilityName: 'com.huawei.hmos.settings.MainAbility',
+      });
+      this.invokeSuccessCallback(callback, await this.querySetting('openSetting'), true)
+    } catch (error) {
+      this.invokeFailureCallback(callback, null, `openSetting:fail ${error}`)
+    }
   }
 
   authorize(data: DMPMap, callback: DMPBridgeCallback) {
@@ -76,19 +83,23 @@ export class DMPContainerBridgesModuleOpenSetting extends DMPContainerBridgesMod
     const scope = data.getString('scope') ?? '';
     if (scope == 'scope.writePhotosAlbum') {
       //弹出保存方式不需要权限申请
-      this.invokeSuccessCallback(callback, null)
+      const result = new DMPMap();
+      result.set('errMsg', 'authorize:ok');
+      this.invokeSuccessCallback(callback, result, true)
       return
     }
     if (supportPermissionMap.has(scope)) {
       this.reqPermissionsFromUser(supportPermissionMap.get(scope)!, context, (status) => {
         if (status) {
-          this.invokeSuccessCallback(callback, null)
+          const result = new DMPMap();
+          result.set('errMsg', 'authorize:ok');
+          this.invokeSuccessCallback(callback, result, true)
         } else {
-          this.invokeFailureCallback(callback, null, '申请权限失败')
+          this.invokeFailureCallback(callback, null, 'authorize:fail auth deny')
         }
       })
     } else {
-      this.invokeFailureCallback(callback, null, '申请权限失败')
+      this.invokeFailureCallback(callback, null, 'authorize:fail invalid scope')
     }
 
   }

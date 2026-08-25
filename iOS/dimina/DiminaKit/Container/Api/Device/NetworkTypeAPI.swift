@@ -16,6 +16,21 @@ public class NetworkTypeAPI: DMPContainerApi {
     
     // API method names
     private static let GET_NETWORK_TYPE = "getNetworkType"
+    private static let ON_NETWORK_STATUS_CHANGE = "onNetworkStatusChange"
+    private static let OFF_NETWORK_STATUS_CHANGE = "offNetworkStatusChange"
+
+    private final class Subscription {
+        let monitor = NWPathMonitor()
+        let queue: DispatchQueue
+        var callbacks: [String: DMPBridgeCallback] = [:]
+
+        init(appId: String) {
+            queue = DispatchQueue(label: "com.didi.dimina.network-status.\(appId)")
+        }
+    }
+
+    private static let subscriptionLock = NSLock()
+    private static var subscriptions: [String: Subscription] = [:]
     
     // Get network type
     @BridgeMethod(GET_NETWORK_TYPE)
@@ -28,6 +43,67 @@ public class NetworkTypeAPI: DMPContainerApi {
         result.set("networkType", networkType)
         DMPContainerApi.invokeSuccess(callback: callback, param: result)
         return DMPAsyncResult()
+    }
+
+    @BridgeMethod(ON_NETWORK_STATUS_CHANGE)
+    var onNetworkStatusChange: DMPBridgeMethodHandler = { param, env, callback in
+        let data = param.getMap()
+        guard let callback,
+              let callbackId = data.getString(key: "callbackId") ?? data.getString(key: "success"),
+              !callbackId.isEmpty else {
+            return DMPNoneResult()
+        }
+
+        NetworkTypeAPI.subscriptionLock.lock()
+        let existing = NetworkTypeAPI.subscriptions[env.appId]
+        let subscription = existing ?? NetworkTypeAPI.Subscription(appId: env.appId)
+        subscription.callbacks[callbackId] = callback
+        NetworkTypeAPI.subscriptions[env.appId] = subscription
+        NetworkTypeAPI.subscriptionLock.unlock()
+
+        if existing == nil {
+            subscription.monitor.pathUpdateHandler = { path in
+                let result = DMPMap()
+                let type = NetworkTypeAPI.networkType(for: path)
+                result.set("isConnected", path.status == .satisfied)
+                result.set("networkType", type)
+                NetworkTypeAPI.subscriptionLock.lock()
+                let listeners = NetworkTypeAPI.subscriptions[env.appId]?.callbacks.values.map { $0 } ?? []
+                NetworkTypeAPI.subscriptionLock.unlock()
+                listeners.forEach { $0(result, .success) }
+            }
+            subscription.monitor.start(queue: subscription.queue)
+        }
+        return DMPNoneResult()
+    }
+
+    @BridgeMethod(OFF_NETWORK_STATUS_CHANGE)
+    var offNetworkStatusChange: DMPBridgeMethodHandler = { param, env, _ in
+        let callbackId = param.getMap().getString(key: "callbackId")
+        NetworkTypeAPI.subscriptionLock.lock()
+        guard let subscription = NetworkTypeAPI.subscriptions[env.appId] else {
+            NetworkTypeAPI.subscriptionLock.unlock()
+            return DMPNoneResult()
+        }
+        if let callbackId, !callbackId.isEmpty {
+            subscription.callbacks.removeValue(forKey: callbackId)
+        } else {
+            subscription.callbacks.removeAll()
+        }
+        let shouldCancel = subscription.callbacks.isEmpty
+        if shouldCancel {
+            NetworkTypeAPI.subscriptions.removeValue(forKey: env.appId)
+        }
+        NetworkTypeAPI.subscriptionLock.unlock()
+        if shouldCancel { subscription.monitor.cancel() }
+        return DMPNoneResult()
+    }
+
+    public static func clearApp(_ appId: String) {
+        subscriptionLock.lock()
+        let subscription = subscriptions.removeValue(forKey: appId)
+        subscriptionLock.unlock()
+        subscription?.monitor.cancel()
     }
     
     // Helper method to get network type
@@ -64,6 +140,13 @@ public class NetworkTypeAPI: DMPContainerApi {
         monitor.cancel()
         
         return networkType
+    }
+
+    private static func networkType(for path: NWPath) -> String {
+        if path.status != .satisfied { return "none" }
+        if path.usesInterfaceType(.wifi) || path.usesInterfaceType(.wiredEthernet) { return "wifi" }
+        if path.usesInterfaceType(.cellular) { return getCellularNetworkType() }
+        return "unknown"
     }
     
     // 获取蜂窝网络类型 (2g, 3g, 4g, 5g)

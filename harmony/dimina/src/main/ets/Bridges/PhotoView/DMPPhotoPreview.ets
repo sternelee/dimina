@@ -3,34 +3,65 @@ import { DMPWindowUtil } from '../../Utils/DMPWindowUtils';
 import { DMPApp } from '../../DApp/DMPApp';
 import { display } from '@kit.ArkUI';
 import { DRouter } from '../../Navigator/DRouter';
+import { DMPMap } from '../../Utils/DMPMap';
+
+class DMPMediaPreviewItem {
+  url: string;
+  type: string;
+  poster: string;
+
+  constructor(url: string, type: string, poster: string = '') {
+    this.url = url;
+    this.type = type;
+    this.poster = poster;
+  }
+}
 
 @Component
 export struct DMPPhotoPreview {
   @Prop uri: string
   @Prop param: Map<string, Object>
-  @State imageUrls: [string] = this.param?.get('urls') as [string]
+  @State mediaSources: Array<DMPMediaPreviewItem> = []
   private swipeController = new SwiperController()
-  private data: MyDataSource = new MyDataSource([])
+  private imageModels: Array<PhotoView.Model> = []
+  private videoControllers: Array<VideoController> = []
   private defaultIndex: number = this.param?.get('index') as number
   private realHeight = 0
 
   static ROUTE_NAME = 'onetravel://dimina/photopreview'
 
   aboutToAppear(): void {
-    let dataList = new Array<PhotoView.Model>()
-    this.imageUrls.forEach((imageUrl) => {
-      if (imageUrl) {
-        const data: PhotoView.Model = new PhotoView.Model();
-        data.setImageURI(imageUrl)
+    const rawSources = this.param?.get('sources') as Array<Object> | undefined;
+    if (rawSources && rawSources.length > 0) {
+      rawSources.forEach((raw: Object) => {
+        const item = raw instanceof DMPMap ? raw : new DMPMap(raw);
+        const url = item.getString('url') ?? '';
+        if (url) {
+          this.mediaSources.push(new DMPMediaPreviewItem(
+            url,
+            item.getString('type') === 'video' ? 'video' : 'image',
+            item.getString('poster') ?? '',
+          ));
+        }
+      });
+    } else {
+      const imageUrls = this.param?.get('urls') as Array<string> | undefined;
+      imageUrls?.forEach((url: string) => this.mediaSources.push(new DMPMediaPreviewItem(url, 'image')));
+    }
+
+    this.mediaSources.forEach((item: DMPMediaPreviewItem) => {
+      const data = new PhotoView.Model();
+      if (item.type === 'image') {
+        data.setImageURI(item.url)
           .setScale(1, false)
           .setImageFit(ImageFit.Contain)
           .setZoomable(false)
           .setMaximumScale(1.5)
           .setMinimumScale(0.8)
-        dataList.push(data)
       }
+      this.imageModels.push(data);
+      this.videoControllers.push(new VideoController());
     })
-    this.data = new MyDataSource(dataList)
     const screentHeight = display.getDefaultDisplaySync().height
     const vpHidth = px2vp(screentHeight)
     this.realHeight = vpHidth - 55 - px2vp(DMPWindowUtil.getTopSafeArea(DMPApp.getWindowStage()))
@@ -68,9 +99,21 @@ export struct DMPPhotoPreview {
         .backgroundColor('#ffffff')
 
         Swiper(this.swipeController) {
-          LazyForEach(this.data, (item: PhotoView.Model) => {
-            PhotoView({ model: item })
-          })
+          ForEach(this.mediaSources, (item: DMPMediaPreviewItem, index: number) => {
+            if (item.type === 'video') {
+              Video({
+                src: item.url,
+                previewUri: item.poster,
+                controller: this.videoControllers[index],
+              })
+                .width('100%')
+                .height('100%')
+                .controls(true)
+                .objectFit(ImageFit.Contain)
+            } else {
+              PhotoView({ model: this.imageModels[index] })
+            }
+          }, (item: DMPMediaPreviewItem, index: number) => `${index}:${item.url}`)
         }
         .index(this.defaultIndex)
         .cachedCount(2)
@@ -83,29 +126,5 @@ export struct DMPPhotoPreview {
       }
     }.hideTitleBar(true)
 
-  }
-}
-
-class MyDataSource implements IDataSource {
-  private list: PhotoView.Model[] = []
-  private listener?: DataChangeListener
-
-  constructor(list: PhotoView.Model[]) {
-    this.list = list
-  }
-
-  totalCount(): number {
-    return this.list.length
-  }
-
-  getData(index: number): PhotoView.Model {
-    return this.list[index]
-  }
-
-  registerDataChangeListener(listener: DataChangeListener): void {
-    this.listener = listener
-  }
-
-  unregisterDataChangeListener() {
   }
 }

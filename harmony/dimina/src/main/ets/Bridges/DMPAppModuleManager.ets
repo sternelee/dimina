@@ -52,6 +52,7 @@ export class DMPAppModuleManager extends DMPModuleManager implements DMPDisposab
   private extBridgeModule: DMPContainerBridgesModuleExt | null = null;
   private bluetoothModule: DMPContainerBridgesModuleBluetooth;
   private localNetworkModule: DMPContainerBridgesModuleLocalNetwork;
+  private networkModule: DMPContainerBridgesModuleNetwork;
   /** Screen 模块实例（含系统截图监听），销毁时需要清理系统监听 */
   private screenModule: DMPContainerBridgesModuleScreen;
 
@@ -90,7 +91,8 @@ export class DMPAppModuleManager extends DMPModuleManager implements DMPDisposab
 
     this.registerModule(new DMPContainerBridgesModuleShare(app))
     this.registerModule(new DMPContainerBridgesModuleCamera(app))
-    this.registerModule(new DMPContainerBridgesModuleNetwork(app))
+    this.networkModule = new DMPContainerBridgesModuleNetwork(app)
+    this.registerModule(this.networkModule)
     this.localNetworkModule = new DMPContainerBridgesModuleLocalNetwork(app)
     this.registerModule(this.localNetworkModule)
     this.registerModule(new DMPContainerBridgesModuleWebSocket(app))
@@ -122,9 +124,9 @@ export class DMPAppModuleManager extends DMPModuleManager implements DMPDisposab
   dispose(): void {
     this.bluetoothModule.dispose();
     this.localNetworkModule.dispose();
+    this.networkModule.dispose();
     // 移除系统截图监听（onUserCaptureScreen）
     this.screenModule.dispose();
     this.extBridgeModule?.cancelAllSubscriptions();
   }
 }
-

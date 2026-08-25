@@ -23,6 +23,22 @@ export function previewImage(opts) {
 }
 
 /**
+ * 获取图片信息。
+ * https://developers.weixin.qq.com/miniprogram/dev/api/media/image/wx.getImageInfo.html
+ */
+export function getImageInfo(opts) {
+	return invokeAPI('getImageInfo', opts)
+}
+
+/**
+ * 预览图片和视频。
+ * https://developers.weixin.qq.com/miniprogram/dev/api/media/image/wx.previewMedia.html
+ */
+export function previewMedia(opts) {
+	return invokeAPI('previewMedia', opts)
+}
+
+/**
  * 压缩图片接口，可选压缩质量。
  * https://developers.weixin.qq.com/miniprogram/dev/api/media/image/wx.compressImage.html
  */

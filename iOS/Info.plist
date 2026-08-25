@@ -20,6 +20,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Dimina NSCameraUsageDescription</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Dimina uses contacts when a mini program requests contact authorization.</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Dimina uses Bluetooth to discover and connect to nearby devices.</string>
 	<key>NSBluetoothPeripheralUsageDescription</key>
@@ -28,8 +30,12 @@
 	<string>Dimina NSMicrophoneUsageDescription</string>
 	<key>NSLocalNetworkUsageDescription</key>
 	<string>Dimina uses the local network to discover and communicate with nearby services and devices.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Dimina uses your location while a mini program is in use.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Dimina NSPhotoLibraryUsageDescription</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Dimina saves images and videos to your photo library when requested.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

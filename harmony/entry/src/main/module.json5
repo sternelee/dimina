@@ -130,6 +130,26 @@
         }
       },
       {
+        "name": "ohos.permission.MICROPHONE",
+        "reason": "$string:EntryAbility_label",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
+        "name": "ohos.permission.READ_CONTACTS",
+        "reason": "$string:EntryAbility_label",
+        "usedScene": {
+          "abilities": [
+            "EntryAbility"
+          ],
+          "when": "inuse"
+        }
+      },
+      {
         "name": "ohos.permission.VIBRATE",
         "reason": "$string:fuzzy_vibrate_permission",
         "usedScene": {

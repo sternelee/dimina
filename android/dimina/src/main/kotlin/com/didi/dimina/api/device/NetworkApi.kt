@@ -6,13 +6,17 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Network
 import android.telephony.TelephonyManager
 import androidx.core.content.ContextCompat
 import com.didi.dimina.api.APIResult
 import com.didi.dimina.api.AsyncResult
 import com.didi.dimina.api.BaseApiHandler
+import com.didi.dimina.api.NoneResult
 import com.didi.dimina.ui.container.DiminaActivity
+import com.didi.dimina.common.ApiUtils
 import org.json.JSONObject
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Device - Network API
@@ -21,9 +25,24 @@ import org.json.JSONObject
 class NetworkApi : BaseApiHandler() {
     private companion object {
         const val GET_NETWORK_TYPE = "getNetworkType"
+        const val ON_NETWORK_STATUS_CHANGE = "onNetworkStatusChange"
+        const val OFF_NETWORK_STATUS_CHANGE = "offNetworkStatusChange"
     }
 
-    override val apiNames = setOf(GET_NETWORK_TYPE)
+    private data class Listener(
+        val callbackId: String,
+        val responseCallback: (String) -> Unit,
+    )
+
+    private data class Subscription(
+        val manager: ConnectivityManager,
+        val callback: ConnectivityManager.NetworkCallback,
+        val listeners: MutableMap<String, Listener>,
+    )
+
+    private val subscriptions = ConcurrentHashMap<String, Subscription>()
+
+    override val apiNames = setOf(GET_NETWORK_TYPE, ON_NETWORK_STATUS_CHANGE, OFF_NETWORK_STATUS_CHANGE)
     override fun handleAction(
         activity: DiminaActivity,
         appId: String,
@@ -46,8 +65,63 @@ class NetworkApi : BaseApiHandler() {
                 )
             }
 
+            ON_NETWORK_STATUS_CHANGE -> {
+                val callbackId = params.optString("callbackId", params.optString("success"))
+                if (callbackId.isBlank()) {
+                    return AsyncResult(JSONObject().apply {
+                        put("errMsg", "$ON_NETWORK_STATUS_CHANGE:fail invalid callback")
+                    })
+                }
+                val manager = activity.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+                val subscription = subscriptions.getOrPut(appId) {
+                    val listeners = ConcurrentHashMap<String, Listener>()
+                    val networkCallback = object : ConnectivityManager.NetworkCallback() {
+                        override fun onAvailable(network: Network) = notifyListeners(activity, appId)
+                        override fun onLost(network: Network) = notifyListeners(activity, appId)
+                        override fun onCapabilitiesChanged(network: Network, capabilities: NetworkCapabilities) =
+                            notifyListeners(activity, appId)
+                    }
+                    manager.registerDefaultNetworkCallback(networkCallback)
+                    Subscription(manager, networkCallback, listeners)
+                }
+                subscription.listeners[callbackId] = Listener(callbackId, responseCallback)
+                NoneResult()
+            }
+
+            OFF_NETWORK_STATUS_CHANGE -> {
+                val subscription = subscriptions[appId] ?: return NoneResult()
+                val callbackId = params.optString("callbackId")
+                if (callbackId.isNotBlank()) subscription.listeners.remove(callbackId)
+                else subscription.listeners.clear()
+                if (subscription.listeners.isEmpty()) clearApp(appId)
+                NoneResult()
+            }
+
             else ->
                 super.handleAction(activity, appId, apiName, params, responseCallback)
+        }
+    }
+
+    fun clearApp(appId: String) {
+        subscriptions.remove(appId)?.let { subscription ->
+            runCatching { subscription.manager.unregisterNetworkCallback(subscription.callback) }
+            subscription.listeners.clear()
+        }
+    }
+
+    fun clearAll() {
+        subscriptions.keys.toList().forEach(::clearApp)
+    }
+
+    private fun notifyListeners(activity: Activity, appId: String) {
+        val subscription = subscriptions[appId] ?: return
+        val type = getNetworkType(activity, subscription.manager)
+        val result = JSONObject().apply {
+            put("isConnected", type != "none")
+            put("networkType", type)
+        }
+        subscription.listeners.values.toList().forEach { listener ->
+            listener.responseCallback(ApiUtils.createCallbackResponse(listener.callbackId, result))
         }
     }
 

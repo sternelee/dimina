@@ -1,4 +1,10 @@
 import { invokeAPI } from '@/api/common'
+import { createNativeEvent } from '../../network/socket/shared'
+
+const networkStatusChangeEvent = createNativeEvent(
+	'onNetworkStatusChange',
+	'offNetworkStatusChange',
+)
 
 /**
  * 获取网络类型
@@ -7,4 +13,14 @@ import { invokeAPI } from '@/api/common'
  */
 export function getNetworkType(opts) {
 	return invokeAPI('getNetworkType', opts)
+}
+
+/** 监听网络状态变化。 */
+export function onNetworkStatusChange(listener) {
+	return networkStatusChangeEvent.on(listener)
+}
+
+/** 移除网络状态变化监听。 */
+export function offNetworkStatusChange(listener) {
+	return networkStatusChangeEvent.off(listener)
 }

@@ -121,3 +121,17 @@ export async function saveWebFile(options: SaveWebFileOptions): Promise<string> 
 
 	return savedFilePath
 }
+
+/** Read a saved user file from this mini program's OPFS namespace. */
+export async function readWebFile(appId: string, filePath: string): Promise<File> {
+	if (!appId) {
+		throw new Error('appId is required')
+	}
+	const pathSegments = userPathSegments(filePath)
+	let directory = await appUserDirectory(appId)
+	for (const segment of pathSegments.slice(0, -1)) {
+		directory = await directory.getDirectoryHandle(segment)
+	}
+	const handle = await directory.getFileHandle(pathSegments[pathSegments.length - 1])
+	return handle.getFile()
+}

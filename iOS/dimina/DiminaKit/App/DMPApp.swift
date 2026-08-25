@@ -435,6 +435,7 @@ public class DMPApp {
         BluetoothAPIManager.shared.clearApp(appId)
         LocalNetworkAPIManager.shared.clearApp(appId)
         NetworkAPI.clearApp(appId)
+        NetworkTypeAPI.clearApp(appId)
 
         let serviceToDestroy = service
         let containerToDestroy = container

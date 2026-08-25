@@ -175,7 +175,7 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 
 ## API 列表
 
-状态说明：`✓` 表示该平台已有对应实现；`✗` 表示当前未提供。能力入口存在但目标平台未实现时，仍按不支持处理。
+状态说明：`✓` 表示该平台已有对应实现；`✗` 表示当前未提供。能力入口存在但目标平台未实现时，仍按不支持处理。本表是已经完成源码链路核对的兼容性基线；API 尚未列入表格只表示“未完成兼容性确认”，不能据此判断它未实现。
 
 蓝牙能力还要求宿主声明系统权限。仓库示例已经补齐 Android 蓝牙/定位权限、iOS 蓝牙用途说明和 HarmonyOS `ohos.permission.ACCESS_BLUETOOTH`；集成 SDK 的宿主应用需要提供等价配置。
 
@@ -354,10 +354,19 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 |               | getStorageInfo                   | ✓       | ✓   | ✓       | ✓   |
 | 媒体 - 图片   | saveImageToPhotosAlbum           | ✓       | ✓   | ✓       | ✗   |
 |               | previewImage                     | ✓       | ✓   | ✓       | ✗   |
+|               | getImageInfo                     | ✓       | ✓   | ✓       | ✓   |
+|               | previewMedia                     | ✓       | ✓   | ✓       | ✓   |
 |               | compressImage                    | ✓       | ✓   | ✓       | ✗   |
 |               | chooseImage                      | ✓       | ✓   | ✓       | ✗   |
 |               | chooseMessageFile                | ✓       | ✓   | ✓       | ✗   |
 | 媒体 - 视频   | chooseMedia                      | ✓       | ✓   | ✓       | ✗   |
+|               | chooseVideo                      | ✓       | ✓   | ✓       | ✓   |
+|               | getVideoInfo                     | ✓       | ✓   | ✓       | ✓   |
+|               | saveVideoToPhotosAlbum           | ✓       | ✓   | ✓       | ✗   |
+|               | compressVideo                    | ✓       | ✓   | ✓       | ✗   |
+| 开放接口 - 授权 | getSetting                     | ✓       | ✓   | ✓       | ✓   |
+|               | openSetting                      | ✓       | ✓   | ✓       | ✗   |
+|               | authorize                        | ✓       | ✓   | ✓       | ✓   |
 | 设备 - 联系人 | chooseContact                    | ✓       | ✓   | ✓       | ✗   |
 |               | addPhoneContact                  | ✓       | ✓   | ✓       | ✗   |
 | 设备 - 剪贴板 | setClipboardData                 | ✓       | ✓   | ✓       | ✓   |
@@ -366,16 +375,22 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 |               | vibrateLong                      | ✓       | ✓   | ✓       | ✗   |
 | 设备 - 键盘   | hideKeyboard                     | ✓       | ✓   | ✓       | ✗   |
 | 设备 - 网络   | getNetworkType                   | ✓       | ✓   | ✓       | ✓   |
+|               | onNetworkStatusChange            | ✓       | ✓   | ✓       | ✓   |
+|               | offNetworkStatusChange           | ✓       | ✓   | ✓       | ✓   |
 | 设备 - 电话   | makePhoneCall                    | ✓       | ✓   | ✓       | ✗   |
+| 设备 - 扫码   | scanCode                         | ✓       | ✓   | ✓       | ✗   |
 | 设备 - 屏幕   | onUserCaptureScreen              | ✗       | ✗   | ✓       | ✗   |
 |               | offUserCaptureScreen             | ✗       | ✗   | ✓       | ✗   |
+|               | setKeepScreenOn                  | ✓       | ✓   | ✓       | ✓   |
 | 第三方扩展    | extBridge                        | ✓       | ✓   | ✓       | ✓   |
 |               | extOnBridge                      | ✓       | ✓   | ✓       | ✓   |
 |               | extOffBridge                     | ✓       | ✓   | ✓       | ✓   |
 
 补充说明：
 
-- 该表是当前确认的兼容性基线。service 中存在某个 API 入口，不代表四个平台都已完成容器实现。
+- 兼容性确认按完整链路验收：service 公开入口、目标平台注册与参数/返回契约、持续事件的多监听/注销语义、权限与资源销毁、文档行以及 compiler 兼容性基线必须一起核对。service 中存在入口不代表四个平台都已完成容器实现；反过来，表中暂时缺行也不代表 native 已有实现不存在。`scanCode` 就是一次“原生三端已实现、表格漏登记”的存量审计结果。
+- Web 的 `authorize` 当前支持浏览器可请求的相机、麦克风和定位 scope；浏览器无法打开系统应用权限页，因此 `openSetting` 明确不支持。Web 的 `chooseVideo` 返回会话期 `blob:` 临时路径；视频相册写入和编码压缩没有浏览器等价系统能力，`saveVideoToPhotosAlbum`、`compressVideo` 明确不支持。
+- `compressVideo` 的精细编码参数受平台编码器能力约束：Android 和 HarmonyOS 会请求目标码率/分辨率，iOS 依据 `quality`/`resolution` 选择系统导出预设；编码器可能降级参数，但不会用原文件复制冒充压缩结果。
 - `getUpdateManager` 只负责更新状态通知和重启入口，包下载、校验和动态下发流程请参考[小程序包更新说明](./MiniProgram-Update.md)。
 - `chooseMessageFile` 在 Android、iOS 和 HarmonyOS 上使用系统文件选择器。宿主无法访问微信会话记录，因此 `time` 返回文件修改时间（取不到时为选择时间），不是微信会话发送时间；选中文件会先复制到当前小程序的临时沙箱并返回 `difile://` 路径。
 - `FileSystemManager.saveFile` 会把临时文件保存到当前小程序隔离的 `wx.env.USER_DATA_PATH`。Web 端使用浏览器 Origin Private File System，要求安全上下文且 `tempFilePath` 必须是当前页面可读取的 URL；不支持时通过 `fail` 明确返回错误。

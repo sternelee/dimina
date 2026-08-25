@@ -20,27 +20,41 @@ import { DMPPhotoPreview } from './PhotoView/DMPPhotoPreview'
 import { DMPOpenType } from '../DApp/config/DMPLaunchConfig'
 import picker from '@ohos.file.picker'
 import { fileUri } from '@kit.CoreFileKit'
+import { request } from '@kit.BasicServicesKit'
 
 export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
   getExportMethods(): string[] {
     return ['getImageInfo', 'chooseImage', 'chooseMessageFile', 'saveImageToPhotosAlbum', 'previewImage',
-      'compressImage'];
+      'previewMedia', 'compressImage'];
   }
 
-  getImageInfo(data: DMPMap, callback: DMPBridgeCallback) {
-    const localPath: string = data.get('src')
-    const imageSourceApi = image.createImageSource(localPath);
-    imageSourceApi.getImageInfo(0, (error, imageInfo) => {
-      if (error) {
-        this.invokeFailureCallback(callback, null, '保存失败')
-      } else {
-        const data = new DMPMap()
-        data.set('width', imageInfo.size.width);
-        data.set('height', imageInfo.size.height);
-        data.set('path', localPath);
-        this.invokeSuccessCallback(callback, data)
+  async getImageInfo(data: DMPMap, callback: DMPBridgeCallback) {
+    const src = data.getString('src') ?? '';
+    try {
+      const localPath = await this.resolveImagePath(src);
+      const imageSourceApi = image.createImageSource(localPath);
+      try {
+        const info = await imageSourceApi.getImageInfo(0);
+        let orientation = 'up';
+        try {
+          orientation = this.imageOrientation(await imageSourceApi.getImageProperty(image.PropertyKey.ORIENTATION));
+        } catch (_) {
+          orientation = 'up';
+        }
+        const result = new DMPMap();
+        result.set('width', info.size.width);
+        result.set('height', info.size.height);
+        result.set('path', DMPFileUrlConvertor.vPathFromLocalPath(localPath));
+        result.set('orientation', orientation);
+        result.set('type', info.mimeType?.split('/').pop()?.toLowerCase() ?? 'unknown');
+        result.set('errMsg', 'getImageInfo:ok');
+        this.invokeSuccessCallback(callback, result, true);
+      } finally {
+        imageSourceApi.release();
       }
-    })
+    } catch (error) {
+      this.invokeFailureCallback(callback, null, `getImageInfo:fail ${error}`);
+    }
   }
 
   /*
@@ -341,6 +355,95 @@ export class DMPContainerBridgesModuleImage extends DMPContainerBridgesModule {
       .setNavMode(DMPOpenType.NavigateTo)
       .start()
     this.invokeSuccessCallback(callback, null)
+  }
+
+  previewMedia(data: DMPMap, callback: DMPBridgeCallback) {
+    const rawSources = data.getArray<Object>('sources') ?? [];
+    if (rawSources.length === 0) {
+      this.invokeFailureCallback(callback, null, 'previewMedia:fail sources is required');
+      return;
+    }
+    const sources = new Array<DMPMap>();
+    rawSources.forEach((source: Object) => {
+      const item = new DMPMap(source);
+      const url = item.getString('url') ?? '';
+      if (url) {
+        item.set('url', this.resolvePackagedMediaPath(url));
+        const poster = item.getString('poster') ?? '';
+        if (poster) {
+          item.set('poster', this.resolvePackagedMediaPath(poster));
+        }
+        sources.push(item);
+      }
+    });
+    if (sources.length === 0) {
+      this.invokeFailureCallback(callback, null, 'previewMedia:fail invalid sources');
+      return;
+    }
+    const current = data.getNumber('current') ?? 0;
+    DRouter.getInstance()
+      .build(DMPPhotoPreview.ROUTE_NAME)
+      .putExtra('sources', sources)
+      .putExtra('index', Math.max(0, Math.min(current, sources.length - 1)))
+      .setNavMode(DMPOpenType.NavigateTo)
+      .start();
+    const result = new DMPMap();
+    result.set('errMsg', 'previewMedia:ok');
+    this.invokeSuccessCallback(callback, result, true);
+  }
+
+  private async resolveImagePath(src: string): Promise<string> {
+    if (!src) {
+      throw new Error('src is required');
+    }
+    if (!src.startsWith('http://') && !src.startsWith('https://')) {
+      return this.resolvePackagedMediaPath(src);
+    }
+    const context = DMPContextUtils.getUIAbilityContext();
+    const suffix = this.pathExtension(src, 'img');
+    const localPath = `${context.tempDir}/image_info_${Date.now()}.${suffix}`;
+    const task = await request.downloadFile(context, { url: src, filePath: localPath });
+    await new Promise<void>((resolve, reject) => {
+      task.on('complete', () => resolve());
+      task.on('fail', (errorCode: number) => reject(new Error(`download failed: ${errorCode}`)));
+    });
+    return localPath;
+  }
+
+  private resolvePackagedMediaPath(src: string): string {
+    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('file://')) {
+      return DMPFileUrlConvertor.localPathFromVPath(src);
+    }
+    if (DMPFileUrlConvertor.isDifilePath(src) || src.startsWith('/')) {
+      return DMPFileUrlConvertor.localPathFromVPath(src);
+    }
+    const cleanPath = src.split('?')[0].split('#')[0];
+    const segments = cleanPath.split('/').filter((segment: string) => segment.length > 0);
+    if (segments.length === 0 || segments.some((segment: string) => segment === '.' || segment === '..' || segment.includes('\\'))) {
+      throw new Error('invalid package path');
+    }
+    const root = this.app.bundleManager.getCurrentJSAppDir();
+    const relativePath = segments.join('/');
+    const direct = `${root}/${relativePath}`;
+    return fs.accessSync(direct) ? direct : `${root}/main/${relativePath}`;
+  }
+
+  private pathExtension(path: string, fallback: string): string {
+    const cleanPath = path.split('?')[0];
+    const dot = cleanPath.lastIndexOf('.');
+    return dot >= 0 ? cleanPath.substring(dot + 1).toLowerCase() : fallback;
+  }
+
+  private imageOrientation(value: string): string {
+    const normalized = value.toLowerCase();
+    if (normalized === '2' || normalized.includes('top-right')) return 'up-mirrored';
+    if (normalized === '3' || normalized.includes('bottom-right')) return 'down';
+    if (normalized === '4' || normalized.includes('bottom-left')) return 'down-mirrored';
+    if (normalized === '5' || normalized.includes('left-top')) return 'left-mirrored';
+    if (normalized === '6' || normalized.includes('right-top')) return 'right';
+    if (normalized === '7' || normalized.includes('right-bottom')) return 'right-mirrored';
+    if (normalized === '8' || normalized.includes('left-bottom')) return 'left';
+    return 'up';
   }
 
   compressImage(data: DMPMap, callback: DMPBridgeCallback) {

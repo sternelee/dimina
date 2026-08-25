@@ -20,6 +20,7 @@ orgJson = "20250107"
 uiTooling = "1.8.2"
 webkit = "1.15.0"
 zxingAndroidEmbedded = "4.3.0"
+media3 = "1.11.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -48,6 +49,9 @@ org-json = { module = "org.json:json", version.ref = "orgJson" }
 ui-tooling = { module = "androidx.compose.ui:ui-tooling", version.ref = "uiTooling" }
 androidx-webkit = { group = "androidx.webkit", name = "webkit", version.ref = "webkit" }
 zxing-android-embedded = { module = "com.journeyapps:zxing-android-embedded", version.ref = "zxingAndroidEmbedded" }
+androidx-media3-common = { module = "androidx.media3:media3-common", version.ref = "media3" }
+androidx-media3-effect = { module = "androidx.media3:media3-effect", version.ref = "media3" }
+androidx-media3-transformer = { module = "androidx.media3:media3-transformer", version.ref = "media3" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -14,8 +14,10 @@ import com.didi.dimina.api.NoneResult
 import com.didi.dimina.common.ApiUtils
 import com.didi.dimina.common.PathUtils
 import com.didi.dimina.common.Utils
+import com.didi.dimina.common.MediaFileUtils
 import com.didi.dimina.ui.container.DiminaActivity
 import com.didi.dimina.ui.container.ImagePreviewActivity
+import com.didi.dimina.ui.container.MediaPreviewActivity
 import com.didi.dimina.ui.view.MediaType
 import org.json.JSONArray
 import org.json.JSONObject
@@ -36,10 +38,13 @@ class ImageApi : BaseApiHandler() {
         const val COMPRESS_IMAGE = "compressImage"
         const val CHOOSE_IMAGE = "chooseImage"
         const val CHOOSE_MESSAGE_FILE = "chooseMessageFile"
+        const val GET_IMAGE_INFO = "getImageInfo"
+        const val PREVIEW_MEDIA = "previewMedia"
     }
 
     override val apiNames =
-        setOf(SAVE_IMAGE_TO_PHOTOS_ALBUM, PREVIEW_IMAGE, COMPRESS_IMAGE, CHOOSE_IMAGE, CHOOSE_MESSAGE_FILE)
+        setOf(SAVE_IMAGE_TO_PHOTOS_ALBUM, PREVIEW_IMAGE, COMPRESS_IMAGE, CHOOSE_IMAGE, CHOOSE_MESSAGE_FILE,
+            GET_IMAGE_INFO, PREVIEW_MEDIA)
 
     override fun handleAction(
         activity: DiminaActivity,
@@ -81,6 +86,37 @@ class ImageApi : BaseApiHandler() {
                         put("errMsg", "$PREVIEW_IMAGE:fail invalid url")
                     })
                 }
+            }
+
+            GET_IMAGE_INFO -> getImageInfo(activity, appId, params, responseCallback)
+
+            PREVIEW_MEDIA -> {
+                val sources = params.optJSONArray("sources")
+                if (sources == null || sources.length() == 0) {
+                    return AsyncResult(JSONObject().apply {
+                        put("errMsg", "$PREVIEW_MEDIA:fail sources is required")
+                    }, completeCarriesResult = true)
+                }
+                val items = ArrayList<MediaPreviewActivity.Item>()
+                for (index in 0 until sources.length()) {
+                    val source = sources.optJSONObject(index) ?: continue
+                    val url = source.optString("url")
+                    if (url.isBlank()) continue
+                    val resolvedUrl = runCatching { resolvePreviewPath(activity, appId, url) }.getOrNull() ?: continue
+                    val poster = source.optString("poster").let { value ->
+                        runCatching { resolvePreviewPath(activity, appId, value) }.getOrDefault("")
+                    }
+                    items.add(MediaPreviewActivity.Item(resolvedUrl, source.optString("type", "image"), poster))
+                }
+                if (items.isEmpty()) {
+                    return AsyncResult(JSONObject().apply {
+                        put("errMsg", "$PREVIEW_MEDIA:fail invalid sources")
+                    }, completeCarriesResult = true)
+                }
+                MediaPreviewActivity.launch(activity, items, params.optInt("current", 0))
+                AsyncResult(JSONObject().apply {
+                    put("errMsg", "$PREVIEW_MEDIA:ok")
+                }, completeCarriesResult = true)
             }
 
             COMPRESS_IMAGE -> {
@@ -165,6 +201,75 @@ class ImageApi : BaseApiHandler() {
             else ->
                 super.handleAction(activity, appId, apiName, params, responseCallback)
         }
+    }
+
+    private fun getImageInfo(
+        activity: DiminaActivity,
+        appId: String,
+        params: JSONObject,
+        responseCallback: (String) -> Unit,
+    ): APIResult {
+        val src = params.optString("src")
+        if (src.isBlank()) {
+            return AsyncResult(JSONObject().apply {
+                put("errMsg", "$GET_IMAGE_INFO:fail src is required")
+            }, completeCarriesResult = true)
+        }
+        activity.lifecycleScope.launch(Dispatchers.IO) {
+            val outcome = runCatching {
+                val resolved = MediaFileUtils.resolve(activity, appId, src)
+                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                BitmapFactory.decodeFile(resolved.file.absolutePath, options)
+                require(options.outWidth > 0 && options.outHeight > 0) { "unsupported image" }
+                val orientation = runCatching {
+                    val exif = android.media.ExifInterface(resolved.file.absolutePath)
+                    when (exif.getAttributeInt(android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL)) {
+                        android.media.ExifInterface.ORIENTATION_FLIP_HORIZONTAL -> "up-mirrored"
+                        android.media.ExifInterface.ORIENTATION_ROTATE_180 -> "down"
+                        android.media.ExifInterface.ORIENTATION_FLIP_VERTICAL -> "down-mirrored"
+                        android.media.ExifInterface.ORIENTATION_TRANSPOSE -> "left-mirrored"
+                        android.media.ExifInterface.ORIENTATION_ROTATE_90 -> "right"
+                        android.media.ExifInterface.ORIENTATION_TRANSVERSE -> "right-mirrored"
+                        android.media.ExifInterface.ORIENTATION_ROTATE_270 -> "left"
+                        else -> "up"
+                    }
+                }.getOrDefault("up")
+                JSONObject().apply {
+                    put("width", options.outWidth)
+                    put("height", options.outHeight)
+                    put("path", resolved.publicPath)
+                    put("orientation", orientation)
+                    put("type", options.outMimeType?.substringAfter('/') ?: "unknown")
+                    put("errMsg", "$GET_IMAGE_INFO:ok")
+                }
+            }
+            withContext(Dispatchers.Main) {
+                outcome.fold(
+                    onSuccess = { result ->
+                        ApiUtils.invokeSuccess(params, result, responseCallback)
+                        ApiUtils.invokeComplete(params, responseCallback, result)
+                    },
+                    onFailure = { error ->
+                        val result = JSONObject().apply { put("errMsg", "$GET_IMAGE_INFO:fail ${error.message}") }
+                        ApiUtils.invokeFail(params, result, responseCallback)
+                        ApiUtils.invokeComplete(params, responseCallback, result)
+                    },
+                )
+            }
+        }
+        return NoneResult()
+    }
+
+    private fun resolvePreviewPath(activity: DiminaActivity, appId: String, source: String): String {
+        if (source.isBlank() || source.startsWith("http://") || source.startsWith("https://")) return source
+        if (PathUtils.isLegalPath(source)) return PathUtils.pathToReal(activity, source, appId)
+        val packageRoot = File(activity.filesDir, "jsapp/$appId").canonicalFile
+        val relativePath = source.substringBefore('?').substringBefore('#').trimStart('/').removePrefix("$appId/")
+        return listOf(relativePath, "main/$relativePath")
+            .map { File(packageRoot, it).canonicalFile }
+            .filter { it.path.startsWith(packageRoot.path + File.separator) }
+            .firstOrNull(File::isFile)?.absolutePath
+            ?: throw IllegalArgumentException("file does not exist")
     }
 
     private fun chooseMessageFile(

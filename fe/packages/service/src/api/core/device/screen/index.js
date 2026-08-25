@@ -1,4 +1,5 @@
 import { createBluetoothEvent } from '../bluetooth/shared'
+import { invokeAPI } from '@/api/common'
 
 const userCaptureScreenEvent = createBluetoothEvent(
 	'onUserCaptureScreen',
@@ -31,4 +32,9 @@ export function offUserCaptureScreen(listener) {
 	}
 	userCaptureScreenListener = undefined
 	return userCaptureScreenEvent.off(listener)
+}
+
+/** 设置是否保持屏幕常亮。 */
+export function setKeepScreenOn(opts) {
+	return invokeAPI('setKeepScreenOn', opts)
 }

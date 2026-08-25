@@ -2,6 +2,7 @@ package com.didi.dimina.common
 
 import android.content.Context
 import android.net.Uri
+import android.webkit.MimeTypeMap
 import java.io.File
 
 /**
@@ -84,9 +85,13 @@ object PathUtils {
     fun uriToTempFile(context: Context, uri: Uri, appId: String): String? {
         return try {
             val inputStream = context.contentResolver.openInputStream(uri) ?: return null
-            val file = File.createTempFile("IMG_${System.currentTimeMillis()}", ".jpg", appTempRoot(context, appId))
-            file.outputStream().use { output ->
-                inputStream.copyTo(output)
+            val mimeType = context.contentResolver.getType(uri)
+            val extension = mimeType?.let { MimeTypeMap.getSingleton().getExtensionFromMimeType(it) }
+                ?: MimeTypeMap.getFileExtensionFromUrl(uri.toString()).takeIf { it.isNotBlank() }
+                ?: "tmp"
+            val file = File.createTempFile("MEDIA_${System.currentTimeMillis()}", ".$extension", appTempRoot(context, appId))
+            inputStream.use { input ->
+                file.outputStream().use { output -> input.copyTo(output) }
             }
             pathToVirtual(file)
         } catch (e: Exception) {

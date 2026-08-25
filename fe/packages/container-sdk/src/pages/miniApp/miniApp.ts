@@ -6,7 +6,7 @@ import { LAUNCH_SCREEN_MIN_MS, MODAL_GUARD_MS, WAIT_TRANSITION_TIMEOUT_MS } from
 import { Bridge } from '../../core/bridge.js'
 import { JSCore } from '../../core/jscore.js'
 import { WebSocketManager } from '../../core/webSocketManager.js'
-import { saveWebFile } from '../../core/webFileSystem.js'
+import { readWebFile, saveWebFile } from '../../core/webFileSystem.js'
 import { resolveStorageAdapter } from '../../config.js'
 import { mergePageConfig, queryPath, readFile, sleep, uuid } from '../../utils/util.js'
 import { Navigator } from './navigator.js'
@@ -181,6 +181,18 @@ interface SaveFileOptions extends ApiCallbackOptions {
 	filePath?: string
 }
 
+interface NetworkInformationLike extends EventTarget {
+	effectiveType?: string
+	type?: string
+}
+
+interface NavigatorWithDeviceApis {
+	connection?: NetworkInformationLike
+	mozConnection?: NetworkInformationLike
+	webkitConnection?: NetworkInformationLike
+	wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> }
+}
+
 interface SetTabBarStyleOptions extends ApiCallbackOptions {
 	color?: string
 	selectedColor?: string
@@ -249,6 +261,10 @@ export class MiniApp {
 	/** 维护第三方扩展的持续订阅，key: `${module}_${event}`，value: unsubscribe 函数 */
 	_extSubscriptions: Map<string, (() => void) | null>
 	_windowResizeHandlers: Set<() => void>
+	_networkStatusHandlers: Map<CallbackId, () => void>
+	_wakeLockSentinel: { release: () => Promise<void> } | null
+	_mediaPreviewEl: HTMLElement | null
+	_tempObjectUrls: Set<string>
 	/** app.tabBar 配置 */
 	tabBarConfig: TabBarConfig | null
 	/** 与 list 等长，pagePath 数组（已规范化、无前导 /） */
@@ -307,6 +323,10 @@ export class MiniApp {
 		})
 		this._extSubscriptions = new Map()
 		this._windowResizeHandlers = new Set()
+		this._networkStatusHandlers = new Map()
+		this._wakeLockSentinel = null
+		this._mediaPreviewEl = null
+		this._tempObjectUrls = new Set()
 		this.tabBarConfig = null
 		this.tabBarPaths = []
 		this.tabBarEl = null
@@ -2237,6 +2257,18 @@ export class MiniApp {
 			globalThis.removeEventListener?.('resize', handler)
 		}
 		this._windowResizeHandlers.clear()
+		for (const handler of this._networkStatusHandlers.values()) {
+			globalThis.removeEventListener?.('online', handler)
+			globalThis.removeEventListener?.('offline', handler)
+			this._networkConnection()?.removeEventListener?.('change', handler)
+		}
+		this._networkStatusHandlers.clear()
+		void this._wakeLockSentinel?.release().catch(() => {})
+		this._wakeLockSentinel = null
+		this._mediaPreviewEl?.remove()
+		this._mediaPreviewEl = null
+		for (const url of this._tempObjectUrls) URL.revokeObjectURL(url)
+		this._tempObjectUrls.clear()
 		if (this._themeMediaQuery?.removeEventListener) {
 			this._themeMediaQuery.removeEventListener('change', this._themeChangeHandler!)
 		}
@@ -2329,11 +2361,52 @@ export class MiniApp {
 	 * https://developers.weixin.qq.com/miniprogram/dev/api/device/network/wx.getNetworkType.html
 	 */
 	getNetworkType(opts: ApiCallbackOptions): void {
-		const { success } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		onSuccess?.({
-			networkType: 'wifi',
-		})
+		const { onSuccess, onComplete } = this._createApiCallbacks(opts)
+		const result = { networkType: this._currentNetworkType(), errMsg: 'getNetworkType:ok' }
+		onSuccess?.(result)
+		onComplete?.(result)
+	}
+
+	onNetworkStatusChange(opts: ApiCallbackOptions & { callbackId?: CallbackId }): void {
+		const callbackId = opts.callbackId ?? opts.success
+		if (!callbackId || this._networkStatusHandlers.has(callbackId)) return
+		const onChange = () => {
+			this.createCallbackFunction(callbackId)?.({
+				isConnected: navigator.onLine,
+				networkType: this._currentNetworkType(),
+			})
+		}
+		this._networkStatusHandlers.set(callbackId, onChange)
+		globalThis.addEventListener?.('online', onChange)
+		globalThis.addEventListener?.('offline', onChange)
+		this._networkConnection()?.addEventListener?.('change', onChange)
+	}
+
+	offNetworkStatusChange(opts: { callbackId?: CallbackId } = {}): void {
+		const entries = opts.callbackId
+			? [[opts.callbackId, this._networkStatusHandlers.get(opts.callbackId)] as const]
+			: [...this._networkStatusHandlers.entries()]
+		for (const [callbackId, handler] of entries) {
+			if (!handler) continue
+			globalThis.removeEventListener?.('online', handler)
+			globalThis.removeEventListener?.('offline', handler)
+			this._networkConnection()?.removeEventListener?.('change', handler)
+			this._networkStatusHandlers.delete(callbackId)
+		}
+	}
+
+	private _networkConnection(): NetworkInformationLike | undefined {
+		const currentNavigator = navigator as unknown as NavigatorWithDeviceApis
+		return currentNavigator.connection ?? currentNavigator.mozConnection ?? currentNavigator.webkitConnection
+	}
+
+	private _currentNetworkType(): string {
+		if (!navigator.onLine) return 'none'
+		const connection = this._networkConnection()
+		const effectiveType = connection?.effectiveType?.toLowerCase()
+		if (effectiveType && ['2g', '3g', '4g', '5g'].includes(effectiveType)) return effectiveType
+		if (connection?.type?.toLowerCase() === 'wifi') return 'wifi'
+		return 'unknown'
 	}
 
 	getSystemInfoAsync(opts: ApiCallbackOptions): void {
@@ -2942,6 +3015,291 @@ export class MiniApp {
 			onFail?.({ errMsg: `getClipboardData:fail ${getErrorMessage(error)}` })
 			onComplete?.()
 		}
+	}
+
+	chooseVideo(opts: ApiCallbackOptions & {
+		sourceType?: string[]
+		camera?: 'front' | 'back'
+		maxDuration?: number
+	} = {}): void {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		const input = document.createElement('input')
+		input.type = 'file'
+		input.accept = 'video/*'
+		if (opts.sourceType?.length === 1 && opts.sourceType[0] === 'camera') {
+			input.capture = opts.camera === 'front' ? 'user' : 'environment'
+		}
+		input.style.display = 'none'
+		this.el.appendChild(input)
+		input.onchange = () => {
+			const file = input.files?.[0]
+			input.remove()
+			if (!file) {
+				const result = { errMsg: 'chooseVideo:fail cancel' }
+				onFail?.(result)
+				onComplete?.(result)
+				return
+			}
+			const url = URL.createObjectURL(file)
+			this._tempObjectUrls.add(url)
+			const video = document.createElement('video')
+			video.preload = 'metadata'
+			video.onloadedmetadata = () => {
+				const result = {
+					tempFilePath: url,
+					duration: Number.isFinite(video.duration) ? video.duration : 0,
+					width: video.videoWidth,
+					height: video.videoHeight,
+					size: file.size,
+					errMsg: 'chooseVideo:ok',
+				}
+				onSuccess?.(result)
+				onComplete?.(result)
+			}
+			video.onerror = () => {
+				const result = { errMsg: 'chooseVideo:fail unsupported video' }
+				onFail?.(result)
+				onComplete?.(result)
+			}
+			video.src = url
+		}
+		input.click()
+	}
+
+	getImageInfo(opts: ApiCallbackOptions & { src?: string }): void {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		if (!opts.src) {
+			const result = { errMsg: 'getImageInfo:fail src is required' }
+			onFail?.(result); onComplete?.(result); return
+		}
+		void this._resolveMediaObjectUrl(opts.src).then((src) => {
+			const image = new Image()
+			image.onload = () => {
+				const pathname = opts.src!.split('?')[0]
+				const extension = pathname.includes('.') ? pathname.split('.').pop()!.toLowerCase() : 'unknown'
+				const result = {
+					width: image.naturalWidth,
+					height: image.naturalHeight,
+					path: opts.src,
+					orientation: 'up',
+					type: extension,
+					errMsg: 'getImageInfo:ok',
+				}
+				onSuccess?.(result); onComplete?.(result)
+			}
+			image.onerror = () => {
+				const result = { errMsg: 'getImageInfo:fail unsupported image' }
+				onFail?.(result); onComplete?.(result)
+			}
+			image.src = src
+		}).catch((error) => {
+			const result = { errMsg: `getImageInfo:fail ${getErrorMessage(error)}` }
+			onFail?.(result); onComplete?.(result)
+		})
+	}
+
+	getVideoInfo(opts: ApiCallbackOptions & { src?: string }): void {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		if (!opts.src) {
+			const result = { errMsg: 'getVideoInfo:fail src is required' }
+			onFail?.(result); onComplete?.(result); return
+		}
+		void this._resolveMediaObjectUrl(opts.src).then((src) => {
+			const video = document.createElement('video')
+			video.preload = 'metadata'
+			video.onloadedmetadata = async () => {
+				let size = 0
+				try {
+					const response = await fetch(src)
+					size = Math.ceil((await response.blob()).size / 1024)
+				}
+				catch {
+					// 元数据可用时，跨域导致拿不到文件大小不应让整个 API 失败。
+				}
+				const extension = opts.src!.split('?')[0].split('.').pop()?.toLowerCase() ?? 'unknown'
+				const result = {
+					duration: Number.isFinite(video.duration) ? video.duration : 0,
+					width: video.videoWidth,
+					height: video.videoHeight,
+					orientation: 'up',
+					type: extension,
+					size,
+					bitrate: 0,
+					fps: 0,
+					errMsg: 'getVideoInfo:ok',
+				}
+				onSuccess?.(result); onComplete?.(result)
+			}
+			video.onerror = () => {
+				const result = { errMsg: 'getVideoInfo:fail unsupported video' }
+				onFail?.(result); onComplete?.(result)
+			}
+			video.src = src
+		}).catch((error) => {
+			const result = { errMsg: `getVideoInfo:fail ${getErrorMessage(error)}` }
+			onFail?.(result); onComplete?.(result)
+		})
+	}
+
+	previewMedia(opts: ApiCallbackOptions & {
+		sources?: Array<{ url?: string, type?: 'image' | 'video', poster?: string }>
+		current?: number
+	}): void {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		const sources = (opts.sources ?? []).filter(source => source.url)
+		if (sources.length === 0) {
+			const result = { errMsg: 'previewMedia:fail sources is required' }
+			onFail?.(result); onComplete?.(result); return
+		}
+		this._mediaPreviewEl?.remove()
+		let current = Math.max(0, Math.min(opts.current ?? 0, sources.length - 1))
+		const overlay = document.createElement('div')
+		overlay.style.cssText = 'position:absolute;inset:0;z-index:10000;background:#000;display:flex;align-items:center;justify-content:center;'
+		const content = document.createElement('div')
+		content.style.cssText = 'width:100%;height:100%;display:flex;align-items:center;justify-content:center;'
+		const indicator = document.createElement('div')
+		indicator.style.cssText = 'position:absolute;top:calc(env(safe-area-inset-top) + 16px);left:50%;transform:translateX(-50%);color:white;font:14px sans-serif;z-index:2;'
+		const close = document.createElement('button')
+		close.type = 'button'
+		close.textContent = '×'
+		close.style.cssText = 'position:absolute;right:16px;top:calc(env(safe-area-inset-top) + 8px);z-index:3;border:0;background:transparent;color:white;font-size:36px;'
+		const render = async () => {
+			const renderIndex = current
+			content.replaceChildren()
+			const source = sources[current]
+			try {
+				const url = await this._resolveMediaObjectUrl(source.url!)
+				if (renderIndex !== current) return
+				const media = source.type === 'video' ? document.createElement('video') : document.createElement('img')
+				media.style.cssText = 'max-width:100%;max-height:100%;object-fit:contain;'
+				if (media instanceof HTMLVideoElement) {
+					media.controls = true
+					media.autoplay = true
+					media.poster = source.poster ? await this._resolveMediaObjectUrl(source.poster) : ''
+				}
+				if (renderIndex !== current) return
+				media.src = url
+				content.appendChild(media)
+				indicator.textContent = `${current + 1}/${sources.length}`
+			}
+			catch (error) {
+				if (renderIndex !== current) return
+				content.textContent = `previewMedia:fail ${getErrorMessage(error)}`
+				content.style.color = 'white'
+			}
+		}
+		let startX = 0
+		content.addEventListener('pointerdown', event => { startX = event.clientX })
+		content.addEventListener('pointerup', (event) => {
+			const delta = event.clientX - startX
+			if (Math.abs(delta) < 40) return
+			current = Math.max(0, Math.min(current + (delta < 0 ? 1 : -1), sources.length - 1))
+			void render()
+		})
+		close.onclick = () => { overlay.remove(); if (this._mediaPreviewEl === overlay) this._mediaPreviewEl = null }
+		overlay.append(content, indicator, close)
+		this.el.appendChild(overlay)
+		this._mediaPreviewEl = overlay
+		void render()
+		const result = { errMsg: 'previewMedia:ok' }
+		onSuccess?.(result); onComplete?.(result)
+	}
+
+	setKeepScreenOn(opts: ApiCallbackOptions & { keepScreenOn?: boolean }): void {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		if (typeof opts.keepScreenOn !== 'boolean') {
+			const result = { errMsg: 'setKeepScreenOn:fail invalid keepScreenOn' }
+			onFail?.(result); onComplete?.(result); return
+		}
+		const finish = (result: { errMsg: string }, success: boolean) => {
+			if (success) onSuccess?.(result); else onFail?.(result)
+			onComplete?.(result)
+		}
+		if (!opts.keepScreenOn) {
+			const sentinel = this._wakeLockSentinel
+			this._wakeLockSentinel = null
+			void sentinel?.release().then(() => {
+				finish({ errMsg: 'setKeepScreenOn:ok' }, true)
+			}).catch(error => finish({ errMsg: `setKeepScreenOn:fail ${getErrorMessage(error)}` }, false))
+			if (!sentinel) finish({ errMsg: 'setKeepScreenOn:ok' }, true)
+			return
+		}
+		if (this._wakeLockSentinel) {
+			finish({ errMsg: 'setKeepScreenOn:ok' }, true)
+			return
+		}
+		const wakeLock = (navigator as unknown as NavigatorWithDeviceApis).wakeLock
+		if (!wakeLock) {
+			finish({ errMsg: 'setKeepScreenOn:fail screen wake lock is not supported' }, false)
+			return
+		}
+		wakeLock.request('screen').then((sentinel) => {
+			this._wakeLockSentinel = sentinel
+			finish({ errMsg: 'setKeepScreenOn:ok' }, true)
+		}).catch(error => finish({ errMsg: `setKeepScreenOn:fail ${getErrorMessage(error)}` }, false))
+	}
+
+	async getSetting(opts: ApiCallbackOptions = {}): Promise<void> {
+		const { onSuccess, onComplete } = this._createApiCallbacks(opts)
+		const authSetting: Record<string, boolean> = {}
+		const permissions = (navigator as unknown as { permissions?: Permissions }).permissions
+		for (const [scope, name] of [
+			['scope.camera', 'camera'],
+			['scope.record', 'microphone'],
+			['scope.userLocation', 'geolocation'],
+		] as const) {
+			try {
+				authSetting[scope] = (await permissions?.query({ name } as PermissionDescriptor))?.state === 'granted'
+			}
+			catch { authSetting[scope] = false }
+		}
+		const result = { authSetting, errMsg: 'getSetting:ok' }
+		onSuccess?.(result); onComplete?.(result)
+	}
+
+	authorize(opts: ApiCallbackOptions & { scope?: string }): void {
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks(opts)
+		const settle = (granted: boolean, reason = 'auth deny') => {
+			const result = { errMsg: granted ? 'authorize:ok' : `authorize:fail ${reason}` }
+			if (granted) onSuccess?.(result); else onFail?.(result)
+			onComplete?.(result)
+		}
+		if (opts.scope === 'scope.camera' || opts.scope === 'scope.record') {
+			if (!navigator.mediaDevices?.getUserMedia) {
+				settle(false, 'media permission is not supported')
+				return
+			}
+			navigator.mediaDevices.getUserMedia({
+				video: opts.scope === 'scope.camera',
+				audio: opts.scope === 'scope.record',
+			}).then((stream) => {
+				stream.getTracks().forEach(track => track.stop())
+				settle(true)
+			}).catch(error => settle(false, getErrorMessage(error)))
+			return
+		}
+		if (opts.scope === 'scope.userLocation' && navigator.geolocation) {
+			navigator.geolocation.getCurrentPosition(() => settle(true), error => settle(false, error.message))
+			return
+		}
+		settle(false, 'scope is not supported on Web')
+	}
+
+	private _resolveMediaUrl(source: string): string {
+		return new URL(source, new URL(this.getResourceBaseUrl(), window.location.origin)).toString()
+	}
+
+	private async _resolveMediaObjectUrl(source: string): Promise<string> {
+		if (source.startsWith('difile://usr/')) {
+			const file = await readWebFile(this.appId, source)
+			const url = URL.createObjectURL(file)
+			this._tempObjectUrls.add(url)
+			return url
+		}
+		if (source.startsWith('difile://')) {
+			throw new Error(`temporary virtual file is not available on Web: ${source}`)
+		}
+		return this._resolveMediaUrl(source)
 	}
 
 	/**

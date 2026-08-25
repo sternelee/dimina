@@ -20,6 +20,7 @@ import java.io.File
 enum class MediaType {
     NONE,
     CAMERA,
+    CAMERA_VIDEO,
     IMAGE,
     VIDEO,
     IMAGE_AND_VIDEO
@@ -33,19 +34,32 @@ fun MediaPickerRoot(
     onSelected: (List<Uri>) -> Unit = {},
 ) {
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
+    var videoCameraUri by remember { mutableStateOf<Uri?>(null) }
 
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
         if (success) {
             cameraUri?.let { uri ->
                 onSelected(listOf(uri))
             }
+        } else {
+            onSelected(emptyList())
+        }
+    }
+
+    val videoCameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CaptureVideo()) { success ->
+        if (success) {
+            videoCameraUri?.let { uri ->
+                onSelected(listOf(uri))
+            }
+        } else {
+            onSelected(emptyList())
         }
     }
 
     // Launcher for picking media
     val mediaLauncher = if (maxCount == 1) {
         rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri ->
-            uri?.let { onSelected(listOf(it)) }
+            onSelected(uri?.let(::listOf) ?: emptyList())
         }
     } else {
         rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(maxCount)) { uris ->
@@ -77,10 +91,15 @@ fun MediaPickerRoot(
                 cameraUri = uri
                 cameraLauncher.launch(uri)
             }
+            MediaType.CAMERA_VIDEO -> {
+                val videoFile = File.createTempFile("VID_${System.currentTimeMillis()}", ".mp4", context.cacheDir)
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", videoFile)
+                videoCameraUri = uri
+                videoCameraLauncher.launch(uri)
+            }
             MediaType.NONE -> {
                 // Do nothing or handle as needed
             }
         }
     }
 }
-

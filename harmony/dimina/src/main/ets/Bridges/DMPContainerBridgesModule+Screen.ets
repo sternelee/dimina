@@ -7,6 +7,7 @@ import { Tags } from '../EventTrack/Tags';
 
 const ON_USER_CAPTURE_SCREEN = 'onUserCaptureScreen';
 const OFF_USER_CAPTURE_SCREEN = 'offUserCaptureScreen';
+const SET_KEEP_SCREEN_ON = 'setKeepScreenOn';
 
 /**
  * Screen 模块：屏幕相关能力。
@@ -22,7 +23,23 @@ export class DMPContainerBridgesModuleScreen extends DMPContainerBridgesModule {
   private screenshotListener: (() => void) | null = null;
 
   getExportMethods(): Array<string> {
-    return [ON_USER_CAPTURE_SCREEN, OFF_USER_CAPTURE_SCREEN];
+    return [ON_USER_CAPTURE_SCREEN, OFF_USER_CAPTURE_SCREEN, SET_KEEP_SCREEN_ON];
+  }
+
+  async setKeepScreenOn(data: DMPMap, callback: DMPBridgeCallback) {
+    const keepScreenOn = data.getBoolean('keepScreenOn');
+    if (keepScreenOn === undefined) {
+      this.invokeFailureCallback(callback, null, `${SET_KEEP_SCREEN_ON}:fail invalid keepScreenOn`);
+      return;
+    }
+    try {
+      await DMPApp.getWindowStage().getMainWindowSync().setWindowKeepScreenOn(keepScreenOn);
+      const result = new DMPMap();
+      result.set('errMsg', `${SET_KEEP_SCREEN_ON}:ok`);
+      this.invokeSuccessCallback(callback, result, true);
+    } catch (err) {
+      this.invokeFailureCallback(callback, null, `${SET_KEEP_SCREEN_ON}:fail ${err}`);
+    }
   }
 
   onUserCaptureScreen(data: DMPMap, callback: DMPBridgeCallback) {
