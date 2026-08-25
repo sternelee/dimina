@@ -70,4 +70,41 @@ describe('collectAssets', () => {
 
 		expect(result).toMatch(/^\/test-app\/main\/static\/.+_icon\.png$/)
 	})
+
+	it('copies the pathname and preserves the query string for local assets', () => {
+		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-assets-'))
+		const workPath = path.join(tempDir, 'project')
+		const targetPath = path.join(tempDir, 'output')
+		const assetDir = path.join(workPath, 'pages/detail/images')
+		fs.mkdirSync(assetDir, { recursive: true })
+		fs.writeFileSync(path.join(assetDir, 'icon.png'), 'image')
+
+		const result = collectAssets(
+			workPath,
+			'/pages/detail/index',
+			'./images/icon.png?v=1#preview',
+			targetPath,
+			'test-app',
+		)
+
+		expect(result).toMatch(/^\/test-app\/main\/static\/.+_icon\.png\?v=1#preview$/)
+		const outputName = result.split('/').pop().split('?')[0]
+		expect(fs.readFileSync(path.join(targetPath, 'main/static', outputName), 'utf8')).toBe('image')
+	})
+
+	it('copies a cached source asset into every build target', () => {
+		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-assets-'))
+		const workPath = path.join(tempDir, 'project')
+		const firstTarget = path.join(tempDir, 'output-a')
+		const secondTarget = path.join(tempDir, 'output-b')
+		const assetDir = path.join(workPath, 'pages/detail/images')
+		fs.mkdirSync(assetDir, { recursive: true })
+		fs.writeFileSync(path.join(assetDir, 'icon.png'), 'image')
+
+		const first = collectAssets(workPath, '/pages/detail/index', './images/icon.png', firstTarget, 'test-app')
+		const second = collectAssets(workPath, '/pages/detail/index', './images/icon.png', secondTarget, 'test-app')
+
+		expect(fs.existsSync(path.join(firstTarget, 'main/static', first.split('/').pop()))).toBe(true)
+		expect(fs.existsSync(path.join(secondTarget, 'main/static', second.split('/').pop()))).toBe(true)
+	})
 })

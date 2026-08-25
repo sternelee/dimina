@@ -10,7 +10,7 @@ import { artCode, resetAssetCache } from './common/utils.js'
 import { workerPool } from './common/worker-pool.js'
 import { NpmBuilder } from './common/npm-builder.js'
 import { compileConfig } from './core/index.js'
-import { getAppConfigInfo, getAppId, getAppName, getAppStyleScopeId, getPages, getTargetPath, getWorkPath, isMiniGame, storeInfo } from './env.js'
+import { getAppConfigInfo, getAppId, getAppName, getAppStyleScopeId, getPages, getTargetPath, getWorkPath, isMiniGame, runWithCompilerContext, storeInfo } from './env.js'
 
 let isPrinted = false
 const previousCompatibilityWarnings = new Map()
@@ -31,7 +31,11 @@ const COMPILE_STAGE_ORDER = ['view', 'logic', 'style']
  * @param {object} [options.dependencyGraph] 上一次构建的依赖图快照
  * @param {Array<'view'|'logic'|'style'>} [options.stages] 仅运行指定编译阶段
  */
-export default async function build(targetPath, workPath, useAppIdDir = true, options = {}) {
+export default function build(targetPath, workPath, useAppIdDir = true, options = {}) {
+	return runWithCompilerContext(() => runBuild(targetPath, workPath, useAppIdDir, options))
+}
+
+async function runBuild(targetPath, workPath, useAppIdDir = true, options = {}) {
 	const { sourcemap = false, fileTypes, affectedEntries, seedPath, dependencyGraph, stages } = options
 	if (stages !== undefined
 		&& (!Array.isArray(stages) || stages.some(stage => !COMPILE_STAGE_ORDER.includes(stage)))) {

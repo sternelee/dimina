@@ -35,7 +35,7 @@
 		"sync:compat": "node scripts/sync-compatibility-reference.js",
 		"check:compat": "node scripts/sync-compatibility-reference.js --check",
 		"pretest": "node scripts/sync-compatibility-reference.js --check",
-		"test": "vitest run",
+		"test": "vitest run --no-file-parallelism",
 		"test:dev": "vitest",
 		"coverage": "vitest run --coverage",
 		"prepack": "npm run build",

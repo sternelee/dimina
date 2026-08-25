@@ -87,15 +87,20 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 		return src
 	}
 
-	const absolutePath = resolveAssetSourcePath(workPath, pagePath, src)
+	const queryIndex = src.indexOf('?')
+	const sourcePath = queryIndex === -1 ? src : src.slice(0, queryIndex)
+	const query = queryIndex === -1 ? '' : src.slice(queryIndex)
+	const absolutePath = resolveAssetSourcePath(workPath, pagePath, sourcePath)
+	// 同一源文件可以被并发发布到不同目录；缓存必须包含目标目录，不能只按源路径复用。
+	const cacheKey = `${path.resolve(targetPath)}\0${absolutePath}`
 
-	if (assetsMap[absolutePath]) {
-		return assetsMap[absolutePath]
+	if (assetsMap[cacheKey]) {
+		return `${assetsMap[cacheKey]}${query}`
 	}
 
 	try {
 		// 复制将文件夹下所有同类型的资源文件并加上前缀
-		const ext = `.${src.split('.').pop()}`
+		const ext = path.extname(sourcePath)
 		const dirPath = absolutePath.split(path.sep).slice(0, -1).join('/')
 		const prefix = uuid(dirPath)
 
@@ -108,14 +113,14 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 			fs.copyFileSync(path.resolve(dirPath, file), `${targetStatic}/${prefix}_${file}`)
 		})
 
-		const filename = src.split('/').pop()
+		const filename = sourcePath.split('/').pop()
 		const pathPrefix = process.env.ASSETS_PATH_PREFIX ? '' : '/'
-		assetsMap[absolutePath] = `${pathPrefix}${appId}/main/static/${prefix}_${filename}`
+		assetsMap[cacheKey] = `${pathPrefix}${appId}/main/static/${prefix}_${filename}`
 	}
 	catch (error) {
 		console.log(error)
 	}
-	return assetsMap[absolutePath] || src
+	return assetsMap[cacheKey] ? `${assetsMap[cacheKey]}${query}` : src
 }
 
 function getFilesWithExtension(directory, extension) {

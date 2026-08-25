@@ -2,6 +2,7 @@ import fs from 'node:fs'
 import os from 'node:os'
 import path from 'node:path'
 import process from 'node:process'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { parseSync } from 'oxc-parser'
 import { walk } from 'oxc-walker'
 import { resolveMiniProgramPath, toMiniProgramModuleId } from './common/path-utils.js'
@@ -9,10 +10,40 @@ import { isObjectEmpty, resolveAssetSourcePath, uuid } from './common/utils.js'
 import { NpmResolver } from './common/npm-resolver.js'
 import { DependencyGraph } from './common/dependency-graph.js'
 
-let pathInfo = {}
-let configInfo = {}
-let npmResolver = null
-let dependencyGraph = new DependencyGraph()
+const compilerContextStorage = new AsyncLocalStorage()
+let defaultCompilerContext
+
+function createCompilerContext() {
+	return {
+		pathInfo: {},
+		configInfo: {},
+		npmResolver: null,
+		dependencyGraph: new DependencyGraph(),
+		compilerOptions: normalizeFileTypes(),
+	}
+}
+
+function getCompilerContext() {
+	defaultCompilerContext ||= createCompilerContext()
+	return compilerContextStorage.getStore() || defaultCompilerContext
+}
+
+// 将现有属性访问路由到当前异步构建上下文。直接调用 storeInfo() 的测试和
+// 独立 Worker 没有 AsyncLocalStorage store 时，仍使用各自进程内的默认上下文。
+const pathInfo = new Proxy({}, {
+	get: (_, key) => getCompilerContext().pathInfo[key],
+	set: (_, key, value) => {
+		getCompilerContext().pathInfo[key] = value
+		return true
+	},
+})
+const configInfo = new Proxy({}, {
+	get: (_, key) => getCompilerContext().configInfo[key],
+	set: (_, key, value) => {
+		getCompilerContext().configInfo[key] = value
+		return true
+	},
+})
 
 // 小程序自定义文件类型：可扩展的文件扩展名和内联标签。
 // 始终保留内置 wx/dd 类型；调用方通过 build() 或 storeInfo() 的 options.fileTypes 追加自定义项。
@@ -43,9 +74,6 @@ const RESERVED_EXTS = new Set([
 	'.ts',
 	'.json',
 ])
-
-// 编译选项单例。env 会跨多次 build() 持久化；每次 storeInfo() 根据当前 options 重建，避免自定义文件类型串用。
-let compilerOptions = normalizeFileTypes()
 
 /**
  * 将单项规范化为扩展名：去除首尾空白、转小写并补一个前导点。
@@ -125,59 +153,66 @@ function normalizeFileTypes(fileTypes = {}) {
  * @param {{ fileTypes?: { template?: string[], style?: string[], viewScript?: string[] } }} [options] 构建选项
  */
 function storeInfo(workPath, options = {}) {
+	const context = getCompilerContext()
 	// 依赖图需要知道当前构建的文件类型，因此在扫描项目前先重建选项。
-	compilerOptions = normalizeFileTypes(options.fileTypes)
+	context.compilerOptions = normalizeFileTypes(options.fileTypes)
 	storePathInfo(workPath)
 	storeProjectConfig()
 	storeAppConfig()
 	storePageConfig()
-	dependencyGraph = createInitialDependencyGraph()
-	dependencyGraph.merge(options.dependencyGraph)
+	context.dependencyGraph = createInitialDependencyGraph()
+	context.dependencyGraph.merge(options.dependencyGraph)
 
 	return {
-		pathInfo,
-		configInfo,
-		compilerOptions,
-		dependencyGraph: dependencyGraph.toJSON(),
+		pathInfo: context.pathInfo,
+		configInfo: context.configInfo,
+		compilerOptions: context.compilerOptions,
+		dependencyGraph: context.dependencyGraph.toJSON(),
 	}
 }
 
 function resetStoreInfo(opts) {
-	pathInfo = opts.pathInfo
-	configInfo = opts.configInfo
+	const context = getCompilerContext()
+	context.pathInfo = opts.pathInfo
+	context.configInfo = opts.configInfo
 	// Worker 恢复上下文时使用主线程生成的自定义文件类型配置，缺省时回退到内置配置。
-	compilerOptions = opts.compilerOptions || normalizeFileTypes()
-	dependencyGraph = new DependencyGraph(opts.dependencyGraph)
+	context.compilerOptions = opts.compilerOptions || normalizeFileTypes()
+	context.dependencyGraph = new DependencyGraph(opts.dependencyGraph)
 
 	// 重新初始化 npm 解析器
 	if (pathInfo.workPath) {
-		npmResolver = new NpmResolver(pathInfo.workPath)
+		context.npmResolver = new NpmResolver(pathInfo.workPath)
 	}
 }
 
+function runWithCompilerContext(callback) {
+	return compilerContextStorage.run(createCompilerContext(), callback)
+}
+
 function getTemplateExts() {
-	return compilerOptions.templateExts
+	return getCompilerContext().compilerOptions.templateExts
 }
 
 function getTemplateDirectivePrefixes() {
+	const compilerOptions = getCompilerContext().compilerOptions
 	return compilerOptions.templateDirectivePrefixes
 		|| normalizeFileTypes({ template: compilerOptions.templateExts }).templateDirectivePrefixes
 }
 
 function getStyleExts() {
-	return compilerOptions.styleExts
+	return getCompilerContext().compilerOptions.styleExts
 }
 
 function getViewScriptExts() {
-	return compilerOptions.viewScriptExts
+	return getCompilerContext().compilerOptions.viewScriptExts
 }
 
 function getViewScriptTags() {
-	return compilerOptions.viewScriptTags
+	return getCompilerContext().compilerOptions.viewScriptTags
 }
 
 function getDependencyGraph() {
-	return dependencyGraph
+	return getCompilerContext().dependencyGraph
 }
 
 function storePathInfo(workPath) {
@@ -196,7 +231,7 @@ function storePathInfo(workPath) {
 	}
 	
 	// 初始化 npm 解析器
-	npmResolver = new NpmResolver(workPath)
+	getCompilerContext().npmResolver = new NpmResolver(workPath)
 }
 
 function storeProjectConfig() {
@@ -588,6 +623,7 @@ function getModuleId(src, pageFilePath) {
 		return resolvedAlias
 	}
 
+	const npmResolver = getCompilerContext().npmResolver
 	if (!npmResolver) {
 		// 如果 npm 解析器未初始化，使用原有逻辑
 		const workPath = getWorkPath()
@@ -644,7 +680,7 @@ function getWorkPath() {
 }
 
 function getNpmResolver() {
-	return npmResolver
+	return getCompilerContext().npmResolver
 }
 
 function getAppId() {
@@ -887,6 +923,7 @@ export {
 	isMiniGame,
 	resetStoreInfo,
 	resolveAppAlias,
+	runWithCompilerContext,
 	storeInfo,
 	storeProjectConfig,
 }
