@@ -192,6 +192,7 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 | 基础          | env                              | ✓       | ✓   | ✓       | ✓   |
 | 文件          | getFileSystemManager             | ✓       | ✓   | ✓       | ✓   |
 |               | FileSystemManager.saveFile       | ✓       | ✓   | ✓       | ✓   |
+|               | openDocument                     | ✓       | ✓   | ✓       | ✗   |
 | 基础 - 应用事件 | onError                         | ✓       | ✓   | ✓       | ✓   |
 |               | offError                         | ✓       | ✓   | ✓       | ✓   |
 |               | onAppShow                        | ✓       | ✓   | ✓       | ✓   |
@@ -378,6 +379,7 @@ DMPApp.init(context, { apiNamespaces: ["myapp"] })
 - `getUpdateManager` 只负责更新状态通知和重启入口，包下载、校验和动态下发流程请参考[小程序包更新说明](./MiniProgram-Update.md)。
 - `chooseMessageFile` 在 Android、iOS 和 HarmonyOS 上使用系统文件选择器。宿主无法访问微信会话记录，因此 `time` 返回文件修改时间（取不到时为选择时间），不是微信会话发送时间；选中文件会先复制到当前小程序的临时沙箱并返回 `difile://` 路径。
 - `FileSystemManager.saveFile` 会把临时文件保存到当前小程序隔离的 `wx.env.USER_DATA_PATH`。Web 端使用浏览器 Origin Private File System，要求安全上下文且 `tempFilePath` 必须是当前页面可读取的 URL；不支持时通过 `fail` 明确返回错误。
+- `openDocument` 支持 `doc`、`docx`、`xls`、`xlsx`、`ppt`、`pptx` 和 `pdf`。Android 调用已安装的系统文档应用，iOS 使用 Quick Look，HarmonyOS 使用 PreviewKit；系统没有可用预览器或文件不可读时会走 `fail`。iOS 会按 `showMenu` 尽量隐藏或显示 Quick Look 操作入口；Android 与 HarmonyOS 的菜单由系统预览器决定，无法保证与微信客户端完全一致。
 - `uploadFile` 在 Android、iOS 和 HarmonyOS 上同步返回 `UploadTask`，支持 `abort`、上传进度和响应头监听；Web 暂不支持。基础上传参数 `url`、`filePath`、`name`、`header`、`formData`、`timeout` 已对齐。`enableHttp2`、`enableQuic`、`enableProfile` 的平台加速或性能信息暂不保证。
 - HarmonyOS 系统 socket 的绑定接口本身是异步的；`UDPSocket.bind()` 未指定端口时会先选定并同步返回一个临时端口，最终绑定成功以 `onListening` 为准，端口冲突等失败通过 `onError` 返回。Android 与 iOS 会直接返回内核实际绑定的端口。
 

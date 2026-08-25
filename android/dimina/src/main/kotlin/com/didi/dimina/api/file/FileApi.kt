@@ -1,6 +1,10 @@
 package com.didi.dimina.api.file
 
+import android.content.ClipData
+import android.content.Intent
 import android.util.Base64
+import android.webkit.MimeTypeMap
+import androidx.core.content.FileProvider
 import com.didi.dimina.api.APIResult
 import com.didi.dimina.api.AsyncResult
 import com.didi.dimina.api.BaseApiHandler
@@ -23,6 +27,7 @@ import java.util.zip.ZipFile
 class FileApi : BaseApiHandler() {
     private companion object {
         const val SAVE_FILE_TO_DISK = "saveFileToDisk"
+        const val OPEN_DOCUMENT = "openDocument"
         const val PREFIX = "FileSystemManager."
         const val VIRTUAL_PREFIX = "difile://"
         const val USER_PREFIX = "usr"
@@ -31,6 +36,16 @@ class FileApi : BaseApiHandler() {
         const val FILE_DATA_BASE64_KEY = "__diminaFileDataBase64"
         const val FILE_DATA_TYPE_KEY = "__diminaFileDataType"
 
+        val DOCUMENT_MIME_TYPES = mapOf(
+            "doc" to "application/msword",
+            "docx" to "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "xls" to "application/vnd.ms-excel",
+            "xlsx" to "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "ppt" to "application/vnd.ms-powerpoint",
+            "pptx" to "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            "pdf" to "application/pdf",
+        )
+
         data class OpenFile(val file: File, val handle: RandomAccessFile)
 
         val OPEN_FILES = mutableMapOf<String, OpenFile>()
@@ -38,6 +53,7 @@ class FileApi : BaseApiHandler() {
 
     override val apiNames = setOf(
         SAVE_FILE_TO_DISK,
+        OPEN_DOCUMENT,
         "FileSystemManager.access",
         "FileSystemManager.accessSync",
         "FileSystemManager.appendFile",
@@ -94,6 +110,9 @@ class FileApi : BaseApiHandler() {
     ): APIResult {
         if (apiName == SAVE_FILE_TO_DISK) {
             return fail(apiName, "not supported on this platform")
+        }
+        if (apiName == OPEN_DOCUMENT) {
+            return openDocument(activity, appId, params)
         }
 
         return try {
@@ -162,6 +181,47 @@ class FileApi : BaseApiHandler() {
 
     private fun fail(apiName: String, message: String): APIResult =
         AsyncResult(JSONObject().put("errMsg", "$apiName:fail $message"))
+
+    private fun openDocument(activity: DiminaActivity, appId: String, params: JSONObject): APIResult {
+        return try {
+            val rawPath = params.optString("filePath")
+            val file = resolve(activity, appId, rawPath)
+            if (!file.isFile || !file.canRead()) {
+                throw IllegalArgumentException("file not found")
+            }
+
+            val requestedType = params.optString("fileType").lowercase()
+            if (requestedType.isNotEmpty() && requestedType !in DOCUMENT_MIME_TYPES) {
+                throw IllegalArgumentException("invalid fileType")
+            }
+            val mimeType = DOCUMENT_MIME_TYPES[requestedType]
+                ?: MimeTypeMap.getSingleton().getMimeTypeFromExtension(file.extension.lowercase())
+                ?: "application/octet-stream"
+            val uri = FileProvider.getUriForFile(
+                activity,
+                "${activity.packageName}.fileprovider",
+                file,
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, mimeType)
+                clipData = ClipData.newRawUri(file.name, uri)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            if (intent.resolveActivity(activity.packageManager) == null) {
+                throw IllegalStateException("no application can open this document")
+            }
+            activity.startActivity(intent)
+            AsyncResult(
+                JSONObject().put("errMsg", "$OPEN_DOCUMENT:ok"),
+                completeCarriesResult = true,
+            )
+        } catch (error: Exception) {
+            AsyncResult(
+                JSONObject().put("errMsg", "$OPEN_DOCUMENT:fail ${error.message ?: "operation failed"}"),
+                completeCarriesResult = true,
+            )
+        }
+    }
 
     private fun syncVoid(block: () -> Unit): APIResult {
         block()

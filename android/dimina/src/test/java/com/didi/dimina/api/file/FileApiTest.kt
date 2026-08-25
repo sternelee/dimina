@@ -14,6 +14,7 @@ class FileApiTest {
         val names = registry.getRegisteredApiNames()
         listOf(
             "saveFileToDisk",
+            "openDocument",
             "FileSystemManager.access",
             "FileSystemManager.accessSync",
             "FileSystemManager.appendFile",

@@ -6,7 +6,7 @@ vi.mock('@/api/common', () => ({
 
 import { invokeAPI } from '@/api/common'
 import { canIUse, env } from '../src/api/core/base/index.js'
-import { getFileSystemManager } from '../src/api/core/file/index.js'
+import { getFileSystemManager, openDocument } from '../src/api/core/file/index.js'
 
 function bytes(buffer) {
 	return Array.from(new Uint8Array(buffer))
@@ -42,6 +42,18 @@ describe('file api service adapter', () => {
 		getFileSystemManager().saveFile(options)
 
 		expect(invokeAPI).toHaveBeenCalledWith('FileSystemManager.saveFile', options)
+	})
+
+	it('forwards openDocument through the top-level file bridge contract', () => {
+		const options = {
+			filePath: 'difile://usr/reports/report.pdf',
+			fileType: 'pdf',
+			showMenu: true,
+		}
+
+		openDocument(options)
+
+		expect(invokeAPI).toHaveBeenCalledWith('openDocument', options)
 	})
 
 	it('encodes ArrayBuffer payloads before forwarding writes to native', () => {

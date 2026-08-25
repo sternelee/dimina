@@ -46,6 +46,7 @@ const supportedWxApis = [
 	"env",
 	"getFileSystemManager",
 	"FileSystemManager.saveFile",
+	"openDocument",
 	"onError",
 	"offError",
 	"onAppShow",

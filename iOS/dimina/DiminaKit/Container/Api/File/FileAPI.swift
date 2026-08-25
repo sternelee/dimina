@@ -1,10 +1,76 @@
 import Foundation
 import CommonCrypto
 import Compression
+import QuickLook
+import UIKit
 import ZIPFoundation
+
+private final class DMPDocumentPreviewItem: NSObject, QLPreviewItem {
+    let previewItemURL: URL?
+    let previewItemTitle: String?
+
+    init(url: URL, title: String) {
+        self.previewItemURL = url
+        self.previewItemTitle = title
+    }
+}
+
+private final class DMPDocumentPreviewController: QLPreviewController, QLPreviewControllerDataSource {
+    private let documentItem: DMPDocumentPreviewItem
+    private let cleanupURL: URL?
+    private let showsMenu: Bool
+
+    init(url: URL, title: String, cleanupURL: URL?, showsMenu: Bool) {
+        self.documentItem = DMPDocumentPreviewItem(url: url, title: title)
+        self.cleanupURL = cleanupURL
+        self.showsMenu = showsMenu
+        super.init(nibName: nil, bundle: nil)
+        dataSource = self
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    deinit {
+        if let cleanupURL {
+            try? FileManager.default.removeItem(at: cleanupURL)
+        }
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        navigationItem.leftBarButtonItem = UIBarButtonItem(
+            barButtonSystemItem: .close,
+            target: self,
+            action: #selector(closePreview)
+        )
+    }
+
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        if !showsMenu {
+            navigationItem.rightBarButtonItems = []
+            navigationController?.setToolbarHidden(true, animated: false)
+        }
+    }
+
+    @objc private func closePreview() {
+        navigationController?.dismiss(animated: true)
+    }
+
+    func numberOfPreviewItems(in controller: QLPreviewController) -> Int {
+        return 1
+    }
+
+    func previewController(_ controller: QLPreviewController, previewItemAt index: Int) -> QLPreviewItem {
+        return documentItem
+    }
+}
 
 public class FileAPI: DMPContainerApi {
     private static let SAVE_FILE_TO_DISK = "saveFileToDisk"
+    private static let OPEN_DOCUMENT = "openDocument"
     private static let PREFIX = "FileSystemManager."
     private static let VIRTUAL_PREFIX = "difile://"
     private static let USER_PREFIX = "usr"
@@ -12,6 +78,7 @@ public class FileAPI: DMPContainerApi {
     private static let ARRAY_BUFFER_BASE64_KEY = "__diminaArrayBufferBase64"
     private static let FILE_DATA_BASE64_KEY = "__diminaFileDataBase64"
     private static let FILE_DATA_TYPE_KEY = "__diminaFileDataType"
+    private static let DOCUMENT_TYPES: Set<String> = ["doc", "docx", "xls", "xlsx", "ppt", "pptx", "pdf"]
 
     private struct OpenFile {
         let handle: FileHandle
@@ -30,6 +97,72 @@ public class FileAPI: DMPContainerApi {
     @BridgeMethod(SAVE_FILE_TO_DISK)
     var saveFileToDisk: DMPBridgeMethodHandler = { param, env, callback in
         FileAPI.fail(name: SAVE_FILE_TO_DISK, message: "not supported on this platform", callback: callback)
+    }
+
+    @BridgeMethod(OPEN_DOCUMENT)
+    var openDocument: DMPBridgeMethodHandler = { param, env, callback in
+        let map = param.getMap()
+        do {
+            let fileType = (map.getString(key: "fileType") ?? "").lowercased()
+            if !fileType.isEmpty && !DOCUMENT_TYPES.contains(fileType) {
+                throw FileError.message("invalid fileType")
+            }
+
+            let url = try FileAPI.resolve(env: env, path: map.getString(key: "filePath") ?? "")
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDirectory), !isDirectory.boolValue else {
+                throw FileError.message("file not found")
+            }
+            let preparedDocument = try FileAPI.prepareDocument(url: url, fileType: fileType, env: env)
+            guard QLPreviewController.canPreview(preparedDocument.url as NSURL) else {
+                if let cleanupURL = preparedDocument.cleanupURL {
+                    try? FileManager.default.removeItem(at: cleanupURL)
+                }
+                throw FileError.message("unsupported file type")
+            }
+
+            let showMenu = map.getBool(key: "showMenu") ?? false
+            DispatchQueue.main.async {
+                guard let topViewController = DMPUIManager.getCurrentWindow()?.rootViewController?.topMostViewController() else {
+                    if let cleanupURL = preparedDocument.cleanupURL {
+                        try? FileManager.default.removeItem(at: cleanupURL)
+                    }
+                    DMPContainerApi.invokeFailure(
+                        callback: callback,
+                        param: nil,
+                        errMsg: "\(OPEN_DOCUMENT):fail cannot find view controller",
+                        completeCarriesResult: true
+                    )
+                    return
+                }
+
+                let previewController = DMPDocumentPreviewController(
+                    url: preparedDocument.url,
+                    title: url.lastPathComponent,
+                    cleanupURL: preparedDocument.cleanupURL,
+                    showsMenu: showMenu
+                )
+                let navigationController = UINavigationController(rootViewController: previewController)
+                navigationController.modalPresentationStyle = .fullScreen
+                topViewController.present(navigationController, animated: true) {
+                    let result = DMPMap()
+                    result.set("errMsg", "\(OPEN_DOCUMENT):ok")
+                    DMPContainerApi.invokeSuccess(
+                        callback: callback,
+                        param: result,
+                        completeCarriesResult: true
+                    )
+                }
+            }
+        } catch {
+            DMPContainerApi.invokeFailure(
+                callback: callback,
+                param: nil,
+                errMsg: "\(OPEN_DOCUMENT):fail \(FileAPI.message(error))",
+                completeCarriesResult: true
+            )
+        }
+        return DMPAsyncResult()
     }
 
     @BridgeMethod(PREFIX + "access")
@@ -329,6 +462,21 @@ public class FileAPI: DMPContainerApi {
             throw FileError.message("permission denied, open \(rawPath)")
         }
         return standardized
+    }
+
+    private static func prepareDocument(url: URL, fileType: String, env: DMPBridgeEnv) throws -> (url: URL, cleanupURL: URL?) {
+        guard !fileType.isEmpty, url.pathExtension.lowercased() != fileType else {
+            return (url, nil)
+        }
+
+        let previewDirectory = URL(fileURLWithPath: root(env: env, user: false))
+            .appendingPathComponent("open-document", isDirectory: true)
+        try FileManager.default.createDirectory(at: previewDirectory, withIntermediateDirectories: true)
+        let previewURL = previewDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension(fileType)
+        try FileManager.default.copyItem(at: url, to: previewURL)
+        return (previewURL, previewURL)
     }
 
     private static func pathParam(_ map: DMPMap) -> String {

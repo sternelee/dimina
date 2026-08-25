@@ -1,5 +1,13 @@
 import { invokeAPI } from '@/api/common'
 
+/**
+ * 新开页面打开文档
+ * https://developers.weixin.qq.com/miniprogram/dev/api/file/wx.openDocument.html
+ */
+export function openDocument(opts) {
+	return invokeAPI('openDocument', opts)
+}
+
 const ARRAY_BUFFER_BASE64_KEY = '__diminaArrayBufferBase64'
 const FILE_DATA_BASE64_KEY = '__diminaFileDataBase64'
 const FILE_DATA_TYPE_KEY = '__diminaFileDataType'

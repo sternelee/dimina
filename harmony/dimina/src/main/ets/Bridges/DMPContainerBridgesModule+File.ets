@@ -1,6 +1,9 @@
 import fs from '@ohos.file.fs';
 import cryptoFramework from '@ohos.security.cryptoFramework';
 import { util } from '@kit.ArkTS';
+import { BusinessError } from '@kit.BasicServicesKit';
+import { fileUri } from '@kit.CoreFileKit';
+import { filePreview } from '@kit.PreviewKit';
 import { brotliDecompress } from 'libdimina.so';
 import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
 import { DMPBridgeCallback } from './DMPTSUtil';
@@ -18,6 +21,15 @@ const ARRAY_BUFFER_BASE64_KEY = '__diminaArrayBufferBase64';
 const FILE_DATA_BASE64_KEY = '__diminaFileDataBase64';
 const FILE_DATA_TYPE_KEY = '__diminaFileDataType';
 const BASE64_CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+const DOCUMENT_MIME_TYPES = new Map<string, string>([
+  ['doc', 'application/msword'],
+  ['docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  ['xls', 'application/vnd.ms-excel'],
+  ['xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+  ['ppt', 'application/vnd.ms-powerpoint'],
+  ['pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+  ['pdf', 'application/pdf'],
+]);
 
 class OpenedFile {
   file: fs.File;
@@ -55,6 +67,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   getExportMethods(): string[] {
     return [
       'saveFileToDisk',
+      'openDocument',
       'FileSystemManager.access',
       'FileSystemManager.accessSync',
       'FileSystemManager.appendFile',
@@ -240,6 +253,44 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
 
   saveFileToDisk(_data: DMPMap, callback: DMPBridgeCallback) {
     this.invokeFailureCallback(callback, null, 'saveFileToDisk:fail not supported on this platform');
+  }
+
+  openDocument(data: DMPMap, callback: DMPBridgeCallback) {
+    const apiName = 'openDocument';
+    try {
+      const path = this.resolve(data.getString('filePath') ?? '');
+      if (!fs.accessSync(path) || !fs.statSync(path).isFile()) {
+        throw new Error('file not found');
+      }
+
+      const requestedType = (data.getString('fileType') ?? '').toLowerCase();
+      if (requestedType && !DOCUMENT_MIME_TYPES.has(requestedType)) {
+        throw new Error('invalid fileType');
+      }
+      const extension = this.nameFromPath(path).split('.').pop()?.toLowerCase() ?? '';
+      const mimeType = DOCUMENT_MIME_TYPES.get(requestedType || extension) ?? 'application/octet-stream';
+      const context = DMPContextUtils.getUIAbilityContext();
+      const uri = fileUri.getUriFromPath(path);
+
+      filePreview.canPreview(context, uri).then((supported: boolean) => {
+        if (!supported) {
+          throw new Error('unsupported file type');
+        }
+        return filePreview.openPreview(context, {
+          title: this.nameFromPath(path),
+          uri,
+          mimeType,
+        });
+      }).then(() => {
+        const result = new DMPMap();
+        result.set('errMsg', `${apiName}:ok`);
+        this.invokeSuccessCallback(callback, result, true);
+      }).catch((err: BusinessError) => {
+        this.invokeFailureCallback(callback, null, `${apiName}:fail ${err.message ?? err}`, true);
+      });
+    } catch (err) {
+      this.invokeFailureCallback(callback, null, `${apiName}:fail ${(err as Error).message ?? err}`, true);
+    }
   }
 
   access(data: DMPMap, callback: DMPBridgeCallback) {
