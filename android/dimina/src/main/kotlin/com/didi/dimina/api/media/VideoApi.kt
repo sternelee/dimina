@@ -8,6 +8,7 @@ import com.didi.dimina.common.ApiUtils
 import com.didi.dimina.common.PathUtils
 import com.didi.dimina.ui.container.DiminaActivity
 import com.didi.dimina.ui.view.MediaType
+import com.didi.dimina.ui.view.VideoCaptureOptions
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -117,7 +118,8 @@ class VideoApi : BaseApiHandler() {
                     type = MediaType.VIDEO,
                     count = 1,
                     allowAlbum = allowAlbum,
-                    allowCamera = allowCamera
+                    allowCamera = allowCamera,
+                    captureOptions = VideoCaptureOptions(camera = camera, maxDuration = maxDuration),
                 ) { imagePaths ->
                     val virtualPath = imagePaths.firstOrNull()
                     if (virtualPath == null) {
@@ -126,12 +128,43 @@ class VideoApi : BaseApiHandler() {
                         ApiUtils.invokeComplete(params, responseCallback, failure)
                         return@handleChooseMedia
                     }
-                    val result = videoMetadata(activity, appId, virtualPath).apply {
-                        put("errMsg", "$CHOOSE_VIDEO:ok")
-                        put("tempFilePath", virtualPath)
+                    if (!compressed) {
+                        completeChooseVideo(activity, appId, params, responseCallback, virtualPath)
+                        return@handleChooseMedia
                     }
-                    ApiUtils.invokeSuccess(params, result, responseCallback)
-                    ApiUtils.invokeComplete(params, responseCallback, result)
+                    val source = runCatching { File(PathUtils.pathToReal(activity, virtualPath, appId)) }.getOrNull()
+                    if (source == null || !source.isFile) {
+                        failChooseVideo(params, responseCallback, "invalid selected video")
+                        return@handleChooseMedia
+                    }
+                    val output = File.createTempFile(
+                        "VIDEO_${System.currentTimeMillis()}",
+                        ".mp4",
+                        PathUtils.appTempRoot(activity, appId),
+                    )
+                    runCatching {
+                        VideoTranscoder.start(
+                            activity = activity,
+                            source = source,
+                            output = output,
+                            resolution = 1.0,
+                            bitrateKbps = 2_000,
+                            fps = null,
+                            onCompleted = {
+                                completeChooseVideo(
+                                    activity,
+                                    appId,
+                                    params,
+                                    responseCallback,
+                                    PathUtils.pathToVirtual(output),
+                                )
+                            },
+                            onError = { error -> failChooseVideo(params, responseCallback, error.message ?: "compression failed") },
+                        )
+                    }.onFailure { error ->
+                        output.delete()
+                        failChooseVideo(params, responseCallback, error.message ?: "compression failed")
+                    }
                 }
                 NoneResult()
             }
@@ -139,6 +172,34 @@ class VideoApi : BaseApiHandler() {
             else ->
                 super.handleAction(activity, appId, apiName, params, responseCallback)
         }
+    }
+
+    private fun completeChooseVideo(
+        activity: DiminaActivity,
+        appId: String,
+        params: JSONObject,
+        responseCallback: (String) -> Unit,
+        virtualPath: String,
+    ) {
+        val result = runCatching { videoMetadata(activity, appId, virtualPath) }.getOrElse { error ->
+            failChooseVideo(params, responseCallback, error.message ?: "unsupported video")
+            return
+        }.apply {
+            put("errMsg", "$CHOOSE_VIDEO:ok")
+            put("tempFilePath", virtualPath)
+        }
+        ApiUtils.invokeSuccess(params, result, responseCallback)
+        ApiUtils.invokeComplete(params, responseCallback, result)
+    }
+
+    private fun failChooseVideo(
+        params: JSONObject,
+        responseCallback: (String) -> Unit,
+        reason: String,
+    ) {
+        val failure = JSONObject().apply { put("errMsg", "$CHOOSE_VIDEO:fail $reason") }
+        ApiUtils.invokeFail(params, failure, responseCallback)
+        ApiUtils.invokeComplete(params, responseCallback, failure)
     }
 
     private fun videoMetadata(activity: DiminaActivity, appId: String, path: String): JSONObject {

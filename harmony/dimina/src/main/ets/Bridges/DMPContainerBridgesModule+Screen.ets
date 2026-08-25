@@ -17,6 +17,7 @@ const SET_KEEP_SCREEN_ON = 'setKeepScreenOn';
  * 底层依赖鸿蒙窗口的 'screenshot' 系统事件（SystemCapability.WindowManager.WindowManager.Core）。
  */
 export class DMPContainerBridgesModuleScreen extends DMPContainerBridgesModule {
+  private static keepScreenOwners: Set<string> = new Set();
   /** JS 侧注册的持续回调（keep 回调），key 为 FE callback id */
   private jsCallbacks: Map<string, DMPBridgeCallback> = new Map();
   /** 已注册到主窗口的截图监听器，null 表示未注册 */
@@ -32,12 +33,24 @@ export class DMPContainerBridgesModuleScreen extends DMPContainerBridgesModule {
       this.invokeFailureCallback(callback, null, `${SET_KEEP_SCREEN_ON}:fail invalid keepScreenOn`);
       return;
     }
+    const appId = this.currentAppId();
+    const wasEnabled = DMPContainerBridgesModuleScreen.keepScreenOwners.has(appId);
+    if (keepScreenOn) {
+      DMPContainerBridgesModuleScreen.keepScreenOwners.add(appId);
+    } else {
+      DMPContainerBridgesModuleScreen.keepScreenOwners.delete(appId);
+    }
     try {
-      await DMPApp.getWindowStage().getMainWindowSync().setWindowKeepScreenOn(keepScreenOn);
+      await this.applyKeepScreenState();
       const result = new DMPMap();
       result.set('errMsg', `${SET_KEEP_SCREEN_ON}:ok`);
       this.invokeSuccessCallback(callback, result, true);
     } catch (err) {
+      if (wasEnabled) {
+        DMPContainerBridgesModuleScreen.keepScreenOwners.add(appId);
+      } else {
+        DMPContainerBridgesModuleScreen.keepScreenOwners.delete(appId);
+      }
       this.invokeFailureCallback(callback, null, `${SET_KEEP_SCREEN_ON}:fail ${err}`);
     }
   }
@@ -95,6 +108,19 @@ export class DMPContainerBridgesModuleScreen extends DMPContainerBridgesModule {
   dispose(): void {
     this.jsCallbacks.clear();
     this.releaseSystemListener();
+    DMPContainerBridgesModuleScreen.keepScreenOwners.delete(this.currentAppId());
+    this.applyKeepScreenState().catch((err: Error) => {
+      DMPLogger.e(Tags.BRIDGE, `${SET_KEEP_SCREEN_ON}: cleanup failed: ${err}`);
+    });
+  }
+
+  private currentAppId(): string {
+    return this.appData.appId || this.app?.appConfig?.appId || 'default';
+  }
+
+  private async applyKeepScreenState(): Promise<void> {
+    await DMPApp.getWindowStage().getMainWindowSync()
+      .setWindowKeepScreenOn(DMPContainerBridgesModuleScreen.keepScreenOwners.size > 0);
   }
 
   private emit(store: Map<string, DMPBridgeCallback>, result: DMPMap): void {

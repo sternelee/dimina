@@ -94,6 +94,7 @@ export function invokeSocketMethod(name, socketId, data = {}) {
 export function createNativeEvent(onName, offName, baseParams = {}, transform = value => value) {
 	const listeners = new Set()
 	let callbackId
+	let failureId
 	let afterEmit
 
 	function stopNative() {
@@ -101,21 +102,48 @@ export function createNativeEvent(onName, offName, baseParams = {}, transform = 
 		const currentId = callbackId
 		callbackId = undefined
 		callback.remove(currentId)
+		if (failureId) callback.remove(failureId)
+		failureId = undefined
 		invokeAPI(offName, { ...baseParams, callbackId: currentId, keep: true })
 	}
 
 	return {
 		on(listener) {
-			if (typeof listener !== 'function' || listeners.has(listener)) return
+			if (typeof listener !== 'function') return
 			listeners.add(listener)
 			if (callbackId) return
 
-			callbackId = callback.store((value) => {
+			const currentId = callback.store((value) => {
+				if (failureId) callback.remove(failureId)
+				failureId = undefined
 				const result = transform(value)
 				for (const current of [...listeners]) current(result)
 				afterEmit?.()
 			}, true)
-			return invokeAPI(onName, { ...baseParams, callbackId, success: callbackId, keep: true })
+			callbackId = currentId
+			failureId = callback.store(() => {
+				if (callbackId !== currentId) return
+				callback.remove(currentId)
+				if (failureId) callback.remove(failureId)
+				callbackId = undefined
+				failureId = undefined
+			})
+			try {
+				return invokeAPI(onName, {
+					...baseParams,
+					callbackId: currentId,
+					success: currentId,
+					fail: failureId,
+					keep: true,
+				})
+			}
+			catch (error) {
+				callback.remove(currentId)
+				if (failureId) callback.remove(failureId)
+				callbackId = undefined
+				failureId = undefined
+				throw error
+			}
 		},
 		off(listener) {
 			if (typeof listener === 'function') listeners.delete(listener)
@@ -126,7 +154,9 @@ export function createNativeEvent(onName, offName, baseParams = {}, transform = 
 			listeners.clear()
 			if (notifyNative) return stopNative()
 			if (callbackId) callback.remove(callbackId)
+			if (failureId) callback.remove(failureId)
 			callbackId = undefined
+			failureId = undefined
 		},
 		hasListeners() {
 			return listeners.size > 0

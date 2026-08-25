@@ -46,8 +46,14 @@ export class DMPContainerBridgesModuleNetwork extends DMPContainerBridgesModule 
         });
       },
       fail: () => {
+        const pending = Array.from(this.callbacks.values());
         this.callbacks.clear();
         this.subscribed = false;
+        const result = new DMPMap();
+        result.set('errMsg', 'onNetworkStatusChange:fail subscribe failed');
+        pending.forEach((current: DMPBridgeCallback) => {
+          current(result, DMPBridgeCallbackType.Fail);
+        });
       }
     });
   }

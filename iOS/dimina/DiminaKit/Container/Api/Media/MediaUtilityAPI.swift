@@ -162,30 +162,32 @@ public final class MediaUtilityAPI: DMPContainerApi {
             return DMPAsyncResult()
         }
         let quality = map.getString(key: "quality") ?? "medium"
-        let preset: String
-        if resolution <= 0.5 {
-            preset = AVAssetExportPreset640x480
-        } else if resolution < 1 {
-            preset = AVAssetExportPreset960x540
-        } else {
-            preset = quality == "low" ? AVAssetExportPresetLowQuality
-                : quality == "high" ? AVAssetExportPresetHighestQuality : AVAssetExportPresetMediumQuality
+        let bitrate = (map.get("bitrate") as? NSNumber)?.intValue
+        let fps = (map.get("fps") as? NSNumber)?.intValue
+        if let bitrate, bitrate <= 0 {
+            DMPContainerApi.invokeFailure(callback: callback, param: nil,
+                                          errMsg: "compressVideo:fail invalid bitrate",
+                                          completeCarriesResult: true)
+            return DMPAsyncResult()
+        }
+        if let fps, fps <= 0 {
+            DMPContainerApi.invokeFailure(callback: callback, param: nil,
+                                          errMsg: "compressVideo:fail invalid fps",
+                                          completeCarriesResult: true)
+            return DMPAsyncResult()
         }
         let directory = DMPSandboxManager.appTmpResourceDirectoryPath(appId: env.appId)
         try? FileManager.default.createDirectory(atPath: directory, withIntermediateDirectories: true)
         let output = URL(fileURLWithPath: directory).appendingPathComponent("compressed_\(UUID().uuidString).mp4")
-        guard let exporter = AVAssetExportSession(asset: AVURLAsset(url: URL(fileURLWithPath: localPath)), presetName: preset) else {
-            DMPContainerApi.invokeFailure(callback: callback, param: nil,
-                                          errMsg: "compressVideo:fail unsupported video",
-                                          completeCarriesResult: true)
-            return DMPAsyncResult()
-        }
-        exporter.outputURL = output
-        exporter.outputFileType = .mp4
-        exporter.shouldOptimizeForNetworkUse = true
-        exporter.exportAsynchronously {
+        DMPVideoCompressor.compress(
+            source: URL(fileURLWithPath: localPath),
+            output: output,
+            resolution: resolution,
+            bitrateKbps: bitrate ?? (quality == "low" ? 1_000 : quality == "high" ? 4_000 : 2_000),
+            fps: fps
+        ) { error in
             DispatchQueue.main.async {
-                if exporter.status == .completed {
+                if error == nil {
                     let byteSize = (try? output.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
                     let size = (byteSize + 1023) / 1024
                     let result = DMPMap([
@@ -197,7 +199,7 @@ public final class MediaUtilityAPI: DMPContainerApi {
                 } else {
                     try? FileManager.default.removeItem(at: output)
                     DMPContainerApi.invokeFailure(callback: callback, param: nil,
-                                                  errMsg: "compressVideo:fail \(exporter.error?.localizedDescription ?? "unknown")",
+                                                  errMsg: "compressVideo:fail \(error?.localizedDescription ?? "unknown")",
                                                   completeCarriesResult: true)
                 }
             }
@@ -289,20 +291,21 @@ fileprivate struct DMPMediaPreviewSource {
     let poster: URL?
 }
 
-fileprivate final class DMPMediaPreviewController: UIPageViewController, UIPageViewControllerDataSource {
+fileprivate final class DMPMediaPreviewController: UIPageViewController,
+                                                    UIPageViewControllerDataSource,
+                                                    UIPageViewControllerDelegate {
     private let pages: [UIViewController]
 
     init(sources: [DMPMediaPreviewSource], current: Int) {
         pages = sources.map { source in
             if source.type == "video" {
-                let controller = AVPlayerViewController()
-                controller.player = AVPlayer(url: source.url)
-                return controller
+                return DMPMediaVideoController(url: source.url, poster: source.poster)
             }
             return DMPMediaImageController(url: source.url)
         }
         super.init(transitionStyle: .scroll, navigationOrientation: .horizontal)
         dataSource = self
+        delegate = self
         modalPresentationStyle = .fullScreen
         setViewControllers([pages[current]], direction: .forward, animated: false)
     }
@@ -325,10 +328,22 @@ fileprivate final class DMPMediaPreviewController: UIPageViewController, UIPageV
             close.widthAnchor.constraint(equalToConstant: 44),
             close.heightAnchor.constraint(equalToConstant: 44),
         ])
-        (viewControllers?.first as? AVPlayerViewController)?.player?.play()
     }
 
-    @objc private func closePreview() { dismiss(animated: true) }
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        (viewControllers?.first as? DMPMediaVideoController)?.play()
+    }
+
+    override func viewWillDisappear(_ animated: Bool) {
+        super.viewWillDisappear(animated)
+        pauseAllVideos()
+    }
+
+    @objc private func closePreview() {
+        pages.compactMap { $0 as? DMPMediaVideoController }.forEach { $0.releasePlayer() }
+        dismiss(animated: true)
+    }
 
     func pageViewController(_ pageViewController: UIPageViewController,
                             viewControllerBefore viewController: UIViewController) -> UIViewController? {
@@ -340,6 +355,100 @@ fileprivate final class DMPMediaPreviewController: UIPageViewController, UIPageV
                             viewControllerAfter viewController: UIViewController) -> UIViewController? {
         guard let index = pages.firstIndex(of: viewController), index + 1 < pages.count else { return nil }
         return pages[index + 1]
+    }
+
+    func pageViewController(_ pageViewController: UIPageViewController,
+                            willTransitionTo pendingViewControllers: [UIViewController]) {
+        (viewControllers?.first as? DMPMediaVideoController)?.pause()
+    }
+
+    func pageViewController(_ pageViewController: UIPageViewController,
+                            didFinishAnimating finished: Bool,
+                            previousViewControllers: [UIViewController],
+                            transitionCompleted completed: Bool) {
+        pauseAllVideos()
+        (viewControllers?.first as? DMPMediaVideoController)?.play()
+    }
+
+    private func pauseAllVideos() {
+        pages.compactMap { $0 as? DMPMediaVideoController }.forEach { $0.pause() }
+    }
+}
+
+fileprivate final class DMPMediaVideoController: UIViewController {
+    private let url: URL
+    private let poster: URL?
+    private let playerController = AVPlayerViewController()
+    private let posterView = UIImageView()
+    private var statusObservation: NSKeyValueObservation?
+
+    init(url: URL, poster: URL?) {
+        self.url = url
+        self.poster = poster
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = .black
+        let player = AVPlayer(url: url)
+        playerController.player = player
+        addChild(playerController)
+        playerController.view.frame = view.bounds
+        playerController.view.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        view.addSubview(playerController.view)
+        playerController.didMove(toParent: self)
+
+        posterView.frame = view.bounds
+        posterView.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        posterView.contentMode = .scaleAspectFit
+        posterView.backgroundColor = .black
+        posterView.isUserInteractionEnabled = false
+        view.addSubview(posterView)
+        loadPoster()
+
+        statusObservation = player.currentItem?.observe(\.status, options: [.initial, .new]) { [weak self] item, _ in
+            guard item.status == .readyToPlay else { return }
+            DispatchQueue.main.async {
+                UIView.animate(withDuration: 0.15) { self?.posterView.alpha = 0 }
+            }
+        }
+    }
+
+    func play() {
+        loadViewIfNeeded()
+        playerController.player?.play()
+    }
+
+    func pause() {
+        playerController.player?.pause()
+    }
+
+    func releasePlayer() {
+        pause()
+        statusObservation = nil
+        playerController.player?.replaceCurrentItem(with: nil)
+        playerController.player = nil
+    }
+
+    deinit { releasePlayer() }
+
+    private func loadPoster() {
+        guard let poster else {
+            posterView.isHidden = true
+            return
+        }
+        if poster.isFileURL {
+            posterView.image = UIImage(contentsOfFile: poster.path)
+            posterView.isHidden = posterView.image == nil
+            return
+        }
+        URLSession.shared.dataTask(with: poster) { [weak self] data, _, _ in
+            guard let data, let image = UIImage(data: data) else { return }
+            DispatchQueue.main.async { self?.posterView.image = image }
+        }.resume()
     }
 }
 
@@ -363,5 +472,162 @@ fileprivate final class DMPMediaImageController: UIViewController {
                 DispatchQueue.main.async { imageView.image = UIImage(data: data) }
             }.resume()
         }
+    }
+}
+
+fileprivate enum DMPVideoCompressor {
+    static func compress(source: URL, output: URL, resolution: Double, bitrateKbps: Int, fps: Int?,
+                         completion: @escaping (Error?) -> Void) {
+        DispatchQueue.global(qos: .userInitiated).async {
+            do {
+                try FileManager.default.removeItemIfExists(at: output)
+                let asset = AVURLAsset(url: source)
+                guard let videoTrack = asset.tracks(withMediaType: .video).first else {
+                    throw compressionError("unsupported video")
+                }
+                let reader = try AVAssetReader(asset: asset)
+                let writer = try AVAssetWriter(outputURL: output, fileType: .mp4)
+
+                let sourceWidth = max(2, Int(abs(videoTrack.naturalSize.width)))
+                let sourceHeight = max(2, Int(abs(videoTrack.naturalSize.height)))
+                let targetWidth = evenDimension(Double(sourceWidth) * resolution)
+                let targetHeight = evenDimension(Double(sourceHeight) * resolution)
+                let videoOutput = AVAssetReaderTrackOutput(track: videoTrack, outputSettings: [
+                    kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange,
+                    kCVPixelBufferWidthKey as String: targetWidth,
+                    kCVPixelBufferHeightKey as String: targetHeight,
+                    kCVPixelBufferIOSurfacePropertiesKey as String: [:],
+                ])
+                videoOutput.alwaysCopiesSampleData = false
+                guard reader.canAdd(videoOutput) else { throw compressionError("unsupported video output") }
+                reader.add(videoOutput)
+
+                var compression: [String: Any] = [
+                    AVVideoAverageBitRateKey: bitrateKbps * 1_000,
+                    AVVideoProfileLevelKey: AVVideoProfileLevelH264HighAutoLevel,
+                ]
+                if let fps {
+                    compression[AVVideoExpectedSourceFrameRateKey] = fps
+                    compression[AVVideoMaxKeyFrameIntervalKey] = max(fps * 2, 1)
+                }
+                let videoInput = AVAssetWriterInput(mediaType: .video, outputSettings: [
+                    AVVideoCodecKey: AVVideoCodecType.h264,
+                    AVVideoWidthKey: targetWidth,
+                    AVVideoHeightKey: targetHeight,
+                    AVVideoCompressionPropertiesKey: compression,
+                ])
+                videoInput.expectsMediaDataInRealTime = false
+                videoInput.transform = videoTrack.preferredTransform
+                guard writer.canAdd(videoInput) else { throw compressionError("unsupported video input") }
+                writer.add(videoInput)
+
+                var audioOutput: AVAssetReaderTrackOutput?
+                var audioInput: AVAssetWriterInput?
+                if let audioTrack = asset.tracks(withMediaType: .audio).first {
+                    let output = AVAssetReaderTrackOutput(track: audioTrack, outputSettings: [
+                        AVFormatIDKey: kAudioFormatLinearPCM,
+                    ])
+                    let input = AVAssetWriterInput(mediaType: .audio, outputSettings: [
+                        AVFormatIDKey: kAudioFormatMPEG4AAC,
+                        AVEncoderBitRateKey: 128_000,
+                        AVSampleRateKey: 44_100,
+                        AVNumberOfChannelsKey: 2,
+                    ])
+                    output.alwaysCopiesSampleData = false
+                    if reader.canAdd(output), writer.canAdd(input) {
+                        reader.add(output)
+                        writer.add(input)
+                        audioOutput = output
+                        audioInput = input
+                    }
+                }
+
+                guard writer.startWriting() else {
+                    throw writer.error ?? compressionError("cannot start video writer")
+                }
+                guard reader.startReading() else {
+                    throw reader.error ?? compressionError("cannot start video reader")
+                }
+                writer.startSession(atSourceTime: .zero)
+
+                try drain(reader: reader, writer: writer,
+                          videoOutput: videoOutput, videoInput: videoInput,
+                          audioOutput: audioOutput, audioInput: audioInput,
+                          fps: fps, sourceFPS: videoTrack.nominalFrameRate)
+                writer.finishWriting {
+                    completion(writer.status == .completed ? nil
+                               : writer.error ?? compressionError("video writer failed"))
+                }
+            } catch {
+                try? FileManager.default.removeItem(at: output)
+                completion(error)
+            }
+        }
+    }
+
+    private static func drain(reader: AVAssetReader, writer: AVAssetWriter,
+                              videoOutput: AVAssetReaderTrackOutput, videoInput: AVAssetWriterInput,
+                              audioOutput: AVAssetReaderTrackOutput?, audioInput: AVAssetWriterInput?,
+                              fps: Int?, sourceFPS: Float) throws {
+        var videoDone = false
+        var audioDone = audioOutput == nil || audioInput == nil
+        let shouldLimitFPS = fps.map { sourceFPS <= 0 || Float($0) < sourceFPS } ?? false
+        let frameInterval = shouldLimitFPS ? CMTime(value: 1, timescale: CMTimeScale(fps!)) : nil
+        var lastVideoTime: CMTime?
+
+        while !videoDone || !audioDone {
+            if reader.status == .failed { throw reader.error ?? compressionError("video reader failed") }
+            if writer.status == .failed { throw writer.error ?? compressionError("video writer failed") }
+            var progressed = false
+
+            if !videoDone, videoInput.isReadyForMoreMediaData {
+                if let sample = videoOutput.copyNextSampleBuffer() {
+                    progressed = true
+                    let timestamp = CMSampleBufferGetPresentationTimeStamp(sample)
+                    let shouldAppend = frameInterval == nil || lastVideoTime == nil
+                        || CMTimeCompare(CMTimeSubtract(timestamp, lastVideoTime!), frameInterval!) >= 0
+                    if shouldAppend {
+                        guard videoInput.append(sample) else {
+                            throw writer.error ?? compressionError("cannot append video frame")
+                        }
+                        lastVideoTime = timestamp
+                    }
+                } else {
+                    videoDone = true
+                    videoInput.markAsFinished()
+                }
+            }
+
+            if !audioDone, let audioOutput, let audioInput, audioInput.isReadyForMoreMediaData {
+                if let sample = audioOutput.copyNextSampleBuffer() {
+                    progressed = true
+                    guard audioInput.append(sample) else {
+                        throw writer.error ?? compressionError("cannot append audio sample")
+                    }
+                } else {
+                    audioDone = true
+                    audioInput.markAsFinished()
+                }
+            }
+
+            if !progressed && (!videoDone || !audioDone) {
+                Thread.sleep(forTimeInterval: 0.002)
+            }
+        }
+    }
+
+    private static func evenDimension(_ value: Double) -> Int {
+        max(2, Int(value.rounded(.down)) & ~1)
+    }
+
+    private static func compressionError(_ message: String) -> NSError {
+        NSError(domain: "MediaUtilityAPI.compressVideo", code: 1,
+                userInfo: [NSLocalizedDescriptionKey: message])
+    }
+}
+
+fileprivate extension FileManager {
+    func removeItemIfExists(at url: URL) throws {
+        if fileExists(atPath: url.path) { try removeItem(at: url) }
     }
 }

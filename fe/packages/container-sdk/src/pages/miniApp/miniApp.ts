@@ -186,11 +186,17 @@ interface NetworkInformationLike extends EventTarget {
 	type?: string
 }
 
+interface WakeLockSentinelLike {
+	released?: boolean
+	release: () => Promise<void>
+	addEventListener?: (type: 'release', listener: () => void, options?: AddEventListenerOptions) => void
+}
+
 interface NavigatorWithDeviceApis {
 	connection?: NetworkInformationLike
 	mozConnection?: NetworkInformationLike
 	webkitConnection?: NetworkInformationLike
-	wakeLock?: { request: (type: 'screen') => Promise<{ release: () => Promise<void> }> }
+	wakeLock?: { request: (type: 'screen') => Promise<WakeLockSentinelLike> }
 }
 
 interface SetTabBarStyleOptions extends ApiCallbackOptions {
@@ -262,7 +268,10 @@ export class MiniApp {
 	_extSubscriptions: Map<string, (() => void) | null>
 	_windowResizeHandlers: Set<() => void>
 	_networkStatusHandlers: Map<CallbackId, () => void>
-	_wakeLockSentinel: { release: () => Promise<void> } | null
+	_wakeLockSentinel: WakeLockSentinelLike | null
+	_wakeLockRequest: Promise<void> | null
+	_keepScreenOnRequested: boolean
+	_wakeLockVisibilityHandler: (() => void) | null
 	_mediaPreviewEl: HTMLElement | null
 	_tempObjectUrls: Set<string>
 	/** app.tabBar 配置 */
@@ -325,6 +334,9 @@ export class MiniApp {
 		this._windowResizeHandlers = new Set()
 		this._networkStatusHandlers = new Map()
 		this._wakeLockSentinel = null
+		this._wakeLockRequest = null
+		this._keepScreenOnRequested = false
+		this._wakeLockVisibilityHandler = null
 		this._mediaPreviewEl = null
 		this._tempObjectUrls = new Set()
 		this.tabBarConfig = null
@@ -2263,8 +2275,12 @@ export class MiniApp {
 			this._networkConnection()?.removeEventListener?.('change', handler)
 		}
 		this._networkStatusHandlers.clear()
-		void this._wakeLockSentinel?.release().catch(() => {})
-		this._wakeLockSentinel = null
+		this._keepScreenOnRequested = false
+		if (this._wakeLockVisibilityHandler) {
+			document.removeEventListener('visibilitychange', this._wakeLockVisibilityHandler)
+			this._wakeLockVisibilityHandler = null
+		}
+		void this._releaseWakeLock().catch(() => {})
 		this._mediaPreviewEl?.remove()
 		this._mediaPreviewEl = null
 		for (const url of this._tempObjectUrls) URL.revokeObjectURL(url)
@@ -2403,9 +2419,12 @@ export class MiniApp {
 	private _currentNetworkType(): string {
 		if (!navigator.onLine) return 'none'
 		const connection = this._networkConnection()
-		const effectiveType = connection?.effectiveType?.toLowerCase()
-		if (effectiveType && ['2g', '3g', '4g', '5g'].includes(effectiveType)) return effectiveType
-		if (connection?.type?.toLowerCase() === 'wifi') return 'wifi'
+		const type = connection?.type?.toLowerCase()
+		if (type === 'wifi' || type === 'ethernet') return 'wifi'
+		if (type === 'cellular') {
+			const effectiveType = connection?.effectiveType?.toLowerCase()
+			if (effectiveType && ['2g', '3g', '4g', '5g'].includes(effectiveType)) return effectiveType
+		}
 		return 'unknown'
 	}
 
@@ -3031,15 +3050,44 @@ export class MiniApp {
 		}
 		input.style.display = 'none'
 		this.el.appendChild(input)
+		let pickerSettled = false
+		let resultSettled = false
+		let focusFallbackTimer: ReturnType<typeof setTimeout> | null = null
+		const cleanupPicker = () => {
+			globalThis.removeEventListener?.('focus', onWindowFocus)
+			if (focusFallbackTimer) clearTimeout(focusFallbackTimer)
+			input.remove()
+		}
+		const settleCancel = () => {
+			if (pickerSettled) return
+			pickerSettled = true
+			cleanupPicker()
+			const result = { errMsg: 'chooseVideo:fail cancel' }
+			onFail?.(result)
+			onComplete?.(result)
+		}
+		const onWindowFocus = () => {
+			focusFallbackTimer = setTimeout(() => {
+				if (!pickerSettled && !input.files?.length) settleCancel()
+			}, 0)
+		}
+		const settleResult = (result: Record<string, unknown>, success: boolean) => {
+			if (resultSettled) return
+			resultSettled = true
+			if (success) onSuccess?.(result)
+			else onFail?.(result)
+			onComplete?.(result)
+		}
+		input.addEventListener('cancel', settleCancel, { once: true })
+		globalThis.addEventListener?.('focus', onWindowFocus)
 		input.onchange = () => {
 			const file = input.files?.[0]
-			input.remove()
 			if (!file) {
-				const result = { errMsg: 'chooseVideo:fail cancel' }
-				onFail?.(result)
-				onComplete?.(result)
+				settleCancel()
 				return
 			}
+			pickerSettled = true
+			cleanupPicker()
 			const url = URL.createObjectURL(file)
 			this._tempObjectUrls.add(url)
 			const video = document.createElement('video')
@@ -3053,13 +3101,10 @@ export class MiniApp {
 					size: file.size,
 					errMsg: 'chooseVideo:ok',
 				}
-				onSuccess?.(result)
-				onComplete?.(result)
+				settleResult(result, true)
 			}
 			video.onerror = () => {
-				const result = { errMsg: 'chooseVideo:fail unsupported video' }
-				onFail?.(result)
-				onComplete?.(result)
+				settleResult({ errMsg: 'chooseVideo:fail unsupported video' }, false)
 			}
 			video.src = url
 		}
@@ -3216,27 +3261,59 @@ export class MiniApp {
 			onComplete?.(result)
 		}
 		if (!opts.keepScreenOn) {
-			const sentinel = this._wakeLockSentinel
-			this._wakeLockSentinel = null
-			void sentinel?.release().then(() => {
+			this._keepScreenOnRequested = false
+			if (this._wakeLockVisibilityHandler) {
+				document.removeEventListener('visibilitychange', this._wakeLockVisibilityHandler)
+				this._wakeLockVisibilityHandler = null
+			}
+			void (this._wakeLockRequest ?? Promise.resolve()).then(() => this._releaseWakeLock()).then(() => {
 				finish({ errMsg: 'setKeepScreenOn:ok' }, true)
 			}).catch(error => finish({ errMsg: `setKeepScreenOn:fail ${getErrorMessage(error)}` }, false))
-			if (!sentinel) finish({ errMsg: 'setKeepScreenOn:ok' }, true)
 			return
 		}
-		if (this._wakeLockSentinel) {
-			finish({ errMsg: 'setKeepScreenOn:ok' }, true)
-			return
-		}
-		const wakeLock = (navigator as unknown as NavigatorWithDeviceApis).wakeLock
-		if (!wakeLock) {
-			finish({ errMsg: 'setKeepScreenOn:fail screen wake lock is not supported' }, false)
-			return
-		}
-		wakeLock.request('screen').then((sentinel) => {
-			this._wakeLockSentinel = sentinel
+		this._keepScreenOnRequested = true
+		this._installWakeLockVisibilityHandler()
+		void this._requestWakeLock().then(() => {
 			finish({ errMsg: 'setKeepScreenOn:ok' }, true)
 		}).catch(error => finish({ errMsg: `setKeepScreenOn:fail ${getErrorMessage(error)}` }, false))
+	}
+
+	private _installWakeLockVisibilityHandler(): void {
+		if (this._wakeLockVisibilityHandler) return
+		this._wakeLockVisibilityHandler = () => {
+			if (document.visibilityState !== 'visible' || !this._keepScreenOnRequested || this._destroyed) return
+			void this._requestWakeLock().catch(() => {})
+		}
+		document.addEventListener('visibilitychange', this._wakeLockVisibilityHandler)
+	}
+
+	private _requestWakeLock(): Promise<void> {
+		if (this._wakeLockSentinel && !this._wakeLockSentinel.released) return Promise.resolve()
+		if (this._wakeLockRequest) return this._wakeLockRequest
+		const wakeLock = (navigator as unknown as NavigatorWithDeviceApis).wakeLock
+		if (!wakeLock) return Promise.reject(new Error('screen wake lock is not supported'))
+
+		let tracked: Promise<void>
+		tracked = wakeLock.request('screen').then(async (sentinel) => {
+			if (!this._keepScreenOnRequested || this._destroyed) {
+				await sentinel.release()
+				return
+			}
+			this._wakeLockSentinel = sentinel
+			sentinel.addEventListener?.('release', () => {
+				if (this._wakeLockSentinel === sentinel) this._wakeLockSentinel = null
+			})
+		}).finally(() => {
+			if (this._wakeLockRequest === tracked) this._wakeLockRequest = null
+		})
+		this._wakeLockRequest = tracked
+		return tracked
+	}
+
+	private _releaseWakeLock(): Promise<void> {
+		const sentinel = this._wakeLockSentinel
+		this._wakeLockSentinel = null
+		return sentinel ? sentinel.release() : Promise.resolve()
 	}
 
 	async getSetting(opts: ApiCallbackOptions = {}): Promise<void> {

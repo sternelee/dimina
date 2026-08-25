@@ -13,6 +13,8 @@ import fs from '@ohos.file.fs';
 import { photoAccessHelper } from '@kit.MediaLibraryKit';
 import { fileUri } from '@kit.CoreFileKit';
 import { BusinessError } from '@kit.BasicServicesKit';
+import { request } from '@kit.BasicServicesKit';
+import { DMPFilePathResolver } from '../Bundle/Util/DMPFilePathResolver';
 
 export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   getExportMethods(): string[] {
@@ -21,51 +23,53 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
 
   chooseVideo(data: DMPMap, callback: DMPBridgeCallback, webViewId: number) {
     const sourceType: [string] = data.get('sourceType') ?? ["album", "camera"];
-    const count: number = data.get('count') ?? 9;
     const camera: string = data.get('camera') ?? 'back';
-    const maxDuration: number = data.get('maxDuration') ?? 10;
+    const maxDuration: number = Math.max(3, Math.min(data.getNumber('maxDuration') ?? 60, 60));
+    const compressed: boolean = data.getBoolean('compressed') ?? true;
 
     if (sourceType.length > 1) {
       this.showSelectDialog(webViewId,
         (sourceTypeData) => {
-          this.chooseVideoBySourceType(sourceTypeData, count, camera, maxDuration, callback)
+          this.chooseVideoBySourceType(sourceTypeData, camera, maxDuration, compressed, callback)
         }
       )
     } else {
       const sourceTypeData = sourceType[0]
-      this.chooseVideoBySourceType(sourceTypeData, count, camera, maxDuration, callback)
+      this.chooseVideoBySourceType(sourceTypeData, camera, maxDuration, compressed, callback)
     }
   }
 
-  chooseVideoBySourceType(sourceType: string, count: number, cameraType: string, maxDuration: number,
+  chooseVideoBySourceType(sourceType: string, cameraType: string, maxDuration: number, compressed: boolean,
     callback: DMPBridgeCallback) {
     if (sourceType === 'album') {
-      let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseVideo';
-      PhotoPicker.selectVideos(DMPContextUtils.getUIAbilityContext(), path, count).then((photoModels) => {
-        if (photoModels != null) {
-          this.completeChooseVideo(photoModels[0].localPath, callback)
+      const path = this.mediaTempDirectory('chooseVideo');
+      PhotoPicker.selectVideos(DMPContextUtils.getUIAbilityContext(), path, 1).then((photoModels) => {
+        if (photoModels != null && photoModels.length > 0) {
+          this.completeChooseVideo(photoModels[0].localPath, compressed, callback)
         } else {
-          this.invokeFailureCallback(callback, null, '选择视频失败')
+          this.invokeFailureCallback(callback, null, 'chooseVideo:fail cancel')
         }
       });
     } else if (sourceType === 'camera') {
-      let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseVideo';
+      const path = this.mediaTempDirectory('chooseVideo');
       CameraPicker.takeVideo(getContext() as common.UIAbilityContext, path, maxDuration,
         cameraType == "back" ? camera.CameraPosition.CAMERA_POSITION_BACK : camera.CameraPosition.CAMERA_POSITION_FRONT)
         .then((result) => {
           if (result) {
-            this.completeChooseVideo(result.localPath, callback)
+            this.completeChooseVideo(result.localPath, compressed, callback)
           } else {
-            this.invokeFailureCallback(callback, null, '拍照失败')
+            this.invokeFailureCallback(callback, null, 'chooseVideo:fail cancel')
           }
         })
+    } else {
+      this.invokeFailureCallback(callback, null, 'chooseVideo:fail invalid sourceType');
     }
   }
 
   async getVideoInfo(data: DMPMap, callback: DMPBridgeCallback) {
     const src = data.getString('src') ?? '';
-    const localPath = DMPFileUrlConvertor.localPathFromVPath(src);
     try {
+      const localPath = await this.resolveVideoSource(src);
       const result = await this.videoInfo(localPath);
       result.set('errMsg', 'getVideoInfo:ok');
       this.invokeSuccessCallback(callback, result, true);
@@ -75,8 +79,14 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   }
 
   async saveVideoToPhotosAlbum(data: DMPMap, callback: DMPBridgeCallback) {
-    const filePath = DMPFileUrlConvertor.localPathFromVPath(data.getString('filePath') ?? '');
-    if (!filePath || !fs.accessSync(filePath)) {
+    let filePath = '';
+    try {
+      filePath = this.resolveLocalMediaPath(data.getString('filePath') ?? '');
+    } catch (_) {
+      this.invokeFailureCallback(callback, null, 'saveVideoToPhotosAlbum:fail invalid filePath');
+      return;
+    }
+    if (!fs.accessSync(filePath)) {
       this.invokeFailureCallback(callback, null, 'saveVideoToPhotosAlbum:fail invalid filePath');
       return;
     }
@@ -92,7 +102,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
       if (destinations.length === 0) {
         throw new Error('cancel');
       }
-      const source = fs.openSync(filePath, fs.OpenMode.READ_ONLY);
+      const source = fs.openSync(filePath, fs.OpenMode.READ_ONLY | fs.OpenMode.NOFOLLOW);
       const destination = fs.openSync(destinations[0], fs.OpenMode.WRITE_ONLY);
       try {
         await fs.copyFile(source.fd, destination.fd);
@@ -109,71 +119,39 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   }
 
   async compressVideo(data: DMPMap, callback: DMPBridgeCallback) {
-    const src = DMPFileUrlConvertor.localPathFromVPath(data.getString('src') ?? '');
-    if (!src || !fs.accessSync(src)) {
+    let src = '';
+    try {
+      src = this.resolveLocalMediaPath(data.getString('src') ?? '');
+    } catch (_) {
       this.invokeFailureCallback(callback, null, 'compressVideo:fail invalid src');
       return;
     }
-
-    const context = DMPContextUtils.getUIAbilityContext();
-    const outputPath = `${context.tempDir}/compressed_video_${Date.now()}.mp4`;
-    const source = fs.openSync(src, fs.OpenMode.READ_ONLY);
-    const destination = fs.openSync(outputPath, fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE);
-    let transcoder: media.AVTranscoder | undefined;
+    if (!fs.accessSync(src)) {
+      this.invokeFailureCallback(callback, null, 'compressVideo:fail invalid src');
+      return;
+    }
     try {
-      const metadata = await this.readMetadata(src);
-      const resolution = data.getNumber('resolution') ?? 1;
-      if (resolution <= 0 || resolution > 1) {
-        throw new Error('invalid resolution');
-      }
-      const quality = data.getString('quality') ?? 'medium';
-      const requestedBitrate = data.getNumber('bitrate');
-      const qualityBitrate = quality === 'low' ? 1000000 : quality === 'high' ? 4000000 : 2000000;
-      const width = Math.floor(Number(metadata.videoWidth ?? '0') * resolution);
-      const height = Math.floor(Number(metadata.videoHeight ?? '0') * resolution);
-      const config: media.AVTranscoderConfig = {
-        fileFormat: media.ContainerFormatType.CFT_MPEG_4,
-        videoCodec: media.CodecMimeType.VIDEO_AVC,
-        videoBitrate: requestedBitrate && requestedBitrate > 0 ? requestedBitrate * 1000 : qualityBitrate,
-      };
-      if (width >= 240 && height >= 240) {
-        config.videoFrameWidth = width;
-        config.videoFrameHeight = height;
-      }
-
-      transcoder = await media.createAVTranscoder();
-      transcoder.fdSrc = { fd: source.fd, offset: 0, length: fs.statSync(src).size };
-      transcoder.fdDst = destination.fd;
-      await new Promise<void>((resolve, reject) => {
-        transcoder!.on('complete', () => resolve());
-        transcoder!.on('error', (error: BusinessError) => reject(error));
-        transcoder!.prepare(config).then(() => transcoder!.start()).catch((error: BusinessError) => reject(error));
-      });
-
+      const outputPath = await this.transcodeVideo(src, data);
       const result = new DMPMap();
       result.set('tempFilePath', DMPFileUrlConvertor.vPathFromLocalPath(outputPath));
       result.set('size', Math.ceil(fs.statSync(outputPath).size / 1024));
       result.set('errMsg', 'compressVideo:ok');
       this.invokeSuccessCallback(callback, result, true);
     } catch (error) {
-      if (fs.accessSync(outputPath)) {
-        fs.unlinkSync(outputPath);
-      }
       this.invokeFailureCallback(callback, null, `compressVideo:fail ${error}`);
-    } finally {
-      if (transcoder) {
-        await transcoder.release();
-      }
-      fs.closeSync(source);
-      fs.closeSync(destination);
     }
   }
 
-  private async completeChooseVideo(localPath: string, callback: DMPBridgeCallback) {
+  private async completeChooseVideo(localPath: string, compressed: boolean, callback: DMPBridgeCallback) {
     try {
-      const info = await this.videoInfo(localPath);
-      info.set('tempFilePath', DMPFileUrlConvertor.vPathFromLocalPath(localPath));
-      info.set('size', fs.statSync(localPath).size);
+      const source = this.resolveLocalMediaPath(DMPFileUrlConvertor.vPathFromLocalPath(localPath));
+      const selectedPath = compressed ? await this.transcodeVideo(source, new DMPMap({
+        resolution: 1,
+        quality: 'medium',
+      })) : source;
+      const info = await this.videoInfo(selectedPath);
+      info.set('tempFilePath', DMPFileUrlConvertor.vPathFromLocalPath(selectedPath));
+      info.set('size', fs.statSync(selectedPath).size);
       info.set('errMsg', 'chooseVideo:ok');
       this.invokeSuccessCallback(callback, info, true);
     } catch (error) {
@@ -199,7 +177,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
     if (!localPath || !fs.accessSync(localPath)) {
       throw new Error('invalid file path');
     }
-    const source = fs.openSync(localPath, fs.OpenMode.READ_ONLY);
+    const source = fs.openSync(localPath, fs.OpenMode.READ_ONLY | fs.OpenMode.NOFOLLOW);
     const extractor = await media.createAVMetadataExtractor();
     try {
       extractor.fdSrc = { fd: source.fd, offset: 0, length: fs.statSync(localPath).size };
@@ -218,6 +196,90 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
     const cleanPath = path.split('?')[0];
     const dot = cleanPath.lastIndexOf('.');
     return dot >= 0 ? cleanPath.substring(dot + 1).toLowerCase() : fallback;
+  }
+
+  private currentAppId(): string {
+    return this.appData.appId || this.app?.appConfig?.appId || 'default';
+  }
+
+  private mediaTempDirectory(name: string): string {
+    const directory = `${DMPFilePathResolver.tempRoot(this.currentAppId())}/${name}`;
+    DMPFilePathResolver.ensureDirectory(directory);
+    return directory;
+  }
+
+  private resolveLocalMediaPath(path: string): string {
+    return DMPFilePathResolver.resolve(path, this.currentAppId(), this.app.bundleManager.getCurrentJSAppDir());
+  }
+
+  private async resolveVideoSource(src: string): Promise<string> {
+    if (!src) {
+      throw new Error('src is required');
+    }
+    if (!src.startsWith('http://') && !src.startsWith('https://')) {
+      return this.resolveLocalMediaPath(src);
+    }
+    const suffix = this.fileExtension(src, 'mp4');
+    const localPath = `${this.mediaTempDirectory('remoteVideo')}/video_${Date.now()}.${suffix}`;
+    const task = await request.downloadFile(DMPContextUtils.getUIAbilityContext(), { url: src, filePath: localPath });
+    await new Promise<void>((resolve, reject) => {
+      task.on('complete', () => resolve());
+      task.on('fail', (errorCode: number) => reject(new Error(`download failed: ${errorCode}`)));
+    });
+    return this.resolveLocalMediaPath(DMPFileUrlConvertor.vPathFromLocalPath(localPath));
+  }
+
+  private async transcodeVideo(src: string, data: DMPMap): Promise<string> {
+    const metadata = await this.readMetadata(src);
+    const resolution = data.getNumber('resolution') ?? 1;
+    if (resolution <= 0 || resolution > 1) {
+      throw new Error('invalid resolution');
+    }
+    if ((data.getNumber('fps') ?? 0) > 0) {
+      throw new Error('fps is not supported on HarmonyOS');
+    }
+    const quality = data.getString('quality') ?? 'medium';
+    const requestedBitrate = data.getNumber('bitrate');
+    const qualityBitrate = quality === 'low' ? 1000000 : quality === 'high' ? 4000000 : 2000000;
+    const width = Math.floor(Number(metadata.videoWidth ?? '0') * resolution);
+    const height = Math.floor(Number(metadata.videoHeight ?? '0') * resolution);
+    const config: media.AVTranscoderConfig = {
+      fileFormat: media.ContainerFormatType.CFT_MPEG_4,
+      videoCodec: media.CodecMimeType.VIDEO_AVC,
+      videoBitrate: requestedBitrate && requestedBitrate > 0 ? requestedBitrate * 1000 : qualityBitrate,
+    };
+    if (width >= 240 && height >= 240) {
+      config.videoFrameWidth = width;
+      config.videoFrameHeight = height;
+    }
+
+    const outputPath = `${this.mediaTempDirectory('compressedVideo')}/compressed_${Date.now()}.mp4`;
+    const source = fs.openSync(src, fs.OpenMode.READ_ONLY | fs.OpenMode.NOFOLLOW);
+    const destination = fs.openSync(outputPath,
+      fs.OpenMode.READ_WRITE | fs.OpenMode.CREATE | fs.OpenMode.NOFOLLOW);
+    let transcoder: media.AVTranscoder | undefined;
+    try {
+      transcoder = await media.createAVTranscoder();
+      transcoder.fdSrc = { fd: source.fd, offset: 0, length: fs.statSync(src).size };
+      transcoder.fdDst = destination.fd;
+      await new Promise<void>((resolve, reject) => {
+        transcoder!.on('complete', () => resolve());
+        transcoder!.on('error', (error: BusinessError) => reject(error));
+        transcoder!.prepare(config).then(() => transcoder!.start()).catch((error: BusinessError) => reject(error));
+      });
+      return outputPath;
+    } catch (error) {
+      if (fs.accessSync(outputPath)) {
+        fs.unlinkSync(outputPath);
+      }
+      throw error;
+    } finally {
+      if (transcoder) {
+        await transcoder.release();
+      }
+      fs.closeSync(source);
+      fs.closeSync(destination);
+    }
   }
 
   chooseMedia(data: DMPMap, callback: DMPBridgeCallback, webViewId: number) {
@@ -257,7 +319,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   }
 
   chooseImageByAlbum(count: number, callback: DMPBridgeCallback) {
-    let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseImage';
+    let path = this.mediaTempDirectory('chooseImage');
     PhotoPicker.selectPhotos(DMPContextUtils.getUIAbilityContext(), path, count).then((photoModels) => {
       if (photoModels != null) {
         const tempFiles = new Array<Map<string, object>>()
@@ -278,7 +340,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   }
 
   chooseImageByCamera(cameraType: string, callback: DMPBridgeCallback) {
-    let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseImage';
+    let path = this.mediaTempDirectory('chooseImage');
     CameraPicker.takePhoto(getContext() as common.UIAbilityContext, path,
       cameraType == "back" ? camera.CameraPosition.CAMERA_POSITION_BACK : camera.CameraPosition.CAMERA_POSITION_FRONT)
       .then((result) => {
@@ -299,7 +361,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   }
 
   chooseVideoByCamera(cameraType: string, maxDuration: number, callback: DMPBridgeCallback) {
-    let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseImage';
+    let path = this.mediaTempDirectory('chooseVideo');
     CameraPicker.takeVideo(getContext() as common.UIAbilityContext, path, maxDuration,
       cameraType == "back" ? camera.CameraPosition.CAMERA_POSITION_BACK : camera.CameraPosition.CAMERA_POSITION_FRONT)
       .then((result) => {
@@ -320,7 +382,7 @@ export class DMPContainerBridgesModuleVideo extends DMPContainerBridgesModule {
   }
 
   chooseVideoByAlbum(count: number, callback: DMPBridgeCallback) {
-    let path = DMPContextUtils.getUIAbilityContext().cacheDir + '/chooseVideo';
+    let path = this.mediaTempDirectory('chooseVideo');
     PhotoPicker.selectVideos(DMPContextUtils.getUIAbilityContext(), path, count).then((photoModels) => {
       if (photoModels != null) {
         const tempFiles = new Array<Map<string, object>>()

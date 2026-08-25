@@ -9,14 +9,13 @@ import { DMPContainerBridgesModule } from './DMPContainerBridgesModule';
 import { DMPBridgeCallback } from './DMPTSUtil';
 import { DMPMap } from '../Utils/DMPMap';
 import { DMPContextUtils } from '../Utils/DMPContextUtils';
-import { DMPFileUrlConvertor } from '../Bundle/Util/DMPFileUrlConvertor';
 import { DMPApp } from '../DApp/DMPApp';
 import { WorkerAppData } from '../Service/DMPSendableObjects';
 import { DMPUnzipManager } from '../Bundle/Util/DMPUnzipManager';
+import { DMPFilePathResolver } from '../Bundle/Util/DMPFilePathResolver';
 
 const VIRTUAL_PREFIX = 'difile://';
 const USER_PREFIX = 'usr';
-const TEMP_PREFIX = 'tmp';
 const ARRAY_BUFFER_BASE64_KEY = '__diminaArrayBufferBase64';
 const FILE_DATA_BASE64_KEY = '__diminaFileDataBase64';
 const FILE_DATA_TYPE_KEY = '__diminaFileDataType';
@@ -669,10 +668,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   private userRoot(): string {
-    const context = DMPContextUtils.getUIAbilityContext();
-    const path = `${context.filesDir}/dimina-file-system/${this.currentAppId()}/${USER_PREFIX}`;
-    this.ensureDirectory(path);
-    return path;
+    return DMPFilePathResolver.userRoot(this.currentAppId());
   }
 
   private currentAppId(): string {
@@ -680,9 +676,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   private tempRoot(): string {
-    const context = DMPContextUtils.getUIAbilityContext();
-    this.ensureDirectory(context.cacheDir);
-    return context.cacheDir;
+    return DMPFilePathResolver.tempRoot(this.currentAppId());
   }
 
   private ensureDirectory(path: string): void {
@@ -699,26 +693,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   private resolve(rawPath: string): string {
-    if (!rawPath) {
-      throw new Error('missing file path');
-    }
-    const userRoot = this.userRoot();
-    const tempRoot = this.tempRoot();
-    let path = rawPath;
-    if (rawPath.startsWith(VIRTUAL_PREFIX)) {
-      const relative = rawPath.replace(VIRTUAL_PREFIX, '').replace(/^\/+/, '');
-      if (relative === USER_PREFIX || relative.startsWith(`${USER_PREFIX}/`)) {
-        path = `${userRoot}/${relative.replace(USER_PREFIX, '').replace(/^\/+/, '')}`;
-      } else if (relative === TEMP_PREFIX || relative.startsWith(`${TEMP_PREFIX}/`)) {
-        path = `${tempRoot}/${relative.replace(TEMP_PREFIX, '').replace(/^\/+/, '')}`;
-      } else {
-        path = DMPFileUrlConvertor.localPathFromVPath(rawPath);
-      }
-    }
-    if (!path.startsWith(userRoot) && !path.startsWith(tempRoot)) {
-      throw new Error(`permission denied, open ${rawPath}`);
-    }
-    return path;
+    return DMPFilePathResolver.resolve(rawPath, this.currentAppId());
   }
 
   private stringParam(data: DMPMap | string, key: string): string {

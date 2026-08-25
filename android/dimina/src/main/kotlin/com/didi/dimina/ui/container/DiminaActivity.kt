@@ -124,6 +124,7 @@ import com.didi.dimina.ui.view.DiminaTabBar
 import com.didi.dimina.ui.view.DiminaWebView
 import com.didi.dimina.ui.view.MediaPickerRoot
 import com.didi.dimina.ui.view.MediaType
+import com.didi.dimina.ui.view.VideoCaptureOptions
 import com.didi.dimina.ui.view.NativeComponentHost
 import com.didi.dimina.ui.view.ScanCodeLauncher
 import com.didi.dimina.ui.view.WebViewCacheManager
@@ -171,6 +172,7 @@ class DiminaActivity : ComponentActivity() {
 
     private val mediaType = mutableStateOf(MediaType.NONE)
     private val maxImageCount = mutableIntStateOf(1)
+    private val videoCaptureOptions = mutableStateOf(VideoCaptureOptions())
 
     // WebView初始化完成后的回调列表
     private val webViewReadyCallbacks = mutableListOf<(WebView) -> Unit>()
@@ -320,9 +322,11 @@ class DiminaActivity : ComponentActivity() {
         count: Int,
         allowAlbum: Boolean,
         allowCamera: Boolean,
+        captureOptions: VideoCaptureOptions = VideoCaptureOptions(),
         callback: (List<String>) -> Unit,
     ) {
         imageChooseCallback = callback
+        videoCaptureOptions.value = captureOptions
 
         if (allowCamera && !allowAlbum) {
             // 只允许相机
@@ -1647,6 +1651,7 @@ class DiminaActivity : ComponentActivity() {
         MediaPickerRoot(
             type = mediaType.value,
             maxCount = maxImageCount.intValue,
+            videoCaptureOptions = videoCaptureOptions.value,
             context = this,
             onSelected = { uris ->
                 // Convert URIs to file paths

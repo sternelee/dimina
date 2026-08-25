@@ -7,21 +7,8 @@ import android.media.MediaMetadataRetriever
 import android.os.Build
 import android.os.Environment
 import android.provider.MediaStore
-import androidx.annotation.OptIn
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.media3.common.Effect
-import androidx.media3.common.MediaItem
-import androidx.media3.common.util.UnstableApi
-import androidx.media3.effect.Presentation
-import androidx.media3.transformer.Composition
-import androidx.media3.transformer.DefaultEncoderFactory
-import androidx.media3.transformer.EditedMediaItem
-import androidx.media3.transformer.Effects
-import androidx.media3.transformer.ExportException
-import androidx.media3.transformer.ExportResult
-import androidx.media3.transformer.Transformer
-import androidx.media3.transformer.VideoEncoderSettings
 import com.didi.dimina.api.APIResult
 import com.didi.dimina.api.AsyncResult
 import com.didi.dimina.api.BaseApiHandler
@@ -36,7 +23,6 @@ import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
-@OptIn(UnstableApi::class)
 class VideoToolApi : BaseApiHandler() {
     private companion object {
         const val GET_VIDEO_INFO = "getVideoInfo"
@@ -137,28 +123,21 @@ class VideoToolApi : BaseApiHandler() {
             ?: return failure(COMPRESS_VIDEO, "invalid src")
         if (!source.isFile) return failure(COMPRESS_VIDEO, "file does not exist")
 
-        val sourceInfo = runCatching { metadata(source) }.getOrNull()
-            ?: return failure(COMPRESS_VIDEO, "unsupported video")
         val output = File.createTempFile("VIDEO_${System.currentTimeMillis()}", ".mp4", PathUtils.appTempRoot(activity, appId))
         val bitrateKbps = params.optInt("bitrate", 0).takeIf { it > 0 } ?: when (params.optString("quality", "medium")) {
             "low" -> 1_000
             "high" -> 4_000
             else -> 2_000
         }
-        val effects = mutableListOf<Effect>()
-        val targetHeight = (sourceInfo.optInt("height") * resolution).toInt()
-        if (targetHeight > 0) effects.add(Presentation.createForHeight(targetHeight))
-        val editedBuilder = EditedMediaItem.Builder(MediaItem.fromUri(source.toURI().toString()))
-            .setEffects(Effects(emptyList(), effects))
-        params.optInt("fps", 0).takeIf { it > 0 }?.let(editedBuilder::setFrameRate)
-
-        val encoderFactory = DefaultEncoderFactory.Builder(activity)
-            .setRequestedVideoEncoderSettings(VideoEncoderSettings.Builder().setBitrate(bitrateKbps * 1000).build())
-            .build()
-        val transformer = Transformer.Builder(activity)
-            .setEncoderFactory(encoderFactory)
-            .addListener(object : Transformer.Listener {
-                override fun onCompleted(composition: Composition, exportResult: ExportResult) {
+        return runCatching {
+            VideoTranscoder.start(
+                activity = activity,
+                source = source,
+                output = output,
+                resolution = resolution,
+                bitrateKbps = bitrateKbps,
+                fps = params.optInt("fps", 0).takeIf { it > 0 },
+                onCompleted = {
                     val result = JSONObject().apply {
                         put("tempFilePath", PathUtils.pathToVirtual(output))
                         put("size", (output.length() + 1023) / 1024)
@@ -166,19 +145,19 @@ class VideoToolApi : BaseApiHandler() {
                     }
                     ApiUtils.invokeSuccess(params, result, responseCallback)
                     ApiUtils.invokeComplete(params, responseCallback, result)
-                }
-
-                override fun onError(composition: Composition, exportResult: ExportResult, exportException: ExportException) {
+                },
+                onError = { error ->
                     output.delete()
-                    val result = JSONObject().apply { put("errMsg", "$COMPRESS_VIDEO:fail ${exportException.message}") }
+                    val result = JSONObject().apply { put("errMsg", "$COMPRESS_VIDEO:fail ${error.message}") }
                     ApiUtils.invokeFail(params, result, responseCallback)
                     ApiUtils.invokeComplete(params, responseCallback, result)
-                }
-            })
-            .build()
-        output.delete()
-        transformer.start(editedBuilder.build(), output.absolutePath)
-        return NoneResult()
+                },
+            )
+            NoneResult()
+        }.getOrElse { error ->
+            output.delete()
+            failure(COMPRESS_VIDEO, error.message ?: "unsupported video")
+        }
     }
 
     private fun metadata(file: File): JSONObject {

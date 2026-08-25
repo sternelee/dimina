@@ -72,4 +72,17 @@ describe('media and device api adapters', () => {
 			expect.objectContaining({ keep: true }),
 		)
 	})
+
+	it('retries native network subscription after registration failure', () => {
+		const listener = vi.fn()
+		onNetworkStatusChange(listener)
+		const firstParams = vi.mocked(invokeAPI).mock.calls[0][1]
+
+		callback.invoke(firstParams.fail, { errMsg: 'subscribe failed' })
+		onNetworkStatusChange(listener)
+
+		expect(invokeAPI).toHaveBeenCalledTimes(2)
+		expect(vi.mocked(invokeAPI).mock.calls[1][0]).toBe('onNetworkStatusChange')
+		expect(vi.mocked(invokeAPI).mock.calls[1][1].callbackId).not.toBe(firstParams.callbackId)
+	})
 })

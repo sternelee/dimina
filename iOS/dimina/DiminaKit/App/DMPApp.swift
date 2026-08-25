@@ -364,6 +364,8 @@ public class DMPApp {
             BluetoothAPIManager.shared.clearApp(self.appId)
             LocalNetworkAPIManager.shared.clearApp(self.appId)
             NetworkAPI.clearApp(self.appId)
+            NetworkTypeAPI.clearApp(self.appId)
+            ScreenAPI.clearApp(self.appId)
             DMPWebSocketManager.shared.disposeOwner(appId: self.appId)
             let registeredExtModules = self.container?.extModules ?? [:]
             self.container?.resetForReload()
@@ -436,6 +438,7 @@ public class DMPApp {
         LocalNetworkAPIManager.shared.clearApp(appId)
         NetworkAPI.clearApp(appId)
         NetworkTypeAPI.clearApp(appId)
+        ScreenAPI.clearApp(appId)
 
         let serviceToDestroy = service
         let containerToDestroy = container

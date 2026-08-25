@@ -18,6 +18,12 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +37,7 @@ import org.json.JSONObject
 
 class MediaPreviewActivity : ComponentActivity() {
     data class Item(val url: String, val type: String, val poster: String = "")
+    private val videoViews = mutableSetOf<VideoView>()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,6 +54,17 @@ class MediaPreviewActivity : ComponentActivity() {
         }
     }
 
+    override fun onStop() {
+        videoViews.forEach(VideoView::pause)
+        super.onStop()
+    }
+
+    override fun onDestroy() {
+        videoViews.toList().forEach(VideoView::stopPlayback)
+        videoViews.clear()
+        super.onDestroy()
+    }
+
     @OptIn(ExperimentalFoundationApi::class)
     @Composable
     private fun PreviewPager(items: List<Item>, current: Int, onClose: () -> Unit) {
@@ -55,23 +73,7 @@ class MediaPreviewActivity : ComponentActivity() {
             HorizontalPager(state = state, modifier = Modifier.fillMaxSize()) { page ->
                 val item = items[page]
                 if (item.type == "video") {
-                    AndroidView(
-                        factory = { context ->
-                            VideoView(context).apply {
-                                if (item.url.startsWith("http://") || item.url.startsWith("https://")) {
-                                    setVideoURI(Uri.parse(item.url))
-                                } else {
-                                    setVideoPath(item.url)
-                                }
-                                setMediaController(android.widget.MediaController(context).also { it.setAnchorView(this) })
-                                setOnPreparedListener { player ->
-                                    player.isLooping = false
-                                    start()
-                                }
-                            }
-                        },
-                        modifier = Modifier.fillMaxSize(),
-                    )
+                    VideoPreview(item = item, active = state.currentPage == page)
                 } else {
                     CoilImage(
                         imageModel = { item.url },
@@ -85,6 +87,54 @@ class MediaPreviewActivity : ComponentActivity() {
                 color = Color.White,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 32.dp),
             )
+        }
+    }
+
+    @Composable
+    private fun VideoPreview(item: Item, active: Boolean) {
+        var prepared by remember(item.url) { mutableStateOf(false) }
+        var videoView by remember(item.url) { mutableStateOf<VideoView?>(null) }
+        val isActive by rememberUpdatedState(active)
+        DisposableEffect(item.url) {
+            onDispose {
+                videoView?.let { view ->
+                    videoViews.remove(view)
+                    view.stopPlayback()
+                }
+                videoView = null
+            }
+        }
+        Box(Modifier.fillMaxSize()) {
+            AndroidView(
+                factory = { context ->
+                    VideoView(context).apply {
+                        videoView = this
+                        videoViews.add(this)
+                        if (item.url.startsWith("http://") || item.url.startsWith("https://")) {
+                            setVideoURI(Uri.parse(item.url))
+                        } else {
+                            setVideoPath(item.url)
+                        }
+                        setMediaController(android.widget.MediaController(context).also { it.setAnchorView(this) })
+                        setOnPreparedListener { player ->
+                            player.isLooping = false
+                            prepared = true
+                            if (isActive) start() else pause()
+                        }
+                    }
+                },
+                update = { view ->
+                    if (prepared && active) view.start() else view.pause()
+                },
+                modifier = Modifier.fillMaxSize(),
+            )
+            if (!prepared && item.poster.isNotBlank()) {
+                CoilImage(
+                    imageModel = { item.poster },
+                    imageOptions = ImageOptions(contentScale = ContentScale.Fit, alignment = Alignment.Center),
+                    modifier = Modifier.fillMaxSize(),
+                )
+            }
         }
     }
 
