@@ -126,7 +126,10 @@ export function canvasPutImageData(opts = {}, component) {
 	if (budgetError) {
 		setCanvasValidationError(params, budgetError)
 	}
-	if (!params.canvasValidationError) {
+	if (params.canvasValidationError) {
+		delete params.data
+	}
+	else {
 		params.data = Array.from(params.data)
 	}
 	return invokeAPI('canvasPutImageData', params, 'render')

@@ -56,6 +56,7 @@ describe('legacy canvas numeric transport normalization', () => {
 		})
 
 		expect(publishedParams().canvasValidationError).toBe('data argument must be an Uint8ClampedArray')
+		expect(publishedParams()).not.toHaveProperty('data')
 	})
 
 	it('validates putImageData dimensions and data length before crossing the bridge', () => {
@@ -70,6 +71,7 @@ describe('legacy canvas numeric transport normalization', () => {
 		})
 
 		expect(publishedParams().canvasValidationError).toContain('invalid data format')
+		expect(publishedParams()).not.toHaveProperty('data')
 	})
 
 	it('rejects a pixel read that exceeds the shared bridge budget before it reaches render', () => {
@@ -101,6 +103,7 @@ describe('legacy canvas numeric transport normalization', () => {
 			})
 
 			expect(publishedParams().canvasValidationError).toContain('maximum transferable pixel data')
+			expect(publishedParams()).not.toHaveProperty('data')
 			expect(arrayFrom).not.toHaveBeenCalled()
 		}
 		finally {

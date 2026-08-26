@@ -64,7 +64,7 @@ Canvas 2D 状态以渲染层宿主 context 为最终权威。逻辑层提供同�
 
 ## 导出与 runtime 生命周期
 
-渲染层编码后，三端各自解码并发布临时文件，都不阻塞收到 bridge 消息的那个调用点：Android 在 `Dispatchers.IO`、iOS 在按 app 和 generation 划分的后台串行队列上执行；HarmonyOS 的 bridge 入口必须同步返回，因此校验留在同步段，解码与写盘交给主线程上的异步串行队列，配合异步文件 API 完成。每个请求都绑定 app owner 和 runtime generation：
+渲染层编码后，三端各自解码并发布临时文件，都不阻塞收到 bridge 消息的那个调用点：Android 在 `Dispatchers.IO`、iOS 在按 app 划分且跨 generation 共用的后台串行队列上执行；HarmonyOS 的 bridge 入口必须同步返回，因此校验留在同步段，解码与写盘交给主线程上的异步串行队列，配合异步文件 API 完成。每个请求都绑定 app owner 和 runtime generation：
 
 - 退出、重启或替换 runtime 时先推进 generation，并取消尚未开始的旧请求。
 - 已经开始的请求在真正结束前继续占用计数和字节预算，不能让新 runtime 绕过峰值限制。
