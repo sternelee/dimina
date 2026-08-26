@@ -192,6 +192,7 @@ const wxsModuleRegistry = new Set()
 
 // wxs 文件路径映射表，用于快速查找模块对应的文件路径
 const wxsFilePathMap = new Map()
+let wxsScannedWorkPath = null
 
 let enableSourcemap = false
 
@@ -200,6 +201,7 @@ if (!isMainThread) {
 		try {
 			resetStoreInfo(storeInfo)
 			enableSourcemap = !!sourcemap
+			wxsScannedWorkPath = null
 
 			const progress = {
 				_completedTasks: 0,
@@ -223,6 +225,7 @@ if (!isMainThread) {
 			compileResCache.clear()
 			wxsModuleRegistry.clear()
 			wxsFilePathMap.clear()
+			wxsScannedWorkPath = null
 
 			parentPort.postMessage({
 				success: true,
@@ -235,6 +238,7 @@ if (!isMainThread) {
 			compileResCache.clear()
 			wxsModuleRegistry.clear()
 			wxsFilePathMap.clear()
+			wxsScannedWorkPath = null
 
 			parentPort.postMessage({
 				success: false,
@@ -254,8 +258,11 @@ if (!isMainThread) {
 async function compileML(pages, root, progress) {
 	const workPath = getWorkPath()
 
-	// 初始化 wxs 文件路径映射
-	initWxsFilePathMap(workPath)
+	// 主包和所有分包共享同一 npm WXS 索引；一次 Worker 任务只扫描一次。
+	if (wxsScannedWorkPath !== workPath) {
+		initWxsFilePathMap(workPath)
+		wxsScannedWorkPath = workPath
+	}
 
 	for (const page of pages) {
 		const scriptRes = new Map()

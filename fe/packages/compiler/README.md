@@ -111,6 +111,25 @@ game.js, game.json    ->  logic.js + app-config.json（小游戏入口，不生�
 miniprogram_npm/      ->  npm包构建   (npm组件支持)
 ```
 
+### CPU 与内存调优
+
+DMCC 默认最多并发两个编译阶段，在编译速度、CPU 峰值和 Worker 内存之间取平衡；
+普通 WXSS/DDSS 项目不会加载 Less 或 Sass 运行时。可按 CI 或开发机资源显式调整：
+
+```sh
+# 内存紧张或希望降低 CPU 峰值
+DIMINA_COMPILER_MAX_WORKERS=1 dmcc build
+
+# 吞吐优先的高配构建机
+DIMINA_COMPILER_MAX_WORKERS=3 dmcc build
+
+# 单个 Worker 的 V8 old generation 上限（MiB，默认最多 2048）
+DIMINA_COMPILER_WORKER_MEMORY_MB=1024 dmcc build
+```
+
+容器环境会读取 cgroup v1/v2 的 CPU、内存限额。以上变量只改变资源预算，
+不会改变 logic/view/style 的产物或增量编译语义。
+
 ### 微信小游戏入口
 
 当 `project.config.json` 的 `compileType` 为 `game`，或工程只有 `game.json` + `game.js`/`game.ts` 而没有 `app.json` 时，DMCC 会按小游戏编译。产物的 `app-config.json` 包含 `runtimeType: "game"`、`entryPagePath: "game"`，`logic.js` 包含 `game.js` 及其本地依赖；不会生成 WXML 页面和页面 CSS。运行能力与边界见[微信小游戏运行文档](../../../docs/Mini-Game.md)。

@@ -4,16 +4,35 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { isMainThread, parentPort } from 'node:worker_threads'
 import { compileStyle } from '@vue/compiler-sfc'
 import autoprefixer from 'autoprefixer'
-import cssnano from 'cssnano'
-import less from 'less'
+import { transform } from 'esbuild'
 import postcss from 'postcss'
 import selectorParser from 'postcss-selector-parser'
-import * as sass from 'sass'
 import { collectAssets, isCollectableImageAsset, resolveAssetSourcePath, tagWhiteList, transformRpx } from '../common/utils.js'
 import { getAppId, getComponent, getContentByPath, getDependencyGraph, getStyleExts, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 import { concatSourcemap, createLineSourcemap, remapSourcemap } from './sourcemap.js'
 
 const compileRes = new Map()
+const builtInTagNames = new Set(tagWhiteList)
+const autoprefixerPlugin = autoprefixer({ overrideBrowserslist: ['cover 99.5%'] })
+const stylePostprocessor = postcss([autoprefixerPlugin])
+let cssnanoLoader
+let lessLoader
+let sassLoader
+
+function loadCssnano() {
+	cssnanoLoader ||= import('cssnano').then(module => module.default)
+	return cssnanoLoader
+}
+
+function loadLess() {
+	lessLoader ||= import('less').then(module => module.default)
+	return lessLoader
+}
+
+function loadSass() {
+	sassLoader ||= import('sass')
+	return sassLoader
+}
 
 if (!isMainThread) {
 	parentPort.on('message', async ({ pages, storeInfo, sourcemap }) => {
@@ -140,6 +159,30 @@ function createExternalClassPlugin(moduleId) {
 	const scopeAttribute = `data-v-${moduleId}`
 	const externalScopeAttribute = 'data-dd-external-class-scope'
 	const processedRules = new WeakSet()
+	const selectorProcessor = selectorParser((selectors) => {
+		for (const selector of [...selectors.nodes]) {
+			const boostedSelector = selector.clone()
+			const scopeNodes = []
+			boostedSelector.walkAttributes((attribute) => {
+				if (attribute.attribute === scopeAttribute) {
+					scopeNodes.push(attribute)
+				}
+			})
+
+			const targetScope = scopeNodes.at(-1)
+			if (!targetScope) {
+				continue
+			}
+
+			targetScope.parent.insertAfter(targetScope, selectorParser.attribute({
+				attribute: externalScopeAttribute,
+				operator: '~=',
+				quoteMark: '"',
+				value: scopeAttribute,
+			}))
+			selectors.append(boostedSelector)
+		}
+	})
 	return {
 		postcssPlugin: 'dimina-external-class',
 		Rule(rule) {
@@ -149,30 +192,7 @@ function createExternalClassPlugin(moduleId) {
 			processedRules.add(rule)
 
 			try {
-				rule.selector = selectorParser((selectors) => {
-					for (const selector of [...selectors.nodes]) {
-						const boostedSelector = selector.clone()
-						const scopeNodes = []
-						boostedSelector.walkAttributes((attribute) => {
-							if (attribute.attribute === scopeAttribute) {
-								scopeNodes.push(attribute)
-							}
-						})
-
-						const targetScope = scopeNodes.at(-1)
-						if (!targetScope) {
-							continue
-						}
-
-						targetScope.parent.insertAfter(targetScope, selectorParser.attribute({
-							attribute: externalScopeAttribute,
-							operator: '~=',
-							quoteMark: '"',
-							value: scopeAttribute,
-						}))
-						selectors.append(boostedSelector)
-					}
-				}).processSync(rule.selector)
+				rule.selector = selectorProcessor.processSync(rule.selector)
 			}
 			catch (error) {
 				throw rule.error(error.message, { plugin: 'dimina-external-class' })
@@ -256,6 +276,13 @@ function getPostcssMapOptions(sourcemap, prev) {
 
 function createStyleTransformPlugin(module, absolutePath, importResults, options) {
 	const processedRules = new WeakSet()
+	const selectorProcessor = selectorParser((selectors) => {
+		selectors.walkTags((tag) => {
+			if (builtInTagNames.has(tag.value)) {
+				tag.value = `.dd-${tag.value}`
+			}
+		})
+	})
 	return {
 		postcssPlugin: 'dimina-style-transform',
 		AtRule(node) {
@@ -287,13 +314,7 @@ function createStyleTransformPlugin(module, absolutePath, importResults, options
 			}
 
 			try {
-				rule.selector = selectorParser((selectors) => {
-					selectors.walkTags((tag) => {
-						if (tagWhiteList.includes(tag.value)) {
-							tag.value = `.dd-${tag.value}`
-						}
-					})
-				}).processSync(rule.selector)
+				rule.selector = selectorProcessor.processSync(rule.selector)
 			}
 			catch (error) {
 				throw rule.error(error.message, { plugin: 'dimina-style-transform' })
@@ -343,6 +364,7 @@ async function enhanceCSS(module, options = {}) {
 
 	try {
 		if (ext === '.less') {
+			const less = await loadLess()
 			const result = await less.render(processedCSS, {
 				filename: absolutePath,
 				paths: [path.dirname(absolutePath), getWorkPath()],
@@ -359,6 +381,7 @@ async function enhanceCSS(module, options = {}) {
 			}
 		}
 		else if (ext === '.scss' || ext === '.sass') {
+			const sass = await loadSass()
 			const result = sass.compileString(processedCSS, {
 				loadPaths: [path.dirname(absolutePath), getWorkPath()],
 				syntax: ext === '.sass' ? 'indented' : 'scss',
@@ -429,13 +452,21 @@ async function enhanceCSS(module, options = {}) {
 	// 统一后处理：autoprefixer + 压缩
 	let finalResult
 	try {
-		finalResult = await postcss([
-			autoprefixer({ overrideBrowserslist: ['cover 99.5%'] }),
-			cssnano()
-		]).process(externalResult.css, {
-			from: undefined,
-			map: getPostcssMapOptions(options.sourcemap, externalResult.map?.toJSON()),
-		})
+		if (options.sourcemap) {
+			const cssnano = await loadCssnano()
+			finalResult = await postcss([autoprefixerPlugin, cssnano()]).process(externalResult.css, {
+				from: undefined,
+				map: getPostcssMapOptions(true, externalResult.map?.toJSON()),
+			})
+		}
+		else {
+			const prefixedResult = await stylePostprocessor.process(externalResult.css, { from: undefined })
+			const minifiedResult = await transform(prefixedResult.css, {
+				loader: 'css',
+				minify: true,
+			})
+			finalResult = { css: minifiedResult.code, map: null }
+		}
 	}
 	catch (error) {
 		throw createStyleCompileError('postprocess', absolutePath, error)
