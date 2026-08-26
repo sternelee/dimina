@@ -22,6 +22,43 @@ jobs:
         with:
           xcode-version: latest-stable
 
+      - name: Select or create iOS Simulator
+        id: simulator
+        run: |
+          SIMULATOR_UDID="$(
+            xcrun simctl list devices available --json |
+              ruby -rjson -e '
+                devices = JSON.parse(STDIN.read).fetch("devices").values.flatten
+                simulator = devices.find do |device|
+                  device.fetch("isAvailable", true) && device.fetch("name", "").start_with?("iPhone")
+                end
+                puts simulator.fetch("udid") if simulator
+              '
+          )"
+
+          if [[ -z "$SIMULATOR_UDID" ]]; then
+            SIMULATOR_CONFIG="$(
+              xcrun simctl list runtimes available --json |
+                ruby -rjson -e '
+                  runtimes = JSON.parse(STDIN.read).fetch("runtimes").select do |runtime|
+                    runtime["isAvailable"] && runtime["platform"] == "iOS"
+                  end
+                  runtime = runtimes.max_by { |item| item.fetch("version").split(".").map(&:to_i) }
+                  abort "No available iOS Simulator runtime found" unless runtime
+                  device_type = runtime.fetch("supportedDeviceTypes").find do |item|
+                    item["productFamily"] == "iPhone"
+                  end
+                  abort "No iPhone device type supports #{runtime.fetch("name")}" unless device_type
+                  puts "#{runtime.fetch("identifier")} #{device_type.fetch("identifier")}"
+                '
+            )"
+            read -r RUNTIME_ID DEVICE_TYPE_ID <<< "$SIMULATOR_CONFIG"
+            SIMULATOR_UDID="$(xcrun simctl create "Dimina CI" "$DEVICE_TYPE_ID" "$RUNTIME_ID")"
+          fi
+
+          echo "udid=$SIMULATOR_UDID" >> "$GITHUB_OUTPUT"
+          echo "Using iOS Simulator $SIMULATOR_UDID"
+
       - name: Cache Swift Package Manager dependencies
         uses: actions/cache@v4
         with:
@@ -44,7 +81,7 @@ jobs:
           xcodebuild test \
             -project dimina.xcodeproj \
             -scheme dimina \
-            -destination 'platform=iOS Simulator,name=iPhone 16,OS=latest' \
+            -destination 'platform=iOS Simulator,id=${{ steps.simulator.outputs.udid }}' \
             -clonedSourcePackagesDirPath SourcePackages \
             -disableAutomaticPackageResolution \
             -resultBundlePath TestResults.xcresult
