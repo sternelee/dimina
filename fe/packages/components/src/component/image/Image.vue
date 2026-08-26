@@ -258,7 +258,7 @@ if (hasTouchEvents) {
 <span ref="conRef" v-bind="$attrs" class="dd-image" :style="backgroundStyle" @contextmenu="handleContextMenu">
 		<img
 			ref="imgRef" :class="[dynamicClass, { 'dd-image-preloader': renderingMode === 'backgroundImage' }]" :src="renderedSrc" alt="" decoding="async"
-			:loading="props.lazyLoad ? 'lazy' : 'eager'" :referrerpolicy="referrerPolicy" @load="handleLoaded"
+			loading="eager" :referrerpolicy="referrerPolicy" @load="handleLoaded"
 			@error="handleError"
 		/>
 	</span>

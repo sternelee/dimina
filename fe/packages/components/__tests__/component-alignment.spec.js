@@ -133,6 +133,7 @@ describe('exparser component alignment', () => {
 		expect(observers[0].options).toEqual({ rootMargin: '1600px 800px' })
 		expect(observers[0].observe).toHaveBeenCalledWith(host.querySelector('.dd-image'))
 		expect(image.getAttribute('src')).toBe('')
+		expect(image.getAttribute('loading')).toBe('eager')
 
 		intersectionCallback([{ intersectionRatio: 1, isIntersecting: true }])
 		await nextTick()
