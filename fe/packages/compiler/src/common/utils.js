@@ -214,6 +214,7 @@ const tagWhiteList = [
 	'block',
 	'button',
 	'camera',
+	'canvas',
 	'checkbox-group',
 	'checkbox',
 	'cover-image',
@@ -258,7 +259,6 @@ const tagWhiteList = [
 // and leaves undeclared tags as native elements.
 const miniProgramBuiltinTags = new Set([
 	...tagWhiteList,
-	'canvas',
 	'match-media',
 	'page-container',
 	'share-element',
