@@ -6,6 +6,10 @@ import android.content.ComponentCallbacks2
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.ViewGroup
@@ -19,6 +23,8 @@ import androidx.webkit.WebViewAssetLoader
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.PathUtils
 import com.didi.dimina.common.VersionUtils
+import java.io.ByteArrayInputStream
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.lang.ref.WeakReference
 import java.net.URI
@@ -539,7 +545,57 @@ internal fun resolveWebResourceMimeType(
     val normalizedExtension = extension.lowercase()
     return when (normalizedExtension) {
         "js" -> "text/javascript"
+        "heic" -> "image/heic"
+        "heif" -> "image/heif"
         else -> lookup(normalizedExtension) ?: "application/octet-stream"
+    }
+}
+
+internal fun requiresHeifWebResourceTranscode(extension: String): Boolean =
+    extension.equals("heic", ignoreCase = true) || extension.equals("heif", ignoreCase = true)
+
+private fun buildLocalFileWebResourceResponse(file: File): WebResourceResponse? {
+    if (!requiresHeifWebResourceTranscode(file.extension)) {
+        val mimeType = resolveWebResourceMimeType(file.extension)
+        return WebResourceResponse(mimeType, "UTF-8", file.inputStream())
+    }
+
+    return try {
+        val bitmap = decodeHeifBitmap(file) ?: run {
+            LogUtils.e(WEBVIEW_TAG, "Failed to decode HEIF resource: ${file.path}")
+            return null
+        }
+        val jpegData = try {
+            ByteArrayOutputStream().use { output ->
+                if (bitmap.compress(Bitmap.CompressFormat.JPEG, 100, output)) {
+                    output.toByteArray()
+                } else {
+                    null
+                }
+            }
+        } finally {
+            bitmap.recycle()
+        }
+
+        if (jpegData == null) {
+            LogUtils.e(WEBVIEW_TAG, "Failed to encode HEIF resource as JPEG: ${file.path}")
+            null
+        } else {
+            WebResourceResponse("image/jpeg", null, ByteArrayInputStream(jpegData))
+        }
+    } catch (e: Exception) {
+        LogUtils.e(WEBVIEW_TAG, "Failed to transcode HEIF resource: ${file.path}", e)
+        null
+    }
+}
+
+private fun decodeHeifBitmap(file: File): Bitmap? {
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+        ImageDecoder.decodeBitmap(ImageDecoder.createSource(file)) { decoder, _, _ ->
+            decoder.allocator = ImageDecoder.ALLOCATOR_SOFTWARE
+        }
+    } else {
+        BitmapFactory.decodeFile(file.absolutePath)
     }
 }
 
@@ -575,8 +631,7 @@ private class DiminaPathHandler(
             return null
         }
 
-        val mimeType = resolveWebResourceMimeType(targetCanonical.extension)
-        return WebResourceResponse(mimeType, "UTF-8", targetCanonical.inputStream())
+        return buildLocalFileWebResourceResponse(targetCanonical)
     }
 }
 
@@ -668,8 +723,7 @@ private fun handleVirtualFileRequest(context: Context, uri: android.net.Uri, app
             return null
         }
 
-        val mimeType = resolveWebResourceMimeType(targetFile.extension)
-        WebResourceResponse(mimeType, "UTF-8", targetFile.inputStream())
+        buildLocalFileWebResourceResponse(targetFile)
     } catch (e: Exception) {
         LogUtils.e(WEBVIEW_TAG, "Failed to intercept virtual file: ${uri}", e)
         null

@@ -6,7 +6,7 @@ import { walk } from 'oxc-walker'
 import MagicString from 'magic-string'
 import { transform } from 'esbuild'
 import { getWxMemberName, takeCompatibilityWarnings, warnUnsupportedWxApi } from '../common/compatibility.js'
-import { collectAssets, hasCompileInfo, resolveAssetSourcePath } from '../common/utils.js'
+import { collectAssets, hasCompileInfo, isCollectableImageAsset, resolveAssetSourcePath } from '../common/utils.js'
 import { getAppConfigInfo, getAppId, getComponent, getContentByPath, getDependencyGraph, getNpmResolver, getTargetPath, getWorkPath, isMiniGame, resetStoreInfo, resolveAppAlias } from '../env.js'
 import { mergeSourcemap, remapSourcemap } from './sourcemap.js'
 
@@ -465,7 +465,7 @@ function isLocalAssetString(value) {
 		&& !value.startsWith('http')
 		&& !value.startsWith('//')
 		&& (value.startsWith('/') || value.startsWith('./') || value.startsWith('../'))
-		&& /\.(?:png|jpe?g|gif|svg)(?:\?.*)?$/.test(value)
+		&& isCollectableImageAsset(value)
 }
 
 function getLineByIndex(content, index) {

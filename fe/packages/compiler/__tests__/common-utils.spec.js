@@ -92,6 +92,36 @@ describe('collectAssets', () => {
 		expect(fs.readFileSync(path.join(targetPath, 'main/static', outputName), 'utf8')).toBe('image')
 	})
 
+	it('collects HEIC and HEIF image assets without changing their format', () => {
+		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-assets-'))
+		const workPath = path.join(tempDir, 'project')
+		const targetPath = path.join(tempDir, 'output')
+		const assetDir = path.join(workPath, 'pages/detail/images')
+		fs.mkdirSync(assetDir, { recursive: true })
+		fs.writeFileSync(path.join(assetDir, 'photo.HEIC'), 'heic-image')
+		fs.writeFileSync(path.join(assetDir, 'preview.heif'), 'heif-image')
+
+		const heicResult = collectAssets(
+			workPath,
+			'/pages/detail/index',
+			'./images/photo.HEIC?v=1',
+			targetPath,
+			'test-app',
+		)
+		const heifResult = collectAssets(
+			workPath,
+			'/pages/detail/index',
+			'./images/preview.heif',
+			targetPath,
+			'test-app',
+		)
+
+		expect(heicResult).toMatch(/^\/test-app\/main\/static\/.+_photo\.HEIC\?v=1$/)
+		expect(heifResult).toMatch(/^\/test-app\/main\/static\/.+_preview\.heif$/)
+		expect(fs.readFileSync(path.join(targetPath, 'main/static', heicResult.split('/').pop().split('?')[0]), 'utf8')).toBe('heic-image')
+		expect(fs.readFileSync(path.join(targetPath, 'main/static', heifResult.split('/').pop()), 'utf8')).toBe('heif-image')
+	})
+
 	it('copies a cached source asset into every build target', () => {
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-assets-'))
 		const workPath = path.join(tempDir, 'project')

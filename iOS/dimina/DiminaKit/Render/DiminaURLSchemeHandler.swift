@@ -6,7 +6,94 @@
 //
 
 import Foundation
+import UIKit
 import WebKit
+
+struct DMPWebResourcePayload {
+    let data: Data
+    let mimeType: String
+}
+
+enum DMPWebResourceLoader {
+    static func load(path: String) throws -> DMPWebResourcePayload {
+        let data = try Data(contentsOf: URL(fileURLWithPath: path))
+        let pathExtension = URL(fileURLWithPath: path).pathExtension
+        return try makePayload(
+            data: data,
+            pathExtension: pathExtension,
+            webKitSupportsHEIF: webKitSupportsHEIF
+        )
+    }
+
+    static func makePayload(
+        data: Data,
+        pathExtension: String,
+        webKitSupportsHEIF: Bool
+    ) throws -> DMPWebResourcePayload {
+        guard requiresHEIFTranscode(
+            pathExtension: pathExtension,
+            webKitSupportsHEIF: webKitSupportsHEIF
+        ) else {
+            return DMPWebResourcePayload(
+                data: data,
+                mimeType: mimeType(forExtension: pathExtension)
+            )
+        }
+
+        guard let image = UIImage(data: data),
+              let jpegData = image.jpegData(compressionQuality: 1.0) else {
+            throw NSError(
+                domain: "DiminaErrorDomain",
+                code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "Unable to decode HEIF image resource"]
+            )
+        }
+        return DMPWebResourcePayload(data: jpegData, mimeType: "image/jpeg")
+    }
+
+    static func requiresHEIFTranscode(
+        pathExtension: String,
+        webKitSupportsHEIF: Bool
+    ) -> Bool {
+        let normalizedExtension = pathExtension.lowercased()
+        let isHEIFFamily = normalizedExtension == "heic" || normalizedExtension == "heif"
+        return isHEIFFamily && !webKitSupportsHEIF
+    }
+
+    static func mimeType(forExtension pathExtension: String) -> String {
+        switch pathExtension.lowercased() {
+        case "html", "htm":
+            return "text/html"
+        case "css":
+            return "text/css"
+        case "js":
+            return "application/javascript"
+        case "jpg", "jpeg":
+            return "image/jpeg"
+        case "png":
+            return "image/png"
+        case "gif":
+            return "image/gif"
+        case "svg":
+            return "image/svg+xml"
+        case "heic":
+            return "image/heic"
+        case "heif":
+            return "image/heif"
+        case "json":
+            return "application/json"
+        default:
+            return "application/octet-stream"
+        }
+    }
+
+    private static var webKitSupportsHEIF: Bool {
+        if #available(iOS 17.0, *) {
+            return true
+        }
+        return false
+    }
+}
 
 @available(iOS 11.0, *)
 class DiminaURLSchemeHandler: NSObject, WKURLSchemeHandler {
@@ -42,15 +129,17 @@ class DiminaURLSchemeHandler: NSObject, WKURLSchemeHandler {
         }
         
         do {
-            // Read file data
-            let data = try Data(contentsOf: URL(fileURLWithPath: path))
-            
-            let mimeType = mimeTypeForPath(path)
-            let response = URLResponse(url: url, mimeType: mimeType, expectedContentLength: data.count, textEncodingName: "UTF-8")
+            let payload = try DMPWebResourceLoader.load(path: path)
+            let response = URLResponse(
+                url: url,
+                mimeType: payload.mimeType,
+                expectedContentLength: payload.data.count,
+                textEncodingName: "UTF-8"
+            )
             
             // Return response and data
             urlSchemeTask.didReceive(response)
-            urlSchemeTask.didReceive(data)
+            urlSchemeTask.didReceive(payload.data)
             urlSchemeTask.didFinish()
             
             DMPLogger.debug("✅ Resource loaded successfully: \(url.absoluteString)")
@@ -98,29 +187,4 @@ class DiminaURLSchemeHandler: NSObject, WKURLSchemeHandler {
         )
     }
     
-    // Get MIME type based on file path
-    private func mimeTypeForPath(_ path: String) -> String {
-        let pathExtension = URL(fileURLWithPath: path).pathExtension.lowercased()
-        
-        switch pathExtension {
-        case "html", "htm":
-            return "text/html"
-        case "css":
-            return "text/css"
-        case "js":
-            return "application/javascript"
-        case "jpg", "jpeg":
-            return "image/jpeg"
-        case "png":
-            return "image/png"
-        case "gif":
-            return "image/gif"
-        case "svg":
-            return "image/svg+xml"
-        case "json":
-            return "application/json"
-        default:
-            return "application/octet-stream"
-        }
-    }
 }

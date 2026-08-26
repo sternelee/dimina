@@ -40,11 +40,16 @@ function getAbsolutePath(workPath, pagePath, src) {
 }
 
 const assetsMap = {}
+const collectableImageAssetPattern = /\.(?:png|jpe?g|gif|svg|heic|heif)(?:\?.*)?$/i
 
 function resetAssetCache() {
 	for (const assetPath of Object.keys(assetsMap)) {
 		delete assetsMap[assetPath]
 	}
+}
+
+function isCollectableImageAsset(src) {
+	return typeof src === 'string' && collectableImageAssetPattern.test(src)
 }
 
 function isPathInside(rootPath, targetPath) {
@@ -83,7 +88,7 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 		return src
 	}
 
-	if (!/\.(?:png|jpe?g|gif|svg)(?:\?.*)?$/.test(src)) {
+	if (!isCollectableImageAsset(src)) {
 		return src
 	}
 
@@ -258,6 +263,7 @@ export {
 	filterFilesByRegex,
 	getAbsolutePath,
 	hasCompileInfo,
+	isCollectableImageAsset,
 	isObjectEmpty,
 	miniProgramBuiltinTags,
 	resolveAssetSourcePath,

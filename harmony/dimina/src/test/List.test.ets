@@ -13,6 +13,7 @@ import dmpWorkerFlushBarrierTest from './DMPWorkerFlushBarrier.test';
 import dmpMiniProgramNavigationCallbackTest from './DMPMiniProgramNavigationCallback.test';
 import dmpAppRuntimeLifecycleTest from './DMPAppRuntimeLifecycle.test';
 import dmpContainerCallbackContractTest from './DMPContainerCallbackContract.test';
+import dmpWebResourceImageFormatTest from './DMPWebResourceImageFormat.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -30,4 +31,5 @@ export default function testsuite() {
   dmpMiniProgramNavigationCallbackTest();
   dmpAppRuntimeLifecycleTest();
   dmpContainerCallbackContractTest();
+  dmpWebResourceImageFormatTest();
 }

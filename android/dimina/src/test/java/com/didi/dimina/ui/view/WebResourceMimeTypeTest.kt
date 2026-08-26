@@ -21,6 +21,19 @@ class WebResourceMimeTypeTest {
     }
 
     @Test
+    fun heifFamilyUsesStableMimeTypesWithoutPlatformLookup() {
+        assertEquals("image/heic", resolveWebResourceMimeType("HEIC") { null })
+        assertEquals("image/heif", resolveWebResourceMimeType("heif") { null })
+    }
+
+    @Test
+    fun heifFamilyRequiresNativeTranscodingForWebView() {
+        assertEquals(true, requiresHeifWebResourceTranscode("heic"))
+        assertEquals(true, requiresHeifWebResourceTranscode("HEIF"))
+        assertEquals(false, requiresHeifWebResourceTranscode("jpeg"))
+    }
+
+    @Test
     fun unknownExtensionFallsBackToOctetStream() {
         val mimeType = resolveWebResourceMimeType("bin") { null }
 

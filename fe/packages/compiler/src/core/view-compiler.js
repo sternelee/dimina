@@ -10,7 +10,7 @@ import { transform } from 'esbuild'
 import * as htmlparser2 from 'htmlparser2'
 import { checkTemplateCompatibility, getTemplateDirectiveName, takeCompatibilityWarnings } from '../common/compatibility.js'
 import { toMiniProgramModuleId } from '../common/path-utils.js'
-import { collectAssets, getAbsolutePath, resolveAssetSourcePath, tagWhiteList, transformRpx } from '../common/utils.js'
+import { collectAssets, getAbsolutePath, isCollectableImageAsset, resolveAssetSourcePath, tagWhiteList, transformRpx } from '../common/utils.js'
 import { getAppId, getComponent, getContentByPath, getDependencyGraph, getTargetPath, getTemplateExts, getViewScriptExts, getViewScriptTags, getWorkPath, resetStoreInfo } from '../env.js'
 import { parseBindings } from '../common/expression-parser.js'
 import { concatSourcemap, createLineSourcemap, mergeSourcemap, remapSourcemap } from './sourcemap.js'
@@ -1265,7 +1265,7 @@ function transAsses($, imageNodes, path, graphOwnerPath = path) {
 		if (!imgSrc.startsWith('{{')) {
 			if (!imgSrc.startsWith('http')
 				&& !imgSrc.startsWith('//')
-				&& /\.(?:png|jpe?g|gif|svg)(?:\?.*)?$/.test(imgSrc)) {
+				&& isCollectableImageAsset(imgSrc)) {
 				getDependencyGraph().addFile(
 					graphOwnerPath,
 					resolveAssetSourcePath(getWorkPath(), path, imgSrc),

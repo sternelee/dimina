@@ -4,6 +4,7 @@ import fs from '@ohos.file.fs';
 import { DMPLogger } from '../../EventTrack/DMPLogger';
 import { Tags } from '../../EventTrack/Tags';
 import { DMPApp } from '../../DApp/DMPApp';
+import image from '@ohos.multimedia.image';
 
 interface InterceptRequestEvent {
   request: WebResourceRequest;
@@ -35,11 +36,12 @@ export class RequestCallback {
     return null;
   }
 
-  private static isWebResourceRequest(url: string): boolean {
-    const path = RequestCallback.getUrlPath(url);
+  static isWebResourceRequest(url: string): boolean {
+    const path = RequestCallback.getUrlPath(url).toLowerCase();
     return path.endsWith('.js') || path.endsWith('.css') || path.endsWith('.html') || path.endsWith('.png') ||
     path.endsWith('.jpg') || path.endsWith('.ico') || path.endsWith('.jpeg') || path.endsWith('.webp') ||
-    path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.json');
+    path.endsWith('.gif') || path.endsWith('.svg') || path.endsWith('.heic') || path.endsWith('.heif') ||
+    path.endsWith('.json');
   }
 
   private static handleWebResourceRequest(url: string, app: DMPApp): WebResourceResponse | null {
@@ -49,8 +51,11 @@ export class RequestCallback {
       return null;
     }
     DMPLogger.d(Tags.WEB_COMPONENT, `${sandboxFilePath}`);
-    const response = RequestCallback.buildResponse(sandboxFilePath);
     const extension = RequestCallback.getFileExtension(sandboxFilePath);
+    if (RequestCallback.requiresHeifTranscode(extension)) {
+      return RequestCallback.buildHeifResponse(sandboxFilePath);
+    }
+    const response = RequestCallback.buildResponse(sandboxFilePath);
     RequestCallback.setResponseMimeType(response, extension);
     return response;
   }
@@ -60,9 +65,64 @@ export class RequestCallback {
     if (filePath == null || !RequestCallback.hasFile(filePath)) {
       return null;
     }
+    const extension = RequestCallback.getFileExtension(filePath);
+    if (RequestCallback.requiresHeifTranscode(extension)) {
+      return RequestCallback.buildHeifResponse(filePath);
+    }
     const response = RequestCallback.buildResponse(filePath);
-    response.setResponseMimeType('image/*');
+    response.setResponseMimeType(RequestCallback.mimeTypeForExtension(extension, 'image/*'));
     return response;
+  }
+
+  private static buildHeifResponse(filePath: string): WebResourceResponse {
+    const response = new WebResourceResponse();
+    response.setResponseCode(200);
+    response.setReasonMessage('OK');
+    response.setResponseMimeType('image/jpeg');
+    response.setResponseIsReady(false);
+
+    let imageSourceApi: image.ImageSource | undefined = undefined;
+    let imagePackerApi: image.ImagePacker | undefined = undefined;
+    try {
+      imageSourceApi = image.createImageSource(filePath);
+      imagePackerApi = image.createImagePacker();
+      const packOptions: image.PackingOption = { format: 'image/jpeg', quality: 100 };
+      imagePackerApi.packing(imageSourceApi, packOptions).then((data: ArrayBuffer) => {
+        response.setResponseData(data);
+        RequestCallback.releaseHeifResources(imageSourceApi, imagePackerApi);
+        response.setResponseIsReady(true);
+      }).catch((error: Error) => {
+        RequestCallback.releaseHeifResources(imageSourceApi, imagePackerApi);
+        RequestCallback.failHeifResponse(response, filePath, error.message);
+      });
+    } catch (error) {
+      RequestCallback.releaseHeifResources(imageSourceApi, imagePackerApi);
+      RequestCallback.failHeifResponse(response, filePath, (error as Error).message);
+    }
+
+    return response;
+  }
+
+  private static releaseHeifResources(imageSourceApi: image.ImageSource | undefined,
+    imagePackerApi: image.ImagePacker | undefined): void {
+    try {
+      imageSourceApi?.release();
+    } catch (error) {
+      DMPLogger.e(Tags.WEB_COMPONENT, `HEIF ImageSource释放失败: ${(error as Error).message}`);
+    }
+    try {
+      imagePackerApi?.release();
+    } catch (error) {
+      DMPLogger.e(Tags.WEB_COMPONENT, `HEIF ImagePacker释放失败: ${(error as Error).message}`);
+    }
+  }
+
+  private static failHeifResponse(response: WebResourceResponse, filePath: string, message: string): void {
+    DMPLogger.e(Tags.WEB_COMPONENT, `HEIF资源解码失败 path=${filePath}, error=${message}`);
+    response.setResponseData(new ArrayBuffer(0));
+    response.setResponseCode(500);
+    response.setReasonMessage('HEIF Decode Failed');
+    response.setResponseIsReady(true);
   }
 
   private static buildResponse(filePath: string): WebResourceResponse {
@@ -77,43 +137,48 @@ export class RequestCallback {
   }
 
   private static setResponseMimeType(response: WebResourceResponse, extension: string): void {
+    const mimeType = RequestCallback.mimeTypeForExtension(extension);
+    if (mimeType === 'application/octet-stream') {
+      DMPLogger.e(Tags.WEB_COMPONENT, `未适配(${extension}类型)资源加载`);
+    }
+    response.setResponseMimeType(mimeType);
+  }
+
+  static mimeTypeForExtension(extension: string, fallback: string = 'application/octet-stream'): string {
     switch (extension) {
       case 'html':
-        response.setResponseMimeType('text/html');
-        break;
+        return 'text/html';
       case 'js':
-        response.setResponseMimeType('text/javascript');
-        break;
+        return 'text/javascript';
       case 'css':
-        response.setResponseMimeType('text/css');
-        break;
+        return 'text/css';
       case 'json':
-        response.setResponseMimeType('application/json');
-        break;
+        return 'application/json';
       case 'png':
-        response.setResponseMimeType('image/png');
-        break;
+        return 'image/png';
       case 'jpg':
       case 'jpeg':
-        response.setResponseMimeType('image/jpeg');
-        break;
+        return 'image/jpeg';
       case 'webp':
-        response.setResponseMimeType('image/webp');
-        break;
+        return 'image/webp';
       case 'gif':
-        response.setResponseMimeType('image/gif');
-        break;
+        return 'image/gif';
       case 'svg':
-        response.setResponseMimeType('image/svg+xml');
-        break;
+        return 'image/svg+xml';
       case 'ico':
-        response.setResponseMimeType('image/x-icon');
-        break;
+        return 'image/x-icon';
+      case 'heic':
+        return 'image/heic';
+      case 'heif':
+        return 'image/heif';
       default:
-        DMPLogger.e(Tags.WEB_COMPONENT, `未适配(${extension}类型)资源加载`);
-        response.setResponseMimeType('application/octet-stream');
-        break;
+        return fallback;
     }
+  }
+
+  static requiresHeifTranscode(extension: string): boolean {
+    const normalizedExtension = extension.toLowerCase();
+    return normalizedExtension === 'heic' || normalizedExtension === 'heif';
   }
 
   private static getSandboxFilePath(url: string, app: DMPApp): string {

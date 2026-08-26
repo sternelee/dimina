@@ -41,15 +41,17 @@ class DifileURLSchemeHandler: NSObject, WKURLSchemeHandler {
         }
         
         do {
-            // Read file data
-            let data = try Data(contentsOf: URL(fileURLWithPath: path))
-            
-            let mimeType = mimeTypeForPath(path)
-            let response = URLResponse(url: url, mimeType: mimeType, expectedContentLength: data.count, textEncodingName: "UTF-8")
+            let payload = try DMPWebResourceLoader.load(path: path)
+            let response = URLResponse(
+                url: url,
+                mimeType: payload.mimeType,
+                expectedContentLength: payload.data.count,
+                textEncodingName: "UTF-8"
+            )
             
             // Return response and data
             urlSchemeTask.didReceive(response)
-            urlSchemeTask.didReceive(data)
+            urlSchemeTask.didReceive(payload.data)
             urlSchemeTask.didFinish()
             
             DMPLogger.debug("✅ Resource loaded successfully: \(url.absoluteString)")
@@ -64,29 +66,4 @@ class DifileURLSchemeHandler: NSObject, WKURLSchemeHandler {
         DMPLogger.debug("🛑 Stopping resource loading")
     }
     
-    // Get MIME type based on file path
-    private func mimeTypeForPath(_ path: String) -> String {
-        let pathExtension = URL(fileURLWithPath: path).pathExtension.lowercased()
-        
-        switch pathExtension {
-        case "html", "htm":
-            return "text/html"
-        case "css":
-            return "text/css"
-        case "js":
-            return "application/javascript"
-        case "jpg", "jpeg":
-            return "image/jpeg"
-        case "png":
-            return "image/png"
-        case "gif":
-            return "image/gif"
-        case "svg":
-            return "image/svg+xml"
-        case "json":
-            return "application/json"
-        default:
-            return "application/octet-stream"
-        }
-    }
 }

@@ -9,7 +9,7 @@ import less from 'less'
 import postcss from 'postcss'
 import selectorParser from 'postcss-selector-parser'
 import * as sass from 'sass'
-import { collectAssets, resolveAssetSourcePath, tagWhiteList, transformRpx } from '../common/utils.js'
+import { collectAssets, isCollectableImageAsset, resolveAssetSourcePath, tagWhiteList, transformRpx } from '../common/utils.js'
 import { getAppId, getComponent, getContentByPath, getDependencyGraph, getStyleExts, getTargetPath, getWorkPath, resetStoreInfo } from '../env.js'
 import { concatSourcemap, createLineSourcemap, remapSourcemap } from './sourcemap.js'
 
@@ -479,7 +479,7 @@ function normalizeCssUrlValue(value, absolutePath, graphOwnerPath) {
 			return fullMatch
 		}
 
-		if (graphOwnerPath && /\.(?:png|jpe?g|gif|svg)(?:\?.*)?$/.test(cleanedUrl)) {
+		if (graphOwnerPath && isCollectableImageAsset(cleanedUrl)) {
 			getDependencyGraph().addFile(
 				graphOwnerPath,
 				resolveAssetSourcePath(getWorkPath(), absolutePath, cleanedUrl),
