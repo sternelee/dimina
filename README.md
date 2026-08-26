@@ -72,7 +72,7 @@ DMCC 将小程序源码转换为逻辑、视图、样式和配置资源。进入
 
 ## 最快上手
 
-想先看看 Dimina 的运行效果，可以直接打开[在线演示](https://didi.github.io/dimina/)。要在本地跑起仓库自带的 Web 示例，请准备 Node.js 22+ 与 pnpm 7+：
+想先看看 Dimina 的运行效果，可以直接打开[在线演示](https://didi.github.io/dimina/)。要在本地跑起仓库自带的 Web 示例，请准备 Node.js 22.22.3+ 与 pnpm 7+：
 
 ```sh
 git clone https://github.com/didi/dimina.git

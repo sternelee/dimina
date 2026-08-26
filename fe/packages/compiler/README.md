@@ -8,7 +8,7 @@
 
 ### 安装
 
-运行环境要求 Node.js 20 或更高版本。
+运行环境要求 Node.js 22.22.3 或更高版本。编译器仅发布 ESM 产物。
 
 ```sh
 npm install @dimina/compiler -g

@@ -21,8 +21,8 @@ export default defineConfig({
 				'core/style-compiler': resolve(import.meta.dirname, 'src/core/style-compiler.js'),
 				'bin/index': resolve(import.meta.dirname, 'src/bin/index.js'),
 			},
-			formats: ['es', 'cjs'],
-			fileName: (format, entryName) => `${entryName}.${format === 'es' ? 'js' : 'cjs'}`,
+			formats: ['es'],
+			fileName: (_format, entryName) => `${entryName}.js`,
 		},
 		rollupOptions: {
 			external: [
@@ -56,7 +56,7 @@ export default defineConfig({
 		outDir: 'dist',
 		emptyOutDir: true,
 		sourcemap: false,
-		target: 'node20',
+		target: 'node22',
 		minify: false,
 	},
 })

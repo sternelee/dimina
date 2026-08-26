@@ -72,7 +72,7 @@ DMCC converts mini program source into logic, view, style, and configuration res
 
 ## Quick start
 
-To see Dimina in action, open the [live demo](https://didi.github.io/dimina/). To run the repository's Web examples locally, have Node.js 22+ and pnpm 7+ ready:
+To see Dimina in action, open the [live demo](https://didi.github.io/dimina/). To run the repository's Web examples locally, have Node.js 22.22.3+ and pnpm 7+ ready:
 
 ```sh
 git clone https://github.com/didi/dimina.git

@@ -1,7 +1,6 @@
 import type { JSCore } from './jscore.js'
 import type { MiniApp } from '../pages/miniApp/miniApp.js'
 import type { BridgeMessage, BridgeOptions } from '../types.js'
-import chalk from 'chalk'
 import { WebView } from '../pages/webview/webview.js'
 import { uuid } from '../utils/util.js'
 
@@ -118,7 +117,7 @@ export class Bridge {
 			return
 		}
 
-		console.log(chalk.green(`[container] receive msg from ${source}: `), msg)
+		console.log(`[container] receive msg from ${source}: `, msg)
 
 		const transMsg: BridgeMessage = {
 			type,
