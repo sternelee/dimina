@@ -28,6 +28,10 @@ object VersionUtils {
         StoreUtils.putInt("${KEY_JS_APP_VERSION}_$appId", version)
     }
 
+    fun removeAppVersion(appId: String) {
+        StoreUtils.remove("${KEY_JS_APP_VERSION}_$appId")
+    }
+
     /**
      * 检查当前应用是否已更新或是第一次安装
      * @return 如果是第一次安装或应用版本已更新，返回 true；否则返回 false

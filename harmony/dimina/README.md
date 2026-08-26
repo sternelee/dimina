@@ -117,6 +117,15 @@ this.app.launch(launchConfig)
 仍需按上述顺序调用 `startPackageLoader()` 和 `launch()`；SDK 会重新注册应用并完整重建临时运行态。
 如果宿主自行维护 appId 到实例的映射，不要在已有新实例运行时复用更早关闭的同 appId 实例。
 
+卸载已安装包时，默认保留小程序 Storage 和持久文件；第二个参数传 `true` 才会一并清除：
+
+```ts
+await DMPAppManager.sharedInstance().uninstallMiniProgram('appId')
+await DMPAppManager.sharedInstance().uninstallMiniProgram('appId', true)
+```
+
+并发更新、待更新包清理和各端完整行为见[小程序包更新说明](../../docs/MiniProgram-Update.md)。
+
 ### 调试模式与 vConsole
 
 当 `appConfig.isDebugMode = true`，或当前 HAP 为 debug 包时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。

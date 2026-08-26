@@ -7,6 +7,13 @@ import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.StoreUtils
 import com.didi.dimina.core.MiniApp
+import com.didi.dimina.core.RemoteUpdateManager
+import com.didi.dimina.ui.container.DiminaActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * Author: Doslin
@@ -77,6 +84,7 @@ class Dimina private constructor(context: Context) {
     fun getApiNamespaces(): List<String> = config.apiNamespaces
 
     private val appContext: Context = context
+    private val operationScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private lateinit var config: DiminaConfig
 
     init {
@@ -106,6 +114,42 @@ class Dimina private constructor(context: Context) {
     fun startMiniProgram(context: Activity, miniProgram: MiniProgram) {
         val miniApp = MiniApp.getInstance()
         miniApp.openApp(context, miniProgram)
+    }
+
+    /**
+     * Stops and uninstalls one mini program without clearing persistent user data by default.
+     * Bundled packages are restored from the host application the next time they are launched.
+     */
+    fun uninstallMiniProgram(
+        appId: String,
+        clearUserData: Boolean = false,
+        completion: (Result<Unit>) -> Unit = {},
+    ) {
+        val normalizedAppId = appId.trim()
+        try {
+            RemoteUpdateManager.beginUninstall(normalizedAppId)
+        } catch (error: Throwable) {
+            completion(Result.failure(error))
+            return
+        }
+
+        operationScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.Main.immediate) {
+                    DiminaActivity.closeForUninstall(normalizedAppId)
+                    MiniApp.getInstance().clear(normalizedAppId)
+                }
+                RemoteUpdateManager.uninstallPackage(
+                    context = appContext,
+                    appId = normalizedAppId,
+                    clearUserData = clearUserData,
+                )
+            }
+            RemoteUpdateManager.endUninstall(normalizedAppId)
+            withContext(Dispatchers.Main.immediate) {
+                completion(result)
+            }
+        }
     }
 
     /**

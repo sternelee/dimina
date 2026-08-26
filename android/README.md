@@ -121,6 +121,15 @@ val miniProgram = MiniProgram(
 Dimina.getInstance().startMiniProgram(context, miniProgram)
 ```
 
+卸载已安装包时，默认保留小程序 Storage 和持久文件；传入 `clearUserData = true` 才会一并清除：
+
+```kotlin
+Dimina.getInstance().uninstallMiniProgram("wx92269e3b2f304afc")
+Dimina.getInstance().uninstallMiniProgram("wx92269e3b2f304afc", clearUserData = true)
+```
+
+并发更新、待更新包清理和各端完整行为见[小程序包更新说明](../docs/MiniProgram-Update.md)。
+
 ## 模块说明
 
 - **dimina**: 核心库，包含小程序运行环境、UI 组件和生命周期管理

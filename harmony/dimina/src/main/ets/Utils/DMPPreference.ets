@@ -30,6 +30,12 @@ export class DMPPreference {
     return await this.preference!.get(key, defaultValue) as T;
   }
 
+  public async remove(key: string): Promise<void> {
+    await this.checkPreferenceInit();
+    this.preference!.deleteSync(key);
+    await this.preference!.flush();
+  }
+
   private async checkPreferenceInit() {
     if (this.preference == null) {
       this.preference = await dataPreferences.getPreferences(DMPContextUtils.getUIAbilityContext(), "dimina_preference");

@@ -13,16 +13,24 @@ class DMPResourceManager {
 
     public static func prepareApp(appId: String) {
         let bundlePath = DMPSandboxManager.appBundlePath(appId)
-        let bundle = DMPResourceManager.jsappBundle
+        guard let resourcePath = DMPResourceManager.jsappBundle?.resourcePath else {
+            DMPLogger.debug("无法获取JSApp Bundle资源路径")
+            return
+        }
+        let sourcePath = (resourcePath as NSString).appendingPathComponent(appId)
+        let sourceConfigPath = (sourcePath as NSString).appendingPathComponent("config.json")
+        guard FileManager.default.fileExists(atPath: sourceConfigPath) else {
+            DMPLogger.debug("JSApp Bundle中不存在应用: \(appId)")
+            return
+        }
 
         if FileManager.default.fileExists(atPath: bundlePath) {
             let config = DMPFileUtil.loadJSONFromFile(
                 filePath: DMPSandboxManager.appBundleConfigPath(appId: appId))
             let versionCodeOld = config?["versionCode"] as? Int ?? 0
 
-            let resourcePath = (bundle?.resourcePath)!
             let configBundle = DMPFileUtil.loadJSONFromFile(
-                filePath: resourcePath + "/\(appId)/config.json")
+                filePath: sourceConfigPath)
             let versionCodeNew = configBundle?["versionCode"] as? Int ?? 0
 
             if versionCodeOld >= versionCodeNew {
@@ -31,36 +39,41 @@ class DMPResourceManager {
             }
         }
 
-        // 确保目标目录存在
-        if DMPFileUtil.createDirectory(at: bundlePath) {
-            if let resourcePath = bundle?.resourcePath {
-                if DMPFileUtil.copyContents(
-                    from: (resourcePath as NSString).appendingPathComponent(appId),
-                    to: bundlePath,
-                    excludeItems: ["\(appId).zip"]
-                ) {
-                    DMPLogger.debug("成功复制JSApp资源到沙盒路径: \(bundlePath)")
-                } else {
-                    DMPLogger.debug("复制JSApp资源失败")
-                }
+        let artifactRoot = (DMPSandboxManager.sandboxPath() as NSString)
+            .appendingPathComponent(".bundled/\(appId)")
+        let stagingPath = (artifactRoot as NSString)
+            .appendingPathComponent("staging-\(UUID().uuidString)")
+        let backupPath = (artifactRoot as NSString)
+            .appendingPathComponent("backup-\(UUID().uuidString)")
+        defer { DMPFileUtil.removeItem(at: artifactRoot) }
 
-                // 再检查是否存在对应应用的zip文件并解压
-                let appResourcePath = (resourcePath as NSString).appendingPathComponent(appId)
-                let appZipPath = (appResourcePath as NSString).appendingPathComponent(
-                    "\(appId).zip")
-                if FileManager.default.fileExists(atPath: appZipPath) {
-                    // 解压应用zip到目标路径
-                    if DMPFileUtil.unzipFile(at: appZipPath, to: bundlePath) {
-                        DMPLogger.debug("成功解压\(appId).zip到沙盒路径: \(bundlePath)")
-                    } else {
-                        DMPLogger.debug("解压\(appId).zip失败")
-                    }
-                }
-            } else {
-                DMPLogger.debug("无法获取JSApp Bundle资源路径")
-            }
-        } else {
-            DMPLogger.debug("创建目标目录失败: \(bundlePath)")
+        guard DMPFileUtil.copyContents(
+            from: sourcePath,
+            to: stagingPath,
+            excludeItems: ["\(appId).zip"]
+        ) else {
+            DMPLogger.debug("复制JSApp资源失败")
+            return
+        }
+
+        let appZipPath = (sourcePath as NSString).appendingPathComponent("\(appId).zip")
+        if FileManager.default.fileExists(atPath: appZipPath),
+           !DMPFileUtil.unzipFile(at: appZipPath, to: stagingPath, overwrite: false) {
+            DMPLogger.debug("解压\(appId).zip失败")
+            return
+        }
+
+        do {
+            try DMPFileUtil.replaceDirectory(
+                from: stagingPath,
+                to: bundlePath,
+                backupPath: backupPath,
+                preserving: ["store", "resources/store"]
+            )
+            DMPSandboxManager.initBundleDirectoryForApp(appId: appId)
+            DMPLogger.debug("成功安装JSApp资源到沙盒路径: \(bundlePath)")
+        } catch {
+            DMPLogger.debug("安装JSApp资源失败: \(error)")
         }
     }
 

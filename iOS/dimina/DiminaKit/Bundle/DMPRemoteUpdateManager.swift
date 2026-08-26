@@ -8,35 +8,88 @@
 import CommonCrypto
 import Foundation
 
+private actor DMPAsyncLock {
+    private var locked = false
+    private var waiters: [CheckedContinuation<Void, Never>] = []
+
+    func withLock<T>(_ operation: () async throws -> T) async rethrows -> T {
+        await acquire()
+        do {
+            let result = try await operation()
+            release()
+            return result
+        } catch {
+            release()
+            throw error
+        }
+    }
+
+    private func acquire() async {
+        if !locked {
+            locked = true
+            return
+        }
+        await withCheckedContinuation { continuation in
+            waiters.append(continuation)
+        }
+    }
+
+    private func release() {
+        if waiters.isEmpty {
+            locked = false
+        } else {
+            waiters.removeFirst().resume()
+        }
+    }
+}
+
 final class DMPRemoteUpdateManager {
     static let shared = DMPRemoteUpdateManager()
+
+    private let stateLock = NSLock()
+    private var appLocks: [String: DMPAsyncLock] = [:]
+    private var operationGenerations: [String: Int] = [:]
+    private var uninstallingApps: Set<String> = []
 
     private init() {}
 
     /// Ensures a runnable package exists before the service and render runtimes
     /// are initialized. Returns true when this call performed the first install.
     func installInitialPackageIfNeeded(appId: String, manifestUrl: String?) async throws -> Bool {
-        if isPackageReady(appId: appId) {
-            return false
+        try validateAppId(appId)
+        let token = operationToken(for: appId)
+        return try await appLock(for: appId).withLock {
+            try self.ensureOperationActive(appId: appId, token: token)
+            if self.isPackageReady(appId: appId) {
+                return false
+            }
+
+            let trimmedUrl = manifestUrl?
+                .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            guard !trimmedUrl.isEmpty else {
+                throw RemoteUpdateError.install(
+                    "mini program \(appId) has no local package or updateManifestUrl"
+                )
+            }
+
+            let manifest = try await self.fetchManifest(manifestUrl: trimmedUrl)
+            try self.ensureOperationActive(appId: appId, token: token)
+            try self.validateManifestAppId(manifest, expectedAppId: appId)
+
+            let zipPath = try await self.downloadPackage(manifest: manifest)
+            do {
+                try self.ensureOperationActive(appId: appId, token: token)
+                try self.installActivePackage(manifest: manifest, zipPath: zipPath)
+            } catch {
+                DMPFileUtil.removeItem(at: zipPath)
+                throw error
+            }
+            return true
         }
-
-        let trimmedUrl = manifestUrl?
-            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        guard !trimmedUrl.isEmpty else {
-            throw RemoteUpdateError.install(
-                "mini program \(appId) has no local package or updateManifestUrl"
-            )
-        }
-
-        let manifest = try await fetchManifest(manifestUrl: trimmedUrl)
-        try validateManifestAppId(manifest, expectedAppId: appId)
-
-        let zipPath = try await downloadPackage(manifest: manifest)
-        try installPackage(manifest: manifest, zipPath: zipPath)
-        return true
     }
 
-    func checkForUpdate(app: DMPApp, manifestUrl: String) async {
+    func checkForUpdate(app: DMPApp, manifestUrl: String, operationToken token: Int) async {
+        let appId = app.getAppId()
         let trimmedUrl = manifestUrl.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedUrl.isEmpty else {
             await app.notifyUpdateStatus(event: "noupdate")
@@ -45,24 +98,100 @@ final class DMPRemoteUpdateManager {
 
         var updateAnnounced = false
         do {
-            let manifest = try await fetchManifest(manifestUrl: trimmedUrl)
-            try validateManifestAppId(manifest, expectedAppId: app.getAppId())
+            try validateAppId(appId)
+            try await appLock(for: appId).withLock {
+                try self.ensureOperationActive(appId: appId, token: token)
+                let manifest = try await self.fetchManifest(manifestUrl: trimmedUrl)
+                try self.ensureOperationActive(appId: appId, token: token)
+                try self.validateManifestAppId(manifest, expectedAppId: appId)
 
-            let currentVersion = currentVersionCode(appId: app.getAppId())
-            guard manifest.versionCode > currentVersion else {
-                await app.notifyUpdateStatus(event: "noupdate")
-                return
+                let currentVersion = self.currentVersionCode(appId: appId)
+                guard manifest.versionCode > currentVersion else {
+                    self.deletePendingPackage(appId: appId)
+                    await app.notifyUpdateStatus(event: "noupdate")
+                    return
+                }
+
+                updateAnnounced = true
+                await app.notifyUpdateStatus(event: "updating")
+
+                if let pendingVersion = try self.pendingVersionCode(appId: appId),
+                   pendingVersion >= manifest.versionCode {
+                    await app.notifyUpdateStatus(event: "updateready")
+                    return
+                }
+
+                let zipPath = try await self.downloadPackage(manifest: manifest)
+                do {
+                    try self.ensureOperationActive(appId: appId, token: token)
+                    try self.installPendingPackage(manifest: manifest, zipPath: zipPath)
+                } catch {
+                    DMPFileUtil.removeItem(at: zipPath)
+                    throw error
+                }
+                await app.notifyUpdateStatus(event: "updateready")
             }
-
-            updateAnnounced = true
-            await app.notifyUpdateStatus(event: "updating")
-
-            let zipPath = try await downloadPackage(manifest: manifest)
-            try installPackage(manifest: manifest, zipPath: zipPath)
-            await app.notifyUpdateStatus(event: "updateready")
+        } catch RemoteUpdateError.cancelled {
+            return
         } catch {
             DMPLogger.debug("Remote update failed: \(error)")
             await app.notifyUpdateStatus(event: updateAnnounced ? "updatefail" : "noupdate")
+        }
+    }
+
+    func activatePendingUpdate(appId: String) async throws -> Bool {
+        try validateAppId(appId)
+        let token = operationToken(for: appId)
+        return try await appLock(for: appId).withLock {
+            try self.ensureOperationActive(appId: appId, token: token)
+            guard let pendingVersion = try self.pendingVersionCode(appId: appId) else {
+                return false
+            }
+            guard pendingVersion > self.currentVersionCode(appId: appId) else {
+                self.deletePendingPackage(appId: appId)
+                return false
+            }
+            try self.replaceActivePackage(
+                sourcePath: self.pendingPath(appId: appId),
+                appId: appId
+            )
+            return true
+        }
+    }
+
+    func operationToken(for appId: String) -> Int {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        return operationGenerations[appId, default: 0]
+    }
+
+    func beginUninstall(appId: String) throws {
+        try validateAppId(appId)
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        guard !uninstallingApps.contains(appId) else {
+            throw RemoteUpdateError.install("mini program \(appId) is already being uninstalled")
+        }
+        uninstallingApps.insert(appId)
+        operationGenerations[appId, default: 0] += 1
+    }
+
+    func endUninstall(appId: String) {
+        stateLock.lock()
+        uninstallingApps.remove(appId)
+        stateLock.unlock()
+    }
+
+    func uninstallPackage(appId: String, clearUserData: Bool) async throws {
+        try await appLock(for: appId).withLock {
+            try self.validateAppId(appId)
+            try self.removeInstalledPackage(appId: appId, clearUserData: clearUserData)
+            self.deletePendingPackage(appId: appId)
+            try self.removeArtifactDirectory(rootName: ".remote", appId: appId)
+            try self.removeArtifactDirectory(rootName: ".backup", appId: appId)
+            let downloadPath = (NSTemporaryDirectory() as NSString)
+                .appendingPathComponent("dimina-updates/\(appId)")
+            DMPFileUtil.removeItem(at: downloadPath)
         }
     }
 
@@ -117,7 +246,12 @@ final class DMPRemoteUpdateManager {
         }
 
         let targetPath = (NSTemporaryDirectory() as NSString)
-            .appendingPathComponent("\(manifest.appId)-\(manifest.versionCode).zip")
+            .appendingPathComponent("dimina-updates/\(manifest.appId)/\(manifest.versionCode).zip")
+        try FileManager.default.createDirectory(
+            atPath: (targetPath as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
         if FileManager.default.fileExists(atPath: targetPath) {
             try FileManager.default.removeItem(atPath: targetPath)
         }
@@ -125,16 +259,31 @@ final class DMPRemoteUpdateManager {
         return targetPath
     }
 
-    private func installPackage(manifest: RemoteUpdateManifest, zipPath: String) throws {
+    private func installActivePackage(manifest: RemoteUpdateManifest, zipPath: String) throws {
+        let stagingPath = try preparePackage(manifest: manifest, zipPath: zipPath)
+        defer { DMPFileUtil.removeItem(at: stagingPath) }
+        try replaceActivePackage(sourcePath: stagingPath, appId: manifest.appId)
+    }
+
+    private func installPendingPackage(manifest: RemoteUpdateManifest, zipPath: String) throws {
+        let stagingPath = try preparePackage(manifest: manifest, zipPath: zipPath)
+        let pendingPath = pendingPath(appId: manifest.appId)
+        defer { DMPFileUtil.removeItem(at: stagingPath) }
+        DMPFileUtil.removeItem(at: pendingPath)
+        try FileManager.default.createDirectory(
+            atPath: (pendingPath as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        try FileManager.default.moveItem(atPath: stagingPath, toPath: pendingPath)
+    }
+
+    private func preparePackage(manifest: RemoteUpdateManifest, zipPath: String) throws -> String {
         let sandboxPath = DMPSandboxManager.sandboxPath()
         let stagingPath = (sandboxPath as NSString)
-            .appendingPathComponent(".remote/\(manifest.appId)-\(manifest.versionCode)")
-        let targetPath = DMPSandboxManager.appBundlePath(manifest.appId)
-        let backupPath = (sandboxPath as NSString)
-            .appendingPathComponent(".backup/\(manifest.appId)-\(Int(Date().timeIntervalSince1970 * 1000))")
+            .appendingPathComponent(".remote/\(manifest.appId)/\(manifest.versionCode)-\(UUID().uuidString)")
 
         defer {
-            DMPFileUtil.removeItem(at: stagingPath)
             DMPFileUtil.removeItem(at: zipPath)
         }
 
@@ -148,27 +297,21 @@ final class DMPRemoteUpdateManager {
 
         try writeConfig(manifest: manifest, to: (stagingPath as NSString).appendingPathComponent("config.json"))
         try validatePackage(at: stagingPath)
+        return stagingPath
+    }
 
-        try FileManager.default.createDirectory(
-            atPath: (backupPath as NSString).deletingLastPathComponent,
-            withIntermediateDirectories: true,
-            attributes: nil
+    private func replaceActivePackage(sourcePath: String, appId: String) throws {
+        let sandboxPath = DMPSandboxManager.sandboxPath()
+        let targetPath = DMPSandboxManager.appBundlePath(appId)
+        let backupPath = (sandboxPath as NSString)
+            .appendingPathComponent(".backup/\(appId)/\(Int(Date().timeIntervalSince1970 * 1000))")
+        try DMPFileUtil.replaceDirectory(
+            from: sourcePath,
+            to: targetPath,
+            backupPath: backupPath,
+            preserving: ["store", "resources/store"]
         )
-
-        do {
-            if FileManager.default.fileExists(atPath: targetPath) {
-                try FileManager.default.moveItem(atPath: targetPath, toPath: backupPath)
-            }
-            try FileManager.default.moveItem(atPath: stagingPath, toPath: targetPath)
-            DMPFileUtil.removeItem(at: backupPath)
-            DMPSandboxManager.initBundleDirectoryForApp(appId: manifest.appId)
-        } catch {
-            if !FileManager.default.fileExists(atPath: targetPath),
-               FileManager.default.fileExists(atPath: backupPath) {
-                try? FileManager.default.moveItem(atPath: backupPath, toPath: targetPath)
-            }
-            throw error
-        }
+        DMPSandboxManager.initBundleDirectoryForApp(appId: appId)
     }
 
     private func writeConfig(manifest: RemoteUpdateManifest, to path: String) throws {
@@ -235,9 +378,106 @@ final class DMPRemoteUpdateManager {
         }
     }
 
+    private func pendingPath(appId: String) -> String {
+        return (DMPSandboxManager.sandboxPath() as NSString)
+            .appendingPathComponent(".pending/\(appId)")
+    }
+
+    private func pendingVersionCode(appId: String) throws -> Int? {
+        let path = pendingPath(appId: appId)
+        guard FileManager.default.fileExists(atPath: path) else { return nil }
+        do {
+            try validatePackage(at: path)
+            let configPath = (path as NSString).appendingPathComponent("config.json")
+            let config = DMPFileUtil.loadJSONFromFile(filePath: configPath)
+            guard config?["appId"] as? String == appId,
+                  let versionCode = config?["versionCode"] as? Int else {
+                throw RemoteUpdateError.install("invalid pending package config")
+            }
+            return versionCode
+        } catch {
+            DMPFileUtil.removeItem(at: path)
+            throw error
+        }
+    }
+
+    private func deletePendingPackage(appId: String) {
+        DMPFileUtil.removeItem(at: pendingPath(appId: appId))
+    }
+
+    private func removeInstalledPackage(appId: String, clearUserData: Bool) throws {
+        let appPath = DMPSandboxManager.appBundlePath(appId)
+        guard FileManager.default.fileExists(atPath: appPath) else { return }
+        if clearUserData {
+            try FileManager.default.removeItem(atPath: appPath)
+            return
+        }
+
+        let persistentPaths: Set<String> = ["store", "resources"]
+        for item in try FileManager.default.contentsOfDirectory(atPath: appPath) {
+            let path = (appPath as NSString).appendingPathComponent(item)
+            if !persistentPaths.contains(item) {
+                try FileManager.default.removeItem(atPath: path)
+            }
+        }
+
+        let resourcesPath = (appPath as NSString).appendingPathComponent("resources")
+        if FileManager.default.fileExists(atPath: resourcesPath) {
+            for item in try FileManager.default.contentsOfDirectory(atPath: resourcesPath) where item != "store" {
+                try FileManager.default.removeItem(
+                    atPath: (resourcesPath as NSString).appendingPathComponent(item)
+                )
+            }
+        }
+    }
+
+    private func removeArtifactDirectory(rootName: String, appId: String) throws {
+        let root = (DMPSandboxManager.sandboxPath() as NSString).appendingPathComponent(rootName)
+        let rootURL = URL(fileURLWithPath: root, isDirectory: true).standardizedFileURL
+        let appURL = rootURL.appendingPathComponent(appId, isDirectory: true).standardizedFileURL
+        guard appURL.deletingLastPathComponent() == rootURL else {
+            throw RemoteUpdateError.install("invalid appId")
+        }
+        DMPFileUtil.removeItem(at: appURL.path)
+    }
+
     private func currentVersionCode(appId: String) -> Int {
         let config = DMPFileUtil.loadJSONFromFile(filePath: DMPSandboxManager.appBundleConfigPath(appId: appId))
         return config?["versionCode"] as? Int ?? 0
+    }
+
+    private func appLock(for appId: String) -> DMPAsyncLock {
+        stateLock.lock()
+        defer { stateLock.unlock() }
+        if let lock = appLocks[appId] {
+            return lock
+        }
+        let lock = DMPAsyncLock()
+        appLocks[appId] = lock
+        return lock
+    }
+
+    private func ensureOperationActive(appId: String, token: Int) throws {
+        stateLock.lock()
+        let active = !uninstallingApps.contains(appId)
+            && operationGenerations[appId, default: 0] == token
+        stateLock.unlock()
+        if !active {
+            throw RemoteUpdateError.cancelled
+        }
+    }
+
+    private func validateAppId(_ appId: String) throws {
+        let reservedAppIds: Set<String> = ["sdk", ".remote", ".backup", ".pending"]
+        guard !appId.isEmpty,
+              appId != ".",
+              appId != "..",
+              !appId.contains("/"),
+              !appId.contains("\\"),
+              !appId.contains("\0"),
+              !reservedAppIds.contains(appId) else {
+            throw RemoteUpdateError.install("invalid appId")
+        }
     }
 
     private func verifySha256(filePath: String, expectedSha256: String) throws {
@@ -294,5 +534,6 @@ final class DMPRemoteUpdateManager {
         case invalidManifest(String)
         case network(String)
         case install(String)
+        case cancelled
     }
 }

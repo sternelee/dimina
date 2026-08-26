@@ -1,5 +1,6 @@
 
 import { MMKV } from '@tencent/mmkv'
+import fs from '@ohos.file.fs';
 import { DMPMap } from '../../Utils/DMPMap';
 import { DMPFileManager } from './DMPFileManager';
 
@@ -18,6 +19,21 @@ export class DMPMMKVManager {
       DMPMMKVManager.instances.set(namespace, instance);
     }
     return instance;
+  }
+
+  static clearStorage(appId: string): void {
+    const namespace = encodeURIComponent(appId.trim() || 'default');
+    const instance = DMPMMKVManager.instances.get(namespace);
+    instance?.mmkv.clearAll();
+    instance?.mmkv.close();
+    DMPMMKVManager.instances.delete(namespace);
+
+    const fileManager = DMPFileManager.sharedInstance();
+    MMKV.removeStorage(`dimina_mmkv_${namespace}`, `${fileManager.sandboxPath}/mmkv`);
+    const backupPath = `${fileManager.sandboxPath}/mmkv_backup/${namespace}`;
+    if (fs.accessSync(backupPath)) {
+      fs.rmdirSync(backupPath);
+    }
   }
 
   private constructor(namespace: string) {

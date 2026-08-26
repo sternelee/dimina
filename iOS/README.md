@@ -107,6 +107,16 @@ struct ContentView: View {
 }
 ```
 
+卸载已安装包时，默认保留小程序 Storage 和持久文件；传入 `clearUserData: true` 才会一并清除：
+
+```swift
+try await DMPAppManager.sharedInstance().uninstallMiniProgram(
+    appId: "wx92269e3b2f304afc"
+)
+```
+
+并发更新、待更新包清理和各端完整行为见[小程序包更新说明](../docs/MiniProgram-Update.md)。
+
 #### 调试模式与 vConsole
 
 iOS Debug 构建会自动尝试启用 vConsole；也可以通过 `appConfig.isDebugMode = true` 在指定小程序上启用。启用后，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。

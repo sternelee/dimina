@@ -2399,5 +2399,12 @@ class DiminaActivity : ComponentActivity() {
             }
             context.startActivity(intent)
         }
+
+        internal fun closeForUninstall(appId: String) {
+            activityRegistry.closeAll(appId) { activity ->
+                activity.prepareForColdRestart()
+                activity.finish()
+            }
+        }
     }
 }

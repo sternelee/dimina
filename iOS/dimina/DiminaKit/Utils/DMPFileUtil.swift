@@ -88,6 +88,56 @@ public class DMPFileUtil {
         }
     }
 
+    static func replaceDirectory(
+        from sourcePath: String,
+        to destinationPath: String,
+        backupPath: String,
+        preserving relativePaths: [String]
+    ) throws {
+        let fileManager = FileManager.default
+        try fileManager.createDirectory(
+            atPath: (backupPath as NSString).deletingLastPathComponent,
+            withIntermediateDirectories: true,
+            attributes: nil
+        )
+        if fileManager.fileExists(atPath: backupPath) {
+            try fileManager.removeItem(atPath: backupPath)
+        }
+
+        do {
+            if fileManager.fileExists(atPath: destinationPath) {
+                try fileManager.moveItem(atPath: destinationPath, toPath: backupPath)
+            }
+            try fileManager.moveItem(atPath: sourcePath, toPath: destinationPath)
+
+            if fileManager.fileExists(atPath: backupPath) {
+                for relativePath in relativePaths {
+                    let oldPath = (backupPath as NSString).appendingPathComponent(relativePath)
+                    guard fileManager.fileExists(atPath: oldPath) else { continue }
+                    let newPath = (destinationPath as NSString).appendingPathComponent(relativePath)
+                    if fileManager.fileExists(atPath: newPath) {
+                        try fileManager.removeItem(atPath: newPath)
+                    }
+                    try fileManager.createDirectory(
+                        atPath: (newPath as NSString).deletingLastPathComponent,
+                        withIntermediateDirectories: true,
+                        attributes: nil
+                    )
+                    try fileManager.copyItem(atPath: oldPath, toPath: newPath)
+                }
+                try fileManager.removeItem(atPath: backupPath)
+            }
+        } catch {
+            if fileManager.fileExists(atPath: destinationPath) {
+                try? fileManager.removeItem(atPath: destinationPath)
+            }
+            if fileManager.fileExists(atPath: backupPath) {
+                try? fileManager.moveItem(atPath: backupPath, toPath: destinationPath)
+            }
+            throw error
+        }
+    }
+
     @discardableResult
     public static func removeItem(at path: String) -> Bool {
         do {

@@ -149,8 +149,15 @@ export class DMPContainerBridgesModuleNavigator extends DMPContainerBridgesModul
 
   applyUpdate(data: DMPMap, callback: DMPBridgeCallback) {
     const app: DMPApp = this.app!
-    app.updateApp()
-    this.invokeSuccessCallback(callback, null)
+    app.updateApp().then((updated: boolean): void => {
+      if (updated) {
+        this.invokeSuccessCallback(callback, null)
+      } else {
+        this.invokeFailureCallback(callback, null, 'applyUpdate:fail no pending update')
+      }
+    }).catch((error: Error): void => {
+      this.invokeFailureCallback(callback, null, `applyUpdate:fail ${error.message}`)
+    })
   }
 
   private async exeJsLogicScript(packageName: string) {

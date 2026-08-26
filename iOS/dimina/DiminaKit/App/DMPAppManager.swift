@@ -168,6 +168,38 @@ public class DMPAppManager {
         }
     }
 
+    /// Stops a running mini program and removes its installed package. Persistent
+    /// Storage/FileSystem data is retained unless `clearUserData` is true.
+    @MainActor
+    public func uninstallMiniProgram(
+        appId rawAppId: String,
+        clearUserData: Bool = false
+    ) async throws {
+        let appId = rawAppId.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !appId.isEmpty else {
+            throw DMPMiniProgramNavigationError.invalidAppId
+        }
+
+        try DMPRemoteUpdateManager.shared.beginUninstall(appId: appId)
+        defer { DMPRemoteUpdateManager.shared.endUninstall(appId: appId) }
+
+        try await withMiniProgramOperation {
+            if let app = existApp(appId: appId) {
+                await closeMiniProgram(app)
+                app.destroy()
+            }
+            FileAPI.clearOpenFiles(appId: appId)
+            if clearUserData {
+                DMPStorage.storage(for: appId).clearAllStorage()
+            }
+            DMPStorage.teardownModule(appId: appId)
+            try await DMPRemoteUpdateManager.shared.uninstallPackage(
+                appId: appId,
+                clearUserData: clearUserData
+            )
+        }
+    }
+
     @discardableResult
     private func removeOpenerContext(for targetAppIndex: Int) -> MiniProgramOpenerContext? {
         return withStateLock {

@@ -150,7 +150,17 @@ export class DMPFileManager {
   //保留3个版本
   async clearJSAppHistoryBundle(bundleLoadInfo: DMPBundleLoadInfo) {
     let dir = this.getJSAppDir(bundleLoadInfo.appId);
-    await DMPVersionUtil.clearHistory(bundleLoadInfo.cacheJSAppBundleConfig?.versionCode.toString() ?? '', dir);
+    const protectedVersions: string[] = [];
+    const pendingConfig = this.readFileToJson(`${dir}/.pending/config.json`);
+    const pendingVersion = pendingConfig?.getNumber('versionCode');
+    if (pendingVersion !== undefined) {
+      protectedVersions.push(pendingVersion.toString());
+    }
+    await DMPVersionUtil.clearHistory(
+      bundleLoadInfo.cacheJSAppBundleConfig?.versionCode.toString() ?? '',
+      dir,
+      protectedVersions
+    );
   }
 
   //保留3个版本

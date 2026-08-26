@@ -131,12 +131,14 @@ class MiniApp private constructor() {
         if (!updateCheckRegistry.begin(miniProgram.appId)) {
             return
         }
+        val operationToken = RemoteUpdateManager.operationToken(miniProgram.appId)
 
         CoroutineScope(Dispatchers.IO).launch {
             RemoteUpdateManager.checkForUpdate(
                 context = context.applicationContext,
                 miniProgram = miniProgram,
                 notify = { event -> postUpdateStatus(miniProgram.appId, event) },
+                operationToken = operationToken,
             )
         }
     }

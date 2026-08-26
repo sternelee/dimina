@@ -5,17 +5,20 @@ import { Tags } from '../EventTrack/Tags';
 
 export class DMPVersionUtil {
   //保留3个版本
-  static async clearHistory(cacheVersion: string, dir: string) {
+  static async clearHistory(cacheVersion: string, dir: string, protectedVersions: string[] = []) {
     try {
       let listFile = await fs.listFile(dir);
       if (listFile != null) {
-        let filterList = listFile.filter((value) => (value !== 'config.json'))
+        // Only numeric version directories participate in retention. Metadata
+        // directories such as .pending and resource must never be deleted here.
+        let filterList = listFile.filter((value) => /^\d+$/.test(value))
         filterList.sort((a, b) => DMPVersionUtil.compareVersion(b, a))
         if (filterList.length > 3) {
           for (let i = 3; i < filterList.length; i++) {
             try {
-              //重复发同一个版本时，避免删除下次启动的版本
-              if (cacheVersion !== filterList[i]) {
+              // Keep the active and pending versions even when an older
+              // leftover version happens to sort outside the newest three.
+              if (cacheVersion !== filterList[i] && protectedVersions.indexOf(filterList[i]) < 0) {
                 await fs.rmdir(dir + '/' + filterList[i]);
               }
             } catch (e) {

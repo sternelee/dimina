@@ -40,9 +40,18 @@ interface DMPRemoteManifestConfig {
   versionName: string;
 }
 
+class DMPUpdateCancelledError extends Error {
+  constructor() {
+    super('update operation cancelled');
+  }
+}
+
 export class DMPRemoteUpdateManager {
   private static instance: DMPRemoteUpdateManager;
   private fileManager: DMPFileManager = DMPFileManager.sharedInstance();
+  private operationTails: Map<string, Promise<void>> = new Map();
+  private operationGenerations: Map<string, number> = new Map();
+  private uninstallingApps: Set<string> = new Set();
 
   public static sharedInstance(): DMPRemoteUpdateManager {
     if (!DMPRemoteUpdateManager.instance) {
@@ -56,26 +65,38 @@ export class DMPRemoteUpdateManager {
    * package exists. Normal updates still use checkForUpdate after launch.
    */
   async installInitialPackageIfNeeded(app: DMPApp): Promise<boolean> {
-    if (this.isPackageReady(app.appConfig.appId)) {
-      return false;
-    }
+    const appId = app.appConfig.appId;
+    this.validateAppId(appId);
+    const token = this.operationToken(appId);
+    return this.withAppLock(appId, async (): Promise<boolean> => {
+      this.ensureOperationActive(appId, token);
+      if (this.isPackageReady(appId)) {
+        return false;
+      }
 
-    const manifestUrl = app.appConfig.updateManifestUrl?.trim() ?? '';
-    if (!manifestUrl) {
-      throw new Error(
-        `mini program ${app.appConfig.appId} has no local package or updateManifestUrl`
-      );
-    }
+      const manifestUrl = app.appConfig.updateManifestUrl?.trim() ?? '';
+      if (!manifestUrl) {
+        throw new Error(`mini program ${appId} has no local package or updateManifestUrl`);
+      }
 
-    const manifest = await this.fetchManifest(manifestUrl);
-    this.validateManifestAppId(manifest, app.appConfig.appId);
+      const manifest = await this.fetchManifest(manifestUrl);
+      this.ensureOperationActive(appId, token);
+      this.validateManifestAppId(manifest, appId);
 
-    const zipPath = await this.downloadPackage(manifest);
-    await this.installPackage(manifest, zipPath);
-    return true;
+      const zipPath = await this.downloadPackage(manifest);
+      try {
+        this.ensureOperationActive(appId, token);
+        await this.installPackage(manifest, zipPath, true);
+      } catch (error) {
+        this.removeFileIfExists(zipPath);
+        throw error as Error;
+      }
+      return true;
+    });
   }
 
-  async checkForUpdate(app: DMPApp): Promise<void> {
+  async checkForUpdate(app: DMPApp, operationToken: number): Promise<void> {
+    const appId = app.appConfig.appId;
     const manifestUrl = app.appConfig.updateManifestUrl?.trim() ?? '';
     if (!manifestUrl) {
       app.notifyUpdateManagerStatus('noupdate');
@@ -84,25 +105,106 @@ export class DMPRemoteUpdateManager {
 
     let updateAnnounced = false;
     try {
-      const manifest = await this.fetchManifest(manifestUrl);
-      this.validateManifestAppId(manifest, app.appConfig.appId);
+      this.validateAppId(appId);
+      await this.withAppLock(appId, async (): Promise<void> => {
+        this.ensureOperationActive(appId, operationToken);
+        const manifest = await this.fetchManifest(manifestUrl);
+        this.ensureOperationActive(appId, operationToken);
+        this.validateManifestAppId(manifest, appId);
 
-      const currentVersion = app.bundleManager.getBundleInfo().currentJsAppBundleConfig?.versionCode ?? 0;
-      if (manifest.versionCode <= currentVersion) {
-        app.notifyUpdateManagerStatus('noupdate');
+        const currentVersion = app.bundleManager.getBundleInfo().currentJsAppBundleConfig?.versionCode ?? 0;
+        if (manifest.versionCode <= currentVersion) {
+          this.deletePendingPackage(appId);
+          app.notifyUpdateManagerStatus('noupdate');
+          return;
+        }
+
+        updateAnnounced = true;
+        app.notifyUpdateManagerStatus('updating');
+
+        const pendingVersion = this.pendingVersionCode(appId);
+        if (pendingVersion !== undefined && pendingVersion >= manifest.versionCode) {
+          app.notifyUpdateManagerStatus('updateready');
+          return;
+        }
+
+        const zipPath = await this.downloadPackage(manifest);
+        try {
+          this.ensureOperationActive(appId, operationToken);
+          await this.installPackage(manifest, zipPath, false);
+        } catch (error) {
+          this.removeFileIfExists(zipPath);
+          throw error as Error;
+        }
+        app.notifyUpdateManagerStatus('updateready');
+      });
+    } catch (e) {
+      if (e instanceof DMPUpdateCancelledError) {
         return;
       }
-
-      updateAnnounced = true;
-      app.notifyUpdateManagerStatus('updating');
-
-      const zipPath = await this.downloadPackage(manifest);
-      await this.installPackage(manifest, zipPath);
-      app.notifyUpdateManagerStatus('updateready');
-    } catch (e) {
       DMPLogger.e(Tags.LOAD_REMOTE_BUNDLE, `远程更新失败: ${e}`);
       app.notifyUpdateManagerStatus(updateAnnounced ? 'updatefail' : 'noupdate');
     }
+  }
+
+  async activatePendingUpdate(appId: string): Promise<boolean> {
+    this.validateAppId(appId);
+    const token = this.operationToken(appId);
+    return this.withAppLock(appId, async (): Promise<boolean> => {
+      this.ensureOperationActive(appId, token);
+      const pendingVersion = this.pendingVersionCode(appId);
+      if (pendingVersion === undefined) {
+        return false;
+      }
+      const currentVersion = this.currentVersionCode(appId);
+      if (pendingVersion <= currentVersion) {
+        this.deletePendingPackage(appId);
+        return false;
+      }
+      const pendingConfig = this.loadPendingConfig(appId);
+      if (!pendingConfig) {
+        this.deletePendingPackage(appId);
+        return false;
+      }
+      this.writeConfigAtomically(
+        this.fileManager.getJSAppConfigPath(appId),
+        JSON.stringify(pendingConfig)
+      );
+      this.deletePendingPackage(appId);
+      return true;
+    });
+  }
+
+  public operationToken(appId: string): number {
+    return this.operationGenerations.get(appId) ?? 0;
+  }
+
+  public beginUninstall(appId: string): void {
+    this.validateAppId(appId);
+    if (this.uninstallingApps.has(appId)) {
+      throw new Error(`mini program ${appId} is already being uninstalled`);
+    }
+    this.uninstallingApps.add(appId);
+    this.operationGenerations.set(appId, this.operationToken(appId) + 1);
+  }
+
+  public endUninstall(appId: string): void {
+    this.uninstallingApps.delete(appId);
+  }
+
+  public async uninstallPackage(appId: string, clearUserData: boolean): Promise<void> {
+    this.validateAppId(appId);
+    await this.withAppLock(appId, async (): Promise<void> => {
+      this.removeInstalledPackage(appId, clearUserData);
+      this.deletePendingPackage(appId);
+      this.removeDirectoryIfExists(`${DMPContextUtils.getUIAbilityContext().cacheDir}/dimina-updates/${appId}`);
+      this.removeDirectoryIfExists(`${DMPContextUtils.getUIAbilityContext().cacheDir}/dimina-file-system/${appId}`);
+      if (clearUserData) {
+        this.removeDirectoryIfExists(
+          `${DMPContextUtils.getUIAbilityContext().filesDir}/dimina-file-system/${appId}`
+        );
+      }
+    });
   }
 
   private isPackageReady(appId: string): boolean {
@@ -178,12 +280,12 @@ export class DMPRemoteUpdateManager {
 
   private async downloadPackage(manifest: DMPRemoteUpdateManifest): Promise<string> {
     const context = DMPContextUtils.getUIAbilityContext();
-    const updateDir = `${context.cacheDir}/dimina-updates`;
+    const updateDir = `${context.cacheDir}/dimina-updates/${manifest.appId}`;
     if (!fs.accessSync(updateDir)) {
       fs.mkdirSync(updateDir, true);
     }
 
-    const localPath = `${updateDir}/${manifest.appId}-${manifest.versionCode}.zip`;
+    const localPath = `${updateDir}/${manifest.versionCode}.zip`;
     if (fs.accessSync(localPath)) {
       fs.unlinkSync(localPath);
     }
@@ -206,7 +308,11 @@ export class DMPRemoteUpdateManager {
     });
   }
 
-  private async installPackage(manifest: DMPRemoteUpdateManifest, zipPath: string): Promise<void> {
+  private async installPackage(
+    manifest: DMPRemoteUpdateManifest,
+    zipPath: string,
+    activateImmediately: boolean
+  ): Promise<void> {
     const versionDir = this.fileManager.getJSAppVersionDir(manifest.appId, manifest.versionCode.toString());
     try {
       if (manifest.sha256) {
@@ -224,7 +330,21 @@ export class DMPRemoteUpdateManager {
 
       this.writeConfig(manifest, `${versionDir}/config.json`);
       this.validatePackage(versionDir);
-      this.writeConfig(manifest, this.fileManager.getJSAppConfigPath(manifest.appId));
+      if (activateImmediately) {
+        this.writeConfigAtomically(
+          this.fileManager.getJSAppConfigPath(manifest.appId),
+          JSON.stringify(this.manifestConfig(manifest))
+        );
+      } else {
+        const pendingDir = this.pendingDir(manifest.appId);
+        if (!fs.accessSync(pendingDir)) {
+          fs.mkdirSync(pendingDir, true);
+        }
+        this.writeConfigAtomically(
+          this.pendingConfigPath(manifest.appId),
+          JSON.stringify(this.manifestConfig(manifest))
+        );
+      }
     } catch (e) {
       if (fs.accessSync(versionDir)) {
         fs.rmdirSync(versionDir);
@@ -238,14 +358,19 @@ export class DMPRemoteUpdateManager {
   }
 
   private writeConfig(manifest: DMPRemoteUpdateManifest, path: string): void {
-    const config: DMPRemoteManifestConfig = {
+    if (!this.fileManager.writeJsonToFile(path, JSON.stringify(this.manifestConfig(manifest)))) {
+      throw new Error(`failed to write config: ${path}`);
+    }
+  }
+
+  private manifestConfig(manifest: DMPRemoteUpdateManifest): DMPRemoteManifestConfig {
+    return {
       appId: manifest.appId,
       name: manifest.name,
       path: manifest.path,
       versionCode: manifest.versionCode,
       versionName: manifest.versionName,
     };
-    this.fileManager.writeJsonToFile(path, JSON.stringify(config));
   }
 
   private validatePackage(versionDir: string): void {
@@ -256,6 +381,156 @@ export class DMPRemoteUpdateManager {
     const missingFile = requiredFiles.find((file) => !fs.accessSync(file));
     if (missingFile) {
       throw new Error(`package missing required file: ${missingFile.replace(versionDir + '/', '')}`);
+    }
+  }
+
+  private pendingDir(appId: string): string {
+    return `${this.fileManager.getJSAppDir(appId)}/.pending`;
+  }
+
+  private pendingConfigPath(appId: string): string {
+    return `${this.pendingDir(appId)}/config.json`;
+  }
+
+  private loadPendingConfig(appId: string): DMPRemoteManifestConfig | undefined {
+    const path = this.pendingConfigPath(appId);
+    if (!fs.accessSync(path)) {
+      return undefined;
+    }
+    try {
+      const config = JSON.parse(fs.readTextSync(path)) as DMPRemoteManifestConfig;
+      if (config.appId !== appId || !Number.isInteger(config.versionCode)) {
+        throw new Error('invalid pending package config');
+      }
+      const versionDir = this.fileManager.getJSAppVersionDir(appId, config.versionCode.toString());
+      this.validatePackage(versionDir);
+      return config;
+    } catch (error) {
+      this.deletePendingPackage(appId);
+      throw error as Error;
+    }
+  }
+
+  private pendingVersionCode(appId: string): number | undefined {
+    return this.loadPendingConfig(appId)?.versionCode;
+  }
+
+  private currentVersionCode(appId: string): number {
+    return this.fileManager.loadJSAppConfig(appId)?.getNumber('versionCode') ?? 0;
+  }
+
+  private deletePendingPackage(appId: string): void {
+    this.removeDirectoryIfExists(this.pendingDir(appId));
+  }
+
+  private removeInstalledPackage(appId: string, clearUserData: boolean): void {
+    const appRoot = this.fileManager.getJSAppDir(appId);
+    if (!fs.accessSync(appRoot)) {
+      return;
+    }
+    if (clearUserData) {
+      fs.rmdirSync(appRoot);
+      return;
+    }
+
+    fs.listFileSync(appRoot).forEach((item: string): void => {
+      if (item !== 'resource') {
+        this.removePathIfExists(`${appRoot}/${item}`);
+      }
+    });
+    const resourceRoot = `${appRoot}/resource`;
+    if (fs.accessSync(resourceRoot)) {
+      fs.listFileSync(resourceRoot).forEach((item: string): void => {
+        if (item !== 'store') {
+          this.removePathIfExists(`${resourceRoot}/${item}`);
+        }
+      });
+    }
+  }
+
+  private writeConfigAtomically(path: string, json: string): void {
+    const parent = path.substring(0, path.lastIndexOf('/'));
+    if (!fs.accessSync(parent)) {
+      fs.mkdirSync(parent, true);
+    }
+    const tempPath = `${path}.tmp-${Date.now()}`;
+    const backupPath = `${path}.backup-${Date.now()}`;
+    this.removeFileIfExists(tempPath);
+    this.removeFileIfExists(backupPath);
+    if (!this.fileManager.writeJsonToFile(tempPath, json)) {
+      throw new Error(`failed to write config: ${path}`);
+    }
+
+    let backedUp = false;
+    try {
+      if (fs.accessSync(path)) {
+        fs.moveFileSync(path, backupPath, 0);
+        backedUp = true;
+      }
+      fs.moveFileSync(tempPath, path, 0);
+      this.removeFileIfExists(backupPath);
+    } catch (error) {
+      this.removeFileIfExists(path);
+      if (backedUp && fs.accessSync(backupPath)) {
+        fs.moveFileSync(backupPath, path, 0);
+      }
+      this.removeFileIfExists(tempPath);
+      throw error as Error;
+    }
+  }
+
+  private async withAppLock<T>(appId: string, operation: () => Promise<T>): Promise<T> {
+    const previous = this.operationTails.get(appId) ?? Promise.resolve();
+    let release: () => void = (): void => {};
+    const gate = new Promise<void>((resolve): void => {
+      release = resolve;
+    });
+    const current = previous.catch((): void => {}).then((): Promise<void> => gate);
+    this.operationTails.set(appId, current);
+    await previous.catch((): void => {});
+    try {
+      return await operation();
+    } finally {
+      release();
+      if (this.operationTails.get(appId) === current) {
+        this.operationTails.delete(appId);
+      }
+    }
+  }
+
+  private ensureOperationActive(appId: string, token: number): void {
+    if (this.uninstallingApps.has(appId) || this.operationToken(appId) !== token) {
+      throw new DMPUpdateCancelledError();
+    }
+  }
+
+  private validateAppId(appId: string): void {
+    const reserved = new Set<string>(['jssdk', 'mmkv', 'mmkv_backup']);
+    if (!/^[A-Za-z0-9._-]+$/.test(appId) || appId === '.' || appId === '..' || reserved.has(appId)) {
+      throw new Error('invalid appId');
+    }
+  }
+
+  private removePathIfExists(path: string): void {
+    if (!fs.accessSync(path)) {
+      return;
+    }
+    if (fs.statSync(path).isDirectory()) {
+      fs.rmdirSync(path);
+    } else {
+      fs.unlinkSync(path);
+    }
+  }
+
+  private removeDirectoryIfExists(path: string): void {
+    if (fs.accessSync(path)) {
+      fs.rmdirSync(path);
+    }
+  }
+
+  private removeFileIfExists(path: string): void {
+    if (fs.accessSync(path)) {
+      fs.unlinkSync(path);
     }
   }
 

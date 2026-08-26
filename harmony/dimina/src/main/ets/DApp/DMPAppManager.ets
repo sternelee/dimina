@@ -11,6 +11,9 @@ import {
   DMPMiniProgramPathParser,
   DMPMiniProgramPresentationStack
 } from './DMPMiniProgramPresentationStack'
+import { DMPRemoteUpdateManager } from '../Bundle/DMPRemoteUpdateManager'
+import { DMPMMKVManager } from '../Bundle/Util/DMPMMKVManager'
+import { DMPPreference } from '../Utils/DMPPreference'
 
 export type DMPMiniProgramBeforeDestructiveAction = () => Promise<void>
 
@@ -123,6 +126,46 @@ export class DMPAppManager {
     if (index !== null) {
       this.appPools.delete(index)
       this.miniProgramPresentations.removeApp(index)
+    }
+  }
+
+  /**
+   * Stop a running mini program and remove its installed package. Persistent
+   * Storage/FileSystem data is retained unless clearUserData is true.
+   */
+  async uninstallMiniProgram(appId: string, clearUserData: boolean = false): Promise<void> {
+    const normalizedAppId = appId.trim()
+    if (this.miniProgramOperationInProgress) {
+      throw new Error('uninstallMiniProgram:fail another mini program operation is in progress')
+    }
+
+    const updateManager = DMPRemoteUpdateManager.sharedInstance()
+    updateManager.beginUninstall(normalizedAppId)
+    this.miniProgramOperationInProgress = true
+    try {
+      const app = this.existApp(normalizedAppId)
+      const openerIndex = app === null
+        ? undefined
+        : this.miniProgramPresentations.openerAppIndex(app.appIndex)
+      const opener = openerIndex === undefined ? undefined : this.appPools.get(openerIndex)
+      if (app !== null) {
+        await app.closeDimina()
+        if (opener) {
+          opener.notifyMiniProgramShow(DMPScene.fromMiniProgramBack, new DMPMap({
+            appId: normalizedAppId
+          }))
+        }
+      }
+
+      if (clearUserData) {
+        DMPMMKVManager.clearStorage(normalizedAppId)
+      }
+      await DMPPreference.getInstance().remove(`${normalizedAppId}_versionName`)
+      await DMPPreference.getInstance().remove(`${normalizedAppId}_versionCode`)
+      await updateManager.uninstallPackage(normalizedAppId, clearUserData)
+    } finally {
+      this.miniProgramOperationInProgress = false
+      updateManager.endUninstall(normalizedAppId)
     }
   }
 

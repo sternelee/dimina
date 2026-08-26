@@ -104,8 +104,13 @@ public class DMPApp {
             await notifyUpdateStatus(event: "noupdate")
         } else if let manifestUrl = appConfig?.updateManifestUrl,
            !manifestUrl.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            let operationToken = DMPRemoteUpdateManager.shared.operationToken(for: appId)
             Task {
-                await DMPRemoteUpdateManager.shared.checkForUpdate(app: self, manifestUrl: manifestUrl)
+                await DMPRemoteUpdateManager.shared.checkForUpdate(
+                    app: self,
+                    manifestUrl: manifestUrl,
+                    operationToken: operationToken
+                )
             }
         } else {
             await notifyUpdateStatus(event: "noupdate")
@@ -216,6 +221,12 @@ public class DMPApp {
         let config = DMPFileUtil.readJsonFile(at: path)
         DMPLogger.debug("config: \(String(describing: config))")
         self.bundleAppConfig = DMPBundleAppConfig.fromJsonString(json: config)
+        if let packageConfig = DMPFileUtil.loadJSONFromFile(
+            filePath: DMPSandboxManager.appBundleConfigPath(appId: appId)
+        ) {
+            appConfig?.versionCode = packageConfig["versionCode"] as? Int
+            appConfig?.versionName = packageConfig["versionName"] as? String
+        }
 
         await service?.loadFile(path: DMPSandboxManager.sdkServicePath())
         await service?.loadFile(path: DMPSandboxManager.appServicePath(appId: appId))
@@ -259,8 +270,13 @@ public class DMPApp {
     @MainActor
     public func applyUpdate() async {
         var launchConfig = currentLaunchConfig ?? DMPLaunchConfig()
+        launchConfig.appEntryPath = nil
         launchConfig.isRelaunch = true
         do {
+            guard try await DMPRemoteUpdateManager.shared.activatePendingUpdate(appId: appId) else {
+                await notifyUpdateStatus(event: "updatefail")
+                return
+            }
             _ = try await DMPAppManager.sharedInstance().restartMiniProgramRuntime(
                 self,
                 launchConfig: launchConfig,

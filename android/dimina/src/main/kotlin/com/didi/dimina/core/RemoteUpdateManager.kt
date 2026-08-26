@@ -5,6 +5,7 @@ import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.AtomicZipInstaller
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.VersionUtils
+import com.tencent.mmkv.MMKV
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -15,6 +16,7 @@ import java.security.MessageDigest
 import java.util.Locale
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.TimeUnit
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import kotlin.concurrent.withLock
 
@@ -31,6 +33,8 @@ object RemoteUpdateManager {
         "main/logic.js",
     )
     private val appLocks = ConcurrentHashMap<String, ReentrantLock>()
+    private val operationGenerations = ConcurrentHashMap<String, AtomicLong>()
+    private val uninstallingApps = ConcurrentHashMap.newKeySet<String>()
     private val httpClient = OkHttpClient.Builder()
         .connectTimeout(15, TimeUnit.SECONDS)
         .readTimeout(60, TimeUnit.SECONDS)
@@ -40,9 +44,12 @@ object RemoteUpdateManager {
         context: Context,
         miniProgram: MiniProgram,
         notify: (String) -> Unit,
+        operationToken: Long = operationToken(miniProgram.appId),
     ) {
+        if (!isOperationActive(miniProgram.appId, operationToken)) return
         lockFor(miniProgram.appId).withLock {
-            checkForUpdateLocked(context, miniProgram, notify)
+            if (!isOperationActive(miniProgram.appId, operationToken)) return@withLock
+            checkForUpdateLocked(context, miniProgram, notify, operationToken)
         }
     }
 
@@ -56,7 +63,9 @@ object RemoteUpdateManager {
      */
     @Throws(IOException::class)
     fun installInitialPackage(context: Context, miniProgram: MiniProgram): MiniProgram {
+        val operationToken = operationToken(miniProgram.appId)
         return lockFor(miniProgram.appId).withLock {
+            ensureOperationActive(miniProgram.appId, operationToken)
             val manifestUrl = miniProgram.updateManifestUrl.trim()
             if (manifestUrl.isEmpty()) {
                 throw IOException(
@@ -65,9 +74,14 @@ object RemoteUpdateManager {
             }
 
             val manifest = fetchManifest(manifestUrl)
+            ensureOperationActive(miniProgram.appId, operationToken)
             validateManifestAppId(manifest, miniProgram.appId)
 
             val zipFile = downloadPackage(context, manifest)
+            if (!isOperationActive(miniProgram.appId, operationToken)) {
+                zipFile.delete()
+                throw UpdateOperationCancelledException()
+            }
             installActivePackage(context, manifest, zipFile)
 
             miniProgram.copy(
@@ -84,7 +98,10 @@ object RemoteUpdateManager {
      * runtime continues to use the old directory until this method is called.
      */
     fun activatePendingUpdate(context: Context, appId: String): Boolean {
+        val operationToken = operationToken(appId)
+        if (!isOperationActive(appId, operationToken)) return false
         return lockFor(appId).withLock {
+            if (!isOperationActive(appId, operationToken)) return@withLock false
             try {
                 val pendingPackage = readPendingPackage(context, appId) ?: return@withLock false
                 val currentVersion = VersionUtils.getAppVersion(appId)
@@ -109,10 +126,40 @@ object RemoteUpdateManager {
         }
     }
 
+    /** Invalidates queued update checks before the host starts runtime teardown. */
+    internal fun beginUninstall(appId: String) {
+        requireValidAppId(appId)
+        check(uninstallingApps.add(appId)) { "mini program $appId is already being uninstalled" }
+        generationFor(appId).incrementAndGet()
+    }
+
+    internal fun endUninstall(appId: String) {
+        uninstallingApps.remove(appId)
+    }
+
+    /** Removes package/update artifacts while holding the same lock as install and activation. */
+    internal fun uninstallPackage(context: Context, appId: String, clearUserData: Boolean) {
+        requireValidAppId(appId)
+        check(uninstallingApps.contains(appId)) { "beginUninstall must be called first" }
+        lockFor(appId).withLock {
+            MiniProgramPackageCleaner.uninstall(
+                filesDir = context.filesDir,
+                cacheDir = context.cacheDir,
+                appId = appId,
+                clearUserData = clearUserData,
+            )
+            VersionUtils.removeAppVersion(appId)
+            if (clearUserData) {
+                MMKV.mmkvWithID(appId).clearAll()
+            }
+        }
+    }
+
     private fun checkForUpdateLocked(
         context: Context,
         miniProgram: MiniProgram,
         notify: (String) -> Unit,
+        operationToken: Long,
     ) {
         val manifestUrl = miniProgram.updateManifestUrl.trim()
         if (manifestUrl.isEmpty()) {
@@ -123,6 +170,7 @@ object RemoteUpdateManager {
         var updateAnnounced = false
         try {
             val manifest = fetchManifest(manifestUrl)
+            ensureOperationActive(miniProgram.appId, operationToken)
             validateManifestAppId(manifest, miniProgram.appId)
 
             val currentVersion = VersionUtils.getAppVersion(miniProgram.appId)
@@ -142,8 +190,14 @@ object RemoteUpdateManager {
             }
 
             val zipFile = downloadPackage(context, manifest)
+            if (!isOperationActive(miniProgram.appId, operationToken)) {
+                zipFile.delete()
+                return
+            }
             installPendingPackage(context, manifest, zipFile)
             notify(EVENT_UPDATE_READY)
+        } catch (_: UpdateOperationCancelledException) {
+            return
         } catch (e: Exception) {
             LogUtils.e(TAG, "Remote update failed: ${e.message}")
             notify(if (updateAnnounced) EVENT_UPDATE_FAILED else EVENT_NO_UPDATE)
@@ -336,6 +390,31 @@ object RemoteUpdateManager {
 
     private fun lockFor(appId: String): ReentrantLock =
         appLocks.computeIfAbsent(appId) { ReentrantLock() }
+
+    internal fun operationToken(appId: String): Long = generationFor(appId).get()
+
+    private fun generationFor(appId: String): AtomicLong =
+        operationGenerations.computeIfAbsent(appId) { AtomicLong(0) }
+
+    private fun isOperationActive(appId: String, token: Long): Boolean =
+        !uninstallingApps.contains(appId) && generationFor(appId).get() == token
+
+    private fun ensureOperationActive(appId: String, token: Long) {
+        if (!isOperationActive(appId, token)) {
+            throw UpdateOperationCancelledException()
+        }
+    }
+
+    private fun requireValidAppId(appId: String) {
+        val reservedAppIds = setOf(".pending")
+        require(
+            appId.isNotBlank() && appId != "." && appId != ".." &&
+                !appId.contains('/') && !appId.contains('\\') && !appId.contains('\u0000') &&
+                appId !in reservedAppIds
+        ) { "invalid appId" }
+    }
+
+    private class UpdateOperationCancelledException : IOException("update operation cancelled")
 
     private data class PendingPackage(
         val directory: File,

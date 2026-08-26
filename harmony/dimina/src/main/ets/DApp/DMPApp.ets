@@ -295,16 +295,17 @@ export class DMPApp {
     }
   }
 
-  updateApp() {
+  async updateApp(): Promise<boolean> {
     DMPLogger.i(Tags.LAUNCH, "updateApp invoke")
-    DRouter.getInstance().popToRoot()
-    const curNavigator = this.navigatorManager.getCurNavigator();
-    const curLaunchConfig = curNavigator!.getLaunchConfig()
-    this.navigatorManager?.clear()
-    this.destroyEngine();
-    setTimeout(() => {
-      this.resetAndStartDimina(curLaunchConfig)
-    }, 300);
+    const activated = await DMPRemoteUpdateManager.sharedInstance()
+      .activatePendingUpdate(this.appConfig.appId)
+    if (!activated) {
+      this.notifyUpdateManagerStatus('updatefail')
+      return false
+    }
+    const curLaunchConfig = this.navigatorManager.getCurNavigator()?.getLaunchConfig()
+    await this.reEnter(curLaunchConfig)
+    return true
   }
 
 
@@ -574,8 +575,9 @@ export class DMPApp {
   }
 
   private startRemoteUpdateCheck() {
-    DMPRemoteUpdateManager.sharedInstance()
-      .checkForUpdate(this)
+    const updateManager = DMPRemoteUpdateManager.sharedInstance()
+    const operationToken = updateManager.operationToken(this.appConfig.appId)
+    updateManager.checkForUpdate(this, operationToken)
       .catch((error: Error) => {
         DMPLogger.e(Tags.LOAD_REMOTE_BUNDLE, `远程更新检查失败: ${error.message}`)
         this.notifyUpdateManagerStatus('noupdate')

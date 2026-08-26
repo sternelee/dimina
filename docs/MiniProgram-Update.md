@@ -12,6 +12,7 @@
 | 无底包时根据 ManifestUrl 首次安装 | 支持 | 支持 | 支持 | 支持远程静态目录 |
 | `updateManifestUrl` 远程更新 | 支持 | 支持 | 支持 | 暂未提供 |
 | `wx.getUpdateManager()` | 支持 | 支持 | 支持 | 支持，默认返回无更新 |
+| 宿主卸载已安装包 | 支持 | 支持 | 支持 | 由站点部署管理 |
 
 Android、iOS 与 Harmony 会下载 manifest 中的 zip 并安装到沙盒。Web 不解压 native zip，而是根据 manifest 直接加载已部署的编译产物目录；Web 的资源版本仍由站点部署和缓存策略管理。
 
@@ -54,9 +55,9 @@ Android 端 WebView 通过 `https://appassets.androidplatform.net/jsapp/` 映射
 - `onCheckForUpdate(callback)`：宿主检查更新后通知是否存在新版本。
 - `onUpdateReady(callback)`：新包已经准备好，可以在业务确认后调用 `applyUpdate()`。
 - `onUpdateFailed(callback)`：新包下载、校验或安装失败。
-- `applyUpdate()`：通知宿主重启或重载当前小程序，使新的沙盒包生效。
+- `applyUpdate()`：激活已经准备好的新包，再由宿主重启或重载当前小程序。
 
-它不负责远程包下载、签名校验、灰度策略、回滚策略和包目录选择。这些能力需要由宿主 App 或业务自建包管理平台实现。
+小程序侧 API 本身不执行远程包下载、签名校验、灰度策略、回滚策略和包目录选择。配置 `updateManifestUrl` 后，三端 SDK 的内置更新器会负责基础下载、哈希校验和待更新包管理；签名、灰度、回滚等生产策略仍需要由宿主 App 或业务包管理平台实现。
 
 没有远程更新能力时，宿主应通知 `onCheckForUpdate({ hasUpdate: false })`，避免业务侧一直等待更新检查结果。
 
@@ -110,10 +111,10 @@ SDK 会根据 manifest 生成沙盒根目录下的 `config.json`。如果 zip �
 3. 下载 zip 到临时目录或 staging 目录。
 4. 确认 manifest 的 `appId` 与当前小程序一致；配置了 `sha256` 时校验 zip 内容。
 5. 解压到 staging 目录，并校验目录结构，至少应包含 `main/app-config.json`、`main/logic.js`，以及实际使用到的分包目录。
-6. 原子替换到对应平台的运行时加载目录，或更新平台已有的版本目录和当前版本记录。
+6. 将通过校验的新包写入待更新目录；首次安装时直接建立当前版本。
 7. 通知小程序 `onCheckForUpdate({ hasUpdate: true })`。
 8. 包准备完成后通知 `onUpdateReady()`。
-9. 业务调用 `updateManager.applyUpdate()` 后，宿主重启或重载当前小程序，加载新版本资源。
+9. 业务调用 `updateManager.applyUpdate()` 后，SDK 原子切换当前版本，宿主重启或重载当前小程序并加载新资源。未调用前，正在运行及下次普通启动仍使用旧版本。
 
 如果已经发现更高版本，但下载、校验或安装失败，内置更新器会通知 `onUpdateFailed()`，并继续保留旧版本包。manifest 拉取或解析在确认新版本之前失败时，当前实现按“无可用更新”处理，不会进入更新失败回调。
 
@@ -156,7 +157,7 @@ Dimina.getInstance().startMiniProgram(activity, miniProgram)
 }
 ```
 
-Android 会将远程包安装到 `${filesDir}/jsapp/<appId>/`。更新准备好后，业务调用 `applyUpdate()` 会销毁当前逻辑引擎并重新启动小程序，从新沙盒包加载。
+Android 会将远程包准备到 `${filesDir}/jsapp/.pending/<appId>/`。更新准备好后，业务调用 `applyUpdate()` 才会原子替换 `${filesDir}/jsapp/<appId>/`，随后销毁当前逻辑引擎并重新启动小程序。
 
 ### iOS 接入
 
@@ -168,7 +169,7 @@ appConfig.updateManifestUrl = "https://example.com/jsapp/wx92269e3b2f304afc.json
 let app = DMPAppManager.sharedInstance().appWithConfig(appConfig: appConfig)
 ```
 
-iOS 会将远程包安装到 `Documents/Dimina/<appId>/`。即使 `JsApp.bundle` 中没有该 `appId`，首次 `launch` 也会先完成 manifest 安装。更新准备好后，业务调用 `applyUpdate()` 会重建 service 引擎、重新读取新包配置并 relaunch 到入口页。
+iOS 会将远程包准备到 `Documents/Dimina/.pending/<appId>/`。即使 `JsApp.bundle` 中没有该 `appId`，首次 `launch` 也会先完成 manifest 安装。更新准备好后，业务调用 `applyUpdate()` 才会原子替换 `Documents/Dimina/<appId>/`，重建 service 引擎、重新读取新包配置并 relaunch 到入口页。
 
 ### Harmony 接入
 
@@ -180,7 +181,55 @@ appConfig.updateManifestUrl = "https://example.com/jsapp/wx92269e3b2f304afc.json
 const app = DMPAppManager.sharedInstance().appWithConfig(appConfig)
 ```
 
-Harmony 会将远程包安装到 `${filesDir}/dimina/<appId>/<versionCode>/`，并更新 `${filesDir}/dimina/<appId>/config.json` 指向新版本。即使 rawfile 中没有该 `appId` 的底包，首次启动也会在包加载阶段先安装 manifest 包。更新准备好后，业务调用 `applyUpdate()` 会走现有 `updateApp()` 重启链路，从新的版本目录加载。
+Harmony 会将远程包解压到 `${filesDir}/dimina/<appId>/<versionCode>/`，但普通更新只在 `${filesDir}/dimina/<appId>/.pending/config.json` 记录待激活版本。即使 rawfile 中没有该 `appId` 的底包，首次启动也会在包加载阶段先安装 manifest 包。更新准备好后，业务调用 `applyUpdate()` 才会原子更新当前 `config.json`，并走 `updateApp()` 重启链路从新版本目录加载。
+
+## 宿主卸载小程序
+
+Android、iOS 与 Harmony 都提供宿主侧卸载接口。卸载会先使同一 `appId` 的排队中更新失效，关闭正在运行的小程序，再串行删除当前包、待更新包、下载临时文件和版本记录，避免下载回调在卸载后重新写回文件。
+
+默认 `clearUserData = false`，保留小程序的 Storage 和持久文件；临时文件及包资源仍会删除。传入 `true` 才会连同 Storage 和持久文件一起清除。内置于宿主的小程序被卸载后，下次启动会从宿主资源重新安装，默认保留的数据不会被重装过程覆盖。
+
+### Android
+
+```kotlin
+Dimina.getInstance().uninstallMiniProgram("wx92269e3b2f304afc") { result ->
+    result.onFailure { error ->
+        // 处理卸载失败
+    }
+}
+
+// 明确清除 Storage 与持久文件
+Dimina.getInstance().uninstallMiniProgram(
+    appId = "wx92269e3b2f304afc",
+    clearUserData = true,
+)
+```
+
+### iOS
+
+```swift
+try await DMPAppManager.sharedInstance().uninstallMiniProgram(
+    appId: "wx92269e3b2f304afc"
+)
+
+// 明确清除 Storage 与持久文件
+try await DMPAppManager.sharedInstance().uninstallMiniProgram(
+    appId: "wx92269e3b2f304afc",
+    clearUserData: true
+)
+```
+
+### Harmony
+
+```ts
+await DMPAppManager.sharedInstance().uninstallMiniProgram('wx92269e3b2f304afc')
+
+// 明确清除 Storage 与持久文件
+await DMPAppManager.sharedInstance().uninstallMiniProgram(
+  'wx92269e3b2f304afc',
+  true
+)
+```
 
 ### Web 行为
 
