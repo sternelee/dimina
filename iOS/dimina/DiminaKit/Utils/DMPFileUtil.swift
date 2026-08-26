@@ -228,6 +228,67 @@ public class DMPFileUtil {
         return confinedPath(rootPath: resourceDirectory, relativePath: relativePath)
     }
 
+    /// Resolve a native-component media source without allowing it to escape
+    /// the current mini program's package or user/temp directories.
+    public static func appAccessiblePath(from rawPath: String, appId: String) -> String? {
+        guard !rawPath.isEmpty else { return nil }
+        if rawPath.lowercased().hasPrefix("\(DMPFileURLScheme)://") {
+            return sandboxPathFromVPath(from: rawPath, appId: appId)
+        }
+
+        var localPath = rawPath
+        if let components = URLComponents(string: rawPath), components.scheme != nil {
+            guard components.scheme?.lowercased() == "file",
+                  components.user == nil,
+                  components.password == nil,
+                  components.host == nil || components.host?.isEmpty == true,
+                  let fileURL = components.url else {
+                return nil
+            }
+            localPath = fileURL.path
+        }
+
+        let packageRoot = DMPSandboxManager.appBundlePath(appId)
+        let appPathPrefix = "/\(appId)/"
+        if localPath.hasPrefix(appPathPrefix) {
+            return confinedPath(
+                rootPath: packageRoot,
+                relativePath: String(localPath.dropFirst(appPathPrefix.count))
+            )
+        }
+        if !localPath.hasPrefix("/") {
+            guard !localPath.contains("\\"),
+                  !localPath.contains("\0"),
+                  !localPath.split(separator: "/", omittingEmptySubsequences: false).contains("..") else {
+                return nil
+            }
+            let direct = confinedPath(rootPath: packageRoot, relativePath: localPath)
+            if let direct, FileManager.default.fileExists(atPath: direct) {
+                return direct
+            }
+            return confinedPath(rootPath: packageRoot, relativePath: "main/\(localPath)")
+        }
+        return confinedAbsolutePath(localPath, allowedRoots: [packageRoot])
+    }
+
+    public static func confinedAbsolutePath(_ path: String, allowedRoots: [String]) -> String? {
+        guard path.hasPrefix("/"), !path.contains("\0") else { return nil }
+        let target = URL(fileURLWithPath: path)
+            .standardizedFileURL
+            .resolvingSymlinksInPath()
+            .path
+        for rootPath in allowedRoots where !rootPath.isEmpty {
+            let root = URL(fileURLWithPath: rootPath, isDirectory: true)
+                .standardizedFileURL
+                .resolvingSymlinksInPath()
+                .path
+            if target == root || target.hasPrefix(root + "/") {
+                return target
+            }
+        }
+        return nil
+    }
+
     /// Resolve a relative path while guaranteeing that the final filesystem
     /// location remains under `rootPath`, including after dot-segment and
     /// symlink resolution.

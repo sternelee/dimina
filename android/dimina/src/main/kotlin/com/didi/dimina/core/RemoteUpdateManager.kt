@@ -2,10 +2,10 @@ package com.didi.dimina.core
 
 import android.content.Context
 import com.didi.dimina.bean.MiniProgram
+import com.didi.dimina.api.storage.StorageApi
 import com.didi.dimina.common.AtomicZipInstaller
 import com.didi.dimina.common.LogUtils
 import com.didi.dimina.common.VersionUtils
-import com.tencent.mmkv.MMKV
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
@@ -150,7 +150,7 @@ object RemoteUpdateManager {
             )
             VersionUtils.removeAppVersion(appId)
             if (clearUserData) {
-                MMKV.mmkvWithID(appId).clearAll()
+                StorageApi.clearAllStorage(appId)
             }
         }
     }

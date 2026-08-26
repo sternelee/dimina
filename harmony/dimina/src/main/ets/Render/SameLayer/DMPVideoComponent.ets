@@ -1,11 +1,11 @@
 import { BusinessError } from '@ohos.base'
-import { DMPFileUrlConvertor } from '../../Bundle/Util/DMPFileUrlConvertor'
 import { DMPAppManager } from '../../DApp/DMPAppManager'
 import { DMPLogger } from '../../EventTrack/DMPLogger'
 import { Tags } from '../../EventTrack/Tags'
 import { DMPChannelProxyNext } from '../../Service/DMPChannelProxyNext'
 import { DMPMap } from '../../Utils/DMPMap'
 import { VideoParams } from './DMPComponetParams'
+import { DMPFilePathResolver } from '../../Bundle/Util/DMPFilePathResolver'
 
 interface DMPVideoHandle {
   play(): void
@@ -287,15 +287,31 @@ struct VideoComponent {
     if (!src) {
       return ''
     }
-    if (src.startsWith('http://') || src.startsWith('https://') || src.startsWith('file://') ||
-      src.startsWith('resource://') || src.startsWith('data:') || src.startsWith('internal://')) {
+    if (src.startsWith('http://') || src.startsWith('https://') ||
+      src.startsWith('resource://') || src.startsWith('data:')) {
       return src
     }
-    const localPath = DMPFileUrlConvertor.localPathFromVPath(src)
-    if (localPath.startsWith('/')) {
-      return `file://${localPath}`
+    const app = DMPAppManager.sharedInstance().getApp(this.appIndex())
+    if (!app) {
+      return ''
     }
-    return localPath
+    const appId = app.appConfig.appId
+    let localSource = src.startsWith('file://') ? src.substring('file://'.length) : src
+    const appResourcePrefix = `/${appId}/`
+    if (localSource.startsWith(appResourcePrefix)) {
+      localSource = localSource.substring(appResourcePrefix.length)
+    }
+    try {
+      const localPath = DMPFilePathResolver.resolve(
+        localSource,
+        appId,
+        app.bundleManager.getCurrentJSAppDir()
+      )
+      return `file://${localPath}`
+    } catch (error) {
+      DMPLogger.w(Tags.WEB_COMPONENT, `Rejected video source ${src}: ${(error as Error).message}`)
+      return ''
+    }
   }
 
   private toImageFit(value?: string): ImageFit {

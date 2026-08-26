@@ -84,4 +84,44 @@ final class DMPUtilPathTests: XCTestCase {
 
         XCTAssertEqual(result["query"] as? [String: String], ["id": "1"])
     }
+
+    // MARK: - appAccessiblePath
+
+    func testAppAccessiblePath_resolvesPackageAndVirtualFilesForCurrentApp() throws {
+        let appId = "path-test-\(UUID().uuidString)"
+        XCTAssertTrue(DMPSandboxManager.initBundleDirectoryForApp(appId: appId))
+        defer { DMPFileUtil.removeItem(at: DMPSandboxManager.appBundlePath(appId)) }
+
+        let packageFile = URL(fileURLWithPath: DMPSandboxManager.appBundlePath(appId))
+            .appendingPathComponent("main/static/video.mp4")
+        try FileManager.default.createDirectory(
+            at: packageFile.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try Data("video".utf8).write(to: packageFile)
+
+        XCTAssertEqual(
+            DMPFileUtil.appAccessiblePath(from: "main/static/video.mp4", appId: appId),
+            packageFile.path
+        )
+        XCTAssertEqual(
+            DMPFileUtil.appAccessiblePath(from: packageFile.absoluteString, appId: appId),
+            packageFile.path
+        )
+        XCTAssertEqual(
+            DMPFileUtil.appAccessiblePath(from: "difile://usr/video.mp4", appId: appId),
+            URL(fileURLWithPath: DMPSandboxManager.appStoreResourceDirectoryPath(appId: appId))
+                .appendingPathComponent("video.mp4").path
+        )
+    }
+
+    func testAppAccessiblePath_rejectsHostAndOtherAppFiles() {
+        let appId = "path-test-\(UUID().uuidString)"
+        XCTAssertTrue(DMPSandboxManager.initBundleDirectoryForApp(appId: appId))
+        defer { DMPFileUtil.removeItem(at: DMPSandboxManager.appBundlePath(appId)) }
+
+        XCTAssertNil(DMPFileUtil.appAccessiblePath(from: "/private/tmp/host.mp4", appId: appId))
+        XCTAssertNil(DMPFileUtil.appAccessiblePath(from: "file://example.com/private/video.mp4", appId: appId))
+        XCTAssertNil(DMPFileUtil.appAccessiblePath(from: "../other-app/video.mp4", appId: appId))
+    }
 }

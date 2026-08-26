@@ -36,6 +36,7 @@ import android.widget.VideoView
 import coil.imageLoader
 import coil.request.ImageRequest
 import com.didi.dimina.common.LogUtils
+import com.didi.dimina.common.PathUtils
 import com.didi.dimina.ui.container.DiminaActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -46,6 +47,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import kotlin.math.roundToInt
 
 /**
@@ -937,13 +939,24 @@ class NativeComponentHost(
                 isPrepared = false
                 mediaPlayer = null
                 pendingPlay = autoplay
-                videoView.setVideoURI(Uri.parse(src))
+                videoView.setVideoURI(resolveVideoSource(src))
                 videoView.requestFocus()
             } catch (e: Exception) {
                 LogUtils.e(TAG, "Failed to load video source: ${e.message}")
                 sendEvent("binderror", baseEventBody().apply {
                     put("errMsg", "video:error ${e.message}")
                 })
+            }
+        }
+
+        private fun resolveVideoSource(source: String): Uri {
+            val uri = Uri.parse(source)
+            return when (uri.scheme?.lowercase()) {
+                "http", "https" -> uri
+                null, "file", "difile" -> Uri.fromFile(
+                    File(PathUtils.pathToAppResource(activity, source, activity.getMiniProgram().appId)),
+                )
+                else -> throw IllegalArgumentException("unsupported video source scheme")
             }
         }
 

@@ -33,6 +33,11 @@ describe('MiniApp system info', () => {
 			type: 'triggerCallback',
 			body: {
 				id: 'complete-id',
+				args: {
+					platform: 'devtools',
+					windowWidth: 375,
+					errMsg: 'getSystemInfo:ok',
+				},
 			},
 		})
 	})
@@ -60,6 +65,7 @@ describe('MiniApp system info', () => {
 			type: 'triggerCallback',
 			body: {
 				id: 'complete-id',
+				args: { errMsg: 'getLocation:fail api is not supported' },
 			},
 		})
 	})

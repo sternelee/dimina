@@ -1,10 +1,10 @@
-import { DMPFileUrlConvertor } from '../../Bundle/Util/DMPFileUrlConvertor';
 import { DMPAppManager } from '../../DApp/DMPAppManager';
 import fs from '@ohos.file.fs';
 import { DMPLogger } from '../../EventTrack/DMPLogger';
 import { Tags } from '../../EventTrack/Tags';
 import { DMPApp } from '../../DApp/DMPApp';
 import image from '@ohos.multimedia.image';
+import { DMPFilePathResolver } from '../../Bundle/Util/DMPFilePathResolver';
 
 interface InterceptRequestEvent {
   request: WebResourceRequest;
@@ -61,8 +61,18 @@ export class RequestCallback {
   }
 
   private static handleDIFileRequest(url: string, app: DMPApp): WebResourceResponse | null {
-    const filePath = DMPFileUrlConvertor.localPathFromVPath(url);
-    if (filePath == null || !RequestCallback.hasFile(filePath)) {
+    let filePath = '';
+    try {
+      filePath = DMPFilePathResolver.resolve(
+        url,
+        app.appConfig.appId,
+        app.bundleManager.getCurrentJSAppDir()
+      );
+    } catch (error) {
+      DMPLogger.w(Tags.WEB_COMPONENT, `Rejected difile request ${url}: ${(error as Error).message}`);
+      return null;
+    }
+    if (!RequestCallback.hasFile(filePath)) {
       return null;
     }
     const extension = RequestCallback.getFileExtension(filePath);

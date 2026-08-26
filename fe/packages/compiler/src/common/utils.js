@@ -40,7 +40,14 @@ function getAbsolutePath(workPath, pagePath, src) {
 }
 
 const assetsMap = {}
-const collectableImageAssetPattern = /\.(?:png|jpe?g|gif|svg|heic|heif)(?:\?.*)?$/i
+const collectableImageAssetPattern = /\.(?:png|jpe?g|gif|svg|webp|heic|heif)$/i
+
+function splitAssetReference(src) {
+	const suffixIndex = src.search(/[?#]/)
+	return suffixIndex === -1
+		? { sourcePath: src, suffix: '' }
+		: { sourcePath: src.slice(0, suffixIndex), suffix: src.slice(suffixIndex) }
+}
 
 function resetAssetCache() {
 	for (const assetPath of Object.keys(assetsMap)) {
@@ -49,7 +56,7 @@ function resetAssetCache() {
 }
 
 function isCollectableImageAsset(src) {
-	return typeof src === 'string' && collectableImageAssetPattern.test(src)
+	return typeof src === 'string' && collectableImageAssetPattern.test(splitAssetReference(src).sourcePath)
 }
 
 function isPathInside(rootPath, targetPath) {
@@ -92,15 +99,13 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 		return src
 	}
 
-	const queryIndex = src.indexOf('?')
-	const sourcePath = queryIndex === -1 ? src : src.slice(0, queryIndex)
-	const query = queryIndex === -1 ? '' : src.slice(queryIndex)
+	const { sourcePath, suffix } = splitAssetReference(src)
 	const absolutePath = resolveAssetSourcePath(workPath, pagePath, sourcePath)
 	// 同一源文件可以被并发发布到不同目录；缓存必须包含目标目录，不能只按源路径复用。
 	const cacheKey = `${path.resolve(targetPath)}\0${absolutePath}`
 
 	if (assetsMap[cacheKey]) {
-		return `${assetsMap[cacheKey]}${query}`
+		return `${assetsMap[cacheKey]}${suffix}`
 	}
 
 	try {
@@ -125,7 +130,7 @@ function collectAssets(workPath, pagePath, src, targetPath, appId) {
 	catch (error) {
 		console.log(error)
 	}
-	return assetsMap[cacheKey] ? `${assetsMap[cacheKey]}${query}` : src
+	return assetsMap[cacheKey] ? `${assetsMap[cacheKey]}${suffix}` : src
 }
 
 function getFilesWithExtension(directory, extension) {

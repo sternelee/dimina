@@ -18,17 +18,22 @@ import org.json.JSONObject
  * Handles data storage operations like setting, getting, and removing stored data
  */
 class StorageApi : BaseApiHandler() {
-    private companion object {
-        const val SET_STORAGE_SYNC = "setStorageSync"
-        const val GET_STORAGE_SYNC = "getStorageSync"
-        const val REMOVE_STORAGE_SYNC = "removeStorageSync"
-        const val CLEAR_STORAGE_SYNC = "clearStorageSync"
-        const val SET_STORAGE = "setStorage"
-        const val GET_STORAGE = "getStorage"
-        const val REMOVE_STORAGE = "removeStorage"
-        const val CLEAR_STORAGE = "clearStorage"
-        const val GET_STORAGE_INFO_SYNC = "getStorageInfoSync"
-        const val GET_STORAGE_INFO = "getStorageInfo"
+    companion object {
+        private const val SET_STORAGE_SYNC = "setStorageSync"
+        private const val GET_STORAGE_SYNC = "getStorageSync"
+        private const val REMOVE_STORAGE_SYNC = "removeStorageSync"
+        private const val CLEAR_STORAGE_SYNC = "clearStorageSync"
+        private const val SET_STORAGE = "setStorage"
+        private const val GET_STORAGE = "getStorage"
+        private const val REMOVE_STORAGE = "removeStorage"
+        private const val CLEAR_STORAGE = "clearStorage"
+        private const val GET_STORAGE_INFO_SYNC = "getStorageInfoSync"
+        private const val GET_STORAGE_INFO = "getStorageInfo"
+
+        internal fun clearAllStorage(appId: String) {
+            MMKV.mmkvWithID(appId).clearAll()
+            MMKV.mmkvWithID(StorageRecordCodec.storageId(appId)).clearAll()
+        }
     }
 
     override val apiNames = setOf(
@@ -51,7 +56,8 @@ class StorageApi : BaseApiHandler() {
         params: JSONObject,
         responseCallback: (String) -> Unit,
     ): APIResult {
-        val storage = MMKV.mmkvWithID(appId)
+        val legacyStorage = MMKV.mmkvWithID(appId)
+        val storage = MMKV.mmkvWithID(StorageRecordCodec.storageId(appId))
         return when (apiName) {
             SET_STORAGE_SYNC -> {
                 val kv = params.optJSONArray("args")
@@ -63,11 +69,12 @@ class StorageApi : BaseApiHandler() {
 
             GET_STORAGE_SYNC -> {
                 val key = params.optString("args")
-                return when (val value = get(key, storage)) {
+                return when (val value = get(key, storage, legacyStorage)) {
                     is String -> SyncResult(JSValue.createString(value))
                     is Int -> SyncResult(JSValue.createNumber(value.toDouble()))
                     is Double -> SyncResult(JSValue.createNumber(value))
                     is Float -> SyncResult(JSValue.createNumber(value.toDouble()))
+                    is Long -> SyncResult(JSValue.createNumber(value.toDouble()))
                     is Boolean -> SyncResult(JSValue.createBoolean(value))
                     is JSONArray -> SyncResult(JSValue.createObject(value.toString()))
                     is JSONObject -> SyncResult(JSValue.createObject(value.toString()))
@@ -78,13 +85,14 @@ class StorageApi : BaseApiHandler() {
             REMOVE_STORAGE_SYNC -> {
                 val key = params.optString("args")
                 if (key.isNotEmpty()) {
-                    storage.removeValueForKey(key)
+                    remove(key, storage)
                 }
                 NoneResult()
             }
 
             CLEAR_STORAGE_SYNC -> {
                 storage.clear()
+                legacyStorage.clear()
                 NoneResult()
             }
 
@@ -99,7 +107,7 @@ class StorageApi : BaseApiHandler() {
 
             GET_STORAGE -> {
                 val key = params.optString("key")
-                val value = get(key, storage)
+                val value = get(key, storage, legacyStorage)
                 AsyncResult(JSONObject().apply {
                     put("data", value)
                     put("errMsg", "$GET_STORAGE:ok")
@@ -109,7 +117,7 @@ class StorageApi : BaseApiHandler() {
             REMOVE_STORAGE -> {
                 val key = params.optString("key")
                 if (key.isNotEmpty()) {
-                    storage.removeValueForKey(key)
+                    remove(key, storage)
                     AsyncResult(JSONObject().apply {
                         put("errMsg", "$REMOVE_STORAGE:ok")
                     })
@@ -122,31 +130,19 @@ class StorageApi : BaseApiHandler() {
 
             CLEAR_STORAGE -> {
                 storage.clear()
+                legacyStorage.clear()
                 AsyncResult(JSONObject().apply {
                     put("errMsg", "$CLEAR_STORAGE:ok")
                 })
             }
 
             GET_STORAGE_INFO_SYNC -> {
-                SyncResult(JSValue.createObject(JSONObject().apply {
-                    put(
-                        "keys", storage.allKeys()
-                            ?.filter { !it.endsWith("_type") }
-                    )
-                    put("currentSize", storage.totalSize())
-                    put("limitSize", 10 * 1024 * 1024)
-                }.toString()))
+                SyncResult(JSValue.createObject(storageInfo(storage, legacyStorage).toString()))
             }
 
             GET_STORAGE_INFO -> {
-                AsyncResult(JSONObject().apply {
-                    put(
-                        "keys", storage.allKeys()
-                            ?.filter { !it.endsWith("_type") }
-                    )
-                    put("currentSize", storage.totalSize())
-                    put("limitSize", 10 * 1024 * 1024)
-                    put("errMsg", "$GET_STORAGE:ok")
+                AsyncResult(storageInfo(storage, legacyStorage).apply {
+                    put("errMsg", "$GET_STORAGE_INFO:ok")
                 })
             }
 
@@ -156,88 +152,130 @@ class StorageApi : BaseApiHandler() {
     }
 
     private fun set(key: String, data: Any?, storage: MMKV): Boolean {
-        if (key.isNotEmpty()) {
-            val typeKey = "${key}_type" // Store type info with a suffix
-            when (data) {
-                is Int -> {
-                    storage.encode(key, data)
-                    storage.encode(typeKey, "Int")
-                }
-
-                is String -> {
-                    storage.encode(key, data)
-                    storage.encode(typeKey, "String")
-                }
-
-                is Boolean -> {
-                    storage.encode(key, data)
-                    storage.encode(typeKey, "Boolean")
-                }
-
-                is Float -> {
-                    storage.encode(key, data)
-                    storage.encode(typeKey, "Float")
-                }
-
-                is Long -> {
-                    storage.encode(key, data)
-                    storage.encode(typeKey, "Long")
-                }
-
-                is Double -> {
-                    storage.encode(key, data)
-                    storage.encode(typeKey, "Double")
-                }
-
-                is JSONArray -> {
-                    storage.encode(key, data.toString())
-                    storage.encode(typeKey, "Array")
-                }
-
-                is JSONObject -> {
-                    storage.encode(key, data.toString())
-                    storage.encode(typeKey, "Object")
-                }
-
-                is Any -> try {
-                    // For JSON-serializable objects
-                    storage.encode(key, data.toString())
-                    storage.encode(typeKey, "String") // Treat as String
-                } catch (_: Exception) {
-                    return false
-                }
-            }
-            return true
-        }
-        return false
+        if (key.isEmpty()) return false
+        return storage.encode(StorageRecordCodec.dataKey(key), StorageRecordCodec.encodeValue(data))
     }
 
-    private fun get(key: String, storage: MMKV): Any? {
-        if (key.isNotEmpty() && storage.containsKey(key)) {
-            val typeKey = "${key}_type"
-            val type = storage.decodeString(typeKey)
-                ?: return storage.decodeString(key) // Fallback to String if no type info
+    private fun remove(key: String, storage: MMKV) {
+        storage.encode(StorageRecordCodec.dataKey(key), StorageRecordCodec.encodeDeleted())
+    }
 
-            return when (type) {
-                "Int" -> storage.decodeInt(key, 0)
-                "String" -> storage.decodeString(key)
-                "Boolean" -> storage.decodeBool(key, false)
-                "Float" -> storage.decodeFloat(key, 0f)
-                "Long" -> storage.decodeLong(key, 0L)
-                "Double" -> storage.decodeDouble(key, 0.0)
-                "Array" -> try {
-                    JSONArray(storage.decodeString(key))
-                } catch (_: Exception) {
-                    storage.decodeString(key) // Fallback to String if parsing fails
-                }
-                "Object" -> try {
-                    JSONObject(storage.decodeString(key))
-                } catch (_: Exception) {
-                    storage.decodeString(key) // Fallback to String if parsing fails
-                }
-                else -> storage.decodeString(key) // Fallback to String for unknown types
-            }
+    private fun get(key: String, storage: MMKV, legacyStorage: MMKV): Any? {
+        if (key.isEmpty()) return null
+        val dataKey = StorageRecordCodec.dataKey(key)
+        if (storage.containsKey(dataKey)) {
+            return StorageRecordCodec.decode(storage.decodeString(dataKey))?.takeUnless { it.deleted }?.value
         }
-        return null
+        val legacyValue = getLegacy(key, legacyStorage) ?: return null
+        set(key, legacyValue, storage)
+        return legacyValue
+    }
+
+    private fun getLegacy(key: String, storage: MMKV): Any? {
+        if (!storage.containsKey(key)) return null
+        val type = storage.decodeString("${key}_type")
+            ?: return storage.decodeString(key)
+        return when (type) {
+            "Int" -> storage.decodeInt(key, 0)
+            "String" -> storage.decodeString(key)
+            "Boolean" -> storage.decodeBool(key, false)
+            "Float" -> storage.decodeFloat(key, 0f)
+            "Long" -> storage.decodeLong(key, 0L)
+            "Double" -> storage.decodeDouble(key, 0.0)
+            "Array" -> storage.decodeString(key)?.let { raw ->
+                runCatching { JSONArray(raw) }.getOrElse { raw }
+            }
+            "Object" -> storage.decodeString(key)?.let { raw ->
+                runCatching { JSONObject(raw) }.getOrElse { raw }
+            }
+            else -> storage.decodeString(key)
+        }
+    }
+
+    private fun storageInfo(storage: MMKV, legacyStorage: MMKV): JSONObject {
+        val values = linkedMapOf<String, Int>()
+        val overriddenKeys = mutableSetOf<String>()
+        storage.allKeys()?.forEach { storedKey ->
+            if (!storedKey.startsWith(StorageRecordCodec.DATA_PREFIX)) return@forEach
+            val key = storedKey.removePrefix(StorageRecordCodec.DATA_PREFIX)
+            overriddenKeys += key
+            val raw = storage.decodeString(storedKey) ?: return@forEach
+            val record = StorageRecordCodec.decode(raw) ?: return@forEach
+            if (!record.deleted) values[key] = raw.toByteArray().size
+        }
+        legacyStorage.allKeys()?.forEach { legacyKey ->
+            if (legacyKey.endsWith("_type") || legacyKey in overriddenKeys) return@forEach
+            val value = getLegacy(legacyKey, legacyStorage) ?: return@forEach
+            values[legacyKey] = value.toString().toByteArray().size
+        }
+        return JSONObject().apply {
+            put("keys", JSONArray(values.keys))
+            put("currentSize", values.values.sum())
+            put("limitSize", 10 * 1024 * 1024)
+        }
+    }
+}
+
+internal data class StorageRecord(val deleted: Boolean, val value: Any? = null)
+
+internal object StorageRecordCodec {
+    const val DATA_PREFIX = "data:"
+    private const val VERSION = 2
+
+    fun storageId(appId: String): String = "dimina_storage_v2_${appId.length}_$appId"
+
+    fun dataKey(key: String): String = "$DATA_PREFIX$key"
+
+    fun encodeDeleted(): String = JSONObject()
+        .put("version", VERSION)
+        .put("kind", "deleted")
+        .toString()
+
+    fun encodeValue(value: Any?): String {
+        val type = when (value) {
+            null, JSONObject.NULL -> "Null"
+            is Int -> "Int"
+            is String -> "String"
+            is Boolean -> "Boolean"
+            is Float -> "Float"
+            is Long -> "Long"
+            is Double -> "Double"
+            is JSONArray -> "Array"
+            is JSONObject -> "Object"
+            else -> "String"
+        }
+        return JSONObject()
+            .put("version", VERSION)
+            .put("kind", "value")
+            .put("type", type)
+            .put("value", when (type) {
+                "Null" -> JSONObject.NULL
+                "String" -> value?.toString() ?: ""
+                else -> value
+            })
+            .toString()
+    }
+
+    fun decode(raw: String?): StorageRecord? {
+        if (raw == null) return null
+        return runCatching {
+            val json = JSONObject(raw)
+            if (json.optInt("version") != VERSION) return null
+            if (json.optString("kind") == "deleted") return StorageRecord(deleted = true)
+            if (json.optString("kind") != "value") return null
+            val value = when (json.optString("type")) {
+                "Null" -> JSONObject.NULL
+                "Int" -> json.getInt("value")
+                "String" -> json.getString("value")
+                "Boolean" -> json.getBoolean("value")
+                "Float" -> json.getDouble("value").toFloat()
+                "Long" -> json.getLong("value")
+                "Double" -> json.getDouble("value")
+                "Array" -> json.getJSONArray("value")
+                "Object" -> json.getJSONObject("value")
+                else -> return null
+            }
+            StorageRecord(deleted = false, value = value)
+        }.getOrNull()
     }
 }

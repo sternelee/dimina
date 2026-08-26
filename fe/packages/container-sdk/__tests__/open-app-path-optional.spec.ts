@@ -114,7 +114,7 @@ describe('openApp path optional when restoreStack is provided', () => {
 			ok: true,
 			status: 200,
 			text: () => Promise.resolve(JSON.stringify(gameConfig)),
-		})) as typeof fetch
+		})) as unknown as typeof fetch
 		const container = createContainer({ mount })
 
 		const miniApp = await container.openApp({ appId: 'wx-game' })

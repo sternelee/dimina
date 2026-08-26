@@ -122,6 +122,27 @@ describe('collectAssets', () => {
 		expect(fs.readFileSync(path.join(targetPath, 'main/static', heifResult.split('/').pop()), 'utf8')).toBe('heif-image')
 	})
 
+	it('collects WebP assets and preserves fragment-only suffixes', () => {
+		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-assets-'))
+		const workPath = path.join(tempDir, 'project')
+		const targetPath = path.join(tempDir, 'output')
+		const assetDir = path.join(workPath, 'pages/detail/images')
+		fs.mkdirSync(assetDir, { recursive: true })
+		fs.writeFileSync(path.join(assetDir, 'photo.webp'), 'webp-image')
+
+		const result = collectAssets(
+			workPath,
+			'/pages/detail/index',
+			'./images/photo.webp#preview',
+			targetPath,
+			'test-app',
+		)
+
+		expect(result).toMatch(/^\/test-app\/main\/static\/.+_photo\.webp#preview$/)
+		const outputName = result.split('/').pop().split('#')[0]
+		expect(fs.readFileSync(path.join(targetPath, 'main/static', outputName), 'utf8')).toBe('webp-image')
+	})
+
 	it('copies a cached source asset into every build target', () => {
 		tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'compiler-assets-'))
 		const workPath = path.join(tempDir, 'project')

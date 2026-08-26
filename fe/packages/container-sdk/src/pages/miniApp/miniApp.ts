@@ -45,6 +45,16 @@ function blockModalPageTouchMove(event: TouchEvent): void {
 type CallbackId = unknown
 type ApiCallback = (args?: unknown) => void
 
+const STORAGE_V2_DATA_PREFIX = '__dimina_storage_v2_data__'
+const STORAGE_V2_META_PREFIX = '__dimina_storage_v2_meta__'
+
+interface StorageValueRecord {
+	version: 2
+	kind: 'value' | 'deleted'
+	dataType?: 'json' | 'undefined'
+	data?: unknown
+}
+
 function getErrorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error)
 }
@@ -608,19 +618,82 @@ export class MiniApp {
 		return this.parent?.storageAdapter ?? resolveStorageAdapter(true)
 	}
 
-	/**
-	 * 存储 key：`${appId}_${key}`，跟 `fe/packages/container` 旧实现、以及 Android/iOS
-	 * 原生实现（各自按 appId 分独立存储实例/文件，key 用原始值，无需拼接）保持同一套
-	 * 对外可见的落地行为——appId/key 本身含下划线时有已知的字符串前缀碰撞歧义，Web 侧
-	 * 因为 localStorage 是单一全局 keyspace、不能像原生那样按 appId 分独立存储实例，
-	 * 暂不解决；这不是本次抽取要处理的范围。
-	 */
+	/** Length-prefixed appId makes the (appId, key) mapping unambiguous. */
 	_storageKey(key: string): string {
-		return `${this.appId}_${key}`
+		return `${this._storageKeyPrefix()}${key}`
 	}
 
 	_storageKeyPrefix(): string {
-		return `${this.appId}_`
+		return `${STORAGE_V2_DATA_PREFIX}${this.appId.length}:${this.appId}:`
+	}
+
+	_legacyStorageKey(key: string): string {
+		return `${this.appId}_${key}`
+	}
+
+	_legacyStorageDisabledKey(): string {
+		return `${STORAGE_V2_META_PREFIX}${this.appId.length}:${this.appId}:legacy-disabled`
+	}
+
+	_serializeStorageValue(data: unknown): string {
+		const record: StorageValueRecord = data === undefined
+			? { version: 2, kind: 'value', dataType: 'undefined' }
+			: { version: 2, kind: 'value', dataType: 'json', data }
+		return JSON.stringify(record)
+	}
+
+	_serializeStorageTombstone(): string {
+		return JSON.stringify({ version: 2, kind: 'deleted' } satisfies StorageValueRecord)
+	}
+
+	_decodeStorageRecord(raw: string): StorageValueRecord {
+		const value = JSON.parse(raw) as Partial<StorageValueRecord> | null
+		if (!value || value.version !== 2 || (value.kind !== 'value' && value.kind !== 'deleted')) {
+			throw new Error('invalid storage record')
+		}
+		if (value.kind === 'value' && value.dataType !== 'json' && value.dataType !== 'undefined') {
+			throw new Error('invalid storage value type')
+		}
+		return value as StorageValueRecord
+	}
+
+	_decodeLegacyStorageValue(raw: string): unknown {
+		try {
+			return JSON.parse(raw)
+		}
+		catch {
+			return raw
+		}
+	}
+
+	_readStorageValue(storageAdapter: StorageAdapter, key: string): { found: boolean, data?: unknown } {
+		const storageKey = this._storageKey(key)
+		const current = storageAdapter.getItem(storageKey)
+		if (current !== null) {
+			const record = this._decodeStorageRecord(current)
+			if (record.kind === 'deleted') {
+				return { found: false }
+			}
+			return { found: true, data: record.dataType === 'undefined' ? undefined : record.data }
+		}
+
+		// Old `${appId}_${key}` data remains readable and is lazily copied into
+		// the collision-free namespace. The old entry is intentionally retained:
+		// its spelling may also represent another app's legacy key.
+		if (
+			storageAdapter.getItem(this._legacyStorageDisabledKey()) === '1'
+			|| this.appId.includes('_')
+			|| key.includes('_')
+		) {
+			return { found: false }
+		}
+		const legacy = storageAdapter.getItem(this._legacyStorageKey(key))
+		if (legacy === null) {
+			return { found: false }
+		}
+		const data = this._decodeLegacyStorageValue(legacy)
+		storageAdapter.setItem(storageKey, this._serializeStorageValue(data))
+		return { found: true, data }
 	}
 
 	/**
@@ -673,8 +746,8 @@ export class MiniApp {
 	_handleUnsupportedApi(name: string, params: Record<string, unknown> = {}): void {
 		const { onFail, onComplete } = this._createApiCallbacks(params as ApiCallbackOptions)
 		const error = { errMsg: `${name}:fail api is not supported` }
-		if (onFail) {
-			onFail(error)
+		if (params.fail) {
+			onFail?.(error)
 		}
 		else {
 			console.warn(`[container] ${error.errMsg}`)
@@ -1082,19 +1155,36 @@ export class MiniApp {
 	}
 
 	_createApiCallbacks({ success, fail, complete }: ApiCallbackOptions = {}): { onSuccess: ApiCallback | undefined, onFail: ApiCallback | undefined, onComplete: ApiCallback | undefined } {
+		const successCallback = this.createCallbackFunction(success)
+		const failCallback = this.createCallbackFunction(fail)
+		const completeCallback = this.createCallbackFunction(complete)
+		let settledResult: unknown
+		const onSuccess: ApiCallback | undefined = successCallback || completeCallback
+			? (result?: unknown) => {
+					settledResult = result
+					successCallback?.(result)
+				}
+			: undefined
+		const onFail: ApiCallback | undefined = failCallback || completeCallback
+			? (result?: unknown) => {
+					settledResult = result
+					failCallback?.(result)
+				}
+			: undefined
+		const onComplete: ApiCallback | undefined = completeCallback
+			? (...args: unknown[]) => completeCallback(args.length > 0 ? args[0] : settledResult)
+			: undefined
 		return {
-			onSuccess: this.createCallbackFunction(success),
-			onFail: this.createCallbackFunction(fail),
-			onComplete: this.createCallbackFunction(complete),
+			onSuccess,
+			onFail,
+			onComplete,
 		}
 	}
 
 	async navigateTo(opts: NavigateOptions): Promise<void> {
 		const { url, success, fail, complete } = opts
 		const { query, pagePath } = queryPath(url)
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		// 微信规范：navigateTo 不允许跳转到 tabBar 页面
 		if (this._isTabBarPage(pagePath)) {
@@ -1200,9 +1290,7 @@ export class MiniApp {
 
 	reLaunch(opts: NavigateOptions): void {
 		const { url, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		// 防抖处理
 		if (!this.webviewAnimaEnd) {
@@ -1323,9 +1411,7 @@ export class MiniApp {
 	redirectTo(opts: NavigateOptions): void {
 		const { url, success, fail, complete } = opts
 		const { query, pagePath } = queryPath(url)
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		// 微信规范：redirectTo 不允许跳转到 tabBar 页面
 		if (this._isTabBarPage(pagePath)) {
@@ -1476,9 +1562,7 @@ export class MiniApp {
 		const { url, success, fail, complete } = opts
 		const { query, pagePath } = queryPath(url)
 		const targetPath = this._normalizePagePath(pagePath)
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		if (!this._isTabBarPage(targetPath)) {
 			onFail?.({ errMsg: `switchTab:fail not a tabBar page: ${targetPath}` })
@@ -1963,9 +2047,7 @@ export class MiniApp {
 	 */
 	setTabBarStyle(opts: SetTabBarStyleOptions = {}): void {
 		const { color, selectedColor, backgroundColor, borderStyle, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		if (!this.tabBarConfig || !this.tabBarEl) {
 			onFail?.({ errMsg: 'setTabBarStyle:fail tabBar not configured' })
@@ -2434,8 +2516,7 @@ export class MiniApp {
 
 		const { success, complete } = opts
 
-		const onSuccess = this.createCallbackFunction(success)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onComplete } = this._createApiCallbacks({ success, complete })
 
 		onSuccess?.({
 			statusBarHeight: bar.height,
@@ -2595,8 +2676,7 @@ export class MiniApp {
 
 		this.hideToast({})
 
-		const onSuccess = this.createCallbackFunction(success)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onComplete } = this._createApiCallbacks({ success, complete })
 
 		// 可选遮罩层：mask:true 时阻止用户点击下层内容（对齐 wx.showToast）
 		let maskEl: HTMLElement | null = null
@@ -2637,8 +2717,7 @@ export class MiniApp {
 
 	hideToast(opts: ApiCallbackOptions = {}): void {
 		const { success, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onComplete } = this._createApiCallbacks({ success, complete })
 
 		if (this.toastInfo.dom) {
 			this.toastInfo.dom.remove()
@@ -2746,8 +2825,7 @@ export class MiniApp {
 			success,
 			complete,
 		} = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onComplete } = this._createApiCallbacks({ success, complete })
 
 		const mask = document.createElement('div')
 		mask.className = 'dimina-dialog-mask'
@@ -2845,9 +2923,10 @@ export class MiniApp {
 
 	showActionSheet(opts: ShowActionSheetOptions): void {
 		const { itemList = [], itemColor = '#000', success, fail, complete } = opts || {}
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 		if (!Array.isArray(itemList) || itemList.length === 0) {
-			fail && this.createCallbackFunction(fail)?.({ errMsg: 'showActionSheet:fail' })
-			complete && this.createCallbackFunction(complete)?.()
+			onFail?.({ errMsg: 'showActionSheet:fail' })
+			onComplete?.()
 			return
 		}
 		// 创建遮罩层
@@ -2870,8 +2949,8 @@ export class MiniApp {
 			btn.textContent = item
 			btn.onclick = () => {
 				cleanup()
-				success && this.createCallbackFunction(success)?.({ tapIndex: idx })
-				complete && this.createCallbackFunction(complete)?.()
+				onSuccess?.({ tapIndex: idx, errMsg: 'showActionSheet:ok' })
+				onComplete?.()
 			}
 			sheet.appendChild(btn)
 		})
@@ -2881,8 +2960,8 @@ export class MiniApp {
 		cancelBtn.textContent = '取消'
 		cancelBtn.onclick = () => {
 			cleanup()
-			fail && this.createCallbackFunction(fail)?.({ errMsg: 'showActionSheet:fail cancel' })
-			complete && this.createCallbackFunction(complete)?.()
+			onFail?.({ errMsg: 'showActionSheet:fail cancel' })
+			onComplete?.()
 		}
 		sheet.appendChild(cancelBtn)
 
@@ -2899,9 +2978,7 @@ export class MiniApp {
 
 	setNavigationBarTitle(opts: SetNavigationBarTitleOptions): void {
 		const { title, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 		try {
 			const currentBridge = this.navigator.top!
 			const navigationTitle = currentBridge.webview!.el.querySelector<HTMLElement>('.dimina-native-webview__navigation-title')
@@ -2923,9 +3000,7 @@ export class MiniApp {
 
 	setNavigationBarColor(opts: SetNavigationBarColorOptions): void {
 		const { frontColor, backgroundColor, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
 			const currentBridge = this.navigator.top!
@@ -2958,9 +3033,7 @@ export class MiniApp {
 	 */
 	pageScrollTo(opts: PageScrollToOptions): void {
 		const { scrollTop, duration = 300, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
 			const currentBridge = this.navigator.top!
@@ -2993,9 +3066,7 @@ export class MiniApp {
 	 */
 	setClipboardData(opts: SetClipboardDataOptions): void {
 		const { data, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
 			navigator.clipboard.writeText(data).then(() => {
@@ -3017,9 +3088,7 @@ export class MiniApp {
 	 */
 	getClipboardData(opts: ApiCallbackOptions): void {
 		const { success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
 			navigator.clipboard.readText().then((data) => {
@@ -3392,9 +3461,7 @@ export class MiniApp {
 	 */
 	'FileSystemManager.saveFile'(opts: SaveFileOptions = {}): void {
 		const { tempFilePath = '', filePath, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		saveWebFile({
 			appId: this.appId,
@@ -3414,15 +3481,11 @@ export class MiniApp {
 
 	setStorage(opts: SetStorageOptions): void {
 		const { key, data, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
 			const storageKey = this._storageKey(key)
-			// 将数据转为字符串存储
-			const dataString = typeof data === 'object' ? JSON.stringify(data) : String(data)
-			this._getStorageAdapter().setItem(storageKey, dataString)
+			this._getStorageAdapter().setItem(storageKey, this._serializeStorageValue(data))
 			onSuccess?.({ errMsg: 'setStorage:ok' })
 		}
 		catch (error) {
@@ -3435,23 +3498,12 @@ export class MiniApp {
 
 	getStorage(opts: StorageKeyOptions): void {
 		const { key, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
-			const storageKey = this._storageKey(key)
-			const data = this._getStorageAdapter().getItem(storageKey)
-			if (data !== null) {
-				// 尝试解析JSON数据
-				let parsedData: unknown = data
-				try {
-					parsedData = JSON.parse(data)
-				}
-				catch {
-					// 如果解析失败，保持原始字符串
-				}
-				onSuccess?.({ data: parsedData, errMsg: 'getStorage:ok' })
+			const result = this._readStorageValue(this._getStorageAdapter(), key)
+			if (result.found) {
+				onSuccess?.({ data: result.data, errMsg: 'getStorage:ok' })
 			}
 			else {
 				onFail?.({ errMsg: `getStorage:fail data not found` })
@@ -3467,21 +3519,13 @@ export class MiniApp {
 
 	removeStorage(opts: StorageKeyOptions): void {
 		const { key, success, fail, complete } = opts
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
-			const storageKey = this._storageKey(key)
-			const storageAdapter = this._getStorageAdapter()
-			if (storageAdapter.getItem(storageKey) !== null) {
-				storageAdapter.removeItem(storageKey)
-				onSuccess?.({ errMsg: 'removeStorage:ok' })
-			}
-			else {
-				// 即使key不存在也返回成功
-				onSuccess?.({ errMsg: 'removeStorage:ok' })
-			}
+			// A tombstone prevents an ambiguous legacy key from being resurrected
+			// without deleting a string that may belong to another legacy appId.
+			this._getStorageAdapter().setItem(this._storageKey(key), this._serializeStorageTombstone())
+			onSuccess?.({ errMsg: 'removeStorage:ok' })
 		}
 		catch (error) {
 			onFail?.({ errMsg: `removeStorage:fail ${getErrorMessage(error)}` })
@@ -3493,17 +3537,15 @@ export class MiniApp {
 
 	clearStorage(opts: ApiCallbackOptions = {}): void {
 		const { success, fail, complete } = opts || {}
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
-			// 只清除当前appId的存储数据
+			// Only collision-free v2 keys can be enumerated safely. The marker
+			// suppresses fallback to ambiguous legacy-prefix entries after clear.
 			const appIdPrefix = this._storageKeyPrefix()
 			const keysToRemove: string[] = []
 			const storageAdapter = this._getStorageAdapter()
 
-			// 找出所有属于当前appId的keys
 			for (let i = 0; i < storageAdapter.length; i++) {
 				const key = storageAdapter.key(i)
 				if (key?.startsWith(appIdPrefix)) {
@@ -3511,8 +3553,8 @@ export class MiniApp {
 				}
 			}
 
-			// 删除所有找到的keys
 			keysToRemove.forEach(key => storageAdapter.removeItem(key))
+			storageAdapter.setItem(this._legacyStorageDisabledKey(), '1')
 
 			onSuccess?.({ errMsg: 'clearStorage:ok' })
 		}
@@ -3526,9 +3568,7 @@ export class MiniApp {
 
 	getStorageInfo(opts: ApiCallbackOptions = {}): void {
 		const { success, fail, complete } = opts || {}
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		try {
 			const keys: string[] = []
@@ -3537,19 +3577,18 @@ export class MiniApp {
 			const appIdPrefix = this._storageKeyPrefix()
 			const storageAdapter = this._getStorageAdapter()
 
-			// 只获取当前appId的存储信息
 			for (let i = 0; i < storageAdapter.length; i++) {
 				const fullKey = storageAdapter.key(i)
 
 				// 只处理当前appId的keys；StorageAdapter.key() 允许返回 null（自定义适配器
 				// 合法返回值，或枚举过程中存储发生变化），跳过而不是断言非空后直接调用字符串方法
 				if (fullKey?.startsWith(appIdPrefix)) {
-					// 移除appId前缀，返回原始key给小程序
-					const originalKey = fullKey.substring(appIdPrefix.length)
-					keys.push(originalKey)
-
 					const item = storageAdapter.getItem(fullKey)
-					currentSize += item ? item.length * 2 : 0 // 估算字符串大小（UTF-16编码每个字符2字节）
+					if (item === null) continue
+					const record = this._decodeStorageRecord(item)
+					if (record.kind === 'deleted') continue
+					keys.push(fullKey.substring(appIdPrefix.length))
+					currentSize += item.length * 2 // 估算 UTF-16 落盘大小
 				}
 			}
 
@@ -3614,9 +3653,7 @@ export class MiniApp {
 	 */
 	_extBridgeCall(event: string, params: ExtCallParams): void {
 		const { module, data = {}, success, fail, complete } = params
-		const onSuccess = this.createCallbackFunction(success)
-		const onFail = this.createCallbackFunction(fail)
-		const onComplete = this.createCallbackFunction(complete)
+		const { onSuccess, onFail, onComplete } = this._createApiCallbacks({ success, fail, complete })
 
 		const handler = this.parent?.appManager?.getExtModule(module!)
 		if (!handler) {

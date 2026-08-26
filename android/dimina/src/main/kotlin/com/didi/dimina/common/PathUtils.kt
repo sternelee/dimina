@@ -78,6 +78,57 @@ object PathUtils {
         return canonical.path
     }
 
+    /**
+     * Resolves a local media source owned by one mini program. In addition to
+     * difile user/temp files, packaged resources are allowed; raw file paths
+     * are accepted only when their canonical target remains under one of
+     * those three roots.
+     */
+    fun pathToAppResource(context: Context, path: String, appId: String): String {
+        val safeAppId = validatedAppId(appId)
+        if (isLegalPath(path)) {
+            return pathToReal(context, path, safeAppId)
+        }
+
+        val parsed = Uri.parse(path)
+        val scheme = parsed.scheme?.lowercase()
+        require(scheme == null || scheme == "file") { "unsupported local file scheme" }
+        if (scheme == "file") {
+            require(parsed.host.isNullOrEmpty()) { "remote file URI is not allowed" }
+        }
+        val rawPath = if (scheme == "file") {
+            requireNotNull(parsed.path) { "invalid file URI" }
+        } else {
+            path
+        }
+
+        val packageRoot = File(context.filesDir, "jsapp/$safeAppId").canonicalFile
+        val userRoot = appUserRoot(context, safeAppId).canonicalFile
+        val tempRoot = appTempRoot(context, safeAppId).canonicalFile
+        val appPathPrefix = "/$safeAppId/"
+        val packageRelativePath = when {
+            rawPath.startsWith(appPathPrefix) -> rawPath.removePrefix(appPathPrefix)
+            !rawPath.startsWith('/') -> rawPath
+            else -> null
+        }
+        val target = if (packageRelativePath != null) {
+            require(!packageRelativePath.contains('\\') && !packageRelativePath.contains('\u0000')) {
+                "invalid package path"
+            }
+            require(packageRelativePath.split('/').none { it == ".." }) { "invalid package path" }
+            val direct = confinedFile(packageRoot, packageRelativePath)
+            if (direct.exists()) direct else confinedFile(packageRoot, "main/$packageRelativePath")
+        } else {
+            File(rawPath).canonicalFile
+        }
+        val canonical = target.canonicalFile
+        val allowedRoots = listOf(packageRoot, userRoot, tempRoot)
+        require(allowedRoots.any { canonical.path == it.path || canonical.path.startsWith(it.path + File.separator) }) {
+            "path is outside mini program storage"
+        }
+        return canonical.path
+    }
+
     fun pathToVirtual(file: File): String {
         return "$VIRTUAL_DOMAIN_URL${file.name}"
     }

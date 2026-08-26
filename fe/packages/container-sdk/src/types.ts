@@ -68,8 +68,9 @@ export interface UrlSyncAdapter {
 
 /**
  * wx.setStorage/getStorage/removeStorage/clearStorage/getStorageInfo 落地的存储适配器。
- * 默认实现无条件读写 window.localStorage（key 按 `${appId}_${key}` 命名空间隔离，与
- * `fe/packages/container` 旧实现字节级一致），这在宿主自身也用 localStorage、或同一
+ * 默认实现读写 window.localStorage，并使用带 appId 长度的 v2 key 编码避免跨应用碰撞；
+ * 可唯一判断归属的旧 `${appId}_${key}` 数据会在精确读取时懒迁移；含下划线而归属
+ * 不明确的旧组合不会被猜测读取。宿主自身也用 localStorage、或同一
  * 宿主页面上多个 createContainer() 实例打开同一 appId（写到完全相同的 key，互相覆盖，
  * 与 urlSync 此前的多容器覆盖问题同构）时没有任何关闭或接管手段，因此改为可替换/可
  * 关闭：宿主可传 false 关闭（存储调用一律以 fail 收场，不再触碰 localStorage），或传
@@ -149,7 +150,7 @@ export interface CreateContainerOptions {
 	instanceKey?: string
 	/**
 	 * wx.setStorage/getStorage/removeStorage/clearStorage/getStorageInfo 落地位置：
-	 * 缺省 true 沿用内置 window.localStorage（key 按 `${appId}_${key}` 命名空间隔离）；
+	 * 缺省 true 使用内置 window.localStorage（v2 key 无歧义隔离，并兼容读取可唯一判断归属的旧 key）；
 	 * 传 false 完全关闭（存储调用一律 fail，不再触碰 localStorage）；传自定义
 	 * { getItem, setItem, removeItem, length, key } 适配器接管（例如路由到宿主自己的
 	 * 存储介质，或按容器实例追加命名空间前缀，规避多容器打开同一 appId 时的 key 碰撞）。

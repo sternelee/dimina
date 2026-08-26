@@ -181,6 +181,10 @@ private final class DMPIOSNativeComponentHost {
         ])
         DMPChannelProxy.containerToRender(msg: msg, app: app, webViewId: webViewId)
     }
+
+    fileprivate var appId: String? {
+        app?.getAppId()
+    }
 }
 
 private final class DMPPassthroughView: UIView {
@@ -684,10 +688,14 @@ private final class DMPIOSNativeVideoComponent: NSObject, UIGestureRecognizerDel
         if src.isEmpty {
             return nil
         }
-        if src.hasPrefix("http://") || src.hasPrefix("https://") || src.hasPrefix("file://") {
+        if src.hasPrefix("http://") || src.hasPrefix("https://") {
             return URL(string: src)
         }
-        return URL(fileURLWithPath: src)
+        guard let appId = host?.appId,
+              let path = DMPFileUtil.appAccessiblePath(from: src, appId: appId) else {
+            return nil
+        }
+        return URL(fileURLWithPath: path)
     }
 }
 

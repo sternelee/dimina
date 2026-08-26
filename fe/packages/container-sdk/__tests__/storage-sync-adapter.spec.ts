@@ -4,13 +4,13 @@ import { FakeWorker, resetFakeWorker } from './fixtures/fake-worker.js'
 import { installFetchMock } from './fixtures/mock-fetch.js'
 
 // 回归测试：setStorage/getStorage/removeStorage/clearStorage/getStorageInfo 这 5 个方法
-// 目前无条件读写 window.localStorage，key 按 `${appId}_${key}` 命名空间隔离，且没有任何
+// 目前无条件读写 window.localStorage，且没有任何
 // 关闭或接管的手段——跟 urlSync 此前遇到的问题同构（见 url-sync-adapter.spec.ts）。
 //
 // 这暴露两个问题：
 // 1) 宿主页面自身也可能用到 window.localStorage，或想把小程序存储路由到别的介质
 //    （IndexedDB、加密存储、远程同步……），目前完全没有关闭或接管的手段。
-// 2) `${appId}_${key}` 只按 appId 区分：同一 appId 在同一宿主页面下被多个独立的
+// 2) 存储只按 appId 区分：同一 appId 在同一宿主页面下被多个独立的
 //    createContainer() 实例分别打开时，会写到完全相同的 localStorage key，互相覆盖——
 //    这是本文件末尾一个测试要留证的既有缺陷（characterization test，非本次修复目标，
 //    留作后续引入自定义命名空间/命名空间适配器的动机说明）。
@@ -107,12 +107,12 @@ describe('storageSync controls whether/how the container touches localStorage', 
 
 			miniApp.invokeApi('setStorage', { key: 'token', data: { value: 'abc' }, success: 'set-success', fail: 'set-fail', complete: 'set-complete' })
 			await waitForTriggerCallback(workerIndexBefore, 'set-success')
-			expect(setItemSpy).toHaveBeenCalledWith('wx-storage-sync-default_token', expect.any(String))
+			expect(setItemSpy).toHaveBeenCalledWith('__dimina_storage_v2_data__23:wx-storage-sync-default:token', expect.any(String))
 
 			miniApp.invokeApi('getStorage', { key: 'token', success: 'get-success', fail: 'get-fail', complete: 'get-complete' })
 			const getResult = await waitForTriggerCallback(workerIndexBefore, 'get-success')
 			expect(getResult.body.args?.data).toEqual({ value: 'abc' })
-			expect(getItemSpy).toHaveBeenCalledWith('wx-storage-sync-default_token')
+			expect(getItemSpy).toHaveBeenCalledWith('__dimina_storage_v2_data__23:wx-storage-sync-default:token')
 		}, 10000)
 
 		it('storageSync: true behaves identically to the default (explicit opt-in)', async () => {
@@ -123,7 +123,7 @@ describe('storageSync controls whether/how the container touches localStorage', 
 
 			miniApp.invokeApi('setStorage', { key: 'token', data: 'plain-value', success: 'set-success', fail: 'set-fail', complete: 'set-complete' })
 			await waitForTriggerCallback(workerIndexBefore, 'set-success')
-			expect(setItemSpy).toHaveBeenCalledWith('wx-storage-sync-true_token', expect.any(String))
+			expect(setItemSpy).toHaveBeenCalledWith('__dimina_storage_v2_data__20:wx-storage-sync-true:token', expect.any(String))
 
 			miniApp.invokeApi('getStorage', { key: 'token', success: 'get-success', fail: 'get-fail', complete: 'get-complete' })
 			const getResult = await waitForTriggerCallback(workerIndexBefore, 'get-success')
@@ -204,7 +204,7 @@ describe('storageSync controls whether/how the container touches localStorage', 
 			miniApp.invokeApi('setStorage', { key: 'token', data: 'custom-value', success: 'set-success', fail: 'set-fail', complete: 'set-complete' })
 			await waitForTriggerCallback(workerIndexBefore, 'set-success')
 
-			expect(adapter.setItem).toHaveBeenCalledWith('wx-storage-sync-custom-set_token', expect.any(String))
+			expect(adapter.setItem).toHaveBeenCalledWith('__dimina_storage_v2_data__26:wx-storage-sync-custom-set:token', expect.any(String))
 			expect(setItemSpy).not.toHaveBeenCalled()
 		}, 10000)
 
@@ -221,15 +221,14 @@ describe('storageSync controls whether/how the container touches localStorage', 
 			miniApp.invokeApi('getStorage', { key: 'token', success: 'get-success', fail: 'get-fail', complete: 'get-complete' })
 			const getResult = await waitForTriggerCallback(workerIndexBefore, 'get-success')
 
-			expect(adapter.getItem).toHaveBeenCalledWith('wx-storage-sync-custom-get_token')
+			expect(adapter.getItem).toHaveBeenCalledWith('__dimina_storage_v2_data__26:wx-storage-sync-custom-get:token')
 			expect(getResult.body.args?.data).toEqual({ via: 'adapter' })
 			expect(getItemSpy).not.toHaveBeenCalled()
 		}, 10000)
 	})
 
-	// characterization test：留证既有缺陷，不是本次要修的行为——`storageSync` 需要支持
-	// 自定义/带命名空间的适配器，正是因为这个碰撞在缺省实现下无法避免。
-	it('characterizes an existing gap: two independent createContainer() instances opening the same appId write to the identical window.localStorage key', async () => {
+	// 同一 appId 跨容器共享存储是预期语义；需要容器级隔离时仍可使用自定义适配器。
+	it('keeps the same appId shared across independent container instances', async () => {
 		const mountA = document.createElement('div')
 		const mountB = document.createElement('div')
 		document.body.appendChild(mountA)
@@ -253,7 +252,7 @@ describe('storageSync controls whether/how the container touches localStorage', 
 
 		expect(setItemSpy).toHaveBeenCalledTimes(2)
 		const keysUsed = setItemSpy.mock.calls.map((call: unknown[]) => call[0])
-		expect(keysUsed[0]).toBe('wx-storage-collision_shared-key')
-		expect(keysUsed[1]).toBe('wx-storage-collision_shared-key')
+		expect(keysUsed[0]).toBe('__dimina_storage_v2_data__20:wx-storage-collision:shared-key')
+		expect(keysUsed[1]).toBe('__dimina_storage_v2_data__20:wx-storage-collision:shared-key')
 	}, 10000)
 })
