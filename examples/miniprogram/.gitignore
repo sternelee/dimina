@@ -8,3 +8,13 @@ dist-ssr
 package-lock.json
 pnpm-lock.yaml
 coverage
+
+/*
+!/.gitignore
+!/base/
+!/air-battle/
+!/subpackages/
+!/weui/
+!/vant/
+!/taro-todo/
+!/mpx-demo/

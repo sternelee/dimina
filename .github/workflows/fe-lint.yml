@@ -5,6 +5,7 @@ on:
   pull_request:
     paths:
       - 'fe/**'
+      - 'examples/miniprogram/**'
   workflow_dispatch:
 
 permissions:

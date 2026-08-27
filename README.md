@@ -82,7 +82,7 @@ pnpm compile
 pnpm dev
 ```
 
-其中，`pnpm compile` 负责构建 `fe/example/` 下的小程序，`pnpm dev` 会启动 Web 容器与代理服务。更多构建、打包和调试命令见[前端工作区说明](./fe/README.md)。
+其中，`pnpm compile` 负责构建 `examples/miniprogram/` 下的小程序，`pnpm dev` 会启动 Web 容器与代理服务。更多构建、打包和调试命令见[前端工作区说明](./fe/README.md)。
 
 准备把资源包接入原生应用时，可以从对应平台的接入文档开始：
 

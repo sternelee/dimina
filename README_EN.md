@@ -82,7 +82,7 @@ pnpm compile
 pnpm dev
 ```
 
-Here, `pnpm compile` builds the mini programs in `fe/example/`, and `pnpm dev` starts the Web container and proxy service. See the [frontend workspace guide](./fe/README.md) for more build, packaging, and debugging commands.
+Here, `pnpm compile` builds the mini programs in `examples/miniprogram/`, and `pnpm dev` starts the Web container and proxy service. See the [frontend workspace guide](./fe/README.md) for more build, packaging, and debugging commands.
 
 When you are ready to integrate a bundle into a native app, start with the guide for your platform:
 
