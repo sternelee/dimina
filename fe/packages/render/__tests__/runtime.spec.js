@@ -59,6 +59,50 @@ describe('runtime template components', () => {
 		delete globalThis.cancelAnimationFrame
 	})
 
+	it('acknowledges page attachment before page ready', async () => {
+		const loader = (await import('../src/core/loader.js')).default
+		const message = (await import('../src/core/message.js')).default
+		window.DiminaRenderBridge = {
+			publish: vi.fn(),
+			invoke: vi.fn(),
+		}
+		message.init()
+
+		vi.spyOn(loader, 'getModuleByPath').mockReturnValue({
+			moduleInfo: {
+				id: 'page-lifecycle-handshake',
+				usingComponents: {},
+				tplComponents: {},
+				render() {
+					return h('main', 'ready')
+				},
+			},
+		})
+
+		runtime.firstRender({
+			bridgeId: 'bridge-lifecycle-handshake',
+			pagePath: '/pages/lifecycle-handshake/index',
+			pageId: 'page-lifecycle-handshake',
+			query: {},
+		})
+		window.DiminaRenderBridge.onMessage({
+			type: 'page-lifecycle-handshake',
+			body: { data: {} },
+		})
+
+		await vi.waitFor(() => {
+			const types = window.DiminaRenderBridge.publish.mock.calls
+				.map(([payload]) => JSON.parse(payload).type)
+			expect(types).toContain('pageReady')
+		})
+		const lifecycleTypes = window.DiminaRenderBridge.publish.mock.calls
+			.map(([payload]) => JSON.parse(payload).type)
+			.filter(type => type === 'pageAttached' || type === 'pageReady')
+		expect(lifecycleTypes).toEqual(['pageAttached', 'pageReady'])
+
+		runtime.app.unmount()
+	})
+
 	it('reconstructs collapsed component roots in exparser bubble order', () => {
 		const page = {}
 		const parent = {}

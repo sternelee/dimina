@@ -11,7 +11,7 @@ describe('page startup protocol', () => {
 		globalThis.DiminaServiceBridge.publish = vi.fn()
 	})
 
-	it('sends firstRender before initial data and waits for a real pageShow signal', () => {
+	it('sends firstRender before initial data and waits for render attachment plus a real pageShow signal', () => {
 		const calls = []
 		const bridgeId = 'bridge-startup-order'
 		const path = 'pages/startup-order/index'
@@ -38,11 +38,17 @@ describe('page startup protocol', () => {
 			expect(messages).toHaveLength(2)
 			expect(messages[0].type).toBe('firstRender')
 			expect(messages[1].type).toBe(messages[0].body.pageId)
-			expect(calls).toEqual(['page:onLoad'])
+			expect(calls).toEqual([])
 
 			globalThis.DiminaServiceBridge.onMessage({
 				type: 'pageShow',
 				body: { bridgeId },
+			})
+			expect(calls).toEqual([])
+
+			globalThis.DiminaServiceBridge.onMessage({
+				type: 'pageAttached',
+				body: { bridgeId, moduleId: messages[0].body.pageId },
 			})
 			expect(calls).toEqual(['page:onLoad', 'page:onShow'])
 

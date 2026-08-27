@@ -14,19 +14,22 @@ Page({
     showTitle: true
   },
   onLoad() {
-    console.log('123321 page onLoad')
+    console.log('[Lifecycle][Page:custom-component] onLoad')
   },
   onShow() {
-    console.log('123321 page onShow')
+    console.log('[Lifecycle][Page:custom-component] onShow')
   },
   onReady() {
-    console.log('123321 page onReady')
+    console.log('[Lifecycle][Page:custom-component] onReady')
   },
   onHide() {
-    console.log('123321 page onHide')
+    console.log('[Lifecycle][Page:custom-component] onHide')
   },
   onUnload() {
-    console.log('123321 page onUnload')
+    console.log('[Lifecycle][Page:custom-component] onUnload')
+  },
+  onResize(size) {
+    console.log('[Lifecycle][Page:custom-component] onResize', size)
   },
   // 事件处理函数
   bindViewTap() {

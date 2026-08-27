@@ -59,13 +59,13 @@ Component({
   },
   lifetimes: {
     created() {
-      console.log('123321 navigation bar created')
+      console.log('[Lifecycle][Component:navigation-bar] created')
     },
     ready() {
-      console.log('123321 navigation bar ready')
+      console.log('[Lifecycle][Component:navigation-bar] ready')
     },
     attached() {
-      console.log('123321 navigation bar attached')
+      console.log('[Lifecycle][Component:navigation-bar] attached')
       const rect = wx.getMenuButtonBoundingClientRect()
       wx.getSystemInfo({
         success: (res) => {
@@ -80,13 +80,31 @@ Component({
         }
       })
     },
+    moved() {
+      console.log('[Lifecycle][Component:navigation-bar] moved')
+    },
+    detached() {
+      console.log('[Lifecycle][Component:navigation-bar] detached')
+    },
+    error(error) {
+      console.log('[Lifecycle][Component:navigation-bar] error', error)
+    },
   },
   pageLifetimes: {
     show() {
-      console.log('123321 navigation bar show', this.data, this.properties)
+      console.log('[Lifecycle][Component:navigation-bar] pageLifetimes.show', {
+        data: this.data,
+        properties: this.properties,
+      })
     },
     hide() {
-      console.log('123321 navigation bar hide')
+      console.log('[Lifecycle][Component:navigation-bar] pageLifetimes.hide')
+    },
+    resize(size) {
+      console.log('[Lifecycle][Component:navigation-bar] pageLifetimes.resize', size)
+    },
+    routeDone() {
+      console.log('[Lifecycle][Component:navigation-bar] pageLifetimes.routeDone')
     },
   },
   /**
@@ -106,7 +124,10 @@ Component({
       this.setData({
         displayStyle
       })
-      console.log('456 navigation bar show', this.data, this.properties)
+      console.log('[State][Component:navigation-bar] show changed', {
+        data: this.data,
+        properties: this.properties,
+      })
     },
     back() {
       const data = this.data

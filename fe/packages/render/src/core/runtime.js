@@ -878,6 +878,14 @@ class Runtime {
 								window.addEventListener('scroll', handleScroll, { passive: true })
 								nextTick(() => {
 									message.send({
+										type: 'pageAttached',
+										target: 'service',
+										body: {
+											bridgeId,
+											moduleId: that.pageId,
+										},
+									})
+									message.send({
 										type: 'pageReady',
 										target: 'service',
 										body: {
