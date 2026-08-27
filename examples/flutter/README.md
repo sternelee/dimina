@@ -14,7 +14,7 @@ Android、iOS 和 Harmony 均通过相对路径依赖当前仓库源码，适合
 
 ## 应用图标
 
-三端应用图标使用同一份“Dimina 主标 + Flutter 平台角标”母版，既保留 Dimina 品牌识别，也能直接看出这是 Flutter 接入示例。源图位于 `assets/app_icon.png`；如需重新生成各端尺寸，请在 macOS 仓库根目录执行：
+源图位于 `assets/app_icon.png`；如需重新生成各端尺寸，请在 macOS 仓库根目录执行：
 
 ```bash
 swift examples/flutter/tool/generate_app_icons.swift
