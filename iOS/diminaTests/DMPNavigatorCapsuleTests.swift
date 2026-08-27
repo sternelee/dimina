@@ -1326,6 +1326,54 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         XCTAssertNil(referrerInfo?["extraData"])
     }
 
+    func testHostCloseMiniProgramUsesTheNormalExitPath() async throws {
+        let manager = DMPAppManager.sharedInstance()
+        let appId = "host-close-\(UUID().uuidString)"
+        let app = manager.newAppWithConfig(
+            appConfig: DMPAppConfig(appName: "host-close", appId: appId)
+        )
+        defer { manager.removeApp(appId: appId) }
+
+        let host = UIViewController()
+        let page = UIViewController()
+        let navigationController = UINavigationController()
+        navigationController.setViewControllers([host, page], animated: false)
+        app.getNavigator()?.setup(
+            navigationController: navigationController,
+            preserving: [host]
+        )
+
+        try await app.closeMiniProgram()
+
+        XCTAssertEqual(navigationController.viewControllers.count, 1)
+        XCTAssertTrue(navigationController.viewControllers.first === host)
+        XCTAssertNil(manager.getApp(appIndex: app.getAppIndex()))
+    }
+
+    func testHostCloseConvenienceUsesTheExitManagerAcrossIOSAndHarmony() throws {
+        let repositoryRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+        let iosApp = try String(
+            contentsOf: repositoryRoot.appendingPathComponent(
+                "iOS/dimina/DiminaKit/App/DMPApp.swift"
+            ),
+            encoding: .utf8
+        )
+        let harmonyApp = try String(
+            contentsOf: repositoryRoot.appendingPathComponent(
+                "harmony/dimina/src/main/ets/DApp/DMPApp.ets"
+            ),
+            encoding: .utf8
+        )
+
+        XCTAssertTrue(iosApp.contains("public func closeMiniProgram() async throws"))
+        XCTAssertTrue(iosApp.contains("exitMiniProgram(self, onAccepted: {})"))
+        XCTAssertTrue(harmonyApp.contains("public closeMiniProgram(): Promise<void>"))
+        XCTAssertTrue(harmonyApp.contains("exitMiniProgram(this, async"))
+    }
+
     func testRestartMiniProgramRequiresPathThroughUnifiedCallbacks() throws {
         _ = RouteAPI()
         let handler = try XCTUnwrap(DMPContainerApi.getHandler(for: "restartMiniProgram"))

@@ -591,6 +591,15 @@ public class DMPApp {
         container?.registerExtModule(moduleName, handler: handler)
     }
 
+    /// Requests a normal mini-program exit from the host application.
+    ///
+    /// Unlike `destroy()`, this first closes the owned pages through the navigator, delivers the
+    /// Page/App hide sequence, and restores a live opener mini program when one exists.
+    @MainActor
+    public func closeMiniProgram() async throws {
+        try await DMPAppManager.sharedInstance().exitMiniProgram(self, onAccepted: {})
+    }
+
     @MainActor
     public func destroy() {
         guard !isDestroyed else {

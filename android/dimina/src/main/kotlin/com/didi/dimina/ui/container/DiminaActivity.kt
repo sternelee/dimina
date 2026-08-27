@@ -2486,6 +2486,17 @@ class DiminaActivity : ComponentActivity() {
             context.startActivity(intent)
         }
 
+        /**
+         * 宿主主动关闭指定小程序。必须从最上层 Activity 进入正常 exit 链路，不能直接
+         * closeAll/clear：后两者不会恢复跨小程序来源，也会绕开 Page/App 隐藏顺序。
+         */
+        @androidx.annotation.MainThread
+        internal fun closeMiniProgramFromHost(appId: String): Boolean {
+            val activity = activityRegistry.lastRegistered(appId) ?: return false
+            activity.exitMiniProgram()
+            return true
+        }
+
         internal fun closeForUninstall(appId: String) {
             activityRegistry.closeAll(appId) { activity ->
                 activity.prepareForColdRestart()

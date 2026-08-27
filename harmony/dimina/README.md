@@ -117,6 +117,14 @@ this.app.launch(launchConfig)
 仍需按上述顺序调用 `startPackageLoader()` 和 `launch()`；SDK 会重新注册应用并完整重建临时运行态。
 如果宿主自行维护 appId 到实例的映射，不要在已有新实例运行时复用更早关闭的同 appId 实例。
 
+宿主主动关闭小程序时，调用统一退出入口：
+
+```ts
+await this.app.closeMiniProgram()
+```
+
+该入口会通过 `DMPAppManager.exitMiniProgram` 完成生命周期派发、运行时回收，并在存在来源小程序时恢复来源。`closeDimina()` 是底层关闭原语，不负责跨小程序来源恢复。
+
 卸载已安装包时，默认保留小程序 Storage 和持久文件；第二个参数传 `true` 才会一并清除：
 
 ```ts

@@ -472,6 +472,14 @@ export class DMPApp {
     return this._closeInProgress
   }
 
+  /**
+   * 宿主主动关闭小程序的稳定入口。通过 AppManager 的 exit 链路关闭，确保存在来源
+   * 小程序时恢复来源，而不是只销毁当前 Worker 和页面。
+   */
+  public closeMiniProgram(): Promise<void> {
+    return DMPAppManager.sharedInstance().exitMiniProgram(this, async (): Promise<void> => {})
+  }
+
   private async performClose(afterPagesClosed?: () => Promise<void>) {
     this.notifyMiniProgramHide()
     // 退出对齐微信的「小程序切入后台」：只派发 App.onHide，页面不收 onUnload。

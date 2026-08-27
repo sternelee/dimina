@@ -10,6 +10,7 @@ Dimina（星河小程序）由 DMCC 编译器、逻辑层与渲染层运行时�
 | --- | --- | --- |
 | 了解 Dimina 如何工作 | [架构总览](./Architecture-Diagram.md) | [实现细节](./Architecture-Details.md) |
 | 判断某项能力是否可用 | [能力参考](./API-Reference.md) | 对应平台的 SDK 接入文档 |
+| 从 Flutter 宿主启动小程序 | [Flutter 宿主接入](./Flutter-Integration.md) | Android/iOS/Harmony SDK 接入文档 |
 | 排查页面或组件初始化时序 | [生命周期](./Architecture-Lifecycle.md) | `service` / `render` 运行时源码与测试 |
 | 接入多小程序切换与后台保留 | [多小程序运行](./Multi-Mini-Program.md) | 跨小程序导航 API 与各端 AppManager |
 | 编译和运行微信小游戏 | [微信小游戏运行](./Mini-Game.md) | `game.js`、Canvas 与三端运行类型透传 |
@@ -40,6 +41,8 @@ Dimina（星河小程序）由 DMCC 编译器、逻辑层与渲染层运行时�
 | iOS | JavaScriptCore | WKWebView | [iOS SDK](../iOS/README.md) |
 | Harmony | QuickJS | Harmony WebView | [Harmony SDK](../harmony/dimina/README.md) |
 | Web | Web Worker | Browser | [前端框架与容器](../fe/README.md) |
+
+Flutter 应用通过原生全屏容器接入三端 SDK，参见 [Flutter 宿主接入](./Flutter-Integration.md)。
 
 ## 仓库模块
 
