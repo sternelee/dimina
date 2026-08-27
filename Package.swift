@@ -41,5 +41,8 @@ let package = Package(
                 .copy("Resources/JsSdk.bundle"),
             ]
         )
-    ]
+    ],
+    // Keep SwiftPM consumers aligned with the checked-in Xcode target until the SDK's shared
+    // mutable registries have completed a strict-concurrency migration.
+    swiftLanguageModes: [.v5]
 )

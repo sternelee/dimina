@@ -1,6 +1,6 @@
 # Flutter 宿主接入 Dimina
 
-本文说明如何在现有 Flutter 应用的原生壳中接入 Dimina Android、iOS 和 Harmony SDK。这里不提供独立示例工程；代码片段用于说明宿主需要建立的通道、导航、资源和生命周期契约。
+本文说明如何在现有 Flutter 应用的原生壳中接入 Dimina Android、iOS 和 Harmony SDK。代码片段用于说明宿主需要建立的通道、导航、资源和生命周期契约；可运行实现见 [Flutter 三端接入示例](../examples/flutter/README.md)。
 
 对应需求：[Issue #321](https://github.com/didi/dimina/issues/321)。
 
