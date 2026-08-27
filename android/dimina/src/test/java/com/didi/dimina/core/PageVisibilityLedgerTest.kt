@@ -87,6 +87,30 @@ class PageVisibilityLedgerTest {
     }
 
     @Test
+    fun `different page bridges keep independent visibility state`() {
+        val firstPage = mutableListOf<PageVisibilityDelivery>()
+        val secondPage = mutableListOf<PageVisibilityDelivery>()
+        val firstLedger = PageVisibilityLedger(firstPage::add)
+        val secondLedger = PageVisibilityLedger(secondPage::add)
+
+        firstLedger.onStart()
+        secondLedger.onStart()
+        firstLedger.onResourceReady()
+        secondLedger.onResourceReady()
+
+        firstLedger.onHide()
+        firstLedger.onHide()
+        secondLedger.onShow()
+        secondLedger.onShow()
+
+        assertEquals(
+            listOf(PageVisibilityDelivery.SHOW, PageVisibilityDelivery.HIDE),
+            firstPage,
+        )
+        assertEquals(listOf(PageVisibilityDelivery.SHOW), secondPage)
+    }
+
+    @Test
     fun `reset drops readiness and any recorded intent`() {
         ledger.onResourceReady()
         ledger.onHide()

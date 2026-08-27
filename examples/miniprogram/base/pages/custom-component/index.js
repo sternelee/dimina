@@ -11,7 +11,8 @@ Page({
     hasUserInfo: false,
     canIUseGetUserProfile: wx.canIUse('getUserProfile'),
     canIUseNicknameComp: wx.canIUse('input.type.nickname'),
-    showTitle: true
+    showTitle: true,
+    showDynamicProbe: false,
   },
   onLoad() {
     console.log('[Lifecycle][Page:custom-component] onLoad')
@@ -69,6 +70,16 @@ Page({
   toggleTitle() {
     this.setData({
       showTitle: !this.data.showTitle
+    })
+  },
+  toggleDynamicProbe() {
+    this.setData({
+      showDynamicProbe: !this.data.showDynamicProbe
+    })
+  },
+  openLifecycleTarget() {
+    wx.navigateTo({
+      url: '/pages/button/index'
     })
   }
 })

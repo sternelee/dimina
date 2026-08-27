@@ -546,6 +546,99 @@ describe('Skyline/exparser lifecycle ordering', () => {
 		])
 	})
 
+	it('keeps lifecycle state isolated for sibling instances created from the same component module', () => {
+		const calls = []
+		const bridgeId = 'bridge-same-component-siblings'
+		const path = 'components/same-definition/index'
+		const module = new ComponentModule({
+			lifetimes: {
+				created() {
+					calls.push(`${this.__id__}:created`)
+				},
+				attached() {
+					calls.push(`${this.__id__}:attached`)
+				},
+				ready() {
+					calls.push(`${this.__id__}:ready`)
+				},
+				detached() {
+					calls.push(`${this.__id__}:detached`)
+				},
+			},
+			pageLifetimes: {
+				show() {
+					calls.push(`${this.__id__}:show`)
+				},
+				hide() {
+					calls.push(`${this.__id__}:hide`)
+				},
+				resize() {
+					calls.push(`${this.__id__}:resize`)
+				},
+				routeDone() {
+					calls.push(`${this.__id__}:routeDone`)
+				},
+			},
+			methods: {},
+		}, {
+			component: true,
+			path,
+			usingComponents: {},
+		})
+		const page = {
+			__id__: 'page',
+			__type__: PageModule.type,
+			initd: true,
+			pageShow: () => calls.push('page:show'),
+			pageHide: () => calls.push('page:hide'),
+			pageResize: () => calls.push('page:resize'),
+			pageUnload: () => calls.push('page:unload'),
+			pageDetached: () => calls.push('page:detached'),
+		}
+		const createSibling = moduleId => new Component(module, {
+			bridgeId,
+			moduleId,
+			path,
+			pageId: page.__id__,
+			parentId: page.__id__,
+			properties: {},
+			propertyNames: [],
+			eventAttr: {},
+			targetInfo: {},
+		})
+		const siblingA = createSibling('sibling-a')
+		const siblingB = createSibling('sibling-b')
+		runtime.instances[bridgeId] = {
+			[page.__id__]: page,
+			[siblingA.__id__]: siblingA,
+			[siblingB.__id__]: siblingB,
+		}
+
+		siblingA.init()
+		siblingB.init()
+		runtime.moduleAttached({ bridgeId, moduleId: siblingA.__id__ })
+		runtime.moduleAttached({ bridgeId, moduleId: siblingB.__id__ })
+		runtime.moduleReady({ bridgeId, moduleId: siblingA.__id__ })
+		runtime.moduleReady({ bridgeId, moduleId: siblingB.__id__ })
+		runtime.pageShow({ bridgeId })
+		runtime.pageHide({ bridgeId })
+		runtime.pageResize({ bridgeId, size: { width: 320, height: 640 } })
+		runtime.componentRouteDone({ bridgeId })
+		runtime.pageUnload({ bridgeId })
+
+		expect(calls).toEqual([
+			'sibling-a:created', 'sibling-b:created',
+			'sibling-a:attached', 'sibling-b:attached',
+			'sibling-a:ready', 'sibling-b:ready',
+			'sibling-a:show', 'sibling-b:show', 'page:show',
+			'sibling-a:hide', 'sibling-b:hide', 'page:hide',
+			'sibling-a:resize', 'sibling-b:resize', 'page:resize',
+			'sibling-a:routeDone', 'sibling-b:routeDone',
+			'page:unload', 'sibling-a:detached', 'sibling-b:detached', 'page:detached',
+		])
+		expect(runtime.instances[bridgeId]).toBeUndefined()
+	})
+
 	it('marks unload and detach before invoking re-entrant lifecycle callbacks', () => {
 		const calls = []
 		const bridgeId = 'bridge-reentrant-unload'

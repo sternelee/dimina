@@ -1,47 +1,75 @@
+let lifecycleInstanceSeed = 0
+
+function logLifecycle(component, event, details) {
+	console.log('[Lifecycle][Component:bar-icon]', {
+		event,
+		instance: component.__lifecycleInstanceId,
+		label: component.properties.instanceId,
+		...(details || {}),
+	})
+}
+
 Component({
+	properties: {
+		instanceId: {
+			type: String,
+			value: 'unlabeled',
+		},
+	},
 	data: {
-		nothing: ''
+		tapCount: 0,
 	},
 	methods: {
 		selectIcon() {
-			console.log('bar icon select')
+			const tapCount = this.data.tapCount + 1
+			this.setData({ tapCount })
+			console.log('[Interaction][Component:bar-icon]', {
+				event: 'tap',
+				instance: this.__lifecycleInstanceId,
+				label: this.properties.instanceId,
+				tapCount,
+			})
 			this.triggerEvent('selectIcon', {
-				type: 'icon'
+				type: 'icon',
+				instanceId: this.properties.instanceId,
+				tapCount,
 			})
 		}
 	},
 	lifetimes: {
 		created() {
-		  console.log('[Lifecycle][Component:bar-icon] created')
+			lifecycleInstanceSeed += 1
+			this.__lifecycleInstanceId = `bar-icon-${lifecycleInstanceSeed}`
+			logLifecycle(this, 'created')
 		},
 		ready() {
-		  console.log('[Lifecycle][Component:bar-icon] ready')
+			logLifecycle(this, 'ready')
 		},
 		attached() {
-		  console.log('[Lifecycle][Component:bar-icon] attached')
+			logLifecycle(this, 'attached')
 		},
 		moved() {
-		  console.log('[Lifecycle][Component:bar-icon] moved')
+			logLifecycle(this, 'moved')
 		},
 		detached() {
-		  console.log('[Lifecycle][Component:bar-icon] detached')
+			logLifecycle(this, 'detached')
 		},
 		error(error) {
-		  console.log('[Lifecycle][Component:bar-icon] error', error)
+			logLifecycle(this, 'error', { error })
 		},
-	  },
-	  pageLifetimes: {
+	},
+	pageLifetimes: {
 		show() {
-		  console.log('[Lifecycle][Component:bar-icon] pageLifetimes.show')
+			logLifecycle(this, 'pageLifetimes.show')
 		},
 		hide() {
-		  console.log('[Lifecycle][Component:bar-icon] pageLifetimes.hide')
+			logLifecycle(this, 'pageLifetimes.hide')
 		},
 		resize(size) {
-		  console.log('[Lifecycle][Component:bar-icon] pageLifetimes.resize', size)
+			logLifecycle(this, 'pageLifetimes.resize', { size })
 		},
 		routeDone() {
-		  console.log('[Lifecycle][Component:bar-icon] pageLifetimes.routeDone')
+			logLifecycle(this, 'pageLifetimes.routeDone')
 		},
-	  },
+	},
 })

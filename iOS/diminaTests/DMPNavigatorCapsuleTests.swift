@@ -1553,6 +1553,42 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         ])
     }
 
+    func testPageLifecyclePreservesEachBridgeIdentityInDispatchOrder() async {
+        let app = DMPApp(
+            appConfig: DMPAppConfig(
+                appName: "page-lifecycle",
+                appId: "page-lifecycle-\(UUID().uuidString)"
+            ),
+            appIndex: -1
+        )
+        let service = DMPService(app: app)
+        app.service = service
+        defer {
+            app.service = nil
+            service.destroy()
+        }
+        let recorder = await recordContainerMessages(on: service, as: "capturePageLifecycle")
+        app.markAppRuntimeReady()
+        let lifecycle = DMPPageLifecycle(app: app)
+
+        lifecycle.onShow(webviewId: 101)
+        lifecycle.onShow(webviewId: 202)
+        lifecycle.onHide(webviewId: 101)
+        lifecycle.onHide(webviewId: 202)
+        lifecycle.onUnload(webviewId: 202)
+        lifecycle.onUnload(webviewId: 101)
+        await service.drainPendingContainerMessages()
+
+        XCTAssertEqual(recorder.types, [
+            "pageShow", "pageShow",
+            "pageHide", "pageHide",
+            "pageUnload", "pageUnload",
+        ])
+        XCTAssertEqual(recorder.bridgeIds(for: "pageShow"), [101, 202])
+        XCTAssertEqual(recorder.bridgeIds(for: "pageHide"), [101, 202])
+        XCTAssertEqual(recorder.bridgeIds(for: "pageUnload"), [202, 101])
+    }
+
     func testNativeCrossMiniProgramEntriesUseTheRoutePageDispatcher() throws {
         let repositoryRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

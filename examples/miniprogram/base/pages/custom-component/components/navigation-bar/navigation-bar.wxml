@@ -61,5 +61,5 @@
       <slot name="right"></slot>
     </view>
   </view>
-  <bar-icon bindselectIcon="selectIcon"/>
+  <bar-icon instance-id="navigation-child" bindselectIcon="selectIcon"/>
 </view>

@@ -9,6 +9,46 @@ page {
   overflow-y: hidden;
 }
 
+.lifecycle-test-card {
+  box-sizing: border-box;
+  width: 92%;
+  margin: 24rpx auto;
+  padding: 24rpx;
+  border: 1rpx solid #e5e5e5;
+  border-radius: 16rpx;
+  background: #fff;
+}
+
+.lifecycle-test-title,
+.lifecycle-test-description {
+  display: block;
+}
+
+.lifecycle-test-title {
+  color: #1f1f1f;
+  font-size: 32rpx;
+  font-weight: 600;
+}
+
+.lifecycle-test-description {
+  margin-top: 12rpx;
+  color: #666;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.lifecycle-probe-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin: 20rpx 0;
+}
+
+.lifecycle-test-card button {
+  display: block;
+  margin: 12rpx 0 0;
+}
+
 .userinfo {
   display: flex;
   flex-direction: column;
