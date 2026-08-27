@@ -1062,8 +1062,8 @@ export class MiniApp {
 		const currentBridge = this.navigator.top
 
 		this.webSocketManager.onAppHide()
-		this.jscore.appHide()
 		currentBridge?.pageHide()
+		this.jscore.appHide()
 	}
 
 	/**
