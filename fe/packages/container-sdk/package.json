@@ -40,9 +40,9 @@
 		"@dimina/components": "workspace:^",
 		"@dimina/render": "workspace:^",
 		"@dimina/service": "workspace:^",
-		"@types/node": "^26.2.0",
-		"sass": "^1.102.0",
+		"@types/node": "^26.4.0",
+		"sass": "^1.103.1",
 		"typescript": "^5.9.3",
-		"vite": "^8.2.1"
+		"vite": "^8.2.2"
 	}
 }
