@@ -176,6 +176,12 @@ public class DMPApp {
         return bundleAppConfig
     }
 
+#if DEBUG
+    func setBundleAppConfigForTesting(_ config: DMPBundleAppConfig?) {
+        bundleAppConfig = config
+    }
+#endif
+
     func getCurrentLaunchConfig() -> DMPLaunchConfig? {
         return currentLaunchConfig
     }

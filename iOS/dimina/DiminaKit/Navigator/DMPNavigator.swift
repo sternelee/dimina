@@ -290,6 +290,11 @@ public class DMPNavigator: NSObject {
         }
     }
 
+    private func notifyRoutingUnload(for controller: UIViewController) {
+        (controller as? DMPPageController)?.notifyRoutingUnloadIfNeeded()
+        (controller as? DMPTabBarContainerController)?.notifyRoutingUnloadIfNeeded()
+    }
+
     @MainActor
     func suspendForMiniProgramNavigation() {
         guard isActiveNavigationOwner() else { return }
@@ -340,9 +345,9 @@ public class DMPNavigator: NSObject {
         bringCapsuleToFront()
     }
 
-    /// 把拆栈原因交给页面控制器本身。真正发 pageUnload 的是 DMPPageController 的销毁路径，
-    /// 而它可能晚到转场动画结束后的 viewDidDisappear、甚至 deinit——那时导航栈里已经没有
-    /// 这些控制器了，只能在离栈之前标注。
+    /// 把拆栈原因交给页面控制器本身。真正的 pageUnload 桥消息只由 DMPPageController 发出；
+    /// 路由会在改栈前让它提前派发，销毁则可能晚到转场结束后的 viewDidDisappear、甚至 deinit。
+    /// 退出原因必须在离栈之前标注，否则迟到的销毁会被误判为路由。
     private func markPageTeardownReason(_ reason: DMPPageStateTeardown) {
         tabBarContainerController?.markTeardownReason(reason)
         guard let navigationController else { return }
@@ -355,7 +360,19 @@ public class DMPNavigator: NSObject {
     private func clearMiniProgramPageState(reason: DMPPageStateTeardown) {
         markPageTeardownReason(reason)
         if reason == .routing {
-            pageRecords.reversed().forEach { pageLifecycle?.onUnload(webviewId: $0.webViewId) }
+            if let navigationController {
+                let controllers = ownedViewControllers(in: navigationController)
+                controllers.reversed().forEach {
+                    notifyRoutingUnload(for: $0)
+                }
+                if let tabBarContainerController,
+                   !controllers.contains(where: { $0 === tabBarContainerController })
+                {
+                    tabBarContainerController.notifyRoutingUnloadIfNeeded()
+                }
+            } else {
+                tabBarContainerController?.notifyRoutingUnloadIfNeeded()
+            }
         }
         tabBarContainerController?.destroy()
         tabBarContainerController = nil
@@ -591,6 +608,11 @@ public class DMPNavigator: NSObject {
 
         // 计算要返回的目标控制器索引
         let targetIndex = max(currentIndex - max(delta, 1), hostControllers.count)
+        if targetIndex + 1 < navigationController.viewControllers.count {
+            navigationController.viewControllers[(targetIndex + 1)...]
+                .reversed()
+                .forEach { notifyRoutingUnload(for: $0) }
+        }
 
         // 处理返回逻辑：最多弹到只剩栈底那条记录，首页记录必须留下——pageRecords 是
         // getCurrentWebViewId 的唯一来源，清空它会让之后的前后台切换和跨小程序派发拿到 -1。
@@ -600,7 +622,6 @@ public class DMPNavigator: NSObject {
                 break
             }
 
-            pageLifecycle?.onUnload(webviewId: app!.getCurrentWebViewId())
             pageRecords.removeLast()
         }
 
@@ -661,11 +682,10 @@ public class DMPNavigator: NSObject {
         // 原生 viewControllers 的栈底可能是宿主自己的页面（如 demo 的应用列表），
         // 按原生栈位置判栈底会把"替换仅剩的一页"误判为非栈底，导航栏因此错显返回箭头
         let replacingStackBottom = pageRecords.count <= 1
+        notifyRoutingUnload(for: navigationController.viewControllers[currentIndex])
 
         // 如果当前只有一个页面，则需要特殊处理
         if currentIndex == 0 {
-            pageLifecycle?.onUnload(webviewId: app!.getCurrentWebViewId())
-
             if !pageRecords.isEmpty {
                 pageRecords.removeLast()
             }
@@ -700,9 +720,6 @@ public class DMPNavigator: NSObject {
 
             return
         }
-
-        // 先触发当前页面的卸载生命周期
-        pageLifecycle?.onUnload(webviewId: app!.getCurrentWebViewId())
 
         if !pageRecords.isEmpty {
             pageRecords.removeLast()
@@ -877,10 +894,14 @@ public class DMPNavigator: NSObject {
                 && pageRecords.count <= 1
 
             if navigationController.topViewController !== tabBarController {
+                if let tabIndex = navigationController.viewControllers.firstIndex(where: {
+                    $0 === tabBarController
+                }), tabIndex + 1 < navigationController.viewControllers.count {
+                    navigationController.viewControllers[(tabIndex + 1)...]
+                        .reversed()
+                        .forEach { notifyRoutingUnload(for: $0) }
+                }
                 while pageRecords.count > 1 {
-                    if let record = pageRecords.last {
-                        pageLifecycle?.onUnload(webviewId: record.webViewId)
-                    }
                     pageRecords.removeLast()
                 }
                 navigationController.popToViewController(tabBarController, animated: animated)
@@ -908,7 +929,9 @@ public class DMPNavigator: NSObject {
             return true
         }
 
-        pageRecords.reversed().forEach { pageLifecycle?.onUnload(webviewId: $0.webViewId) }
+        ownedViewControllers(in: navigationController).reversed().forEach {
+            notifyRoutingUnload(for: $0)
+        }
         pageRecords.removeAll()
 
         let tabBarController = DMPTabBarContainerController(

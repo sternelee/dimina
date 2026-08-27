@@ -353,7 +353,187 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         page.destroy()
         await service.drainPendingContainerMessages()
 
-        XCTAssertTrue(recorder.types.contains("pageUnload"))
+        XCTAssertEqual(recorder.types.filter { $0 == "pageUnload" }, ["pageUnload"])
+    }
+
+    func testNavigateBackDispatchesOneUnloadForEachRemovedPage() async throws {
+        let fixture = await makeRoutingFixture(name: "navigate-back")
+        defer { destroyRoutingFixture(fixture) }
+
+        let launched = await fixture.navigator.launch(
+            to: "pages/index/index",
+            animated: false,
+            showsLaunchLoading: false
+        )
+        XCTAssertTrue(launched)
+        await fixture.navigator.navigateTo(to: "pages/detail/index", animated: false)
+        let removedPage = try XCTUnwrap(
+            fixture.navigationController.topViewController as? DMPPageController
+        )
+        await fixture.service.drainPendingContainerMessages()
+        fixture.recorder.types.removeAll()
+
+        fixture.navigator.navigateBack(animated: false)
+        // Retaining the controller keeps deinit from being the test's timing boundary. Explicitly
+        // finish the same destruction path that viewDidDisappear runs after a real pop transition.
+        removedPage.destroy()
+        await fixture.service.drainPendingContainerMessages()
+
+        XCTAssertEqual(
+            fixture.recorder.types.filter { ["pageUnload", "pageShow"].contains($0) },
+            ["pageUnload", "pageShow"]
+        )
+    }
+
+    func testRedirectToWithoutAHostDispatchesOneUnloadForTheReplacedRoot() async throws {
+        let fixture = await makeRoutingFixture(name: "redirect-root", includesHost: false)
+        defer { destroyRoutingFixture(fixture) }
+
+        let launched = await fixture.navigator.launch(
+            to: "pages/index/index",
+            animated: false,
+            showsLaunchLoading: false
+        )
+        XCTAssertTrue(launched)
+        let replacedPage = try XCTUnwrap(
+            fixture.navigationController.topViewController as? DMPPageController
+        )
+        await fixture.service.drainPendingContainerMessages()
+        fixture.recorder.types.removeAll()
+
+        await fixture.navigator.redirectTo(to: "pages/replaced/index")
+        replacedPage.destroy()
+        await fixture.service.drainPendingContainerMessages()
+
+        XCTAssertEqual(
+            fixture.recorder.types.filter { ["pageUnload", "pageShow"].contains($0) },
+            ["pageUnload", "pageShow"]
+        )
+    }
+
+    func testRedirectToWithAHostDispatchesOneUnloadForTheReplacedPage() async throws {
+        let fixture = await makeRoutingFixture(name: "redirect-host")
+        defer { destroyRoutingFixture(fixture) }
+
+        let launched = await fixture.navigator.launch(
+            to: "pages/index/index",
+            animated: false,
+            showsLaunchLoading: false
+        )
+        XCTAssertTrue(launched)
+        let replacedPage = try XCTUnwrap(
+            fixture.navigationController.topViewController as? DMPPageController
+        )
+        await fixture.service.drainPendingContainerMessages()
+        fixture.recorder.types.removeAll()
+
+        await fixture.navigator.redirectTo(to: "pages/replaced/index")
+        replacedPage.destroy()
+        await fixture.service.drainPendingContainerMessages()
+
+        XCTAssertEqual(
+            fixture.recorder.types.filter { ["pageUnload", "pageShow"].contains($0) },
+            ["pageUnload", "pageShow"]
+        )
+    }
+
+    func testRelaunchDispatchesOneUnloadForEachRemovedPage() async throws {
+        let fixture = await makeRoutingFixture(name: "relaunch")
+        defer { destroyRoutingFixture(fixture) }
+
+        let launched = await fixture.navigator.launch(
+            to: "pages/index/index",
+            animated: false,
+            showsLaunchLoading: false
+        )
+        XCTAssertTrue(launched)
+        await fixture.navigator.navigateTo(to: "pages/detail/index", animated: false)
+        let removedPages = fixture.navigationController.viewControllers.compactMap {
+            $0 as? DMPPageController
+        }
+        XCTAssertEqual(removedPages.count, 2)
+        let expectedUnloadOrder = removedPages.reversed().map {
+            $0.getWebView().getWebViewId()
+        }
+        await fixture.service.drainPendingContainerMessages()
+        fixture.recorder.types.removeAll()
+
+        await fixture.navigator.relaunch(to: "pages/relaunched/index", animated: false)
+        removedPages.forEach { $0.destroy() }
+        await fixture.service.drainPendingContainerMessages()
+
+        XCTAssertEqual(
+            fixture.recorder.types.filter { ["pageUnload", "pageShow"].contains($0) },
+            ["pageUnload", "pageUnload", "pageShow"]
+        )
+        XCTAssertEqual(fixture.recorder.bridgeIds(for: "pageUnload"), expectedUnloadOrder)
+    }
+
+    func testSwitchTabDispatchesOneUnloadForTheRemovedDetailPage() async throws {
+        let fixture = await makeRoutingFixture(
+            name: "switch-existing-tab",
+            bundleConfig: makeTabbedBundleConfig()
+        )
+        defer { destroyRoutingFixture(fixture) }
+
+        let launched = await fixture.navigator.launch(
+            to: "pages/home/index",
+            animated: false,
+            showsLaunchLoading: false
+        )
+        XCTAssertTrue(launched)
+        await fixture.navigator.navigateTo(to: "pages/detail/index", animated: false)
+        let removedPage = try XCTUnwrap(
+            fixture.navigationController.topViewController as? DMPPageController
+        )
+        await fixture.service.drainPendingContainerMessages()
+        fixture.recorder.types.removeAll()
+
+        let switched = await fixture.navigator.switchTab(
+            to: "pages/settings/index",
+            animated: false
+        )
+        XCTAssertTrue(switched)
+        removedPage.destroy()
+        await fixture.service.drainPendingContainerMessages()
+
+        XCTAssertEqual(
+            fixture.recorder.types.filter { ["pageUnload", "pageShow"].contains($0) },
+            ["pageUnload", "pageShow"]
+        )
+    }
+
+    func testSwitchTabDispatchesOneUnloadWhenItReplacesANonTabRoot() async throws {
+        let fixture = await makeRoutingFixture(
+            name: "switch-new-tab",
+            bundleConfig: makeTabbedBundleConfig()
+        )
+        defer { destroyRoutingFixture(fixture) }
+
+        let launched = await fixture.navigator.launch(
+            to: "pages/detail/index",
+            animated: false,
+            showsLaunchLoading: false
+        )
+        XCTAssertTrue(launched)
+        let removedPage = try XCTUnwrap(
+            fixture.navigationController.topViewController as? DMPPageController
+        )
+        await fixture.service.drainPendingContainerMessages()
+        fixture.recorder.types.removeAll()
+
+        let switched = await fixture.navigator.switchTab(
+            to: "pages/home/index",
+            animated: false
+        )
+        XCTAssertTrue(switched)
+        removedPage.destroy()
+        await fixture.service.drainPendingContainerMessages()
+
+        XCTAssertEqual(
+            fixture.recorder.types.filter { ["pageUnload", "pageShow"].contains($0) },
+            ["pageUnload", "pageShow"]
+        )
     }
 
     /// guest 只能从 exitMiniProgram / navigateBackMiniProgram 退出——那里才把 scene 1038 和
@@ -1671,19 +1851,112 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         XCTAssertEqual(loadingStates, [true, false])
     }
 
-    /// 容器发往 service 的全部消息类型，按到达顺序记录——断言「没有派发某个生命周期」
-    /// 需要看到完整序列，只挑白名单会让多余的一条消息静默通过。
     private final class ContainerMessageRecorder {
         var types: [String] = []
+        var messages: [[String: Any]] = []
+
+        func bridgeIds(for type: String) -> [Int] {
+            return messages.compactMap { message in
+                guard message["type"] as? String == type,
+                      let body = message["body"] as? [String: Any]
+                else {
+                    return nil
+                }
+                return (body["bridgeId"] as? NSNumber)?.intValue
+            }
+        }
     }
 
+    private struct RoutingFixture {
+        let app: DMPApp
+        let service: DMPService
+        let navigator: DMPNavigator
+        let navigationController: UINavigationController
+        let recorder: ContainerMessageRecorder
+    }
+
+    private func makeRoutingFixture(
+        name: String,
+        includesHost: Bool = true,
+        bundleConfig: DMPBundleAppConfig? = nil
+    ) async -> RoutingFixture {
+        let appConfig = DMPAppConfig(appName: name, appId: "\(name)-\(UUID().uuidString)")
+        let app = DMPApp(appConfig: appConfig, appIndex: -1)
+        app.setBundleAppConfigForTesting(bundleConfig)
+        let service = DMPService(app: app)
+        app.service = service
+        app.render = DMPRender(app: app)
+        let methodName = "capture_\(name.replacingOccurrences(of: "-", with: "_"))"
+        let recorder = await recordContainerMessages(on: service, as: methodName)
+        app.markAppRuntimeReady()
+
+        let navigator = app.getNavigator()!
+        let navigationController = UINavigationController()
+        if includesHost {
+            navigationController.setViewControllers([UIViewController()], animated: false)
+        }
+        navigator.setup(navigationController: navigationController)
+
+        return RoutingFixture(
+            app: app,
+            service: service,
+            navigator: navigator,
+            navigationController: navigationController,
+            recorder: recorder
+        )
+    }
+
+    private func destroyRoutingFixture(_ fixture: RoutingFixture) {
+        fixture.navigationController.viewControllers.forEach { controller in
+            if let pageController = controller as? DMPPageController {
+                pageController.markTeardownReason(.exit)
+                pageController.destroy()
+            }
+            if let tabBarController = controller as? DMPTabBarContainerController {
+                tabBarController.markTeardownReason(.exit)
+                tabBarController.destroy()
+            }
+        }
+        fixture.app.service = nil
+        fixture.service.destroy()
+        fixture.app.render = nil
+    }
+
+    private func makeTabbedBundleConfig() -> DMPBundleAppConfig {
+        let pagePaths = [
+            "pages/home/index",
+            "pages/settings/index",
+            "pages/detail/index",
+        ]
+        let modules = Dictionary(uniqueKeysWithValues: pagePaths.map {
+            ($0, ["root": "main"] as [String: Any])
+        })
+        return DMPBundleAppConfig(data: [
+            "app": [
+                "pages": pagePaths,
+                "entryPagePath": "pages/home/index",
+                "tabBar": [
+                    "list": [
+                        ["pagePath": "pages/home/index", "text": "Home"],
+                        ["pagePath": "pages/settings/index", "text": "Settings"],
+                    ],
+                ],
+            ] as [String: Any],
+            "modules": modules,
+        ])
+    }
+
+    /// 容器发往 service 的全部消息类型，按到达顺序记录——断言「没有派发某个生命周期」
+    /// 需要看到完整序列，只挑白名单会让多余的一条消息静默通过。
     private func recordContainerMessages(
         on service: DMPService,
         as methodName: String
     ) async -> ContainerMessageRecorder {
         let recorder = ContainerMessageRecorder()
         service.getEngine().registerMethod(name: methodName) { value in
-            if let type = (value.toDictionary() as? [String: Any])?["type"] as? String {
+            if let message = value.toDictionary() as? [String: Any] {
+                recorder.messages.append(message)
+                guard let type = message["type"] as? String else { return nil }
                 recorder.types.append(type)
             }
             return nil

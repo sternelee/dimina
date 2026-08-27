@@ -207,6 +207,14 @@ final class DMPTabBarContainerController: UIViewController {
         tabControllers.values.forEach { $0.markTeardownReason(reason) }
     }
 
+    func notifyRoutingUnloadIfNeeded() {
+        tabControllers[selectedIndex]?.notifyRoutingUnloadIfNeeded()
+        tabControllers.keys.sorted().forEach { index in
+            guard index != selectedIndex else { return }
+            tabControllers[index]?.notifyRoutingUnloadIfNeeded()
+        }
+    }
+
     func destroy() {
         tabControllers.values.forEach { $0.destroy() }
     }

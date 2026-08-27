@@ -53,6 +53,7 @@ public class DMPPageController: UIViewController {
 
     // State
     private var isWebViewDestroyed = false
+    private var hasDispatchedPageUnload = false
     private var hasStartedLoading = false
     private var hasShownLaunchLoading = false
 
@@ -979,16 +980,7 @@ public class DMPPageController: UIViewController {
         isWebViewDestroyed = true
         webview.clearLoadingStateObserver(ownerToken: loadingStateObserverToken)
 
-        // Notify page unload
-        if pageStateTeardownReason == .routing, let app = app {
-            let msg = DMPMap([
-                "type": "pageUnload",
-                "body": [
-                    "bridgeId": webview.getWebViewId()
-                ]
-            ])
-            DMPChannelProxy.containerToService(msg: msg, app: app)
-        }
+        notifyRoutingUnloadIfNeeded()
         
         // Release WebView back to pool
         app?.render?.releaseWebView(webview)
@@ -998,6 +990,19 @@ public class DMPPageController: UIViewController {
     /// 那时导航栈里已经找不到这个控制器了。
     public func markTeardownReason(_ reason: DMPPageStateTeardown) {
         pageStateTeardownReason = reason
+    }
+
+    /// 路由层在修改原生导航栈之前调用，保证旧页 onUnload 先于新页 onShow；真正的桥消息仍由
+    /// 页面控制器单点拥有。稍后的 viewDidDisappear/deinit 会再次走这里，但不会重复派发。
+    func notifyRoutingUnloadIfNeeded() {
+        guard pageStateTeardownReason == .routing,
+              !hasDispatchedPageUnload,
+              let app
+        else {
+            return
+        }
+        hasDispatchedPageUnload = true
+        DMPPageLifecycle(app: app).onUnload(webviewId: webview.getWebViewId())
     }
 
     // Manual destroy method (for external calls)
