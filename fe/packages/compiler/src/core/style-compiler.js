@@ -14,7 +14,6 @@ import { concatSourcemap, createLineSourcemap, remapSourcemap } from './sourcema
 const compileRes = new Map()
 const builtInTagNames = new Set(tagWhiteList)
 const autoprefixerPlugin = autoprefixer({ overrideBrowserslist: ['cover 99.5%'] })
-const stylePostprocessor = postcss([autoprefixerPlugin])
 let cssnanoLoader
 let lessLoader
 let sassLoader
@@ -406,61 +405,45 @@ async function enhanceCSS(module, options = {}) {
 	}
 
 	const importResults = []
-	let transformedResult
-	try {
-		transformedResult = await postcss([
-			createStyleTransformPlugin(module, absolutePath, importResults, options),
-		]).process(fixedCSS, {
-			from: undefined,
-			map: getPostcssMapOptions(options.sourcemap, processedMap),
-		})
-	} catch (error) {
-		throw createStyleCompileError('transform', absolutePath, error)
-	}
-
-	// 样式隔离
+	// 把基础转换交给 compileStyle 的同一条 PostCSS 管线，避免作用域处理前重复解析 CSS。
 	const moduleId = module.id
 	let scopedResult
 	try {
 		scopedResult = compileStyle({
-			source: transformedResult.css,
+			source: fixedCSS,
 			filename: getStyleSourcePath(absolutePath),
 			id: moduleId,
 			scoped: !!moduleId,
-			inMap: options.sourcemap ? transformedResult.map.toJSON() : undefined,
+			inMap: options.sourcemap ? processedMap : undefined,
+			postcssPlugins: [
+				createStyleTransformPlugin(module, absolutePath, importResults, options),
+			],
 		})
 		if (scopedResult.errors.length > 0) {
 			throw scopedResult.errors[0]
 		}
 	}
 	catch (error) {
-		throw createStyleCompileError('scope', absolutePath, error)
+		const stage = error?.plugin === 'vue-sfc-vars' || error?.plugin === 'vue-sfc-scoped'
+			? 'scope'
+			: 'transform'
+		throw createStyleCompileError(stage, absolutePath, error)
 	}
 
-	let externalResult
-	try {
-		externalResult = await postcss([createExternalClassPlugin(moduleId)])
-			.process(scopedResult.code, {
-				from: undefined,
-				map: getPostcssMapOptions(options.sourcemap, scopedResult.map),
-			})
-	}
-	catch (error) {
-		throw createStyleCompileError('external-class', absolutePath, error)
-	}
-
-	// 统一后处理：autoprefixer + 压缩
+	// external-class 与 autoprefixer/cssnano 共享一次 PostCSS 解析。
 	let finalResult
 	try {
+		const postcssPlugins = [createExternalClassPlugin(moduleId), autoprefixerPlugin]
 		if (options.sourcemap) {
 			const cssnano = await loadCssnano()
-			finalResult = await postcss([autoprefixerPlugin, cssnano()]).process(externalResult.css, {
+			postcssPlugins.push(cssnano())
+			finalResult = await postcss(postcssPlugins).process(scopedResult.code, {
 				from: undefined,
-				map: getPostcssMapOptions(true, externalResult.map?.toJSON()),
+				map: getPostcssMapOptions(true, scopedResult.map),
 			})
 		}
 		else {
-			const prefixedResult = await stylePostprocessor.process(externalResult.css, { from: undefined })
+			const prefixedResult = await postcss(postcssPlugins).process(scopedResult.code, { from: undefined })
 			const minifiedResult = await transform(prefixedResult.css, {
 				loader: 'css',
 				minify: true,
@@ -469,7 +452,8 @@ async function enhanceCSS(module, options = {}) {
 		}
 	}
 	catch (error) {
-		throw createStyleCompileError('postprocess', absolutePath, error)
+		const stage = error?.plugin === 'dimina-external-class' ? 'external-class' : 'postprocess'
+		throw createStyleCompileError(stage, absolutePath, error)
 	}
 
 	// 处理导入的样式
