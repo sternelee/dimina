@@ -626,16 +626,29 @@ describe('Skyline/exparser lifecycle ordering', () => {
 		runtime.componentRouteDone({ bridgeId })
 		runtime.pageUnload({ bridgeId })
 
-		expect(calls).toEqual([
-			'sibling-a:created', 'sibling-b:created',
-			'sibling-a:attached', 'sibling-b:attached',
-			'sibling-a:ready', 'sibling-b:ready',
-			'sibling-a:show', 'sibling-b:show', 'page:show',
-			'sibling-a:hide', 'sibling-b:hide', 'page:hide',
-			'sibling-a:resize', 'sibling-b:resize', 'page:resize',
-			'sibling-a:routeDone', 'sibling-b:routeDone',
-			'page:unload', 'sibling-a:detached', 'sibling-b:detached', 'page:detached',
+		const lifecycleOf = id => calls
+			.filter(call => call.startsWith(`${id}:`))
+			.map(call => call.slice(id.length + 1))
+
+		// WeChat does not promise an observable order between sibling instances.
+		// Assert each instance and the page boundary independently instead.
+		expect(lifecycleOf('sibling-a')).toEqual([
+			'created', 'attached', 'ready', 'show', 'hide', 'resize', 'routeDone', 'detached',
 		])
+		expect(lifecycleOf('sibling-b')).toEqual([
+			'created', 'attached', 'ready', 'show', 'hide', 'resize', 'routeDone', 'detached',
+		])
+		expect(lifecycleOf('page')).toEqual(['show', 'hide', 'resize', 'unload', 'detached'])
+		expect(calls).toHaveLength(21)
+
+		for (const event of ['show', 'hide', 'resize']) {
+			expect(calls.indexOf('page:' + event)).toBeGreaterThan(calls.indexOf('sibling-a:' + event))
+			expect(calls.indexOf('page:' + event)).toBeGreaterThan(calls.indexOf('sibling-b:' + event))
+		}
+		expect(calls.indexOf('page:unload')).toBeLessThan(calls.indexOf('sibling-a:detached'))
+		expect(calls.indexOf('page:unload')).toBeLessThan(calls.indexOf('sibling-b:detached'))
+		expect(calls.indexOf('page:detached')).toBeGreaterThan(calls.indexOf('sibling-a:detached'))
+		expect(calls.indexOf('page:detached')).toBeGreaterThan(calls.indexOf('sibling-b:detached'))
 		expect(runtime.instances[bridgeId]).toBeUndefined()
 	})
 
