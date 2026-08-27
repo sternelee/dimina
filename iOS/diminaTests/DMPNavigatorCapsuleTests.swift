@@ -1344,6 +1344,7 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         )
 
         try await app.closeMiniProgram()
+        waitForNavigationStack(navigationController, toSettleAt: 1)
 
         XCTAssertEqual(navigationController.viewControllers.count, 1)
         XCTAssertTrue(navigationController.viewControllers.first === host)
