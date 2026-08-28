@@ -3,7 +3,11 @@
   "version": "1.6.0",
   "description": "星河小程序鸿蒙容器sdk,可以快速帮助微信小程序迁移到鸿蒙应用中",
   "main": "Index.ets",
-  "author": "ucodeustory",
+  "author": {
+    "name": "doslin",
+    "email": "doslino@gmail.com",
+    "url": "https://github.com/didi/dimina"
+  },
   "license": "Apache-2.0",
   "homepage": "https://github.com/didi/dimina",
   "repository": "https://github.com/didi/dimina",
