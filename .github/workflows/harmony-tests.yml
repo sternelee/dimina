@@ -40,7 +40,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgl1-mesa-dev libgl1-mesa-dri mesa-utils xvfb xauth
+          sudo apt-get install --yes libgl1-mesa-dev libgl1-mesa-dri libminizip1 mesa-utils xvfb xauth
 
       - name: Cache Harmony command-line tools
         id: harmony-cli-cache
@@ -92,15 +92,37 @@ jobs:
           echo "HOS_SDK_HOME=$tool_root/sdk" >> "$GITHUB_ENV"
           echo "OHOS_NDK_HOME=$tool_root/sdk/default/openharmony" >> "$GITHUB_ENV"
 
+      - name: Repair Linux Previewer library names
+        run: |
+          set -euo pipefail
+
+          previewer_dir="$OHOS_NDK_HOME/previewer/common/bin"
+          hilog_library="$previewer_dir/libhilog_linux.so"
+          minizip_library="$(ldconfig -p | awk '$1 == "libminizip.so.1" && path == "" { path = $NF } END { print path }')"
+
+          test -f "$hilog_library"
+          test -f "$minizip_library"
+
+          # The Linux archive uses a platform-suffixed HiLog filename while
+          # some Previewer components retain the generic DT_NEEDED name.
+          ln --symbolic --force libhilog_linux.so "$previewer_dir/libhilog.so"
+
+          # libide_extension links Huawei's libshared_libz name but only uses
+          # the standard MiniZip unz* ABI provided by Ubuntu's libminizip.
+          ln --symbolic --force "$minizip_library" "$previewer_dir/libshared_libz.so"
+
       - name: Verify Harmony toolchain
         run: |
+          set -euo pipefail
+
           hvigorw -v
           ohpm --version
 
           previewer="$OHOS_NDK_HOME/previewer/common/bin/Previewer"
           test -x "$previewer"
-          if ldd "$previewer" | grep --quiet 'not found'; then
-            ldd "$previewer"
+          previewer_dependencies="$(ldd "$previewer")"
+          printf '%s\n' "$previewer_dependencies"
+          if grep --quiet 'not found' <<< "$previewer_dependencies"; then
             exit 1
           fi
 
