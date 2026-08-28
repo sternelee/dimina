@@ -71,6 +71,7 @@ Usage: dmcc build [选项]
   -c, --work-path <path>     编译文件所在目录（默认为当前目录）
   -s, --target-path <path>   编译产物存放路径（默认为当前目录）
   -w, --watch                启用改动监听（实时编译）
+  --sourcemap                生成 logic.js.map，用于原生逻辑层断点调试
   --no-app-id-dir            产物根目录不包含appId，默认为 false
   -h, --help                 显示帮助信息
 ```
@@ -92,7 +93,13 @@ dmcc build -c ./src -s ./dist -w
 
 # 产物根目录不包含appId
 dmcc build --no-app-id-dir
+
+# 生成 Harmony QuickJS 断点调试所需的 source map
+dmcc build -c ./miniapp -s ./dist --sourcemap
 ```
+
+Harmony 端的虚拟脚本路径、VS Code attach 与 HDC 端口转发配置见
+[JavaScript 断点调试](../../../docs/JavaScript-Debugging.md)。
 
 ### 编译流程说明
 

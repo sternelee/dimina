@@ -139,3 +139,7 @@ await DMPAppManager.sharedInstance().uninstallMiniProgram('appId', true)
 当 `appConfig.isDebugMode = true`，或当前 HAP 为 debug 包时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。
 
 JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测到该启用标记时，pageFrame 才会在 render 初始化前同步初始化 vConsole。
+
+逻辑层 QuickJS 的断点、单步、变量查看和表达式求值需要 Debug HAP、DMCC `--sourcemap`
+产物及显式调试端口。完整配置与 HDC 端口转发步骤见
+[Harmony 逻辑层 JavaScript 断点调试](../../docs/JavaScript-Debugging.md)。

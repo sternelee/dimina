@@ -21,6 +21,7 @@ import dmpFileUrlConvertorTest from './DMPFileUrlConvertor.test';
 import dmpCanvasCallbackTest from './DMPCanvasCallback.test';
 import dmpCanvasExportJobRegistryTest from './DMPCanvasExportJobRegistry.test';
 import dmpCanvasExportWriteQueueTest from './DMPCanvasExportWriteQueue.test';
+import dmpJavaScriptDebuggerConfigTest from './DMPJavaScriptDebuggerConfig.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -46,4 +47,5 @@ export default function testsuite() {
   dmpCanvasCallbackTest();
   dmpCanvasExportJobRegistryTest();
   dmpCanvasExportWriteQueueTest();
+  dmpJavaScriptDebuggerConfigTest();
 }

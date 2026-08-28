@@ -125,7 +125,16 @@ async function runBuild(targetPath, workPath, useAppIdDir = true, options = {}) 
 							title: '编译逻辑',
 							rendererOptions: { outputBar: true, persistentOutput: false },
 							task: async (ctx, task) => {
-								return runCompileInWorker('logic', ctx, task, { sourcemap, pages: ctx.allPages })
+								const sourcemapTargetPath = path.resolve(
+									process.cwd(),
+									targetPath,
+									useAppIdDir ? getAppId() : '',
+								)
+								return runCompileInWorker('logic', ctx, task, {
+									sourcemap,
+									pages: ctx.allPages,
+									sourcemapTargetPath,
+								})
 							},
 						})
 					}
@@ -228,7 +237,12 @@ function runCompileInWorker(script, ctx, task, options = {}) {
 			reject(error)
 		}
 
-		worker.postMessage({ pages, storeInfo: ctx.storeInfo, sourcemap: !!options.sourcemap })
+			worker.postMessage({
+				pages,
+				storeInfo: ctx.storeInfo,
+				sourcemap: !!options.sourcemap,
+				sourcemapTargetPath: options.sourcemapTargetPath,
+			})
 		// 接收 Worker 完成后的消息
 		worker.on('message', async (message) => {
 			try {

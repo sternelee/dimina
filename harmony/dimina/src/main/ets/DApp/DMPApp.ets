@@ -37,6 +37,7 @@ import { DMPAppModuleManagerLifecycle } from '../Bridges/DMPAppModuleManagerLife
 import { DMPAppRuntimeLifecycle } from './utils/DMPAppRuntimeLifecycle'
 import { DMPAppVisibilityLedger } from './utils/DMPAppVisibilityLedger'
 import { CanvasExportJobRegistry } from '../Bridges/CanvasExportJobRegistry'
+import { DMPJavaScriptSourceURL } from '../Service/DMPJavaScriptSourceURL'
 export type DMPBundleUpdateCallback = () => void;
 
 export interface DMPAppInitOptions {
@@ -88,7 +89,7 @@ export class DMPApp {
       new DMPAppModuleManager(this),
       (): DMPAppModuleManager => new DMPAppModuleManager(this)
     )
-    this._service = new DMPService(this.appIndex)
+    this._service = new DMPService(this.appIndex, this.appConfig)
     this._bundleManager = new DMPBundleManager(this);
   }
 
@@ -285,7 +286,7 @@ export class DMPApp {
     // destroyEngine disposes app-scoped native listeners. A cold restart must use a fresh bridge
     // module graph; the lifecycle also replays host ext modules registered on this DMPApp.
     this._appModuleManagerLifecycle.rebuild()
-    this._service = new DMPService(this.appIndex);
+    this._service = new DMPService(this.appIndex, this.appConfig);
     this._render = new DMPRender(this);
     this._container = new DMPContainer(this);
     this._navigatorManager = new DMPNavigatorManager(this);
@@ -718,7 +719,7 @@ export class DMPApp {
       this._service.executeScript(`globalThis.__diminaRegisteredApis = ${apisJson}`)
     }
     const serviceJsPath = await this._bundleManager.requestServiceJsUri();
-    await this._service.loadFileUri(serviceJsPath);
+    await this._service.loadFileUri(serviceJsPath, DMPJavaScriptSourceURL.SDK_SERVICE);
     DMPLogger.i(Tags.LAUNCH, "startEngineService end");
     DMPLogger.d(Tags.LAUNCH, "webViewCachePool init start");
     this._webViewCachePool.init();
@@ -728,7 +729,10 @@ export class DMPApp {
   private async startMainService() {
     DMPLogger.d(Tags.LAUNCH, "startMainService start");
     const logicJsPath = await this._bundleManager.requestLogicJsUri();
-    await this._service.loadFileUri(logicJsPath);
+    await this._service.loadFileUri(
+      logicJsPath,
+      DMPJavaScriptSourceURL.appLogic(this.appConfig.appId, 'main')
+    );
     DMPLogger.i(Tags.LAUNCH, "startMainService end");
   }
 
