@@ -82,7 +82,7 @@ export struct DMPTabBar {
   @Prop tabBarConfig: DMPTabBarConfig = { color: '#999999', selectedColor: '#1890ff', backgroundColor: '#FFFFFF', borderStyle: 'black', list: [] };
   @Prop badges: string[] = [];
   @Prop redDots: boolean[] = [];
-  private onTabSelected?: (index: number) => void;
+  onTabSelected?: (index: number) => void;
 
   private getBorderColor(): string {
     return this.tabBarConfig.borderStyle === 'white' ? '#FFFFFF' : '#E0E0E0';

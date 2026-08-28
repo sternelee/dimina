@@ -7,8 +7,8 @@ import { DMPMenuButtonLayout } from '../Utils/DMPMenuButtonLayout'
 export struct DMPCapsuleButton {
   @Prop appIndex: number
   @Prop webViewId: number
-  private onMoreClick?: () => void
-  private onCloseClick?: () => void
+  onMoreClick?: () => void
+  onCloseClick?: () => void
 
   build() {
     Row() {

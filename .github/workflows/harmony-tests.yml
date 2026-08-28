@@ -40,7 +40,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgl1-mesa-dev
+          sudo apt-get install --yes libgl1-mesa-dev xvfb xauth
 
       - name: Cache Harmony command-line tools
         id: harmony-cli-cache
@@ -113,7 +113,15 @@ jobs:
 
       - name: Run Harmony local tests
         working-directory: ./harmony
-        run: hvigorw test -p module=dimina,entry -p coverage=true --no-daemon
+        env:
+          LIBGL_ALWAYS_SOFTWARE: '1'
+        run: >-
+          xvfb-run --auto-servernum
+          --server-args="-screen 0 1280x720x24"
+          hvigorw test
+          -p module=dimina,entry
+          -p coverage=true
+          --no-daemon
 
       - name: Build Harmony SDK
         working-directory: ./harmony
