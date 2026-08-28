@@ -14,34 +14,13 @@ project("qjs")
 # Define the root path for NativeRender
 set(NATIVERENDER_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 
-# Include FetchContent for downloading dependencies
-include(FetchContent)
-
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../../cmake/DependencyVersions.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../../cmake/DiminaLibuv.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../../cmake/DiminaQuickJS.cmake")
 
 # Android does not expose the debugger API yet. Keeping the option explicit lets
 # the shared QuickJS preparation be enabled when the runtime wiring lands.
 option(DIMINA_ENABLE_QUICKJS_DEBUGGER "Build the QuickJS breakpoint debugger" OFF)
-
-# Download libuv from GitHub
-FetchContent_Declare(
-    libuv
-    GIT_REPOSITORY https://github.com/libuv/libuv.git
-    GIT_TAG ${DIMINA_LIBUV_GIT_TAG}
-)
-
-# Only the static libuv target is linked into libdimina.so. Keeping libuv's
-# shared target enabled produces a separately packaged libuv.so, which must also
-# satisfy Android 16 KB page-size alignment checks.
-set(LIBUV_BUILD_SHARED OFF CACHE BOOL "Build shared libuv" FORCE)
-FetchContent_MakeAvailable(libuv)
-
-if(ANDROID AND TARGET uv_a)
-    # Android NDK r28 does not expose LLONG_MAX from <limits.h> in libuv's
-    # default GNU90 mode, while current libuv uses it in src/unix/linux.c.
-    set_property(TARGET uv_a PROPERTY C_STANDARD 99)
-endif()
 
 # Set build type to Release for optimization
 if(NOT CMAKE_BUILD_TYPE)
@@ -59,7 +38,6 @@ add_compile_options(
 include_directories(
         ${NATIVERENDER_ROOT_PATH}
         ${NATIVERENDER_ROOT_PATH}/include
-        ${libuv_SOURCE_DIR}/include  # Include libuv headers
 )
 
 # Explicitly list source files for better control
@@ -85,6 +63,7 @@ add_library(dimina SHARED ${sources})
 dimina_configure_quickjs(dimina
     ENABLE_DEBUGGER "${DIMINA_ENABLE_QUICKJS_DEBUGGER}"
 )
+dimina_configure_libuv(dimina)
 
 # Add linker option for 16KB page size compatibility
 # This helps ensure the .so is compatible with systems using 16KB page sizes,
@@ -95,11 +74,11 @@ target_link_options(dimina PRIVATE "-Wl,-z,max-page-size=16384")
 # can link libraries from various origins, such as libraries defined in this
 # build script, prebuilt third-party libraries, or Android system libraries.
 target_link_libraries(dimina
+        PRIVATE
         # List libraries link to the target library
         android
         log
-        m
-        uv_a)  # Link libuv static library
+        m)
 
 # Additional target properties for Release mode
 if(CMAKE_BUILD_TYPE STREQUAL "Release")

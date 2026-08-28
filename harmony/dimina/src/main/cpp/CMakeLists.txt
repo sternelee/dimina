@@ -11,6 +11,7 @@ set(NATIVERENDER_ROOT_PATH ${CMAKE_CURRENT_SOURCE_DIR})
 include(FetchContent)
 
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../../cmake/DependencyVersions.cmake")
+include("${CMAKE_CURRENT_LIST_DIR}/../../../../../cmake/DiminaLibuv.cmake")
 include("${CMAKE_CURRENT_LIST_DIR}/../../../../../cmake/DiminaQuickJS.cmake")
 
 string(TOLOWER "${CMAKE_BUILD_TYPE}" DIMINA_BUILD_TYPE_LOWER)
@@ -73,9 +74,10 @@ add_library(dimina SHARED ${sources})
 dimina_configure_quickjs(dimina
     ENABLE_DEBUGGER "${DIMINA_ENABLE_QUICKJS_DEBUGGER}"
 )
+dimina_configure_libuv(dimina)
 
 # Link necessary libraries
-target_link_libraries(dimina PUBLIC libace_napi.z.so libhilog_ndk.z.so libuv.so)
+target_link_libraries(dimina PUBLIC libace_napi.z.so libhilog_ndk.z.so)
 target_link_libraries(dimina PUBLIC brotlidec brotlicommon)
 
 # Additional target properties for Release mode
