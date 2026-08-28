@@ -25,8 +25,8 @@ concurrency:
 jobs:
   local-test:
     name: Harmony Local Tests
-    runs-on: ubuntu-24.04
-    timeout-minutes: 60
+    runs-on: ubuntu-22.04
+    timeout-minutes: 20
     env:
       HARMONY_CLI_VERSION: '6.0.0.858'
       HARMONY_CLI_PART_A_SHA256: 'ce8e66b9b4a8c0f492e348595173cbccd685ed029e33eab4097d6affc184b4de'
@@ -40,7 +40,7 @@ jobs:
       - name: Install Linux build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install --yes libgl1-mesa-dev xvfb xauth
+          sudo apt-get install --yes libgl1-mesa-dev libgl1-mesa-dri mesa-utils xvfb xauth
 
       - name: Cache Harmony command-line tools
         id: harmony-cli-cache
@@ -97,6 +97,18 @@ jobs:
           hvigorw -v
           ohpm --version
 
+          previewer="$OHOS_NDK_HOME/previewer/common/bin/Previewer"
+          test -x "$previewer"
+          if ldd "$previewer" | grep --quiet 'not found'; then
+            ldd "$previewer"
+            exit 1
+          fi
+
+          LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe \
+            xvfb-run --auto-servernum \
+            --server-args="-screen 0 1920x2400x24 -ac +extension GLX +render -noreset" \
+            glxinfo -B
+
       - name: Cache ohpm packages
         uses: actions/cache@v4
         with:
@@ -113,14 +125,20 @@ jobs:
 
       - name: Run Harmony local tests
         working-directory: ./harmony
+        timeout-minutes: 10
         env:
           LIBGL_ALWAYS_SOFTWARE: '1'
+          GALLIUM_DRIVER: llvmpipe
+        # entry contains only DevEco's default scaffold case, which is already
+        # duplicated in dimina. Build its HAP below without starting a second
+        # Previewer instance.
         run: >-
           xvfb-run --auto-servernum
-          --server-args="-screen 0 1280x720x24"
+          --server-args="-screen 0 1920x2400x24 -ac +extension GLX +render -noreset"
           hvigorw test
-          -p module=dimina,entry
+          -p module=dimina
           -p coverage=true
+          --no-parallel
           --no-daemon
 
       - name: Build Harmony SDK
@@ -134,6 +152,17 @@ jobs:
           --parallel
           --no-daemon
 
+      - name: Build Harmony example app
+        working-directory: ./harmony
+        run: >-
+          hvigorw --mode module
+          -p product=default
+          -p module=entry@default
+          assembleHap
+          --analyze=normal
+          --parallel
+          --no-daemon
+
       - name: Upload Harmony test reports
         if: always()
         uses: actions/upload-artifact@v4
@@ -142,5 +171,7 @@ jobs:
           path: |
             harmony/*/.test/default/outputs/test/reports/**
             harmony/*/.test/default/intermediates/test/coverage_data/test_result.txt
+            harmony/*/.test/default/intermediates/test/coverage_data/coverage.log
           retention-days: 5
           if-no-files-found: warn
+          include-hidden-files: true
