@@ -84,6 +84,7 @@ describe('runtime template components', () => {
 			pagePath: '/pages/lifecycle-handshake/index',
 			pageId: 'page-lifecycle-handshake',
 			query: {},
+			resourceLoadId: 'load-lifecycle-handshake',
 		})
 		window.DiminaRenderBridge.onMessage({
 			type: 'page-lifecycle-handshake',
@@ -99,6 +100,14 @@ describe('runtime template components', () => {
 			.map(([payload]) => JSON.parse(payload).type)
 			.filter(type => type === 'pageAttached' || type === 'pageReady')
 		expect(lifecycleTypes).toEqual(['pageAttached', 'pageReady'])
+		expect(window.DiminaRenderBridge.invoke).toHaveBeenCalledWith({
+			type: 'domReady',
+			target: 'container',
+			body: {
+				bridgeId: 'bridge-lifecycle-handshake',
+				resourceLoadId: 'load-lifecycle-handshake',
+			},
+		})
 
 		runtime.app.unmount()
 	})

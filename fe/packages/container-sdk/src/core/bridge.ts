@@ -6,7 +6,6 @@ import { uuid } from '../utils/util.js'
 
 const RESOURCE_READY_TIMEOUT_MS = 15000
 
-/** Bridge.start(options) 的可选启动参数：透传 visible 覆盖 desiredPageVisible 缺省值。 */
 /**
  * 拆掉页面的两种原因。微信里 unloadPage 只有路由事件（reLaunch/redirectTo/navigateBack/
  * switchTab）会触发，退出小程序走的是 onAppEnterBackground，只派发 App.onHide，页面不收
@@ -31,7 +30,8 @@ export class Bridge {
 	resourceLoadId!: string | null
 	desiredPageVisible!: boolean | null
 	sentPageVisible!: boolean | null
-	private resourceReadyWaiter: {
+	domReadyResourceLoadId!: string | null
+	private startupReadyWaiter: {
 		resourceLoadId: string
 		resolve: () => void
 		reject: (error: Error) => void
@@ -47,7 +47,7 @@ export class Bridge {
 		this.webview = null
 		this.jscore = opts.jscore
 		this.parent = null
-		this.resourceReadyWaiter = null
+		this.startupReadyWaiter = null
 		this.unsubscribeServiceInvoke = null
 		this.unsubscribeServicePublish = null
 		this.resetStatus()
@@ -117,8 +117,10 @@ export class Bridge {
 		const isResourceLifecycleMessage = type === 'serviceResourceLoaded'
 			|| type === 'renderResourceLoaded'
 			|| type === 'renderResourceLoadFailed'
+		const isDomReadyMessage = target === 'container' && type === 'domReady'
+		const isLoadLifecycleMessage = isResourceLifecycleMessage || isDomReadyMessage
 		if (
-			isResourceLifecycleMessage
+			isLoadLifecycleMessage
 			&& (
 				typeof body.resourceLoadId !== 'string'
 				|| body.resourceLoadId !== this.resourceLoadId
@@ -176,11 +178,11 @@ export class Bridge {
 			this.jscore.postMessage(transMsg)
 			if (transMsg.type === 'resourceLoaded') {
 				this.#flushPageVisibility()
-				this.#resolveResourceReady()
+				this.#resolveStartupReady()
 			}
 			else if (transMsg.type === 'resourceLoadFailed') {
 				const errors = Array.isArray(body.errors) ? body.errors.map(String).join('; ') : ''
-				this.#rejectResourceReady(new Error(errors || `render resource load failed: ${this.opts.pagePath}`))
+				this.#rejectStartupReady(new Error(errors || `render resource load failed: ${this.opts.pagePath}`))
 			}
 		}
 		else if (target === 'container') {
@@ -190,6 +192,10 @@ export class Bridge {
 				// 作用于"调用页自身"的 API 能定位到正确的页面
 				this.parent!.invokeApi(name, params, this)
 			}
+			else if (type === 'domReady') {
+				this.domReadyResourceLoadId = body.resourceLoadId as string
+				this.#resolveStartupReady()
+			}
 		}
 	}
 
@@ -197,8 +203,13 @@ export class Bridge {
 	 * 启动资源加载
 	 */
 	start(options: BridgeStartOptions = {}): void {
-		this.#rejectResourceReady(new Error('resource load was superseded'))
+		this.#rejectStartupReady(new Error('startup was superseded'))
+		this.serviceResource = false
+		this.renderResource = false
+		this.resourceLoadedForwarded = false
 		this.resourceLoadId = uuid()
+		this.domReadyResourceLoadId = null
+		this.sentPageVisible = null
 		if (Object.prototype.hasOwnProperty.call(options, 'visible')) {
 			this.desiredPageVisible = options.visible ?? null
 		}
@@ -250,13 +261,13 @@ export class Bridge {
 	}
 
 	/**
-	 * 冷重启的事务门：只有 service 与 render 都回报当次 resourceLoadId
-	 * 就绪才提交。Worker 失败、渲染资源失败或超时都 reject，让 Application
-	 * 恢复旧 runtime，不会先回调 ok 再留下空实例。
+	 * 启动事务门：service、render 资源与首屏 DOM 必须都属于本次 resourceLoadId。
+	 * Worker 失败、渲染资源失败、销毁或超时都会 reject，启动遮罩不能提前消失，
+	 * 也不能永久挂住。
 	 */
 	startAndWait(options: BridgeStartOptions = {}): Promise<void> {
 		this.start(options)
-		if (this.isResourceLoaded()) {
+		if (this.isStartupReady()) {
 			return Promise.resolve()
 		}
 		const expectedResourceLoadId = this.resourceLoadId
@@ -266,12 +277,12 @@ export class Bridge {
 		return new Promise((resolve, reject) => {
 			const unsubscribeWorkerFailure = this.jscore.onWorkerFailure((reason) => {
 				const detail = reason instanceof Error ? reason.message : 'worker failed while loading resources'
-				this.#rejectResourceReady(new Error(detail))
+				this.#rejectStartupReady(new Error(detail))
 			})
 			const timer = setTimeout(() => {
-				this.#rejectResourceReady(new Error(`resource load timed out: ${this.opts.pagePath}`))
+				this.#rejectStartupReady(new Error(`startup ready timed out: ${this.opts.pagePath}`))
 			}, RESOURCE_READY_TIMEOUT_MS)
-			this.resourceReadyWaiter = {
+			this.startupReadyWaiter = {
 				resourceLoadId: expectedResourceLoadId,
 				resolve,
 				reject,
@@ -279,43 +290,44 @@ export class Bridge {
 				unsubscribeWorkerFailure,
 			}
 			// 保护测试替身或宿主桥接同步回包的非标准情形。
-			this.#resolveResourceReady()
+			this.#resolveStartupReady()
 		})
 	}
 
-	#resolveResourceReady(): void {
-		const waiter = this.resourceReadyWaiter
+	#resolveStartupReady(): void {
+		const waiter = this.startupReadyWaiter
 		if (
 			!waiter
 			|| waiter.resourceLoadId !== this.resourceLoadId
-			|| !this.isResourceLoaded()
+			|| !this.isStartupReady()
 		) {
 			return
 		}
-		this.resourceReadyWaiter = null
+		this.startupReadyWaiter = null
 		clearTimeout(waiter.timer)
 		waiter.unsubscribeWorkerFailure()
 		waiter.resolve()
 	}
 
-	#rejectResourceReady(error: Error): void {
-		const waiter = this.resourceReadyWaiter
+	#rejectStartupReady(error: Error): void {
+		const waiter = this.startupReadyWaiter
 		if (!waiter) {
 			return
 		}
-		this.resourceReadyWaiter = null
+		this.startupReadyWaiter = null
 		clearTimeout(waiter.timer)
 		waiter.unsubscribeWorkerFailure()
 		waiter.reject(error)
 	}
 
 	resetStatus(): void {
-		this.#rejectResourceReady(new Error('resource load state was reset'))
+		this.#rejectStartupReady(new Error('startup state was reset'))
 		this.destroyed = false
 		this.serviceResource = false
 		this.renderResource = false
 		this.resourceLoadedForwarded = false
 		this.resourceLoadId = null
+		this.domReadyResourceLoadId = null
 		this.desiredPageVisible = null
 		this.sentPageVisible = null
 	}
@@ -369,6 +381,12 @@ export class Bridge {
 		return this.serviceResource && this.renderResource
 	}
 
+	isStartupReady(): boolean {
+		return this.isResourceLoaded()
+			&& this.resourceLoadId !== null
+			&& this.domReadyResourceLoadId === this.resourceLoadId
+	}
+
 	pageShow(): void {
 		this.desiredPageVisible = true
 		this.#flushPageVisibility()
@@ -407,12 +425,13 @@ export class Bridge {
 	 */
 	destroy(reason: PageStateTeardown = 'routing'): void {
 		const wasResourceLoaded = this.isResourceLoaded()
-		this.#rejectResourceReady(new Error('bridge was destroyed before resources became ready'))
+		this.#rejectStartupReady(new Error('bridge was destroyed before startup became ready'))
 		this.destroyed = true
 		this.serviceResource = false
 		this.renderResource = false
 		this.resourceLoadedForwarded = false
 		this.resourceLoadId = null
+		this.domReadyResourceLoadId = null
 		this.desiredPageVisible = null
 		this.sentPageVisible = null
 		this.unsubscribeServiceInvoke?.()

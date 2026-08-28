@@ -131,7 +131,7 @@ class Service {
 	onAppMsg() {
 		// 双线程资源就绪后创建首个页面实例
 		this.message.on('resourceLoaded', (msg) => {
-			const { bridgeId, pagePath, query, stackId } = msg
+			const { bridgeId, pagePath, query, resourceLoadId, stackId } = msg
 			if (runtime.isMiniGame()) {
 				return
 			}
@@ -166,6 +166,7 @@ class Service {
 					pagePath,
 					initialProps,
 					query,
+					resourceLoadId,
 				},
 			})
 			page?.sendInitialData()

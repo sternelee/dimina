@@ -2,7 +2,7 @@ import type { MiniApp } from '../src/pages/miniApp/miniApp.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createContainer } from '../src/index.js'
 import { ENTRY_PAGE_PATH } from './fixtures/app-config.js'
-import { FakeWorker, resetFakeWorker } from './fixtures/fake-worker.js'
+import { FakeWorker, resetFakeWorker, setAutoRuntimeReady } from './fixtures/fake-worker.js'
 import { installFetchMock } from './fixtures/mock-fetch.js'
 
 function messagesOfType(worker: FakeWorker, type: string): Array<Record<string, unknown>> {
@@ -103,6 +103,7 @@ describe('mini program container navigation APIs', () => {
 	}, 15000)
 
 	it('does not emit a late pageHide after appHide when the source render is still loading', async () => {
+		setAutoRuntimeReady(false)
 		const container = createContainer({ mount })
 		const source = await container.openApp({ appId: 'pending-source', path: ENTRY_PAGE_PATH })
 		await waitForReady(source)
@@ -110,10 +111,20 @@ describe('mini program container navigation APIs', () => {
 		const sourceBridge = source.navigator.top!
 		const sourceWorker = source.jscore.worker as unknown as FakeWorker
 
+		// 只让 source 保持在 render 未就绪窗口；target 恢复正常的完整握手。
+		setAutoRuntimeReady(true)
 		await source.navigateToMiniProgram({ appId: 'pending-target' })
 		sourceBridge.messageInvoke('render', {
 			type: 'renderResourceLoaded',
 			target: 'service',
+			body: {
+				bridgeId: sourceBridge.id,
+				resourceLoadId: sourceBridge.resourceLoadId!,
+			},
+		})
+		sourceBridge.messageInvoke('render', {
+			type: 'domReady',
+			target: 'container',
 			body: {
 				bridgeId: sourceBridge.id,
 				resourceLoadId: sourceBridge.resourceLoadId!,
@@ -299,10 +310,14 @@ describe('mini program container navigation APIs', () => {
 		const container = createContainer({ mount })
 		const original = await container.openApp({ appId: 'restart-worker-app', path: ENTRY_PAGE_PATH })
 		await waitForReady(original)
+		await vi.waitFor(() => expect(original.navigator.top?.isStartupReady()).toBe(true), { timeout: 8000 })
 		const originalWorker = original.jscore.worker as unknown as FakeWorker
 		const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
 
 		try {
+			// 原 runtime 已完成握手；仅让 replacement 停留在资源启动阶段，以验证 Worker
+			// 失败会打断 domReady 门控并回滚，而不是被测试桩自动提交。
+			setAutoRuntimeReady(false)
 			const restartPromise = original.restartMiniProgram({
 				path: ENTRY_PAGE_PATH,
 				fail: 'worker-restart-fail',
@@ -319,6 +334,7 @@ describe('mini program container navigation APIs', () => {
 			await restartPromise
 		}
 		finally {
+			setAutoRuntimeReady(true)
 			consoleError.mockRestore()
 		}
 

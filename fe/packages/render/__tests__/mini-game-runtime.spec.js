@@ -12,9 +12,11 @@ describe('mini game render surface', () => {
 		document.body.innerHTML = ''
 		runtime.canvasNodes.clear()
 		runtime.canvasResources.clear()
+		runtime.resourceLoadIds.clear()
 	})
 
 	it('mounts one full-screen canvas and forwards touch and simulated mouse events to service', () => {
+		runtime.registerResourceLoad('bridge-game', 'load-game')
 		runtime.createGameCanvas({
 			bridgeId: 'bridge-game',
 			params: { nodeId: 'game-canvas', width: 390, height: 844, type: '2d' },
@@ -28,7 +30,7 @@ describe('mini game render surface', () => {
 		expect(invoke).toHaveBeenCalledWith({
 			type: 'domReady',
 			target: 'container',
-			body: { bridgeId: 'bridge-game' },
+			body: { bridgeId: 'bridge-game', resourceLoadId: 'load-game' },
 		})
 
 		const event = new Event('touchstart', { cancelable: true })

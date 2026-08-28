@@ -640,6 +640,7 @@ class Runtime {
 		this.canvasResources = new Map()
 		this.canvasRafIds = new Map()
 		this.canvasCapabilities = null
+		this.resourceLoadIds = new Map()
 		// 队列和回放状态都按真实 canvas 元素隔离；canvas-id 只在组件作用域内唯一。
 		// WeakMap 让卸载后的画布及其队列、save/clip 状态可以一起回收。
 		this.canvasDrawQueues = new WeakMap()
@@ -691,6 +692,23 @@ class Runtime {
 		}
 		this.canvasRafIds.clear()
 		this.canvasScopeQueues.clear()
+		this.resourceLoadIds.clear()
+	}
+
+	registerResourceLoad(bridgeId, resourceLoadId) {
+		if (!bridgeId) return
+		if (typeof resourceLoadId === 'string' && resourceLoadId) {
+			this.resourceLoadIds.set(bridgeId, resourceLoadId)
+		}
+		else {
+			this.resourceLoadIds.delete(bridgeId)
+		}
+	}
+
+	createDomReadyBody(bridgeId, resourceLoadId = this.resourceLoadIds.get(bridgeId)) {
+		const body = { bridgeId }
+		if (typeof resourceLoadId === 'string' && resourceLoadId) body.resourceLoadId = resourceLoadId
+		return body
 	}
 
 	syncReactiveState(state, nextState = {}) {
@@ -709,13 +727,14 @@ class Runtime {
 	 * @param {*} opts
 	 */
 	firstRender(opts) {
-		const { bridgeId, pagePath, pageId, query } = opts
+		const { bridgeId, pagePath, pageId, query, resourceLoadId } = opts
 
 		const options = this.makeOptions({
 			path: pagePath,
 			bridgeId,
 			pageId,
 			query,
+			resourceLoadId,
 		})
 
 		if (this.app != null) {
@@ -781,7 +800,7 @@ class Runtime {
 	// Component create -> Page create -> Page attached -> Component attached -> Component ready -> Page ready
 	// Component attached -> Page onLoad -> Page onShow -> Component ready -> onReady
 	makeOptions(opts) {
-		const { path, bridgeId, pageId } = opts
+		const { path, bridgeId, pageId, resourceLoadId } = opts
 		const pageModule = loader.getModuleByPath(path)
 		const {
 			id,
@@ -806,6 +825,7 @@ class Runtime {
 			...sharedStyleScopeIds.map(scopeId => `data-v-${scopeId}`),
 		].filter(Boolean)
 		const components = this.createComponent(path, bridgeId, usingComponents, new Map(), componentPlaceholder)
+		const domReadyBody = this.createDomReadyBody(bridgeId, resourceLoadId)
 		return {
 			id,
 			tplComponents,
@@ -817,9 +837,7 @@ class Runtime {
 							message.invoke({
 								type: 'domReady',
 								target: 'container',
-								body: {
-									bridgeId,
-								},
+								body: domReadyBody,
 							})
 						},
 					}, {
@@ -1747,7 +1765,7 @@ class Runtime {
 		message.invoke({
 			type: 'domReady',
 			target: 'container',
-			body: { bridgeId },
+			body: this.createDomReadyBody(bridgeId),
 		})
 	}
 
