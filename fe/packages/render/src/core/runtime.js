@@ -1742,6 +1742,13 @@ class Runtime {
 			},
 		})
 		this.publishCanvasCapabilities(bridgeId)
+		// 小游戏没有 Page/WXML，也就不会经过页面 Suspense 的 domReady。
+		// 首个上屏 canvas 已经挂载后复用同一容器就绪契约，让原生端关闭启动遮罩。
+		message.invoke({
+			type: 'domReady',
+			target: 'container',
+			body: { bridgeId },
+		})
 	}
 
 	disposeCanvasNode(nodeId, bridgeId) {

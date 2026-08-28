@@ -45,7 +45,7 @@ legacy API 先按页面或组件作用域解析 `canvas-id`，再把操作交给
 
 Canvas node API 在逻辑层积累 operation，flush 后由渲染层逐条结算。每条 operation 的异常独立返回，图片加载、像素 Promise、RAF callback 和状态反馈都绑定到 node owner；成功、失败、取消或销毁只允许一个终态。
 
-Canvas 2D 状态以渲染层宿主 context 为最终权威。逻辑层提供同步的 optimistic getter，并以单调序号接收宿主 readback；迟到反馈不能覆盖新值。`save()` / `restore()`、`reset()` 和 backing size 变化会同步更新状态栈。宿主没有 `reset()` 时，渲染层通过重建同尺寸 backing store 清除像素、路径、clip、save stack 和绘图状态，再返回完整状态快照。
+Canvas 2D 状态以渲染层宿主 context 为最终权威。逻辑层提供同步的 optimistic getter，并以单调序号接收宿主 readback；迟到反馈不能覆盖新值。flush 不会删除或重排绘制 operation，只省略已被后续状态覆盖且不再被当前状态栈引用的中间 readback，因此动画帧内反复设置样式不会形成等量的反向 bridge 流量。`save()` / `restore()`、`reset()` 和 backing size 变化会同步更新状态栈；`restore()` 只为真实变化的属性申请状态快照。宿主没有 `reset()` 时，渲染层通过重建同尺寸 backing store 清除像素、路径、clip、save stack 和绘图状态，再返回完整状态快照。
 
 ## 位图与传输预算
 

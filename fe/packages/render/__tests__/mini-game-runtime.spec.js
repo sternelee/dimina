@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { send } = vi.hoisted(() => ({ send: vi.fn() }))
-vi.mock('../src/core/message', () => ({ default: { send } }))
+const { invoke, send } = vi.hoisted(() => ({ invoke: vi.fn(), send: vi.fn() }))
+vi.mock('../src/core/message', () => ({ default: { invoke, send } }))
 
 import runtime from '../src/core/runtime.js'
 
 describe('mini game render surface', () => {
 	beforeEach(() => {
+		invoke.mockReset()
 		send.mockReset()
 		document.body.innerHTML = ''
 		runtime.canvasNodes.clear()
@@ -23,6 +24,12 @@ describe('mini game render surface', () => {
 		expect(canvas.width).toBe(390)
 		expect(canvas.height).toBe(844)
 		expect(canvas.style.touchAction).toBe('none')
+		expect(invoke).toHaveBeenCalledOnce()
+		expect(invoke).toHaveBeenCalledWith({
+			type: 'domReady',
+			target: 'container',
+			body: { bridgeId: 'bridge-game' },
+		})
 
 		const event = new Event('touchstart', { cancelable: true })
 		Object.defineProperties(event, {

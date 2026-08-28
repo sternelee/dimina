@@ -944,6 +944,18 @@ class CanvasRenderingContext2DProxy {
 		if (clearStack) this.stateStack = []
 	}
 
+	restoreState(frame) {
+		const changedSequences = Object.create(null)
+		for (const prop of Object.keys(this.state)) {
+			if (Object.is(this.state[prop], frame.state[prop])) continue
+			const sequence = Math.max(this.stateSequences[prop] || 0, frame.sequences[prop] || 0) + 1
+			this.stateSequences[prop] = sequence
+			changedSequences[prop] = sequence
+		}
+		this.state = { ...frame.state }
+		return changedSequences
+	}
+
 	resetStateForBitmapResize() {
 		this.replaceState(CANVAS_2D_DEFAULT_STATE, { clearStack: true })
 		this.confirmedState = { ...CANVAS_2D_DEFAULT_STATE }
@@ -960,12 +972,14 @@ class CanvasRenderingContext2DProxy {
 	}
 
 	call(method, args) {
-		const stateTransition = method === 'save' || method === 'restore' || method === 'reset'
+		let stateSequences
 		if (method === 'save') {
 			this.stateStack.push({ state: { ...this.state }, sequences: this.stateSequenceSnapshot() })
 		}
-		else if (method === 'restore' && this.stateStack.length > 0) this.replaceState(this.stateStack.pop().state)
-		else if (method === 'reset') this.resetStateForBitmapResize()
+		else if (method === 'restore' && this.stateStack.length > 0) {
+			stateSequences = this.restoreState(this.stateStack.pop())
+		}
+		else if (method === 'reset') stateSequences = this.resetStateForBitmapResize()
 
 		if (method === 'measureText') {
 			this.measureContext ??= createMeasureContext()
@@ -987,8 +1001,8 @@ class CanvasRenderingContext2DProxy {
 			method,
 			args: serializeCanvasArgs(args),
 			resultId,
-			feedback: stateTransition ? 'stateSnapshot' : undefined,
-			stateSequences: stateTransition ? this.stateSequenceSnapshot() : undefined,
+			feedback: stateSequences && Object.keys(stateSequences).length > 0 ? 'stateSnapshot' : undefined,
+			stateSequences,
 		})
 
 		if (resultId) return new CanvasResource(this.canvas, resultId)
@@ -1894,12 +1908,54 @@ export class CanvasNode {
 		scheduleMicrotask(() => this.flushOperations())
 	}
 
+	compactStateFeedback(operations) {
+		const requiredSequences = new Set()
+		const addRequiredSequences = (contextId, sequences = {}) => {
+			for (const [prop, sequence] of Object.entries(sequences)) {
+				if (sequence > 0) requiredSequences.add(`${contextId}\0${prop}\0${sequence}`)
+			}
+		}
+
+		for (const [contextId, context] of this.contextsById) {
+			if (!context?.stateSequences) continue
+			addRequiredSequences(contextId, context.stateSequences)
+			if (Array.isArray(context.stateStack)) {
+				for (const frame of context.stateStack) addRequiredSequences(contextId, frame.sequences)
+			}
+		}
+
+		return operations.map((operation) => {
+			if (operation.feedback === 'state') {
+				const key = `${operation.contextId}\0${operation.prop}\0${operation.sequence}`
+				if (!requiredSequences.has(key)) {
+					const withoutFeedback = { ...operation }
+					delete withoutFeedback.feedback
+					return withoutFeedback
+				}
+			}
+			else if (operation.feedback === 'stateSnapshot') {
+				const stateSequences = Object.fromEntries(
+					Object.entries(operation.stateSequences || {}).filter(([prop, sequence]) =>
+						requiredSequences.has(`${operation.contextId}\0${prop}\0${sequence}`)),
+				)
+				if (Object.keys(stateSequences).length === 0) {
+					const withoutFeedback = { ...operation }
+					delete withoutFeedback.feedback
+					delete withoutFeedback.stateSequences
+					return withoutFeedback
+				}
+				return { ...operation, stateSequences }
+			}
+			return operation
+		})
+	}
+
 	flushOperations() {
 		this.flushScheduled = false
 		if (this.pendingOperations.length === 0) {
 			return
 		}
-		const operations = this.pendingOperations
+		const operations = this.compactStateFeedback(this.pendingOperations)
 		this.pendingOperations = []
 		const stateKeys = operations.flatMap((operation) => {
 			if (operation.feedback === 'state') return [`${operation.contextId}:${operation.prop}`]

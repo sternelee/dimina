@@ -534,6 +534,48 @@ describe('canvas api', () => {
 		expect(setters.map(operation => operation.previousValue)).toEqual(['none', 'none'])
 	})
 
+	it('coalesces animation-frame state readback without dropping or reordering draw operations', async () => {
+		const context = createOffscreenCanvas({ type: '2d' }).getContext('2d')
+		for (let index = 0; index < 4; index += 1) {
+			context.save()
+			context.globalAlpha = 0.2 + index * 0.1
+			context.fillStyle = index % 2 === 0 ? 'red' : 'blue'
+			context.fillRect(index, index, 1, 1)
+			context.restore()
+		}
+		await Promise.resolve()
+
+		const flush = globalThis.DiminaServiceBridge.publish.mock.calls
+			.map(([, message]) => message)
+			.find(message => message.body.name === 'canvasNodeFlush')
+		const operations = flush.body.params.operations
+
+		expect(operations.filter(operation => operation.op === 'contextSetProperty')).toHaveLength(8)
+		expect(operations.filter(operation => operation.method === 'fillRect')).toHaveLength(4)
+		expect(operations.filter(operation => operation.feedback === 'state')).toHaveLength(0)
+		const snapshots = operations.filter(operation => operation.feedback === 'stateSnapshot')
+		expect(snapshots).toHaveLength(1)
+		expect(snapshots[0].method).toBe('restore')
+		expect(Object.keys(snapshots[0].stateSequences).sort()).toEqual(['fillStyle', 'globalAlpha'])
+	})
+
+	it('retains readback sequences referenced by an unmatched save frame', async () => {
+		const context = createOffscreenCanvas({ type: '2d' }).getContext('2d')
+		context.fillStyle = 'red'
+		context.save()
+		context.fillStyle = 'blue'
+		await Promise.resolve()
+
+		const flush = globalThis.DiminaServiceBridge.publish.mock.calls
+			.map(([, message]) => message)
+			.find(message => message.body.name === 'canvasNodeFlush')
+		const setters = flush.body.params.operations.filter(operation => operation.prop === 'fillStyle')
+
+		expect(setters).toHaveLength(2)
+		expect(setters.every(operation => operation.feedback === 'state')).toBe(true)
+		expect(flush.body.params.operations.find(operation => operation.method === 'save').feedback).toBeUndefined()
+	})
+
 	it('uses the available font engine for synchronous 2d measureText', () => {
 		class FakeMeasureContext {
 			measureText(text) {
