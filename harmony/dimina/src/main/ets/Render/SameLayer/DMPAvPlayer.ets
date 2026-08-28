@@ -76,12 +76,18 @@ export class DMPAvPlayer {
   }
 
   // 通过url设置网络地址来实现播放直播码流。
-  async avPlayerLive(src: string) {
-    // 创建avPlayer实例对象
-    let avPlayer: media.AVPlayer = await media.createAVPlayer();
-    // 创建状态机变化回调函数。
-    this.setAVPlayerCallback(avPlayer);
-    this.isSeek = false; // 不支持seek操作。
-    avPlayer.url = src;
+  async avPlayerLive(src: string): Promise<void> {
+    try {
+      // 创建avPlayer实例对象
+      let avPlayer: media.AVPlayer = await media.createAVPlayer();
+      // 创建状态机变化回调函数。
+      this.setAVPlayerCallback(avPlayer);
+      this.isSeek = false; // 不支持seek操作。
+      avPlayer.url = src;
+    } catch (err) {
+      const error = err as BusinessError;
+      DMPLogger.e('', `Create live AVPlayer failed, code is ${error.code}, message is ${error.message}`);
+      throw new Error(`Create live AVPlayer failed: ${error.message}`);
+    }
   }
 }

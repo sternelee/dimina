@@ -4,6 +4,11 @@ import fileUri from '@ohos.file.fileuri';
 import { AssetModel, AssetExtType } from './AssetModel';
 import { JSON, buffer } from '@kit.ArkTS';
 import { DMPLogger } from '../../EventTrack/DMPLogger';
+import deviceInfo from '@ohos.deviceInfo';
+
+interface LegacyImagePacker {
+  packing(source: image.PixelMap, option: image.PackingOption): Promise<ArrayBuffer>;
+}
 
 export class AssetUtil {
 
@@ -229,7 +234,6 @@ export class AssetUtil {
    * @param filePath 操作后图片存储位置
    */
   static async saveAssetData(imageData: ArrayBuffer, filePath: string): Promise<void> {
-    const context: Context = getContext();
     // 定义要保存的压缩图片uri。afterCompressiona.jpeg表示压缩后的图片。
     const compressedImageUri: string = filePath;
     try {
@@ -243,9 +247,23 @@ export class AssetUtil {
     }
     // 知识点：保存图片。获取最终图片压缩数据compressedImageData，保存图片。
     // 压缩图片数据写入文件
-    const file: fileIo.File = fileIo.openSync(compressedImageUri, fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE);
-    fileIo.writeSync(file.fd, imageData);
-    fileIo.closeSync(file);
+    try {
+      const file: fileIo.File = fileIo.openSync(compressedImageUri,
+        fileIo.OpenMode.READ_WRITE | fileIo.OpenMode.CREATE);
+      try {
+        fileIo.writeSync(file.fd, imageData);
+      } finally {
+        try {
+          fileIo.closeSync(file);
+        } catch (err) {
+          DMPLogger.e('[AssetUtil]', `saveAssetData failed to close file: ${err}`);
+        }
+      }
+    } catch (err) {
+      const error = err as Error;
+      DMPLogger.e('[AssetUtil]', `saveAssetData failed to write file: ${error.message}`);
+      throw new Error(`saveAssetData failed: ${error.message}`);
+    }
   }
 
   // packing压缩(大小不变降低质量，JPEG)
@@ -259,17 +277,25 @@ export class AssetUtil {
     let format: string = "image/jpeg"
     if (extType == AssetExtType.Jpeg) {
       format = "image/jpeg"
-    } if (extType == AssetExtType.Png) {
+    } else if (extType == AssetExtType.Png) {
       format = "image/png"
       quality = 100;
-    } if (extType == AssetExtType.Png) {
+    } else if (extType == AssetExtType.Webp) {
       format = "image/webp"
       quality = 100;
     }
     const packOpts: image.PackingOption = { format: format, quality: quality };
-    const data: ArrayBuffer = await imagePackerApi.packing(sourcePixelMap, packOpts);
-    await imagePackerApi.release()
-    return data;
+    try {
+      if (deviceInfo.sdkApiVersion >= 13) {
+        return await imagePackerApi.packToData(sourcePixelMap, packOpts);
+      }
+      return await (imagePackerApi as LegacyImagePacker).packing(sourcePixelMap, packOpts);
+    } catch (err) {
+      const error = err as Error;
+      throw new Error(`Pack image data failed: ${error.message}`);
+    } finally {
+      await imagePackerApi.release()
+    }
   }
 
   // 默认图片路径
@@ -338,12 +364,9 @@ export class AssetUtil {
    * @returns compressedImageInfo：返回最终压缩后的图片信息
    */
   static async compressedImage(sourcePixelMap: image.PixelMap, maxCompressedImageSize: number, filePath: string): Promise<AssetModel> {
-    // 创建图像编码ImagePacker对象
-    const imagePackerApi = image.createImagePacker();
     const IMAGE_QUALITY = 0;
-    const packOpts: image.PackingOption = { format: "image/jpeg", quality: IMAGE_QUALITY };
     // 通过PixelMap进行编码。compressedImageData为打包获取到的图片文件流。
-    let compressedImageData: ArrayBuffer = await imagePackerApi.packing(sourcePixelMap, packOpts);
+    let compressedImageData: ArrayBuffer = await AssetUtil.packingJPEGPixelMap(sourcePixelMap, IMAGE_QUALITY);
     // 压缩目标图像字节长度
     const maxCompressedImageByte = maxCompressedImageSize * 1024;
     // 图片压缩。先判断设置图片质量参数quality为0时，packing能压缩到的图片最小字节大小是否满足指定的图片压缩大小。如果满足，则使用packing方式二分查找最接近指定图片压缩目标大小的quality来压缩图片。如果不满足，则使用scale对图片先进行缩放，采用while循环每次递减0.4倍缩放图片，再用packing（图片质量参数quality设置0）获取压缩图片大小，最终查找到最接近指定图片压缩目标大小的缩放倍数的图片压缩数据。
