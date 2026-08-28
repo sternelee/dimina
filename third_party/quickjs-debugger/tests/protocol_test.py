@@ -13,6 +13,7 @@ from pathlib import Path
 
 
 DEBUGGER_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_QUICKJS_SOURCE = DEBUGGER_DIR.parent / "quickjs" / "upstream"
 SOURCE_PATH = "/__dimina__/test/main/logic.js"
 
 
@@ -154,7 +155,13 @@ def run_protocol_test(harness: Path) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser()
-    parser.add_argument("quickjs_source", type=Path)
+    parser.add_argument(
+        "quickjs_source",
+        type=Path,
+        nargs="?",
+        default=DEFAULT_QUICKJS_SOURCE,
+        help="QuickJS source directory (default: third_party/quickjs/upstream)",
+    )
     args = parser.parse_args()
     with tempfile.TemporaryDirectory(prefix="dimina-qjs-debugger-") as temp_dir:
         harness = build_harness(args.quickjs_source.resolve(), Path(temp_dir))
