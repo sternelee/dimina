@@ -3,6 +3,21 @@ import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 describe('device stage markup', () => {
+	it('renders the Wi-Fi status icon with theme-aware filled segments', () => {
+		const markup = fs.readFileSync(resolve(process.cwd(), 'src/pages/device/device.html'), 'utf8')
+		const deviceStyles = fs.readFileSync(resolve(process.cwd(), 'src/pages/device/device.scss'), 'utf8')
+		const wifiMarkup = markup.match(/<svg class="status-bar__wifi"[^>]*>[\s\S]*?<\/svg>/)?.[0]
+
+		expect(wifiMarkup).toBeDefined()
+		expect(wifiMarkup).toContain('viewBox="0 0 20 14"')
+		expect(wifiMarkup).toContain('aria-hidden="true"')
+		expect(wifiMarkup?.match(/<path[^>]*fill="currentColor"/g)).toHaveLength(2)
+		expect(wifiMarkup).toMatch(/<circle[^>]*fill="currentColor"/)
+		expect(wifiMarkup).not.toContain('fill-rule=')
+		expect(deviceStyles).toMatch(/\.status-bar__wifi\s*{[^}]*width:\s*18px;[^}]*height:\s*14px;/s)
+		expect(deviceStyles).not.toMatch(/\.status-bar__wifi\s*{\s*fill:\s*#(?:fff|000);\s*stroke:\s*#(?:fff|000);/s)
+	})
+
 	it('keeps the approved white-gallery structure and platform order', () => {
 		const markup = fs.readFileSync(resolve(process.cwd(), 'src/pages/device/device.html'), 'utf8')
 		const stageStyles = fs.readFileSync(resolve(process.cwd(), 'src/pages/device/device-stage.scss'), 'utf8')
