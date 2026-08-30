@@ -1,6 +1,6 @@
 import fs from '@ohos.file.fs';
 import { DMPContextUtils } from '../../Utils/DMPContextUtils';
-import { DMPFileURLScheme as VIRTUAL_PREFIX, DMPFileUrlConvertor } from './DMPFileUrlConvertor';
+import { DMPFileUrlConvertor, DMPVirtualFileConfig } from './DMPFileUrlConvertor';
 const USER_PREFIX = 'usr';
 const TEMP_PREFIX = 'tmp';
 
@@ -35,15 +35,16 @@ export class DMPFilePathResolver {
     }
     const userRoot = DMPFilePathResolver.userRoot(appId);
     const tempRoot = DMPFilePathResolver.tempRoot(appId);
+    const virtualPrefix = DMPVirtualFileConfig.getPrefix();
     let candidate = rawPath;
 
-    if (rawPath === `${VIRTUAL_PREFIX}${USER_PREFIX}` || rawPath.startsWith(`${VIRTUAL_PREFIX}${USER_PREFIX}/`)) {
-      const relative = rawPath.substring(`${VIRTUAL_PREFIX}${USER_PREFIX}`.length).replace(/^\/+/, '');
+    if (rawPath === `${virtualPrefix}${USER_PREFIX}` || rawPath.startsWith(`${virtualPrefix}${USER_PREFIX}/`)) {
+      const relative = rawPath.substring(`${virtualPrefix}${USER_PREFIX}`.length).replace(/^\/+/, '');
       candidate = `${userRoot}/${relative}`;
-    } else if (rawPath === `${VIRTUAL_PREFIX}${TEMP_PREFIX}` || rawPath.startsWith(`${VIRTUAL_PREFIX}${TEMP_PREFIX}/`)) {
-      const relative = rawPath.substring(`${VIRTUAL_PREFIX}${TEMP_PREFIX}`.length).replace(/^\/+/, '');
+    } else if (rawPath === `${virtualPrefix}${TEMP_PREFIX}` || rawPath.startsWith(`${virtualPrefix}${TEMP_PREFIX}/`)) {
+      const relative = rawPath.substring(`${virtualPrefix}${TEMP_PREFIX}`.length).replace(/^\/+/, '');
       candidate = `${tempRoot}/${relative}`;
-    } else if (rawPath.startsWith(VIRTUAL_PREFIX)) {
+    } else if (rawPath.startsWith(virtualPrefix)) {
       candidate = DMPFileUrlConvertor.localPathFromVPath(rawPath, DMPFilePathResolver.legacyTempRoot(appId));
     } else if (!rawPath.startsWith('/')) {
       if (!packageRoot) {

@@ -110,7 +110,7 @@ class QuickJSEngine {
      * Initialize and create a new QuickJS runtime and context
      * @return true if initialization was successful, false otherwise
      */
-    fun initialize(virtualFilePrefix: String = ""): Boolean {
+    fun initialize(virtualFilePrefix: String = "difile://"): Boolean {
         if (isRunning) {
             Log.d(tag, "QuickJS engine already initialized (instance ID: $instanceId)")
             return false

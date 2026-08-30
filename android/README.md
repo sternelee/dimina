@@ -61,6 +61,8 @@ class MyApplication : Application() {
             // 是否启用调试模式：影响日志显示，并允许 pageFrame 初始化 vConsole
             // 调试模式不检测 App 是否已更新，都会进入 JSSDK 和 JSApp 的更新检测逻辑
             .setDebugMode(true)
+            // 可选：必须在 SDK 初始化时设置，原生路径解析与逻辑层会使用同一前缀
+            .setVirtualFilePrefix("host-file://")
             .build()
         )
     }

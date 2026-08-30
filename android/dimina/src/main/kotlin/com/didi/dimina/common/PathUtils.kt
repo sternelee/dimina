@@ -14,11 +14,36 @@ object PathUtils {
     const val WEBVIEW_BASE_URL = "https://$WEBVIEW_ASSET_DOMAIN"
     const val WEBVIEW_JSAPP_BASE_URL = "$WEBVIEW_BASE_URL/jsapp/"
     const val WEBVIEW_JSSDK_BASE_URL = "$WEBVIEW_BASE_URL/jssdk/"
-    const val VIRTUAL_SCHEME = "difile"
-    const val VIRTUAL_DOMAIN_URL = "$VIRTUAL_SCHEME://"
+    const val DEFAULT_VIRTUAL_DOMAIN_URL = "difile://"
+    @Volatile
+    private var virtualDomainUrl: String = DEFAULT_VIRTUAL_DOMAIN_URL
+    val VIRTUAL_DOMAIN_URL: String
+        get() = virtualDomainUrl
+    val VIRTUAL_SCHEME: String
+        get() = virtualDomainUrl.removeSuffix("://")
     private const val FILE_SYSTEM_DIR = "dimina-file-system"
     private const val USER_DIR = "usr"
     private const val TEMP_DIR = "tmp"
+    private val RESERVED_VIRTUAL_FILE_SCHEMES = setOf(
+        "about", "blob", "content", "data", "dimina", "file", "ftp", "http", "https",
+        "internal", "javascript", "resource", "ws", "wss",
+    )
+
+    internal fun normalizeVirtualFilePrefix(prefix: String): String {
+        val normalized = prefix.trim().lowercase()
+        val scheme = normalized.removeSuffix("://")
+        require(
+            Regex("^[a-z][a-z0-9+.-]*://$").matches(normalized) &&
+                scheme !in RESERVED_VIRTUAL_FILE_SCHEMES
+        ) {
+            "virtualFilePrefix must be a custom URI scheme ending in ://"
+        }
+        return normalized
+    }
+
+    internal fun configureVirtualFilePrefix(prefix: String) {
+        virtualDomainUrl = normalizeVirtualFilePrefix(prefix)
+    }
 
     private fun validatedAppId(appId: String): String {
         require(appId.isNotBlank()) { "appId is required for virtual file access" }

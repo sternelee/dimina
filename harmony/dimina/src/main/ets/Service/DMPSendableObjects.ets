@@ -68,15 +68,17 @@ export class initPayload {
   isDebugMode: boolean;
   debuggerAddress: string;
   runtimeSourceURL: string;
+  virtualFilePrefix: string;
 
   constructor(command: string, appIndex: number, context: common.UIAbilityContext, isDebugMode: boolean,
-    debuggerAddress: string, runtimeSourceURL: string) {
+    debuggerAddress: string, runtimeSourceURL: string, virtualFilePrefix: string) {
     this.command = command;
     this.appIndex = appIndex;
     this.context = context;
     this.isDebugMode = isDebugMode;
     this.debuggerAddress = debuggerAddress;
     this.runtimeSourceURL = runtimeSourceURL;
+    this.virtualFilePrefix = virtualFilePrefix;
   }
 }
 

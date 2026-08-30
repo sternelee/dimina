@@ -73,6 +73,7 @@ resourceBaseUrl/
 | `shell.updateStatusBarColor` | 状态栏前景色（黑/白）变化通知，供宿主壳联动切换深浅色 |
 | `resourceBaseUrl` | 小程序资源请求基路径，缺省 `/`。经真实 `URL` 解析归一化为绝对 URL（相对路径按 `window.location.origin` 解析），畸形输入同步抛错。宿主部署在非根路径时必须显式传入 |
 | `pageFrameUrl` | 渲染层 iframe 的 URL，缺省基于归一化后的 `resourceBaseUrl` 解析出 `pageFrame.html`；同样经 `URL` 解析，畸形输入同步抛错 |
+| `virtualFilePrefix` | 虚拟文件协议前缀，缺省 `difile://`。必须是以 `://` 结尾的自定义 URI scheme，不能使用系统或 SDK 保留 scheme；按容器实例隔离，并在 service Worker 启动前同步传入逻辑层 |
 | `allowedOrigins` | `resourceBaseUrl`/`pageFrameUrl` 最终解析出的 origin 白名单（如 `[location.origin]`）。不传不限制来源；传了则两者（含走缺省值解析出的 origin）都必须精确命中，否则 `createContainer()` 同步抛错 |
 | `apiNamespaces` | 额外 API 命名空间（如 `['qd']`），每个小程序 `getApiNamespaces()` 都会返回它 |
 | `urlSync` | 地址栏路由同步。由 `application.syncUrl()` 统一从**当前展示栈栈顶实例**派生并回写——只要栈顶变化（打开/切前台/关闭后露出下一个/全部关闭）就会同步，不由某个小程序的内部导航各自决定。缺省 `true` 沿用内置 `QueryRouter`（`history.replaceState` 改写地址栏 `?appId=&entry=&page=`；无小程序打开时清除）；传 `false` 完全关闭；传 `{ syncStack(appId, stack), clear(), buildShareUrl?(appId, stack) }` 自定义适配器接管（例如接入宿主自身的 hash-router），此时 SDK 不再自己碰 `history`；可选的 `buildShareUrl` 供小程序菜单的"复制链接"使用，不实现时该菜单项直接隐藏而不是拼一个打不开的地址。**多容器**：同一地址栏无法让两个都用内置 `QueryRouter`、且都不传 `instanceKey` 的容器共存（固定 query key 会互相覆盖）——给每个容器传各自不同的 `instanceKey` 即可都保留 `urlSync: true`（见下一行）；不想用命名空间方案时也可只给其中一个容器留 `urlSync: true`，其余传 `false` 或各自的自定义适配器 |

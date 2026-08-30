@@ -147,6 +147,7 @@ export class AppManager {
 			query,
 			restoreStack, // 完整页面栈，用于刷新后静默恢复
 			resourceBaseUrl,
+			virtualFilePrefix: dimina.virtualFilePrefix,
 		})
 
 		// 容器级 API 须在 presentView 之前注入：jscore.init 会快照 apiRegistry

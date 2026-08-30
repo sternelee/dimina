@@ -38,10 +38,12 @@ import { DMPAppRuntimeLifecycle } from './utils/DMPAppRuntimeLifecycle'
 import { DMPAppVisibilityLedger } from './utils/DMPAppVisibilityLedger'
 import { CanvasExportJobRegistry } from '../Bridges/CanvasExportJobRegistry'
 import { DMPJavaScriptSourceURL } from '../Service/DMPJavaScriptSourceURL'
+import { DMPDefaultVirtualFilePrefix, DMPVirtualFileConfig } from '../Bundle/Util/DMPFileUrlConvertor'
 export type DMPBundleUpdateCallback = () => void;
 
 export interface DMPAppInitOptions {
   apiNamespaces?: string[];
+  virtualFilePrefix?: string;
 }
 
 //小程序应用实例
@@ -169,6 +171,7 @@ export class DMPApp {
     DMPApp._entryContext = context;
     DMPApp._context = DMPApp._entryContext.getContext();
     DMPApp._apiNamespaces = options?.apiNamespaces ?? [];
+    DMPVirtualFileConfig.configure(options?.virtualFilePrefix ?? DMPDefaultVirtualFilePrefix);
     ImageKnife.getInstance()
       .initFileCache(DMPApp._entryContext.getContext())
       .catch((error: Error) => {

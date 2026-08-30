@@ -6,6 +6,7 @@ import androidx.annotation.MainThread
 import com.didi.dimina.api.ext.ExtModuleHandler
 import com.didi.dimina.bean.MiniProgram
 import com.didi.dimina.common.LogUtils
+import com.didi.dimina.common.PathUtils
 import com.didi.dimina.common.StoreUtils
 import com.didi.dimina.core.MiniApp
 import com.didi.dimina.core.RemoteUpdateManager
@@ -53,10 +54,12 @@ class Dimina private constructor(context: Context) {
     class DiminaConfig private constructor(builder: Builder) {
         val debugMode: Boolean = builder.debugMode
         val apiNamespaces: List<String> = builder.apiNamespaces
+        val virtualFilePrefix: String = builder.virtualFilePrefix
 
         class Builder {
             var debugMode: Boolean = false
             internal var apiNamespaces: MutableList<String> = mutableListOf()
+            internal var virtualFilePrefix: String = PathUtils.DEFAULT_VIRTUAL_DOMAIN_URL
 
             fun setDebugMode(debugMode: Boolean): Builder {
                 this.debugMode = debugMode
@@ -65,6 +68,15 @@ class Dimina private constructor(context: Context) {
 
             fun addApiNamespace(name: String): Builder {
                 apiNamespaces.add(name)
+                return this
+            }
+
+            /**
+             * Configure the virtual file URI scheme used by both native path resolution and
+             * the service JavaScript runtime. Call this before [Dimina.init].
+             */
+            fun setVirtualFilePrefix(prefix: String): Builder {
+                virtualFilePrefix = PathUtils.normalizeVirtualFilePrefix(prefix)
                 return this
             }
 
@@ -102,6 +114,7 @@ class Dimina private constructor(context: Context) {
     private fun applyConfig(config: DiminaConfig) {
         // 存储配置到类属性
         this.config = config
+        PathUtils.configureVirtualFilePrefix(config.virtualFilePrefix)
 
 		// A mini-program setting must never enable host logs in a release build.
 		LogUtils.initialize(isDebugMode())

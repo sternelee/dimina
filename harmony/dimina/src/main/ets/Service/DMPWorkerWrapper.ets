@@ -20,6 +20,7 @@ import { DMPWorkerCaller } from './DMPWorkerCaller';
 import { DMPWorkerFlushBarrier } from './DMPWorkerFlushBarrier';
 import common from '@ohos.app.ability.common';
 import { DMPContextUtils } from '../Utils/DMPContextUtils';
+import { DMPVirtualFileConfig } from '../Bundle/Util/DMPFileUrlConvertor';
 
 
 export class DMPWorkerWrapper {
@@ -122,7 +123,8 @@ export class DMPWorkerWrapper {
       context,
       isDebugMode,
       this.debuggerAddress,
-      this.runtimeSourceURL
+      this.runtimeSourceURL,
+      DMPVirtualFileConfig.getPrefix()
     );
     this.w.postMessage(payload);
   }

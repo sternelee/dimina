@@ -1,6 +1,7 @@
 import { invokeAPI } from '@/api/common'
+import { resolveVirtualFilePrefix } from './virtual-file-prefix.js'
 
-export const VIRTUAL_FILE_PREFIX = globalThis.__VIRTUAL_FILE_PREFIX__ || 'difile://'
+export const VIRTUAL_FILE_PREFIX = resolveVirtualFilePrefix()
 
 /**
  * 新开页面打开文档
@@ -654,9 +655,10 @@ let fileSystemManagerInstance = null
 export function getFileSystemManager() {
 	if (!fileSystemManagerInstance) {
 		const fsm = new FileSystemManager()
-		// Copy prototype methods as own properties so that
+		// Copy prototype methods as enumerable own properties so that
 		// Object.keys(fsm).filter(k => typeof fsm[k] === 'function')
-		// works as callers expect (e.g. Taro compatibility layer).
+		// works as callers expect (e.g. Taro compatibility layer). This is
+		// property enumeration, not the unrelated Symbol.iterator protocol.
 		for (const name of fileSystemManagerAPINames) {
 			fsm[name] = fsm[name].bind(fsm)
 		}

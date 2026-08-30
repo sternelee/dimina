@@ -13,7 +13,7 @@ import { DMPApp } from '../DApp/DMPApp';
 import { WorkerAppData } from '../Service/DMPSendableObjects';
 import { DMPUnzipManager } from '../Bundle/Util/DMPUnzipManager';
 import { DMPFilePathResolver } from '../Bundle/Util/DMPFilePathResolver';
-import { DMPFileURLScheme as VIRTUAL_PREFIX } from '../Bundle/Util/DMPFileUrlConvertor';
+import { DMPVirtualFileConfig } from '../Bundle/Util/DMPFileUrlConvertor';
 const USER_PREFIX = 'usr';
 const ARRAY_BUFFER_BASE64_KEY = '__diminaArrayBufferBase64';
 const FILE_DATA_BASE64_KEY = '__diminaFileDataBase64';
@@ -546,7 +546,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
     if (!fs.accessSync(temp)) {
       throw new Error(`no such file or directory ${data.getString('tempFilePath') ?? ''}`);
     }
-    const targetPath = data.getString('filePath') ?? `${VIRTUAL_PREFIX}${USER_PREFIX}/saved/${Date.now()}_${this.nameFromPath(temp)}`;
+    const targetPath = data.getString('filePath') ?? `${DMPVirtualFileConfig.getPrefix()}${USER_PREFIX}/saved/${Date.now()}_${this.nameFromPath(temp)}`;
     const dest = this.resolve(targetPath);
     if (!data.getString('filePath')) {
       this.ensureParentDirectory(dest);
@@ -859,7 +859,7 @@ export class DMPContainerBridgesModuleFile extends DMPContainerBridgesModule {
   }
 
   private userPath(path: string): string {
-    return `${VIRTUAL_PREFIX}${USER_PREFIX}/${path.replace(this.userRoot(), '').replace(/^\/+/, '')}`;
+    return `${DMPVirtualFileConfig.getPrefix()}${USER_PREFIX}/${path.replace(this.userRoot(), '').replace(/^\/+/, '')}`;
   }
 
   private nameFromPath(path: string): string {

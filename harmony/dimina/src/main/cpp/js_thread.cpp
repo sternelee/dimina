@@ -607,12 +607,12 @@ napi_value StartJsEngine(napi_env env, napi_callback_info info) {
     }
 
     // 获取虚拟文件前缀
-    std::string virtualFilePrefix;
+    std::string virtualFilePrefix = "difile://";
     if (argc > 4) {
-        size_t prefixLen = 0;
-        napi_get_value_string_utf8(env, args[4], nullptr, 0, &prefixLen);
-        virtualFilePrefix.resize(prefixLen);
-        napi_get_value_string_utf8(env, args[4], &virtualFilePrefix[0], prefixLen + 1, &prefixLen);
+        if (!getStringArgument(env, args[4], virtualFilePrefix)) {
+            napi_throw_error(env, "-1004", "Invalid virtual file prefix");
+            return nullptr;
+        }
     }
 
     // 检查是否已存在该 appIndex 的实例

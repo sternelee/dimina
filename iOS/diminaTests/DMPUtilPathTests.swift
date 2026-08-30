@@ -8,6 +8,22 @@ import XCTest
 
 final class DMPUtilPathTests: XCTestCase {
 
+    func testVirtualFilePrefix_normalizesSchemeAndRejectsPaths() {
+        XCTAssertEqual(DMPFileUtil.normalizedVirtualFilePrefix("HostFile://"), "hostfile://")
+        XCTAssertNil(DMPFileUtil.normalizedVirtualFilePrefix("host-file://usr/"))
+        XCTAssertNil(DMPFileUtil.normalizedVirtualFilePrefix("host-file"))
+        XCTAssertNil(DMPFileUtil.normalizedVirtualFilePrefix("https://"))
+    }
+
+    func testVirtualFilePrefix_configurationUpdatesSchemeAndPrefixTogether() {
+        let previous = DMPFileUtil.virtualFilePrefix
+        defer { XCTAssertTrue(DMPFileUtil.configureVirtualFilePrefix(previous)) }
+
+        XCTAssertTrue(DMPFileUtil.configureVirtualFilePrefix("HostFile://"))
+        XCTAssertEqual(DMPFileUtil.DMPFileURLScheme, "hostfile")
+        XCTAssertEqual(DMPFileUtil.virtualFilePrefix, "hostfile://")
+    }
+
     // MARK: - normalizePagePath
 
     func testNormalizePagePath_stripsSingleLeadingSlash() {

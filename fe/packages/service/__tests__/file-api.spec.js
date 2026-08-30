@@ -6,7 +6,7 @@ vi.mock('@/api/common', () => ({
 
 import { invokeAPI } from '@/api/common'
 import { canIUse, env } from '../src/api/core/base/index.js'
-import { getFileSystemManager, openDocument } from '../src/api/core/file/index.js'
+import { fileSystemManagerAPINames, getFileSystemManager, openDocument } from '../src/api/core/file/index.js'
 
 function bytes(buffer) {
 	return Array.from(new Uint8Array(buffer))
@@ -23,6 +23,14 @@ describe('file api service adapter', () => {
 
 	it('returns a singleton FileSystemManager', () => {
 		expect(getFileSystemManager()).toBe(getFileSystemManager())
+	})
+
+	it('exposes bound methods as enumerable own properties for Taro API discovery', () => {
+		const fsm = getFileSystemManager()
+		const enumerableMethods = Object.keys(fsm).filter(name => typeof fsm[name] === 'function')
+
+		expect(enumerableMethods).toEqual(fileSystemManagerAPINames)
+		expect(Object.hasOwn(fsm, 'readFileSync')).toBe(true)
 	})
 
 	it('marks FileSystemManager schemas as available in canIUse', () => {

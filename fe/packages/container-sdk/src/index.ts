@@ -15,7 +15,7 @@ export type { DefaultShell, DefaultShellOptions } from './defaultShell.js'
  * 配置与返回值契约见 {@link CreateContainerOptions} / {@link ContainerInstance}。
  */
 export function createContainer(options: CreateContainerOptions | Record<string, never> = {}): ContainerInstance {
-	const { mount, shell, resourceBaseUrl, pageFrameUrl, apiNamespaces, urlSync, instanceKey, storageSync, getAppInfo, onAppLaunchError, apis, extModules, allowedOrigins } = options
+	const { mount, shell, resourceBaseUrl, pageFrameUrl, virtualFilePrefix, apiNamespaces, urlSync, instanceKey, storageSync, getAppInfo, onAppLaunchError, apis, extModules, allowedOrigins } = options
 
 	if (!mount) {
 		throw new Error('[container] createContainer: options.mount is required')
@@ -31,7 +31,7 @@ export function createContainer(options: CreateContainerOptions | Record<string,
 		appManager.registerExtModule(name, handler)
 	}
 
-	const application = new Application({ shell, resourceBaseUrl, pageFrameUrl, apiNamespaces, urlSync, instanceKey, storageSync, getAppInfo, onAppLaunchError, appManager, allowedOrigins })
+	const application = new Application({ shell, resourceBaseUrl, pageFrameUrl, virtualFilePrefix, apiNamespaces, urlSync, instanceKey, storageSync, getAppInfo, onAppLaunchError, appManager, allowedOrigins })
 	mount.appendChild(application.el)
 
 	return {

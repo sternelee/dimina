@@ -18,6 +18,7 @@ import {
 } from './DMPSendableObjects';
 import { DMPContextUtils, DMPWorkerContext } from '../Utils/DMPContextUtils';
 import { DMPRawFileUtils } from '../Utils/DMPRawFileUtils';
+import { DMPVirtualFileConfig } from '../Bundle/Util/DMPFileUrlConvertor';
 
 
 const workerPort: ThreadWorkerGlobalScope = worker.workerPort;
@@ -129,7 +130,14 @@ workerPort.onmessage = async (e: MessageEvents) => {
         appIndex = request.appIndex;
         runtimeSourceURL = request.runtimeSourceURL;
         const isDebugMode: boolean = request.isDebugMode
-        jsEngine.initWithWorker(appIndex, serviceToContainer, isDebugMode, request.debuggerAddress);
+        DMPVirtualFileConfig.configure(request.virtualFilePrefix);
+        jsEngine.initWithWorker(
+          appIndex,
+          serviceToContainer,
+          isDebugMode,
+          request.debuggerAddress,
+          request.virtualFilePrefix
+        );
         // 提前存储 context，在子线程使用
         const c = DMPWorkerContext.sharedInstance();
         c.context = request.context;

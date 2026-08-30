@@ -60,7 +60,11 @@ export class JSCore {
 		// 已注册的 API 名字随 worker 启动配置传给 service 层，
 		// 使它们在 wx（globalApi Proxy）上可被 Object.keys 枚举。
 		const registeredApis = Object.keys(this.parent.apiRegistry ?? {})
-		const workerName = JSON.stringify({ apiNamespaces: namespaces, registeredApis })
+		const workerName = JSON.stringify({
+			apiNamespaces: namespaces,
+			registeredApis,
+			virtualFilePrefix: this.parent.appInfo.virtualFilePrefix,
+		})
 		this.worker = new Worker(serviceURL, { type: 'classic', name: workerName })
 
 		// 监听逻辑线程的消息

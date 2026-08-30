@@ -6,6 +6,11 @@ import { QueryRouter } from './utils/queryRouter.js'
 // 不取 SDK 构建时的 import.meta.env.BASE_URL：本包以预构建 dist 发布，
 // 那个值与宿主的部署路径无关；非根路径部署的宿主必须显式传 resourceBaseUrl。
 const DEFAULT_RESOURCE_BASE_URL = '/'
+export const DEFAULT_VIRTUAL_FILE_PREFIX = 'difile://'
+const RESERVED_VIRTUAL_FILE_SCHEMES = new Set([
+	'about', 'blob', 'content', 'data', 'dimina', 'file', 'ftp', 'http', 'https',
+	'internal', 'javascript', 'resource', 'ws', 'wss',
+])
 
 function withTrailingSlash(url: string): string {
 	return url.endsWith('/') ? url : `${url}/`
@@ -16,6 +21,25 @@ function defaultGetStatusBarRect(): StatusBarRect {
 }
 
 function noop() {}
+
+/**
+ * Normalize the host-selected virtual file scheme once per container instance.
+ * Keeping this value on Application avoids one container changing another through
+ * a process-wide global. The global remains a backwards-compatible fallback.
+ */
+export function resolveVirtualFilePrefix(virtualFilePrefix?: string): string {
+	const injectedPrefix = (globalThis as typeof globalThis & { __VIRTUAL_FILE_PREFIX__?: unknown }).__VIRTUAL_FILE_PREFIX__
+	const candidate = virtualFilePrefix ?? injectedPrefix ?? DEFAULT_VIRTUAL_FILE_PREFIX
+	if (typeof candidate !== 'string') {
+		throw new TypeError('[container] createContainer: virtualFilePrefix must be a string')
+	}
+	const normalized = candidate.trim().toLowerCase()
+	const scheme = normalized.slice(0, -3)
+	if (!/^[a-z][a-z0-9+.-]*:\/\/$/.test(normalized) || RESERVED_VIRTUAL_FILE_SCHEMES.has(scheme)) {
+		throw new Error('[container] createContainer: virtualFilePrefix must be a custom URI scheme ending in "://"')
+	}
+	return normalized
+}
 
 /**
  * 归一化 shell 适配器：按字段单独兜底。宿主方法可能依赖自身实例状态，

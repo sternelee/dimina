@@ -134,6 +134,27 @@ describe('Web FileSystemManager.saveFile', () => {
 		expect(savedDirectory?.files.has(result.savedFilePath.split('/').pop()!)).toBe(true)
 	})
 
+	it('uses the container-specific prefix for validation and generated paths', async () => {
+		const app = new MiniApp({
+			appId: 'wx-custom-save-file',
+			pagePath: 'pages/index/index',
+			virtualFilePrefix: 'host-file://',
+		})
+		vi.spyOn(app.jscore, 'postMessage')
+
+		app.invokeApi('FileSystemManager.saveFile', {
+			tempFilePath: 'data:text/plain,report-content',
+			filePath: 'host-file://usr/reports/report.txt',
+			success: 'save-success',
+		})
+
+		await vi.waitFor(() => expect(callbackMessage(app, 'save-success')).toBeDefined())
+		expect(callbackMessage(app, 'save-success')?.body.args).toEqual({
+			savedFilePath: 'host-file://usr/reports/report.txt',
+			errMsg: 'FileSystemManager.saveFile:ok',
+		})
+	})
+
 	it('fails without creating a file when tempFilePath is missing', async () => {
 		const app = new MiniApp({ appId: 'wx-save-file', pagePath: 'pages/index/index' })
 		vi.spyOn(app.jscore, 'postMessage')

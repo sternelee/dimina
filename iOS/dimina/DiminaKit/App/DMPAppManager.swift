@@ -93,6 +93,28 @@ public class DMPAppManager {
         self.apiNamespaces = apiNamespaces
     }
 
+    /// Configure SDK-wide service settings before creating the first mini program.
+    /// Returns false without changing existing settings when the prefix is invalid
+    /// or a mini program has already been created.
+    @discardableResult
+    public func setup(apiNamespaces: [String] = [], virtualFilePrefix: String) -> Bool {
+        guard let normalizedPrefix = DMPFileUtil.normalizedVirtualFilePrefix(virtualFilePrefix) else {
+            DMPLogger.debug("Invalid virtualFilePrefix: \(virtualFilePrefix)")
+            return false
+        }
+
+        let configured = withStateLock {
+            guard appPools.isEmpty else { return false }
+            DMPFileUtil.configureVirtualFilePrefix(normalizedPrefix)
+            self.apiNamespaces = apiNamespaces
+            return true
+        }
+        if !configured {
+            DMPLogger.debug("virtualFilePrefix must be configured before creating the first mini program")
+        }
+        return configured
+    }
+
     private func withStateLock<T>(_ body: () -> T) -> T {
         stateLock.lock()
         defer { stateLock.unlock() }

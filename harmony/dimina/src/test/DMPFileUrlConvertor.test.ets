@@ -1,5 +1,9 @@
 import { describe, it, expect } from '@ohos/hypium'
-import { DMPFileUrlConvertor } from '../main/ets/Bundle/Util/DMPFileUrlConvertor'
+import {
+  DMPDefaultVirtualFilePrefix,
+  DMPFileUrlConvertor,
+  DMPVirtualFileConfig
+} from '../main/ets/Bundle/Util/DMPFileUrlConvertor'
 
 export default function dmpFileUrlConvertorTest() {
   describe('DMPFileUrlConvertor canvas temp paths', () => {
@@ -26,6 +30,26 @@ export default function dmpFileUrlConvertorTest() {
       expect(DMPFileUrlConvertor.isUnderAnyRoot('/sandbox/app/usr/a.png', roots)).assertTrue()
       expect(DMPFileUrlConvertor.isUnderAnyRoot('/etc/passwd', roots)).assertFalse()
       expect(DMPFileUrlConvertor.isUnderAnyRoot('/sandbox/app/usr-evil/a.png', roots)).assertFalse()
+    })
+
+    it('usesTheConfiguredPrefixForGeneratedAndParsedPaths', 0, () => {
+      try {
+        DMPVirtualFileConfig.configure('HostFile://')
+        const fileName = 'canvas_01234567-89ab-cdef-0123-456789abcdef.png'
+        const vPath = DMPFileUrlConvertor.canvasTempVPath(fileName)
+
+        expect(vPath).assertEqual(`hostfile://canvas/${fileName}`)
+        expect(DMPFileUrlConvertor.canvasTempFileName(vPath)).assertEqual(fileName)
+        let rejectedReservedScheme = false;
+        try {
+          DMPVirtualFileConfig.configure('https://')
+        } catch (_) {
+          rejectedReservedScheme = true;
+        }
+        expect(rejectedReservedScheme).assertTrue()
+      } finally {
+        DMPVirtualFileConfig.configure(DMPDefaultVirtualFilePrefix)
+      }
     })
   })
 }

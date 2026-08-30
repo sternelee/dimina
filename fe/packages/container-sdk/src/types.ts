@@ -127,6 +127,11 @@ export interface CreateContainerOptions {
 	/** 渲染层 iframe URL */
 	pageFrameUrl?: string
 	/**
+	 * 小程序虚拟文件协议前缀，必须是以 `://` 结尾且不与系统或 SDK 保留值冲突的自定义 URI scheme；缺省为 `difile://`。
+	 * 该值按容器实例隔离，并在逻辑线程启动前传入 Worker。
+	 */
+	virtualFilePrefix?: string
+	/**
 	 * resourceBaseUrl/pageFrameUrl 最终解析出的 origin 白名单；不传则不限制来源。
 	 * 传了则两者（含走缺省值解析出的 origin）都必须精确命中，否则 createContainer() 同步抛错。
 	 */

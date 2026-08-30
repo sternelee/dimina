@@ -11,7 +11,55 @@ import ZIPFoundation
 
 public class DMPFileUtil {
 
-    public static let DMPFileURLScheme: String = "difile"
+    private final class VirtualFilePrefixState: @unchecked Sendable {
+        private let lock = NSLock()
+        private var scheme = "difile"
+
+        func readScheme() -> String {
+            lock.lock()
+            defer { lock.unlock() }
+            return scheme
+        }
+
+        func updateScheme(_ value: String) {
+            lock.lock()
+            scheme = value
+            lock.unlock()
+        }
+    }
+
+    private static let virtualFilePrefixState = VirtualFilePrefixState()
+    private static let reservedVirtualFileSchemes: Set<String> = [
+        "about", "blob", "content", "data", "dimina", "file", "ftp", "http", "https",
+        "internal", "javascript", "resource", "ws", "wss",
+    ]
+
+    public static var DMPFileURLScheme: String {
+        virtualFilePrefixState.readScheme()
+    }
+
+    public static var virtualFilePrefix: String {
+        "\(DMPFileURLScheme)://"
+    }
+
+    static func normalizedVirtualFilePrefix(_ prefix: String) -> String? {
+        let normalized = prefix.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard normalized.range(
+            of: "^[a-z][a-z0-9+.-]*://$",
+            options: .regularExpression
+        ) != nil,
+              !reservedVirtualFileSchemes.contains(String(normalized.dropLast(3))) else {
+            return nil
+        }
+        return normalized
+    }
+
+    @discardableResult
+    static func configureVirtualFilePrefix(_ prefix: String) -> Bool {
+        guard let normalized = normalizedVirtualFilePrefix(prefix) else { return false }
+        virtualFilePrefixState.updateScheme(String(normalized.dropLast(3)))
+        return true
+    }
 
     private init() {}
 

@@ -5,7 +5,7 @@ import { Tags } from '../../EventTrack/Tags';
 import { DMPApp } from '../../DApp/DMPApp';
 import image from '@ohos.multimedia.image';
 import { DMPFilePathResolver } from '../../Bundle/Util/DMPFilePathResolver';
-import { DMPFileURLScheme } from '../../Bundle/Util/DMPFileUrlConvertor';
+import { DMPVirtualFileConfig } from '../../Bundle/Util/DMPFileUrlConvertor';
 
 interface InterceptRequestEvent {
   request: WebResourceRequest;
@@ -24,7 +24,7 @@ export class RequestCallback {
       const url = event.request.getRequestUrl();
       DMPLogger.d(Tags.LAUNCH, "webview onInterceptRequest url=" + url);
       DMPLogger.d(Tags.WEB_COMPONENT, "url=" + url);
-      if (url.startsWith(DMPFileURLScheme)) {
+      if (url.startsWith(DMPVirtualFileConfig.getPrefix())) {
         return RequestCallback.handleDIFileRequest(url, app);
       }
       if (RequestCallback.isWebResourceRequest(url)) {

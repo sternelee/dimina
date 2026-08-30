@@ -173,6 +173,35 @@ DMPAppManager.sharedInstance().setup(apiNamespaces: ["myapp"])
 DMPApp.init(context, { apiNamespaces: ["myapp"] })
 ```
 
+## 自定义虚拟文件协议前缀
+
+虚拟文件前缀缺省为 `difile://`。自定义值必须是以 `://` 结尾的自定义 URI scheme，不能使用 `http`、`https`、`file`、`dimina` 等系统或 SDK 保留 scheme，并在首个小程序逻辑引擎创建前配置；SDK 会把同一个归一化后的值同时用于原生路径解析和 service 层 `wx.env.USER_DATA_PATH`。
+
+```ts
+// Web：按容器实例隔离
+createContainer({ mount, virtualFilePrefix: 'host-file://' })
+```
+
+```kotlin
+// Android
+Dimina.DiminaConfig.Builder()
+    .setVirtualFilePrefix("host-file://")
+    .build()
+```
+
+```swift
+// iOS
+DMPAppManager.sharedInstance().setup(
+    apiNamespaces: [],
+    virtualFilePrefix: "host-file://"
+)
+```
+
+```ts
+// HarmonyOS
+DMPApp.init(context, { virtualFilePrefix: 'host-file://' })
+```
+
 ## API 列表
 
 状态说明：`✓` 表示该平台已有对应实现；`✗` 表示当前未提供。能力入口存在但目标平台未实现时，仍按不支持处理。本表是已经完成源码链路核对的兼容性基线；API 尚未列入表格只表示“未完成兼容性确认”，不能据此判断它未实现。

@@ -6,8 +6,8 @@ import { LAUNCH_SCREEN_MIN_MS, MODAL_GUARD_MS, WAIT_TRANSITION_TIMEOUT_MS } from
 import { Bridge } from '../../core/bridge.js'
 import { JSCore } from '../../core/jscore.js'
 import { WebSocketManager } from '../../core/webSocketManager.js'
-import { readWebFile, saveWebFile, VIRTUAL_FILE_PREFIX, VIRTUAL_USER_PREFIX } from '../../core/webFileSystem.js'
-import { resolveStorageAdapter } from '../../config.js'
+import { readWebFile, saveWebFile } from '../../core/webFileSystem.js'
+import { DEFAULT_VIRTUAL_FILE_PREFIX, resolveStorageAdapter } from '../../config.js'
 import { mergePageConfig, queryPath, readFile, sleep, uuid } from '../../utils/util.js'
 import { Navigator } from './navigator.js'
 
@@ -79,6 +79,8 @@ export interface MiniAppOptions {
 	restoreStack?: Array<{ pagePath: string, query?: Record<string, string> }>
 	/** 逐 app 覆盖容器默认 resourceBaseUrl；已由 AppManager 解析并校验过 allowedOrigins。 */
 	resourceBaseUrl?: string
+	/** 当前容器已经归一化的虚拟文件协议前缀。 */
+	virtualFilePrefix?: string
 }
 
 interface TabBarItemConfig {
@@ -258,7 +260,7 @@ interface ExtCallParams {
 }
 
 export class MiniApp {
-	appInfo: MiniAppOptions
+	appInfo: MiniAppOptions & { virtualFilePrefix: string }
 	id: string
 	parent: Application | null
 	appId: string
@@ -317,7 +319,10 @@ export class MiniApp {
 	_tabBarResizeObserver: ResizeObserver | null = null
 
 	constructor(opts: MiniAppOptions) {
-		this.appInfo = opts
+		this.appInfo = {
+			...opts,
+			virtualFilePrefix: opts.virtualFilePrefix ?? DEFAULT_VIRTUAL_FILE_PREFIX,
+		}
 		this.id = `mini_app_${uuid()}`
 		this.parent = null
 		this.appId = opts.appId
@@ -3456,13 +3461,15 @@ export class MiniApp {
 	}
 
 	private async _resolveMediaObjectUrl(source: string): Promise<string> {
-		if (source.startsWith(VIRTUAL_USER_PREFIX)) {
-			const file = await readWebFile(this.appId, source)
+		const virtualFilePrefix = this.appInfo.virtualFilePrefix
+		const virtualUserPrefix = `${virtualFilePrefix}usr/`
+		if (source.startsWith(virtualUserPrefix)) {
+			const file = await readWebFile(this.appId, source, virtualFilePrefix)
 			const url = URL.createObjectURL(file)
 			this._tempObjectUrls.add(url)
 			return url
 		}
-		if (source.startsWith(VIRTUAL_FILE_PREFIX)) {
+		if (source.startsWith(virtualFilePrefix)) {
 			throw new Error(`temporary virtual file is not available on Web: ${source}`)
 		}
 		return this._resolveMediaUrl(source)
@@ -3481,6 +3488,7 @@ export class MiniApp {
 			tempFilePath,
 			filePath,
 			resourceBaseUrl: this.getResourceBaseUrl(),
+			virtualFilePrefix: this.appInfo.virtualFilePrefix,
 		}).then((savedFilePath) => {
 			const result = { savedFilePath, errMsg: 'FileSystemManager.saveFile:ok' }
 			onSuccess?.(result)

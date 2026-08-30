@@ -31,7 +31,7 @@ const dmpConfig: DMPEntryContext = {
     return windowStage;
   }
 };
-DMPApp.init(dmpConfig);
+DMPApp.init(dmpConfig, { virtualFilePrefix: 'host-file://' });
 ```
 
 ### 步骤 3：配置路由
