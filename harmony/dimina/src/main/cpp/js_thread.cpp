@@ -67,7 +67,7 @@ void discardPendingException(JSContext *ctx) {
     }
 }
 
-void initBridges(JSContext *ctx);
+void initBridges(JSContext *ctx, const char* virtualFilePrefix);
 void registerInvoke(JSContext *ctx);
 void registerPublish(JSContext *ctx);
 
@@ -573,8 +573,8 @@ napi_value dispatchJsTaskPath(napi_env env, napi_callback_info info) {
     return nullptr;
 }
 
-void registerFunc(JSContext *ctx) {
-    initBridges(ctx);
+void registerFunc(JSContext *ctx, const std::string &virtualFilePrefix) {
+    initBridges(ctx, virtualFilePrefix.c_str());
     registerInvoke(ctx);
     registerPublish(ctx);
 }
@@ -583,10 +583,10 @@ void registerFunc(JSContext *ctx) {
 napi_value StartJsEngine(napi_env env, napi_callback_info info) {
     OHLog("StartJsEngine begin");
 
-    size_t argc = 4;
-    napi_value args[4] = {nullptr};
+    size_t argc = 5;
+    napi_value args[5] = {nullptr};
     if (napi_get_cb_info(env, info, &argc, args, NULL, NULL) != napi_ok || argc < 4) {
-        napi_throw_error(env, "-1000", "StartJsEngine requires four arguments");
+        napi_throw_error(env, "-1000", "StartJsEngine requires at least four arguments");
         return nullptr;
     }
 
@@ -604,6 +604,15 @@ napi_value StartJsEngine(napi_env env, napi_callback_info info) {
     if (!getStringArgument(env, args[3], debuggerAddress)) {
         napi_throw_error(env, "-1003", "Invalid debugger address");
         return nullptr;
+    }
+
+    // 获取虚拟文件前缀
+    std::string virtualFilePrefix;
+    if (argc > 4) {
+        size_t prefixLen = 0;
+        napi_get_value_string_utf8(env, args[4], nullptr, 0, &prefixLen);
+        virtualFilePrefix.resize(prefixLen);
+        napi_get_value_string_utf8(env, args[4], &virtualFilePrefix[0], prefixLen + 1, &prefixLen);
     }
 
     // 检查是否已存在该 appIndex 的实例
@@ -625,7 +634,9 @@ napi_value StartJsEngine(napi_env env, napi_callback_info info) {
     auto timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(now.time_since_epoch()).count();
     PFLog("[launch-container][%{public}lld]JS引擎启动 appIndex: %{public}d", timestamp, appIndex);
 
-    JSEngine *newEngine = new JSEngine(appIndex, registerFunc, debuggerAddress);
+    JSEngine *newEngine = new JSEngine(appIndex, [virtualFilePrefix](JSContext *ctx) {
+        registerFunc(ctx, virtualFilePrefix);
+    }, debuggerAddress);
     engineMap[appIndex] = newEngine;
     OHLog("engine 地址: %{public}p for appIndex: %{public}d", (void *)newEngine, appIndex);
 
@@ -671,10 +682,14 @@ napi_value destroyJsEngine(napi_env env, napi_callback_info info) {
 }
 
 
-void initBridges(JSContext *ctx) {
+void initBridges(JSContext *ctx, const char* virtualFilePrefix) {
     JSValue diminaServiceBridge = JS_NewObject(ctx);
     JSValue global = JS_GetGlobalObject(ctx);
     JS_SetPropertyStr(ctx, global, "DiminaServiceBridge", diminaServiceBridge);
+
+    // Inject virtual file prefix for JSSDK
+    JS_SetPropertyStr(ctx, global, "__VIRTUAL_FILE_PREFIX__",
+                      JS_NewString(ctx, virtualFilePrefix));
 
     JS_FreeValue(ctx, global);
 }

@@ -1,5 +1,6 @@
 import diminaNative from 'libdimina.so'
 import { DMPLogger } from '../EventTrack/DMPLogger'
+import { DMPFileURLScheme } from '../Bundle/Util/DMPFileUrlConvertor'
 
 
 export class DMPJSEngine {
@@ -49,6 +50,6 @@ export class DMPJSEngine {
     diminaNative.StartJsEngine(this.appIndex, (t: number, id: number, data: string, ab: ArrayBuffer) => {
       // DMPLogger.d(Tags.JS_ENGINE, `StartJsEngine, ${t}, ${id}, ${data}`)
       return serviceToContainer(t, id, data, ab);
-    }, isDebugMode, debuggerAddress)
+    }, isDebugMode, debuggerAddress, DMPFileURLScheme)
   }
 }

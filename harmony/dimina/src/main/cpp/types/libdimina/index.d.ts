@@ -2,7 +2,8 @@
 export const StartJsEngine: (appIndex: number,
   f: (t: number, w: number, d: string, a: ArrayBuffer) => number | string | boolean | object,
   isDebugMode: boolean,
-  debuggerAddress: string) => number;
+  debuggerAddress: string,
+  virtualFilePrefix: string) => number;
 
 export const dispatchJsTask: (appIndex: number, script: string, sourceURL: string) => void;
 
