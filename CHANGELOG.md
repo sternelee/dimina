@@ -1,5 +1,34 @@
 # Changelog
 
+## [v1.6.1] 2026-08-31
+
+### 新增
+
+- Android、iOS、HarmonyOS 和 Web 支持配置虚拟文件协议前缀，统一向运行时注入 `globalThis.__VIRTUAL_FILE_PREFIX__`，文件 API、资源拦截及原生组件不再依赖固定的 `difile://`。
+- `getFileSystemManager()` 将原型方法绑定为可枚举的实例属性，兼容 Taro 等依赖 `Object.keys()` 探测文件 API 的框架。
+- Web 小程序列表支持根据横向滚动位置自动显示或隐藏导航按钮。
+
+### 优化
+
+- DMCC 视图编译器缓存共享命名模板、可选链改写及源码定位结果；在 63 页面 Taro UI 参考项目中，视图编译耗时由约 41.7 秒降至约 4.9 秒，并避免缓存键重复持有大段源码。
+- Web bridge 启动协议统一校验 service、render 资源及首屏 `domReady`，通过 `resourceLoadId` 隔离过期回包，避免启动遮罩提前消失或永久等待。
+- 优化 Canvas 2D `save`、`restore`、`reset` 状态反馈和批次压缩；小游戏首个上屏 Canvas 挂载后复用 `domReady` 就绪契约。
+- 完善 HarmonyOS 图片写入、编码器版本兼容和直播播放器错误传播，并补充本地测试工作流及依赖校验。
+- MMKV 升级到 2.4.2，Vue 升级到 3.5.42，`oxc-parser` 升级到 0.147.0。
+
+### 修复
+
+- 修复 Page 默认 `data` 对象在多个页面实例之间共享，导致实例状态相互污染的问题。
+- 修复 HarmonyOS 胶囊按钮与 TabBar 事件回调不可由宿主组件传入的问题。
+- 修复 Canvas 状态恢复时反馈序列不完整，以及小游戏首屏就绪后启动遮罩未及时关闭的问题。
+- 修复 HarmonyOS 图片文件关闭、WebP 编码分支及 `AVPlayer` 创建失败时错误信息不完整的问题。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.6.1。
+- 编译器升级到 1.2.1，继续要求 Node.js 22.22.3 及以上版本并采用纯 ESM。
+- JSSDK 升级到 1.0.38。
+
 ## [v1.6.0] 2026-08-28
 
 ### 新增

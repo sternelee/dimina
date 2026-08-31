@@ -1,5 +1,28 @@
 # Changelog
 
+## [v1.6.1] 2026-08-31
+
+### 新增
+
+- `DMPApp.init` 支持通过 `virtualFilePrefix` 配置虚拟文件协议前缀，并导出 `DMPDefaultVirtualFilePrefix` 与 `DMPVirtualFileConfig`；QuickJS、文件 API、资源拦截及原生组件统一使用同一配置。
+- `getFileSystemManager()` 将方法暴露为可枚举的实例属性，兼容 Taro 等通过 `Object.keys()` 探测文件 API 的框架。
+
+### 优化
+
+- 完善图片文件写入与句柄关闭流程，兼容不同 HarmonyOS SDK 的 `ImagePacker` 接口，并修正 WebP 编码分支。
+- 完善直播 `AVPlayer` 创建失败时的日志和错误传播。
+- MMKV 升级到 2.4.2，并完善 HarmonyOS 本地测试工作流和原生依赖校验。
+
+### 修复
+
+- 修复胶囊按钮与 TabBar 事件回调属性不可由宿主组件传入的问题。
+- 修复 Page 默认 `data` 对象在多个小程序页面实例之间共享的问题。
+- 修复 Canvas 状态恢复反馈不完整，以及小游戏首个 Canvas 上屏后启动遮罩未及时关闭的问题。
+
+### 兼容性
+
+- HarmonyOS SDK 升级到 1.6.1，JSSDK 升级到 1.0.38。
+
 ## [v1.6.0] 2026-08-28
 
 ### 新增
