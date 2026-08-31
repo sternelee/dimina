@@ -3,12 +3,13 @@ import { PageModule } from '../src/instance/page/page-module'
 import { Page } from '../src/instance/page/page'
 
 describe('Page data isolation', () => {
-	function createPageModule() {
+	function createPageModule(pageDefinition = {}) {
 		return new PageModule({
 			data: {
 				count: 0,
 				profile: { nick: 'anonymous' },
 			},
+			...pageDefinition,
 		}, {
 			path: 'pages/demo/index',
 			usingComponents: {},
@@ -35,6 +36,36 @@ describe('Page data isolation', () => {
 
 		const second = createPage(pageModule, 'bridge-second')
 		expect(second.data).toEqual({
+			count: 0,
+			profile: { nick: 'anonymous' },
+		})
+	})
+
+	it('keeps onLoad setData isolated from later instances', () => {
+		let loadCount = 0
+		const pageModule = createPageModule({
+			onLoad() {
+				loadCount++
+				if (loadCount === 1) {
+					this.setData({ count: 1 })
+					this.setData({ 'profile.nick': 'first' })
+				}
+			},
+		})
+
+		const first = createPage(pageModule, 'bridge-first')
+		const second = createPage(pageModule, 'bridge-second')
+
+		expect(loadCount).toBe(2)
+		expect(first.data).toEqual({
+			count: 1,
+			profile: { nick: 'first' },
+		})
+		expect(second.data).toEqual({
+			count: 0,
+			profile: { nick: 'anonymous' },
+		})
+		expect(pageModule.moduleInfo.data).toEqual({
 			count: 0,
 			profile: { nick: 'anonymous' },
 		})
