@@ -4,11 +4,13 @@
 # populated sources without contacting the upstream repository on every build.
 # QuickJS is vendored separately under third_party/quickjs so Android and
 # Harmony builds do not depend on a source checkout or network access.
-# Before creating an SDK release, run:
+# Validate the pinned revisions and vendored QuickJS snapshot with:
 #
-#   ./scripts/update-native-dependencies.sh
+#   ./scripts/update-native-dependencies.sh --check
 #
-# The release workflow verifies that these revisions match upstream master.
+# Use --check-updates to compare them with upstream master and --update only
+# when intentionally upgrading and retesting the native SDKs. Release builds
+# validate the pins but do not require them to match a moving upstream branch.
 set(DIMINA_LIBUV_GIT_TAG_DEFAULT "601a1537bb5628398c2389efbc7eecd062e8aac2")
 set(DIMINA_BROTLI_GIT_TAG_DEFAULT "61fe96194b7cf8ecb651892f8f644bc01761c5d3")
 

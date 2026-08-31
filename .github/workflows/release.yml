@@ -24,7 +24,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
 
-      - name: Verify native dependency release commits
+      - name: Validate pinned native dependencies
         run: ./scripts/update-native-dependencies.sh --check
 
   changelog:

@@ -10,6 +10,8 @@ build inputs into the platform build directory and apply
 `third_party/quickjs-debugger/patches/quickjs.patch` there, so Debug and Release
 builds never modify or share a patched source tree.
 
-Use `scripts/update-native-dependencies.sh` to check or update the pinned
-revision. An update is accepted only when the debugger patch still applies to
-the new source snapshot.
+Use `scripts/update-native-dependencies.sh --check` to validate the pinned
+revision and snapshot without contacting upstream. Use `--check-updates` to
+compare the pins with upstream master, and run `--update` only when intentionally
+upgrading and retesting the native SDKs. A QuickJS update is accepted only when
+the debugger patch still applies to the new source snapshot.

@@ -16,9 +16,10 @@ dependency_variables=("DIMINA_LIBUV_GIT_TAG_DEFAULT" "DIMINA_BROTLI_GIT_TAG_DEFA
 dependency_repositories=("https://github.com/libuv/libuv.git" "https://github.com/google/brotli.git")
 
 usage() {
-    echo "Usage: $0 [--check|--update]"
-    echo "  --check   Validate the vendored QuickJS snapshot and fail if a native dependency is not upstream master."
-    echo "  --update  Replace QuickJS and update fetched dependency revisions to upstream master (default)."
+    echo "Usage: $0 [--check|--check-updates|--update]"
+    echo "  --check          Validate pinned revisions and the vendored QuickJS snapshot without contacting upstream (default)."
+    echo "  --check-updates  Compare pinned revisions with upstream master and fail when updates are available."
+    echo "  --update         Replace QuickJS and update fetched dependency revisions to upstream master."
 }
 
 resolve_master_sha() {
@@ -71,9 +72,9 @@ prepare_quickjs_snapshot() {
     validate_quickjs_snapshot "${source_dir}"
 }
 
-mode="${1:---update}"
+mode="${1:---check}"
 case "${mode}" in
-    --check|--update)
+    --check|--check-updates|--update)
         ;;
     -h|--help)
         usage
@@ -84,9 +85,6 @@ case "${mode}" in
         exit 2
         ;;
 esac
-
-latest_shas=()
-dependencies_outdated=false
 
 if [[ ! -f "${QUICKJS_REVISION_FILE}" ]]; then
     echo "QuickJS revision metadata is missing: ${QUICKJS_REVISION_FILE}" >&2
@@ -100,6 +98,30 @@ if [[ ! "${current_quickjs_sha}" =~ ^[0-9a-f]{40}$ ]]; then
 fi
 validate_quickjs_snapshot "${QUICKJS_SOURCE_DIR}"
 
+current_shas=()
+for dependency_index in "${!dependency_names[@]}"; do
+    dependency_name="${dependency_names[dependency_index]}"
+    dependency_variable="${dependency_variables[dependency_index]}"
+
+    current_sha=$(sed -n "s/^set(${dependency_variable} \"\\([0-9a-f]\\{40\\}\\)\")$/\\1/p" "${VERSION_FILE}")
+    if [[ ! "${current_sha}" =~ ^[0-9a-f]{40}$ ]]; then
+        echo "Unable to read the pinned ${dependency_name} commit from ${VERSION_FILE}" >&2
+        exit 1
+    fi
+    current_shas+=("${current_sha}")
+done
+
+if [[ "${mode}" == "--check" ]]; then
+    echo "QuickJS snapshot is valid: ${current_quickjs_sha}"
+    for dependency_index in "${!dependency_names[@]}"; do
+        echo "${dependency_names[dependency_index]} pin is valid: ${current_shas[dependency_index]}"
+    done
+    exit 0
+fi
+
+latest_shas=()
+dependencies_outdated=false
+
 latest_quickjs_sha=$(resolve_master_sha "QuickJS" "${QUICKJS_REPOSITORY}")
 quickjs_outdated=false
 if [[ "${current_quickjs_sha}" == "${latest_quickjs_sha}" ]]; then
@@ -112,14 +134,8 @@ fi
 
 for dependency_index in "${!dependency_names[@]}"; do
     dependency_name="${dependency_names[dependency_index]}"
-    dependency_variable="${dependency_variables[dependency_index]}"
     dependency_repository="${dependency_repositories[dependency_index]}"
-
-    current_sha=$(sed -n "s/^set(${dependency_variable} \"\\([0-9a-f]\\{40\\}\\)\")$/\\1/p" "${VERSION_FILE}")
-    if [[ ! "${current_sha}" =~ ^[0-9a-f]{40}$ ]]; then
-        echo "Unable to read the pinned ${dependency_name} commit from ${VERSION_FILE}" >&2
-        exit 1
-    fi
+    current_sha="${current_shas[dependency_index]}"
 
     latest_sha=$(resolve_master_sha "${dependency_name}" "${dependency_repository}")
 
@@ -137,8 +153,8 @@ if [[ "${dependencies_outdated}" == false ]]; then
     exit 0
 fi
 
-if [[ "${mode}" == "--check" ]]; then
-    echo "Run ./scripts/update-native-dependencies.sh, test both native SDKs, and commit the source and revision updates before releasing." >&2
+if [[ "${mode}" == "--check-updates" ]]; then
+    echo "Native dependency updates are available. Run ./scripts/update-native-dependencies.sh --update, test both native SDKs, and commit the source and revision updates when you choose to upgrade." >&2
     exit 1
 fi
 
