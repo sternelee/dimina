@@ -29,7 +29,7 @@ export class DMPPageRecord {
   // 这条记录是否在共享 NavPathStack（DRouter 单例内部持有的那一份原生栈，见 DRouter.ets）
   // 里真正占用了一个槽位。经 DRouter push/replace 挂载的页面（DMPOpenType.NavigateTo /
   // Insert）为 true；customLaunchPageCallBack 场景由宿主自行挂载页面、从未进入
-  // NavPathStack，为 false。unwind 一条记录时是否要对应调用 DRouter.pop() 只认这个字段
+  // NavPathStack，为 false。unwind 一条记录时是否要对应弹出原生路由只认这个字段
   // （见 shouldPopRouter），不要在别处另起一套算术判断
   ownsRouterEntry: boolean = true
 
@@ -53,8 +53,8 @@ export class DMPPageRecord {
   /**
    * 判断 unwind 一条页面记录时是否需要对应调用 DRouter.pop()：只有真正占了共享
    * NavPathStack 槽位的记录才需要——customLaunchPageCallBack 挂载的页面对它调用
-   * DRouter.pop() 会误弹别的页面。DMPNavigator.pop()/closeAllPages() 共用这一个判据。
-   * 栈已空、拿不到记录时保守返回 true，与两处调用方原有行为一致
+   * DRouter.pop() 会误弹别的页面。普通返回和批量关闭的路由计数共用这一个判据。
+   * 普通返回在账本已空、拿不到记录时保守返回 true，与原有行为一致
    */
   static shouldPopRouter(ownsRouterEntry: boolean | undefined): boolean {
     return ownsRouterEntry !== false

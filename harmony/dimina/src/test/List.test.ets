@@ -22,6 +22,7 @@ import dmpCanvasCallbackTest from './DMPCanvasCallback.test';
 import dmpCanvasExportJobRegistryTest from './DMPCanvasExportJobRegistry.test';
 import dmpCanvasExportWriteQueueTest from './DMPCanvasExportWriteQueue.test';
 import dmpJavaScriptDebuggerConfigTest from './DMPJavaScriptDebuggerConfig.test';
+import dmpNavPathPopPlanTest from './DMPNavPathPopPlan.test';
 
 export default function testsuite() {
   localUnitTest();
@@ -48,4 +49,5 @@ export default function testsuite() {
   dmpCanvasExportJobRegistryTest();
   dmpCanvasExportWriteQueueTest();
   dmpJavaScriptDebuggerConfigTest();
+  dmpNavPathPopPlanTest();
 }

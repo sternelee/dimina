@@ -6,6 +6,7 @@ import { DMPNavigatorDelegate } from './DMPNavigatorDelegate';
 import { DMPPageRecord } from './DMPPageRecord';
 import { DMPPageLifecycle, DMPPageLifecycleLike } from '../DPages/DMPPageLifecycle';
 import { DMPPageStateTeardown } from './DMPPageStateTeardown';
+import { DRouter } from './DRouter';
 
 export type PopListener = (destroyRecord?: DMPPageRecord, currentRecord?: DMPPageRecord) => void;
 
@@ -148,8 +149,16 @@ export class DMPNavigatorManager {
 
   closeAllNavigators(reason: DMPPageStateTeardown, animated: boolean = false) {
     const navigators = this._navigatorDelegateStack.data.slice().reverse()
+    let routerEntryCount = 0
     navigators.forEach((navigatorDelegate) => {
-      navigatorDelegate.getNavigator().closeAllPages(reason, animated)
+      routerEntryCount += navigatorDelegate.getNavigator().routerEntryCount()
+    })
+    // All Dimina destinations are contiguous at the top of the shared NavPathStack.
+    // Pop them in one operation so an actual close has exactly one transition and
+    // leaves host/opener destinations below them untouched.
+    DRouter.getInstance().popEntries(routerEntryCount, animated)
+    navigators.forEach((navigatorDelegate) => {
+      navigatorDelegate.getNavigator().closeAllPages(reason)
     })
     while (!this._navigatorDelegateStack.isEmpty()) {
       this.popNavigator()

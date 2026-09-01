@@ -487,7 +487,7 @@ export class DMPApp {
   private async performClose(afterPagesClosed?: () => Promise<void>) {
     this.notifyMiniProgramHide()
     // 退出对齐微信的「小程序切入后台」：只派发 App.onHide，页面不收 onUnload。
-    this.navigatorManager.closeAllNavigators(DMPPageStateTeardown.Exit, false)
+    this.navigatorManager.closeAllNavigators(DMPPageStateTeardown.Exit, true)
     if (afterPagesClosed) {
       // The callback uses the old service runtime, so it must run after page unload is queued
       // but before destroyEngine terminates that Worker.

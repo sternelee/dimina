@@ -295,17 +295,27 @@ export class DMPNavigator {
     }
   }
 
-  closeAllPages(reason: DMPPageStateTeardown, animated: boolean = false) {
+  routerEntryCount(): number {
+    let count = 0
+    this._stacks.data.forEach((record: DMPPageRecord) => {
+      if (DMPPageRecord.shouldPopRouter(record.ownsRouterEntry)) {
+        count++
+      }
+    })
+    return count
+  }
+
+  /**
+   * Clears this navigator's lifecycle and page bookkeeping. The manager owns
+   * the corresponding native batch pop so every navigator in the closing mini
+   * program can leave through one NavPathStack transition.
+   */
+  closeAllPages(reason: DMPPageStateTeardown) {
     const pageCount = this._stacks.size()
     const unloadPages = dispatchesPageUnload(reason)
     for (let i = 0; i < pageCount; i++) {
       if (unloadPages) {
         this.pageLifecycle.onUnload(this.app.currentWebViewId)
-      }
-      // 同 pop()：customLaunchPageCallBack 挂载的记录从未占用 NavPathStack 槽位，
-      // 无条件 DRouter.pop() 会误弹宿主自己挂载的页面
-      if (DMPPageRecord.shouldPopRouter(this._stacks.peek()?.ownsRouterEntry)) {
-        DRouter.getInstance().pop(animated)
       }
       this.popPageRecord()
     }
