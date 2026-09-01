@@ -16,23 +16,26 @@ async function createZip(sourceDir, outputPath) {
 	const { ZipArchive } = await import('archiver')
 
 	return new Promise((resolve, reject) => {
-		const output = fs.createWriteStream(outputPath)
 		const archive = new ZipArchive({
 			zlib: { level: 9 }, // Maximum compression
 		})
+		const output = fs.createWriteStream(outputPath)
+		let failed = false
+		const handleError = (error) => {
+			failed = true
+			reject(error)
+		}
 
 		output.on('close', () => {
+			if (failed) {
+				return
+			}
 			console.log(`Successfully created ${outputPath} (${archive.pointer()} bytes)`)
 			resolve()
 		})
 
-		archive.on('error', (err) => {
-			reject(err)
-		})
-
-		output.on('error', (err) => {
-			reject(err)
-		})
+		archive.on('error', handleError)
+		output.on('error', handleError)
 
 		archive.pipe(output)
 		archive.directory(sourceDir, false)
@@ -42,6 +45,8 @@ async function createZip(sourceDir, outputPath) {
 
 // Main async function
 async function main() {
+	const failedAppIds = []
+
 	// Check if the shared/jsapp directory exists
 	if (!fs.existsSync(sharedJsappPath)) {
 		console.error(`Error: Directory ${sharedJsappPath} does not exist.`)
@@ -135,7 +140,12 @@ async function main() {
 		}
 		catch (error) {
 			console.error(`Error creating zip for ${appId}:`, error)
+			failedAppIds.push(appId)
 		}
+	}
+
+	if (failedAppIds.length > 0) {
+		throw new Error(`Failed to create zip for: ${failedAppIds.join(', ')}`)
 	}
 
 	console.log('App generation completed successfully!')
