@@ -111,12 +111,24 @@ describe('picker-view controlled value and hidden layout', () => {
 		expect(Array.from(indicators, node => node.style.top)).toEqual(['', ''])
 
 		pickerVisible = true
-		resizeCallbacks.at(-1)()
+		document.dispatchEvent(new CustomEvent('pageReRender'))
 		await flush()
 
 		expect(Array.from(indicators, node => node.style.top)).toEqual(['72px', '72px'])
 		expect(Array.from(host.querySelectorAll('.dd-picker__content'), node => node.style.paddingTop)).toEqual(['72px', '72px'])
 		expect(contentTransforms()).toEqual(['translateY(-288px)', 'translateY(-612px)'])
 		expect(window.__message.send).not.toHaveBeenCalled()
+	})
+
+	it('also follows size changes that do not come from a page data render', async () => {
+		mountPicker(() => renderPicker([8, 17]))
+		await flush()
+
+		pickerVisible = true
+		resizeCallbacks.at(-1)()
+		await flush()
+
+		expect(Array.from(host.querySelectorAll('.dd-picker__indicator'), node => node.style.top)).toEqual(['72px', '72px'])
+		expect(contentTransforms()).toEqual(['translateY(-288px)', 'translateY(-612px)'])
 	})
 })

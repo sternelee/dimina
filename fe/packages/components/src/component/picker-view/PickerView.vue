@@ -52,17 +52,20 @@ const props = defineProps({
 let index = -1
 const pickerView = ref(null)
 const pickerHeight = ref(0)
+const pickerLayoutVersion = ref(0)
 const itemValue = ref([...(props.value || [])])
 let resizeObserver
 
-function updatePickerHeight() {
+function updatePickerLayout() {
 	pickerHeight.value = pickerView.value?.offsetHeight || 0
+	pickerLayoutVersion.value++
 }
 
 provide('getPickerHeight', () => {
 	return pickerHeight.value
 })
 provide('pickerHeight', pickerHeight)
+provide('pickerLayoutVersion', pickerLayoutVersion)
 
 provide('pickerItemStyle', computed(() => ({
 	indicatorStyle: props.indicatorStyle,
@@ -109,14 +112,16 @@ const unregisterFormControl = registerFormControl?.({
 	},
 })
 onMounted(() => {
-	updatePickerHeight()
+	updatePickerLayout()
+	document.addEventListener('pageReRender', updatePickerLayout)
 	if (window.ResizeObserver && pickerView.value) {
-		resizeObserver = new ResizeObserver(updatePickerHeight)
+		resizeObserver = new ResizeObserver(updatePickerLayout)
 		resizeObserver.observe(pickerView.value)
 	}
 })
 onBeforeUnmount(() => {
 	resizeObserver?.disconnect()
+	document.removeEventListener('pageReRender', updatePickerLayout)
 	unregisterFormControl?.()
 })
 </script>

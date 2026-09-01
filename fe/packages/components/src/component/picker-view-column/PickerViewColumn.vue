@@ -11,7 +11,7 @@ const pickerItemStyle = inject('pickerItemStyle', computed(() => ({})))
 const pickerEvent = inject('pickerEvent', undefined)
 const pickerImmediateChange = inject('pickerImmediateChange', computed(() => false))
 const getPickerHeight = inject('getPickerHeight', () => 0)
-const pickerHeight = inject('pickerHeight', ref(0))
+const pickerLayoutVersion = inject('pickerLayoutVersion', ref(0))
 const getItemIndex = inject('getItemIndex', () => 0)
 const itemIndex = getItemIndex()
 const setPickerValue = inject('setPickerValue', undefined)
@@ -141,8 +141,19 @@ function applyLayoutStyles() {
 	contentRef.value.style.paddingTop = `${pTop}px`
 }
 
+function updateColumnLayout() {
+	if (!indicatorRef.value || !contentRef.value) return
+	const measuredItemHeight = indicatorRef.value.offsetHeight
+	if (measuredItemHeight > 0) itemHeight = measuredItemHeight
+	itemsSize = Math.max(contentRef.value.children.length - 1, 0)
+	currentIndex.value = normalizeIndex(itemValue.value[itemIndex])
+	setPickerValue?.(itemIndex, currentIndex.value)
+	applyLayoutStyles()
+	currentY.value = -currentIndex.value * itemHeight
+}
+
 watch(pickerItemStyle, () => applyLayoutStyles(), { deep: true })
-watch(pickerHeight, () => applyLayoutStyles())
+watch(pickerLayoutVersion, () => updateColumnLayout())
 
 onMounted(async () => {
 	await nextTick()
@@ -160,12 +171,8 @@ onMounted(async () => {
 	}
 
 	itemHeight = indicatorRef.value.offsetHeight || Number.parseFloat(nodeLineHeight.value) || 34
-	itemsSize = Math.max(contentRef.value.children.length - 1, 0)
-	currentIndex.value = normalizeIndex(itemValue.value[itemIndex])
-	setPickerValue?.(itemIndex, currentIndex.value)
-	applyLayoutStyles()
+	updateColumnLayout()
 	duration.value = '0s'
-	currentY.value = -currentIndex.value * itemHeight
 })
 </script>
 

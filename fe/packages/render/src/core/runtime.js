@@ -641,6 +641,7 @@ class Runtime {
 		this.canvasRafIds = new Map()
 		this.canvasCapabilities = null
 		this.resourceLoadIds = new Map()
+		this._pageReRenderPending = false
 		// 队列和回放状态都按真实 canvas 元素隔离；canvas-id 只在组件作用域内唯一。
 		// WeakMap 让卸载后的画布及其队列、save/clip 状态可以一起回收。
 		this.canvasDrawQueues = new WeakMap()
@@ -1434,6 +1435,16 @@ class Runtime {
 		else {
 			console.warn('[system]', '[render]', `module ${moduleId} is not exist.`)
 		}
+		this.schedulePageReRender()
+	}
+
+	schedulePageReRender() {
+		if (this._pageReRenderPending) return
+		this._pageReRenderPending = true
+		nextTick(() => {
+			this._pageReRenderPending = false
+			document.dispatchEvent(new CustomEvent('pageReRender'))
+		})
 	}
 
 	updateModules(opts) {

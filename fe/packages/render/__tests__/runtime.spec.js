@@ -1713,6 +1713,27 @@ describe('runtime template components', () => {
 		runtime.initializedModules.delete(moduleId)
 	})
 
+	it('signals pageReRender after a service data update has reached the DOM flush', async () => {
+		const moduleId = 'module-page-rerender'
+		const data = {}
+		const listener = vi.fn()
+		document.addEventListener('pageReRender', listener, { once: true })
+		runtime.setupData.set(moduleId, data)
+		runtime.initializedModules.add(moduleId)
+
+		runtime.updateModule({
+			moduleId,
+			data: { visible: true },
+		})
+
+		expect(listener).not.toHaveBeenCalled()
+		await nextTick()
+		expect(listener).toHaveBeenCalledOnce()
+
+		runtime.setupData.delete(moduleId)
+		runtime.initializedModules.delete(moduleId)
+	})
+
 	it('makes late-added top-level data available through the component proxy', () => {
 		const moduleId = 'module-late-key'
 		const data = {}
