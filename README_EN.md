@@ -51,7 +51,7 @@ Dimina goes beyond Web preview. It includes a mini program compiler, logic and v
 - **Offline-ready bundles**: The host provides and stores mini program packages locally, reducing runtime network dependencies.
 - **Separate logic and view runtimes**: Business logic runs in a dedicated JS engine or Worker while WebView / Browser renders the view.
 - **One path to native capabilities**: Standard APIs and extension bridges connect to the host without spreading platform-specific logic across business pages.
-- **Page semantics across containers**: The runtime handles preloading, routing, lifecycles, components, and cross-thread messaging.
+- **Runtime-managed page behavior**: The runtime handles preloading, routing, lifecycles, components, and cross-thread messaging.
 
 ## How one codebase reaches four platforms
 
@@ -106,7 +106,7 @@ Dimina continues to align with mini app standards and major WeChat Mini Program 
 
 ## Contributing
 
-Dimina follows the [Mini App Standard White Paper](https://www.w3.org/TR/mini-app-white-paper/) and grows by working through real cross-platform differences one by one. Moonlight scatters across a river of stars, and the road ahead stretches on, one patient step at a time. If you care about compatibility semantics, cross-platform runtimes, component behavior, or native capabilities, open an issue or add a line of code. We would be glad to walk that road with you.
+Dimina's architecture is informed by the [Mini App Standard White Paper](https://www.w3.org/TR/mini-app-white-paper/) and grows by working through real cross-platform differences one by one. Moonlight scatters across a river of stars, and the road ahead stretches on, one patient step at a time. If you care about compatibility semantics, cross-platform runtimes, component behavior, or native capabilities, open an issue or add a line of code. We would be glad to walk that road with you.
 
 - Have a problem or an idea? [Open an issue](https://github.com/didi/dimina/issues)
 - Ready to contribute code? [Read the contribution guidelines](./CONTRIBUTING_EN.md)

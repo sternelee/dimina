@@ -1,327 +1,124 @@
-# 复杂表达式绑定机制实现文档
+# 组件属性表达式绑定
 
-## 概述
+本文说明组件属性表达式如何在编译阶段记录依赖，并在父组件调用 `setData()` 后同步到子组件。
 
-本文档描述了在 Dimina 框架中实现的复杂表达式绑定机制，支持在组件属性绑定中使用复杂表达式。
+## 处理流程
 
-## 设计目标
+以以下模板为例：
 
-1. **支持复杂表达式**：不仅支持简单的变量绑定（如 `count`），还支持复杂表达式（如 `count || defaultValue`、`item.name`、`count + 1` 等）
-2. **精确的依赖追踪**：准确识别表达式中的所有数据依赖
-3. **高效的更新机制**：只在依赖变化时重新计算表达式
-4. **向后兼容**：保持现有简单绑定的性能
+```xml
+<child-comp count2="{{count || defaultValue}}" />
+```
 
-## 架构设计
+处理过程分为三步：
 
-### 1. 编译时（Compiler）
+1. Compiler 使用 Oxc 解析表达式，生成表达式文本、根依赖和简单绑定标记。
+2. Render 将绑定信息随组件实例注册消息发送给 Service。
+3. 父组件数据变化后，Service 检查受影响的依赖，重新求值并更新子组件 property。
 
-#### expression-parser.js
+生成的绑定信息如下：
 
-新增的表达式解析器，提供以下核心功能：
+```json
+{
+  "count2": {
+    "expression": "count || defaultValue",
+    "dependencies": ["count", "defaultValue"],
+    "isSimple": false
+  }
+}
+```
 
-```javascript
-// 提取表达式中的所有变量依赖
-extractDependencies(expression) 
-// 返回: ['count', 'defaultValue']
+## 编译阶段
 
-// 解析表达式并生成完整信息
-parseExpression(expression)
-// 返回: { 
+`packages/compiler/src/common/expression-parser.js` 使用 `oxc-parser` 分析表达式。成员访问只记录根对象，例如 `item.name` 记录为 `item`；对象字面量的静态键、JavaScript 关键字和已知全局对象不会被当作数据依赖。
+
+```js
+parseExpression('count')
+// { expression: 'count', dependencies: ['count'], isSimple: true }
+
+parseExpression('item.name')
+// { expression: 'item.name', dependencies: ['item'], isSimple: false }
+
+parseExpression('count || defaultValue')
+// {
 //   expression: 'count || defaultValue',
 //   dependencies: ['count', 'defaultValue'],
 //   isSimple: false
 // }
-
-// 批量解析多个绑定
-parseBindings(bindings)
-// 输入: { count2: 'count', value: 'item.name' }
-// 输出: { 
-//   count2: { expression: 'count', dependencies: ['count'], isSimple: true },
-//   value: { expression: 'item.name', dependencies: ['item'], isSimple: false }
-// }
 ```
 
-**关键特性**：
-- 使用 Babel AST 解析器进行精确的语法分析
-- 自动过滤字符串字面量中的标识符
-- 只提取成员访问表达式的根对象（如 `item.name` 只提取 `item`）
-- 智能识别并跳过 JavaScript 关键字和全局对象（如 `Math`、`Array`）
-- 准确处理对象字面量（只提取值表达式的依赖，不提取键名）
-- 正确处理函数调用（提取函数名和参数依赖）
+解析失败时，编译器会输出警告并返回空依赖数组。此时后续 `setData()` 无法根据依赖命中该表达式，因此应先修正模板表达式，而不是依赖运行时兜底。
 
-#### view-compiler.js 的修改
+`packages/compiler/src/core/view-compiler.js` 调用 `parseBindings()`，把结果写入组件属性绑定指令。Render 在组件挂载时读取这些信息，再交给 Service 保存到父实例的 `__childPropsBindings__`。
 
-在处理组件属性绑定时：
+## 运行阶段
 
-```javascript
-// 解析并存储完整的绑定信息
-const parsedBindings = parseBindings(validBindings)
-// {
-//   count2: { expression: 'count', dependencies: ['count'], isSimple: true }
-// }
+相关实现位于 `packages/service/src/core/utils.js`。
+
+### 判断依赖变化
+
+`hasDependencyChanged()` 会检查根依赖和本次 `setData()` 的路径。以下两种情况都会命中 `item`：
+
+```js
+setData({ item: nextItem })
+setData({ 'item.name': nextName })
 ```
 
-### 2. 运行时（Service）
+路径检查同时支持点号和方括号形式。
 
-在 `packages/service/src/core/utils.js` 中：
+### 重新计算表达式
 
-#### hasDependencyChanged()
+简单绑定直接通过路径读取值：
 
-检查表达式的依赖是否发生变化：
-
-```javascript
-function hasDependencyChanged(bindingInfo, changedData) {
-  // 1. 检查直接依赖
-  for (const dep of bindingInfo.dependencies) {
-    if (dep in changedData) return true
-    
-    // 2. 检查嵌套路径
-    // 如果 changedData 有 'item' 变化，'item.name' 表达式也需要更新
-    // 如果 changedData 有 'item.name' 变化，依赖 'item' 的表达式也需要更新
-  }
-}
-```
-
-#### evaluateExpression()
-
-计算表达式的新值：
-
-```javascript
-function evaluateExpression(bindingInfo, parentData) {
-  if (bindingInfo.isSimple) {
-    // 简单绑定：直接获取值（性能优化）
-    return get(parentData, bindingInfo.expression)
-  }
-  
-  // 复杂表达式：使用 Function 构造器安全求值
-  const func = new Function('data', `with(data) { return ${bindingInfo.expression} }`)
-  return func(parentData)
-}
-```
-
-#### syncUpdateChildrenProps()
-
-同步更新子组件的 properties：
-
-```javascript
-export function syncUpdateChildrenProps(parent, allInstances, changedData) {
-  for (const child of children) {
-    for (const propName in childProperties) {
-      const bindingInfo = parent.__childPropsBindings__?.[child.__id__]?.[propName]
-      
-      // 检查依赖是否变化
-      if (hasDependencyChanged(bindingInfo, changedData)) {
-        // 重新计算表达式的值
-        const newValue = evaluateExpression(bindingInfo, parent.data)
-        updateData[propName] = newValue
-      }
-    }
-    
-    // 触发子组件更新
-    if (Object.keys(updateData).length > 0) {
-      child.tO?.(updateData)
-    }
-  }
-}
-```
-
-## 数据流
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│ 编译时 (Compiler)                                            │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  WXML: <child-comp count2="{{count || defaultValue}}" />    │
-│                          ↓                                   │
-│  expression-parser.js                                        │
-│    - extractDependencies('count || defaultValue')           │
-│    - 返回: ['count', 'defaultValue']                        │
-│                          ↓                                   │
-│  生成绑定信息：                                              │
-│  {                                                           │
-│    count2: {                                                 │
-│      expression: 'count || defaultValue',                   │
-│      dependencies: ['count', 'defaultValue'],               │
-│      isSimple: false                                         │
-│    }                                                         │
-│  }                                                           │
-└─────────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 运行时 - Render 层                                           │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  v-c-prop-bindings 指令                                      │
-│    - 将绑定信息存储在 DOM 元素上                             │
-│    - el._propBindings = parsedBindings                      │
-│                          ↓                                   │
-│  组件 onMounted                                              │
-│    - 读取 el._propBindings                                   │
-│    - 发送到 Service 层                                       │
-└─────────────────────────────────────────────────────────────┘
-                          ↓
-┌─────────────────────────────────────────────────────────────┐
-│ 运行时 - Service 层                                          │
-├─────────────────────────────────────────────────────────────┤
-│                                                              │
-│  runtime.moduleReady()                                       │
-│    - 注册绑定信息到父组件                                    │
-│    - parent.__childPropsBindings__[childId] = propBindings  │
-│                          ↓                                   │
-│  父组件 setData({ count: 10 })                              │
-│    - changedData = { count: 10 }                            │
-│                          ↓                                   │
-│  syncUpdateChildrenProps()                                   │
-│    1. hasDependencyChanged(bindingInfo, changedData)        │
-│       - 检查 'count' in changedData → true                  │
-│    2. evaluateExpression(bindingInfo, parentData)           │
-│       - 计算: count || defaultValue → 10                    │
-│    3. child.tO({ count2: 10 })                             │
-│       - 触发子组件 observer                                  │
-└─────────────────────────────────────────────────────────────┘
-```
-
-## 支持的表达式类型
-
-### 1. 简单绑定
-```xml
-<child-comp count="{{count}}" />
-```
-- Dependencies: `['count']`
-- isSimple: `true`
-- 性能优化：直接使用 `get()` 获取值
-
-### 2. 逻辑运算符
-```xml
-<child-comp value="{{count || defaultValue}}" />
-<child-comp show="{{active && visible}}" />
-```
-- Dependencies: `['count', 'defaultValue']` / `['active', 'visible']`
-- isSimple: `false`
-
-### 3. 成员访问
-```xml
-<child-comp name="{{item.name}}" />
-<child-comp profile="{{data.user.profile}}" />
-```
-- Dependencies: `['item']` / `['data']`
-- 只追踪根对象，子属性变化通过路径检查
-
-### 4. 算术运算
-```xml
-<child-comp total="{{count + 1}}" />
-<child-comp percent="{{value * 100}}" />
-```
-- Dependencies: `['count']` / `['value']`
-- isSimple: `false`
-
-### 5. 三元表达式
-```xml
-<child-comp status="{{active ? 'on' : 'off'}}" />
-<child-comp value="{{count > 0 ? count : defaultValue}}" />
-```
-- Dependencies: `['active']` / `['count', 'defaultValue']`
-- isSimple: `false`
-
-### 6. 函数调用
-```xml
-<child-comp date="{{formatDate(timestamp)}}" />
-```
-- Dependencies: `['formatDate', 'timestamp']`
-- isSimple: `false`
-
-## 性能优化
-
-### 1. 简单绑定快速路径
-```javascript
+```js
 if (bindingInfo.isSimple) {
-  // 使用 lodash get，避免 Function 构造器开销
   return get(parentData, bindingInfo.expression)
 }
 ```
 
-### 2. 依赖检查优化
-```javascript
-// 只在依赖真正变化时才重新计算
-if (hasDependencyChanged(bindingInfo, changedData)) {
-  const newValue = evaluateExpression(bindingInfo, parent.data)
-}
+其他表达式使用 `new Function()` 和 `with(data)` 在父组件数据作用域内求值。求值失败时返回 `undefined` 并记录警告。
+
+这段求值逻辑不是安全沙箱。表达式来自编译后的小程序模板，不应把外部输入或运行时下载的未受信代码直接写入 `expression` 字段。
+
+### 更新子组件
+
+`syncUpdateChildrenProps()` 只处理当前父实例的直接子组件。依赖命中后，计算结果会先深拷贝，再经过 property 归一化和 `tO()` 更新，从而触发对应的 observer。
+
+```text
+父组件 setData
+  -> 检查 __childPropsBindings__
+  -> 重新计算命中的表达式
+  -> 深拷贝结果
+  -> 更新子组件 property
+  -> 执行 observer
 ```
 
-### 3. 嵌套路径智能匹配
-```javascript
-// 支持路径前缀匹配
-if (changedKey.startsWith(dep + '.') || changedKey.startsWith(dep + '[')) {
-  return true
-}
-```
+## 当前支持的表达式
 
-## 测试覆盖
+| 类型 | 示例 | 记录的依赖 |
+| --- | --- | --- |
+| 简单变量 | `count` | `count` |
+| 成员访问 | `item.name` | `item` |
+| 逻辑运算 | `count || defaultValue` | `count`、`defaultValue` |
+| 算术运算 | `count + 1` | `count` |
+| 三元表达式 | `active ? 'on' : 'off'` | `active` |
+| 函数调用 | `formatDate(timestamp)` | `formatDate`、`timestamp` |
+| 数组访问 | `list[0]` | `list` |
 
-在 `packages/compiler/__tests__/expression-parser.test.js` 中：
+成员访问只跟踪根对象。`item.name` 和 `item.profile.avatar` 都记录为 `item`，具体子路径由运行时的前缀检查处理。
 
-- ✅ 覆盖所有表达式类型
-
-## 实现亮点
-
-### 1. 基于 Babel AST 的精确依赖提取
-- 使用 `@babel/core` 和 `@babel/traverse` 进行完整的语法树分析
-- 自动过滤字符串字面量中的标识符
-- 只提取成员访问的根对象
-- 智能识别 JavaScript 关键字和全局对象
-- 准确区分标识符的不同上下文（变量、属性、键名等）
-
-### 2. 双层优化策略
-- 简单绑定：快速路径，零开销
-- 复杂表达式：按需求值，最小化性能影响
-
-### 3. 安全的表达式求值
-- 使用 `new Function()` + `with` 作用域
-- 完整的错误处理
-- 避免全局作用域污染
-
-### 4. 完整的向后兼容
-- 支持现有的简单绑定场景
-- 渐进式增强，不破坏现有功能
-
-## 使用示例
+## 示例
 
 ```xml
-<!-- 简单绑定 -->
-<checkbox value="{{ checkbox1 }}" />
-
-<!-- 条件表达式 -->
-<image src="{{ checkbox3 ? activeIcon : inactiveIcon }}" />
-
-<!-- 逻辑运算 -->
-<checkbox value="{{ checked || false }}" />
+<checkbox value="{{checkbox1}}" />
+<image src="{{checkbox3 ? activeIcon : inactiveIcon}}" />
+<checkbox value="{{checked || false}}" />
 ```
 
-编译后的绑定信息：
-```json
-{
-  "value": {
-    "expression": "checkbox1",
-    "dependencies": ["checkbox1"],
-    "isSimple": true
-  }
-}
-```
+当父组件执行 `setData({ checkbox1: true })` 时，运行时命中 `checkbox1` 依赖，通过简单绑定路径读取 `true`，再更新子组件的 `value` property。
 
-当父组件执行 `setData({ checkbox1: true })` 时：
-1. `hasDependencyChanged()` 检测到 `checkbox1` 变化
-2. `evaluateExpression()` 直接返回 `true`（简单绑定快速路径）
-3. 子组件 `tO({ value: true })` 被触发
-4. 子组件 observer 执行
+## 验证入口
 
-## 未来优化方向
-
-1. **表达式缓存**：缓存已编译的 Function，避免重复创建
-2. **静态分析**：编译时进行更多优化，减少运行时开销
-3. **增量编译**：只重新解析变化的表达式
-4. **WebAssembly**：将表达式求值移至 WASM，提升性能
-
-## 总结
-
-通过精确的依赖追踪和智能的更新策略，确保了数据变化能够正确、高效地传播到子组件。
+- [依赖提取与表达式分类](../__tests__/expression-parser.test.js)
+- [编译产物中的绑定信息](../__tests__/view-compiler.spec.js)
+- [子组件 property 同步](../../service/__tests__/utils.spec.js)

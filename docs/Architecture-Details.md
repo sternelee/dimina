@@ -4,7 +4,7 @@
 
 本文从实现角度说明 Dimina 如何把小程序源码转换为可在 Android、iOS、Harmony 和 Web 容器中加载的资源包。阅读前建议先浏览[架构总览](./Architecture-Diagram.md)。
 
-## 一句话模型
+## 运行模型
 
 ```text
 小程序源码 → DMCC 编译 → 运行时资源包 → 宿主容器加载
@@ -46,7 +46,7 @@ DMCC 从 `project.config.json`、`app.json` 和页面配置中收集工程信息
 │   ├── pages_index_index.js
 │   ├── pages_index_index.css
 │   └── static/
-└── <subpackage>/
+└── sub_<root>/
     ├── logic.js
     ├── pages_detail_index.js
     └── pages_detail_index.css
@@ -55,7 +55,7 @@ DMCC 从 `project.config.json`、`app.json` 和页面配置中收集工程信息
 这里有两个容易混淆的配置文件：
 
 - `main/app-config.json` 由 DMCC 生成，包含 App 配置、页面/组件模块信息与项目名称，供运行时读取。
-- 根目录 `config.json` 是宿主打包或发布阶段使用的包元数据，通常包含 `appId`、入口路径和版本号。仓库内的 `generate-app` 流程会在生成原生端小程序包时创建或更新它。
+- 根目录 `config.json` 是宿主打包或发布阶段使用的包元数据，通常包含 `appId`、入口路径和版本号。仓库内的 `pnpm generate:app` 流程会在生成原生端小程序包时创建或更新它。
 
 页面路径中的 `/` 会在视图和样式文件名中转换为 `_`。主包与每个分包分别拥有自己的 `logic.js`；页面视图和样式按页面拆分，容器只加载当前页面需要的文件。
 
@@ -173,4 +173,4 @@ wx.xxx()
 | iOS SDK | [`iOS/dimina`](../iOS/dimina) |
 | Harmony SDK | [`harmony/dimina`](../harmony/dimina) |
 
-下一步可继续阅读[生命周期](./Architecture-Lifecycle.md)或[能力参考](./API-Reference.md)。
+相关内容见[生命周期](./Architecture-Lifecycle.md)和[能力参考](./API-Reference.md)。

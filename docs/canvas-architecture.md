@@ -41,7 +41,9 @@ legacy API 先按页面或组件作用域解析 `canvas-id`，再把操作交给
 2. lookup 完成后立即释放作用域队列。
 3. 同一真实 canvas 的绘制、像素读写和导出串行；不同 canvas 互不阻塞。
 
-`draw(reserve)` 的 `reserve` 只决定像素去留，不决定绘图状态：两种取值下新批次都从默认样式、变换和裁剪区开始，官方示例里第二批没重设 `fillStyle` 时画出来就是默认黑色。`reserve:false` 通过重建 backing store 一次清掉像素与状态；`reserve:true` 不能动 backing store，改由每批开头的一层基线 `save` 帧承载整批状态，下一批开始时弹回默认值而画面不动。批内未配平的 `restore()` 停在批边界，弹不走基线帧——真实 canvas 对空栈 `restore()` 同样是空操作。微信 iOS 的底层字号跨批次泄漏，两条重置路径都保留 `font`。
+`draw(reserve)` 的 `reserve` 只决定像素去留，不决定绘图状态。两种取值下，新批次都从默认样式、变换和裁剪区开始；第二批没有重设 `fillStyle` 时会使用默认黑色。
+
+`reserve:false` 通过重建 backing store 同时清除像素与状态。`reserve:true` 不能改动 backing store，因此每批开头用一层基线 `save` 帧承载整批状态，下一批开始时恢复默认值而不清除画面。批内未配平的 `restore()` 会停在批边界，无法弹出基线帧；真实 canvas 对空栈调用 `restore()` 同样不会产生操作。微信 iOS 的底层字号会跨批次保留，所以两条重置路径都保留 `font`。
 
 Canvas node API 在逻辑层积累 operation，flush 后由渲染层逐条结算。每条 operation 的异常独立返回，图片加载、像素 Promise、RAF callback 和状态反馈都绑定到 node owner；成功、失败、取消或销毁只允许一个终态。
 

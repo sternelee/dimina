@@ -33,7 +33,7 @@ dependencyResolutionManagement {
 ```groovy
 dependencies {
     // Dimina 核心库
-    implementation 'com.github.didi.dimina:dimina:latest.release'
+    implementation 'com.github.didi.dimina:dimina:1.6.1'
 }
 ```
 
@@ -42,7 +42,7 @@ dependencies {
 ```kotlin
 dependencies {
     // Dimina 核心库
-    implementation("com.github.didi.dimina:dimina:latest.release")
+    implementation("com.github.didi.dimina:dimina:1.6.1")
 }
 ```
 

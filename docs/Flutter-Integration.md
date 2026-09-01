@@ -21,7 +21,7 @@ Dimina 页面由各端原生 SDK 管理，不是 Flutter `PlatformView`。这种
 | 平台 | Flutter 宿主要求 | Dimina 要求 |
 | --- | --- | --- |
 | Android | Flutter v2 embedding、可取得当前 `Activity` | API 26+、Java 17、ARM64 |
-| iOS | Runner 可执行 Swift、可取得当前 `UIViewController` | iOS 14+、Swift 6、Xcode 16+ |
+| iOS | Runner 可执行 Swift、可取得当前 `UIViewController` | iOS 14+、Xcode 16+；SDK 使用 Swift tools 6.0、Swift 5 language mode |
 | Harmony | 使用支持 OHOS/Harmony 的 Flutter SDK，并能编写 ArkTS 插件 | HarmonyOS 5.0.0+、API 12 |
 
 Flutter 官方 Add-to-app 文档目前覆盖 Android、iOS、macOS 和 Web；Harmony 端需要使用项目实际选定的 OHOS/Harmony Flutter 发行版。接入前应固定 Flutter SDK、DevEco Studio、Harmony SDK 和 `flutter_ohos` 版本，避免只依赖浮动分支。
@@ -83,7 +83,7 @@ final class DiminaHost {
 
 ## Android
 
-先按 [Android SDK 接入说明](../android/README.md)添加并固定 Dimina 依赖。生产项目不建议使用浮动的 `latest.release`。
+先按 [Android SDK 接入说明](../android/README.md) 添加并固定 Dimina 依赖。生产项目不建议使用浮动的 `latest.release`。
 
 ### 插件职责
 
@@ -281,7 +281,7 @@ channel.setMethodCallHandler { call, result in
 
 ## Harmony
 
-先按 [Harmony SDK 接入说明](../harmony/dimina/README.md)安装 HAR。Harmony 的 Flutter 发行版与插件 API 可能随所选分支变化，下列代码使用 OpenHarmony-SIG 文档中的 `FlutterPluginBinding`、`MethodChannel`、`MethodCall` 和 `MethodResult` 结构。
+先按 [Harmony SDK 接入说明](../harmony/dimina/README.md) 安装 HAR。Harmony 的 Flutter 发行版与插件 API 可能随所选分支变化，下列代码使用 OpenHarmony-SIG 文档中的 `FlutterPluginBinding`、`MethodChannel`、`MethodCall` 和 `MethodResult` 结构。
 
 ### EntryAbility 初始化
 

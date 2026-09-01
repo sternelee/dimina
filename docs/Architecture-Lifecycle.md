@@ -46,7 +46,11 @@ sequenceDiagram
     S->>S: Page.onReady
 ```
 
-`pageShow` 由容器的真实页面可见状态驱动。Web 与 Android 容器会在双线程资源未就绪时缓存最新可见状态，先发送 `resourceLoaded`，再通过同一 service 通道发送 `pageShow` 或 `pageHide`；iOS 与 Harmony 的真实早到事件则由 service 暂存。每次 Web / Android `start` 都会生成独立的 `resourceLoadId`，service 和 render 回传同一标识，容器会丢弃已销毁或前一次加载的延迟确认。service 不根据“页面已创建且未隐藏”猜测首次显示，只消费容器信号并对重复事件去重；首次 `pageShow` 还要等待 render 的 `pageAttached` 握手，确保初始组件已经 attached。即使 `mR` 或 `pageReady` 先到，service 也会先完成 `onLoad` 和 `onShow`，再释放组件 `ready` 与页面 `onReady`，保证 `onLoad` → `onShow` → 组件 `ready` → `onReady`。因此可以依赖以下稳定边界：
+`pageShow` 由容器的真实页面可见状态驱动。Web 与 Android 容器会在双线程资源未就绪时缓存最新可见状态，先发送 `resourceLoaded`，再通过同一 service 通道发送 `pageShow` 或 `pageHide`；iOS 与 Harmony 的早到事件由 service 暂存。
+
+每次 Web / Android `start` 都会生成独立的 `resourceLoadId`。service 和 render 回传同一标识，容器会丢弃已销毁实例或前一次加载的延迟确认。service 不根据“页面已创建且未隐藏”推测首次显示，只消费容器信号并对重复事件去重。
+
+首次 `pageShow` 还要等待 render 的 `pageAttached` 握手。即使 `mR` 或 `pageReady` 先到，service 也会先完成 `onLoad` 和 `onShow`，再释放组件 `ready` 与页面 `onReady`。可依赖的顺序是 `onLoad` → `onShow` → 组件 `ready` → `onReady`，各阶段边界如下：
 
 - `onLoad`：页面实例已创建，可以读取路由参数、初始化状态并调用 `setData()`；此时不能假设 DOM 已存在。
 - `onShow`：页面已经进入前台，但不保证第一次渲染完成。

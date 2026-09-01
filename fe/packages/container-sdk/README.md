@@ -2,7 +2,7 @@
 
 Web 端小程序容器运行时 SDK：管理小程序的启动、导航栈与生命周期。
 
-- 核心不含 UI——应用列表、手机壳等展示由宿主提供；SDK 附带一个可选的极简状态栏 `createDefaultShell()`。
+- 核心不包含应用列表、手机壳等展示 UI，这些内容由宿主提供。SDK 另带可选的基础状态栏 `createDefaultShell()`。
 - 分层对齐 Android / iOS / Harmony 三端的「管理器 + App 实例」模型。
 - `fe/packages/container` demo 是参考消费者实现。
 
@@ -26,7 +26,7 @@ await container.openApp({ appId: 'wx-game-app-id' })
 ```
 
 - 包以预构建 `dist/`（ESM）分发；`CreateContainerOptions` / `ContainerInstance` / `ShellAdapter` 等契约类型随包导出，TS 宿主可直接 `import type`。
-- 零配置即可启动：不传 `shell` 时状态栏几何降级为全 0 矩形，不传 `getAppInfo` 时不发起任何元信息请求，不调用 `setRootView` 也能正常 `openApp`/`closeApp`。
+- `shell`、`getAppInfo` 和 `setRootView` 都是可选项。不传 `shell` 时状态栏几何使用全 0 矩形；不传 `getAppInfo` 时不发起元信息请求。
 
 `openApp()` 能真正打开页面，还需要两份资源就位：小程序编译产物（下一节）和渲染层宿主页 `pageFrame.html`（再下一节）。
 
@@ -76,13 +76,33 @@ resourceBaseUrl/
 | `virtualFilePrefix` | 虚拟文件协议前缀，缺省 `difile://`。必须是以 `://` 结尾的自定义 URI scheme，不能使用系统或 SDK 保留 scheme；按容器实例隔离，并在 service Worker 启动前同步传入逻辑层 |
 | `allowedOrigins` | `resourceBaseUrl`/`pageFrameUrl` 最终解析出的 origin 白名单（如 `[location.origin]`）。不传不限制来源；传了则两者（含走缺省值解析出的 origin）都必须精确命中，否则 `createContainer()` 同步抛错 |
 | `apiNamespaces` | 额外 API 命名空间（如 `['qd']`），每个小程序 `getApiNamespaces()` 都会返回它 |
-| `urlSync` | 地址栏路由同步。由 `application.syncUrl()` 统一从**当前展示栈栈顶实例**派生并回写——只要栈顶变化（打开/切前台/关闭后露出下一个/全部关闭）就会同步，不由某个小程序的内部导航各自决定。缺省 `true` 沿用内置 `QueryRouter`（`history.replaceState` 改写地址栏 `?appId=&entry=&page=`；无小程序打开时清除）；传 `false` 完全关闭；传 `{ syncStack(appId, stack), clear(), buildShareUrl?(appId, stack) }` 自定义适配器接管（例如接入宿主自身的 hash-router），此时 SDK 不再自己碰 `history`；可选的 `buildShareUrl` 供小程序菜单的"复制链接"使用，不实现时该菜单项直接隐藏而不是拼一个打不开的地址。**多容器**：同一地址栏无法让两个都用内置 `QueryRouter`、且都不传 `instanceKey` 的容器共存（固定 query key 会互相覆盖）——给每个容器传各自不同的 `instanceKey` 即可都保留 `urlSync: true`（见下一行）；不想用命名空间方案时也可只给其中一个容器留 `urlSync: true`，其余传 `false` 或各自的自定义适配器 |
-| `instanceKey` | 多容器场景下给这个容器实例一个稳定身份 key：内置 `QueryRouter` 的地址栏 query key 会按这个 key 命名空间化（如 `appId` → `appId__{instanceKey}`），多个容器各自传不同的 `instanceKey` 即可都安全使用缺省 `urlSync: true`，不再互相覆盖，各自的 `clear()` 也只删自己命名空间下的 key。不传时行为与该特性存在之前完全一致（不加命名空间）。对自定义 `urlSync` 适配器没有约束力——只影响内置 `QueryRouter` |
-| `storageSync` | `wx.setStorage`/`getStorage`/`removeStorage`/`clearStorage`/`getStorageInfo` 的落地位置。缺省 `true` 使用内置 `window.localStorage`，v2 key 通过 appId 长度前缀实现无歧义隔离；可唯一解析的旧 `` `${appId}_${key}` `` 数据在精确读取时懒迁移，含下划线而无法判断归属的旧组合不会被猜测读取，`clearStorage` 也不再按旧歧义前缀跨应用删除。传 `false` 完全关闭（5 个方法均 `fail` 且不触碰存储）；传 `{ getItem, setItem, removeItem, length, key }` 由自定义适配器接管。相同 appId 的多个容器默认共享同一逻辑存储；需要容器级隔离时应使用分别带实例命名空间的自定义适配器。 |
+| `urlSync` | 地址栏路由同步。缺省使用内置 `QueryRouter`；也可关闭或传入自定义适配器，细节见下文 |
+| `instanceKey` | 多容器共用内置地址栏路由时的实例命名空间，细节见下文 |
+| `storageSync` | 小程序 Storage 的持久化适配器。缺省使用 `window.localStorage`，细节见下文 |
 | `getAppInfo(appId)` | 小程序元信息提供者，可同步或异步返回 `{name?, logo?} \| null \| undefined`，缺省返回 `{}` |
 | `onAppLaunchError(error, {appId})` | 小程序启动失败（配置不可达/为空/非法等）通知。`openApp` 不因此 reject（与 Native 端「打开成功但内容加载失败走回调」对称）；容器销毁打断不触发 |
 | `apis` | 启动阶段注册的容器级 API（`{name: handler}`），等价于拿到容器实例后立刻逐个调用 `registerApi`，但保证严格早于任何 `openApp()`（见下方「registerApi 边界」） |
 | `extModules` | 启动阶段注册的第三方扩展模块（`{name: handler}`），等价于立刻逐个调用 `registerExtModule` |
+
+### 地址栏同步
+
+`urlSync` 由 `application.syncUrl()` 根据当前展示栈的栈顶实例统一回写。打开、切到前台、关闭后露出下一个实例或清空栈时都会同步；小程序内部导航不各自改写地址栏。
+
+- 缺省值 `true` 使用内置 `QueryRouter`，通过 `history.replaceState` 维护 `?appId=&entry=&page=`；没有打开的小程序时清除这些参数。
+- `false` 关闭地址栏同步。
+- 自定义适配器的结构为 `{ syncStack(appId, stack), clear(), buildShareUrl?(appId, stack) }`。传入后，SDK 不再直接操作 `history`。`buildShareUrl` 未实现时，小程序菜单隐藏“复制链接”。
+
+多个容器同时使用内置 `QueryRouter` 时，要为每个容器设置不同的 `instanceKey`。路由参数会按该值增加命名空间，例如 `appId__{instanceKey}`，每个容器的 `clear()` 也只删除自己的参数。不设置 `instanceKey` 时保留未命名空间化的原有行为。`instanceKey` 不影响自定义 `urlSync` 适配器。
+
+### Storage 持久化
+
+`storageSync` 控制 `wx.setStorage`、`getStorage`、`removeStorage`、`clearStorage` 和 `getStorageInfo` 的持久化位置：
+
+- 缺省值 `true` 使用 `window.localStorage`。v2 key 通过 appId 长度前缀隔离小程序。
+- `false` 关闭持久化，五个方法都会进入 `fail`，且不会读写存储。
+- 传入 `{ getItem, setItem, removeItem, length, key }` 时，由自定义适配器接管。
+
+可唯一识别的旧格式 `` `${appId}_${key}` `` 会在精确读取时迁移。含下划线且无法判断归属的旧 key 不会被猜测读取，`clearStorage` 也不会按有歧义的旧前缀跨应用删除。相同 appId 的多个容器默认共享一份逻辑存储；需要按容器隔离时，应在自定义适配器中加入实例命名空间。
 
 ```js
 const container = createContainer({

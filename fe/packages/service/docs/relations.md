@@ -1,23 +1,23 @@
-# 组件间关系 (Relations) 功能实现
+# 组件间关系（Relations）
 
 ## 概述
 
-本实现完全支持微信小程序的组件间关系功能，允许组件之间建立 parent-child、ancestor-descendant 等关系，并提供相应的生命周期函数和 API。
+Dimina 支持组件之间的 `parent` / `child` 和 `ancestor` / `descendant` 关系，并提供关系回调与 `getRelationNodes()`。
 
 ## 功能特性
 
 ### 1. 支持的关系类型
 
-- **parent**: 父子关系中的父组件
-- **child**: 父子关系中的子组件  
-- **ancestor**: 祖先-后代关系中的祖先组件
-- **descendant**: 祖先-后代关系中的后代组件
+- `parent`：当前组件的直接父组件
+- `child`：当前组件的直接子组件
+- `ancestor`：当前组件的祖先组件
+- `descendant`：当前组件的后代组件
 
 ### 2. 关系生命周期
 
-- **linked**: 关系建立时调用
-- **linkChanged**: 关系发生变化时调用（如组件移动）
-- **unlinked**: 关系断开时调用
+- `linked`：关系建立时调用
+- `linkChanged`：已关联组件移动时调用
+- `unlinked`：关系断开时调用
 
 ### 3. 路径解析
 
@@ -153,11 +153,13 @@ Component({
 ### 使用 Behavior
 
 ```javascript
+const childBehavior = Behavior({})
+
 const parentBehavior = Behavior({
   relations: {
     './child-component': {
       type: 'child',
-      target: 'childBehavior',
+      target: childBehavior,
       linked: function(target) {
         console.log('具有 childBehavior 的组件已连接')
       }
@@ -168,6 +170,11 @@ const parentBehavior = Behavior({
 Component({
   behaviors: [parentBehavior],
   // 其他配置...
+})
+
+// 被关联的子组件需要声明同一个 behavior
+Component({
+  behaviors: [childBehavior]
 })
 ```
 
@@ -213,28 +220,28 @@ Component({
 
 ## 测试覆盖
 
-实现包含完整的测试套件，覆盖以下场景：
+现有测试覆盖以下场景：
 
-- ✅ 父子关系建立和断开
-- ✅ 祖先-后代关系建立
-- ✅ 关系生命周期函数调用
-- ✅ 组件销毁时关系清理
-- ✅ 相对路径解析
-- ✅ getRelationNodes API
-- ✅ **双向关系建立** - 父组件先创建时也能正确获取后创建的子组件
+- 父子关系建立和断开
+- 祖先与后代关系建立
+- 关系回调调用
+- 组件销毁时清理关系
+- 相对路径解析
+- `getRelationNodes()`
+- 父组件先创建、子组件后创建时的双向关系建立
 
 ## 注意事项
 
-1. **双向关系**: 关系建立是双向的，组件创建顺序不影响关系的正确建立
-2. **性能考虑**: 关系建立在组件 attached 时立即执行，确保及时性
-3. **内存管理**: 组件销毁时自动清理所有关系，避免内存泄漏
-4. **错误处理**: 关系生命周期函数执行错误不会影响组件正常运行
-5. **路径匹配**: 支持多种路径格式，自动解析相对路径
+1. 组件在 `attached` 阶段检查关系，并通知已经存在的实例重新匹配，因此父子组件的创建顺序不影响已覆盖的场景。
+2. 组件 `detached` 回调执行完后才触发 relation `unlinked`，随后清理双方保存的关系引用。
+3. 关系回调的异常会被隔离并交给组件错误处理，不会中断剩余关系遍历。
+4. `getRelationNodes()` 的参数必须与 `relations` 中声明的原始路径一致；未声明的路径返回 `null`。
 
-## 兼容性
+## 兼容性边界
 
-完全兼容微信小程序官方组件间关系 API，可以无缝迁移现有代码。
+当前实现覆盖本文列出的关系类型、路径、回调和查询 API。迁移依赖 relations 的组件时，仍需验证 behavior `target`、组件移动、动态创建和销毁顺序等实际用例。
 
 ## 参考文档
 
-- [微信小程序组件间关系官方文档](https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/relations.html) 
+- [微信小程序组件间关系官方文档](https://developers.weixin.qq.com/miniprogram/dev/framework/custom-component/relations.html)
+- [Dimina relations 回归测试](../__tests__/relations.spec.js)

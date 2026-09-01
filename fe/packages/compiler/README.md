@@ -108,14 +108,14 @@ Harmony 端的虚拟脚本路径、VS Code attach 与 HDC 端口转发配置见
 ```txt
 app.js, index.js      ->  logic.js     (逻辑文件)
 app.ts, index.ts      ->  logic.js     (TypeScript 逻辑文件)
-index.wxml            ->  view.js      (视图文件)
-app.wxss, index.wxss  ->  style.css    (样式文件)
-app.less, index.less  ->  style.css    (Less 样式文件)
-app.scss, index.scss  ->  style.css    (SCSS 样式文件)
-app.sass, index.sass  ->  style.css    (Sass 样式文件)
-app.json, index.json  ->  config.json  (配置文件)
-game.js, game.json    ->  logic.js + app-config.json（小游戏入口，不生成页面视图/样式）
-miniprogram_npm/      ->  npm包构建   (npm组件支持)
+index.wxml            ->  页面视图模块（写入对应的页面 .js）
+app.wxss, index.wxss  ->  app.css / 对应的页面 .css
+app.less, index.less  ->  app.css / 对应的页面 .css
+app.scss, index.scss  ->  app.css / 对应的页面 .css
+app.sass, index.sass  ->  app.css / 对应的页面 .css
+app.json, index.json  ->  main/app-config.json（运行时配置）
+game.js, game.json    ->  main/logic.js + main/app-config.json（小游戏入口，不生成页面视图/样式）
+miniprogram_npm/      ->  组件与依赖编译（npm 组件支持）
 ```
 
 ### CPU 与内存调优
@@ -139,23 +139,20 @@ DIMINA_COMPILER_WORKER_MEMORY_MB=1024 dmcc build
 
 ### 微信小游戏入口
 
-当 `project.config.json` 的 `compileType` 为 `game`，或工程只有 `game.json` + `game.js`/`game.ts` 而没有 `app.json` 时，DMCC 会按小游戏编译。产物的 `app-config.json` 包含 `runtimeType: "game"`、`entryPagePath: "game"`，`logic.js` 包含 `game.js` 及其本地依赖；不会生成 WXML 页面和页面 CSS。运行能力与边界见[微信小游戏运行文档](../../../docs/Mini-Game.md)。
+当 `project.config.json` 的 `compileType` 为 `game`，或工程只有 `game.json` + `game.js`/`game.ts` 而没有 `app.json` 时，DMCC 会按小游戏编译。产物的 `main/app-config.json` 包含 `app.runtimeType: "game"`、`app.entryPagePath: "game"`，`main/logic.js` 包含 `game.js` 及其本地依赖；不会生成 WXML 页面和页面 CSS。运行能力与边界见[微信小游戏运行文档](../../../docs/Mini-Game.md)。
 
-### TypeScript、Less 和 SCSS 支持
+### TypeScript、Less 和 Sass 支持
 
-编译器现已支持现代前端开发工具：
-
-- ✅ **TypeScript 支持**: `.ts` 文件自动编译为 JavaScript
-- ✅ **ES6 Import 语句**: 支持相对路径、npm 包和绝对路径导入
-- ✅ **Less 支持**: `.less` 文件编译为 CSS，支持变量、mixin 和嵌套
-- ✅ **SCSS/Sass 支持**: `.scss` 和 `.sass` 文件编译为 CSS
-- ✅ **错误处理**: 编译失败时自动回退，不中断构建流程
-- ✅ **向后兼容**: 完全兼容现有的 `.js` 和 `.wxss` 文件
+- `.ts` 文件由 esbuild 转换为 CommonJS；DMCC 不执行类型检查，也不读取 `tsconfig.json`
+- ES module import 支持相对路径、npm 包路径和以 `/` 开头的小程序绝对路径
+- `.less` 文件由 Less 编译，`.scss` 和 `.sass` 文件由 Dart Sass 编译
+- 样式预处理或 PostCSS 转换失败时构建会报错，不会静默使用原始样式
 
 #### 支持的文件类型
 
-**逻辑文件查找顺序**: `.js` → `.ts`
-**样式文件查找顺序**: `.wxss` → `.ddss` → `.less` → `.scss` → `.sass`
+逻辑文件查找顺序：`.js` → `.ts`
+
+样式文件查找顺序：`.wxss` → `.ddss` → `.less` → `.scss` → `.sass`
 
 详细使用说明请参考：[TypeScript、Less 和 SCSS 支持文档](./docs/typescript-less-scss-support.md)
 
@@ -168,8 +165,8 @@ import build from '@dimina/compiler'
 
 await build(targetPath, workPath, true, {
   fileTypes: {
-    template: ['qdml'],   // 追加模板扩展名，与 .wxml/.ddml 等价 -> view.js
-    style: ['qdss'],      // 追加样式扩展名，与 .wxss/.ddss 等价 -> style.css
+    template: ['qdml'],   // 追加模板扩展名，与 .wxml/.ddml 等价
+    style: ['qdss'],      // 追加样式扩展名，与 .wxss/.ddss 等价
     viewScript: ['qds'],  // 追加 WXS 类视图脚本：同时覆盖 .qds 文件与内联 <qds> 标签
   },
 })
@@ -182,14 +179,12 @@ await build(targetPath, workPath, true, {
 
 ### npm 组件支持
 
-编译器现已支持微信小程序的 npm 包功能，遵循微信官方的 npm 支持规范：
+编译器会解析已经由开发者工具或 `miniprogram-ci` 生成的 `miniprogram_npm` 目录：
 
-- ✅ 支持 `miniprogram_npm` 目录中的组件解析
-- ✅ 按照微信小程序寻址顺序查找组件
-- ✅ 自动构建和复制 npm 包文件
-- ✅ 支持组件依赖关系处理
-- ✅ 缓存机制提升编译性能
-- ✅ 兼容现有的相对路径组件引用
+- 从当前目录逐级向工程根目录查找 npm 组件
+- 编译组件及其 `usingComponents` 依赖
+- 保留相对路径和小程序绝对路径组件引用
+- 通过仓库批量编译入口运行时复用持久化编译缓存
 
 #### npm 组件使用示例
 
@@ -207,32 +202,35 @@ await build(targetPath, workPath, true, {
 
 ### 编译产物目录结构
 
-编译后，默认会在目标目录生成以小程序 id 命名的文件夹，项目结构如下：
+编译后，默认会在目标目录生成以小程序 ID 命名的目录。主包资源位于固定的 `main/` 子目录：
 
 ```txt
 dist/
-  ├─ {appId}/      # 小程序 ID 目录（使用 --no-app-id-dir 参数可以去除此目录层级）
-    ├─ logic.js      # 小程序逻辑代码
-    ├─ view.js       # 小程序视图代码
-    ├─ style.css     # 小程序样式
-    └─ config.json   # 小程序配置
+└── {appId}/
+    └── main/
+        ├── app-config.json     # 全局配置
+        ├── app.css             # 全局样式
+        ├── logic.js            # 主包逻辑代码
+        ├── pages_index.js      # 页面视图代码，文件名由页面路径转换
+        └── pages_index.css     # 页面样式
 ```
 
-如果使用 `--no-app-id-dir` 参数，产物将直接输出到目标目录，而不会创建以 appId 命名的子目录：
+分包会生成与 `main/` 平级的 `sub_<root>/` 目录。使用 `--no-app-id-dir` 时只去掉 `{appId}/` 这一层，`main/` 和分包目录保持不变：
 
 ```txt
 dist/
-  ├─ logic.js      # 小程序逻辑代码
-  ├─ view.js       # 小程序视图代码
-  ├─ style.css     # 小程序样式
-  └─ config.json   # 小程序配置
+└── main/
+    ├── app-config.json
+    ├── app.css
+    ├── logic.js
+    ├── pages_index.js
+    └── pages_index.css
 ```
 
 ### 常见问题
 
-如果编译过程中遇到问题，可以尝试以下解决方法：
+如果编译失败，按以下顺序排查：
 
-1. 确保小程序项目结构正确
-2. 检查 app.json 配置是否有效
-3. 启用监听模式 (-w) 可以实时查看编译错误
-4. 确保依赖安装完整
+1. 检查小程序目录结构和 `app.json` 配置
+2. 检查 `miniprogram_npm` 是否已经构建，项目依赖是否安装完整
+3. 使用 `-w` 监听文件变化并查看最新错误

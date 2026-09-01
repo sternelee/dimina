@@ -1,346 +1,126 @@
-# TypeScript、Less 和 SCSS 编译支持
+# TypeScript、Less 和 Sass 编译
 
-Dimina 编译器现在支持 TypeScript、Less 和 SCSS 文件的编译，为开发者提供更强大的开发体验。
+DMCC 可以读取 TypeScript、Less、SCSS 和 Sass 文件，并把它们转换为小程序运行时使用的 JavaScript 与 CSS。
 
-## 功能特性
+## 文件查找顺序
 
-### TypeScript 支持
+同一路径存在多个候选文件时，编译器按以下顺序选择：
 
-- **文件扩展名**: `.ts`
-- **自动编译**: TypeScript 文件会自动编译为 JavaScript
-- **类型检查**: 基本的 TypeScript 语法支持
-- **错误处理**: 编译失败时会回退到原始代码
+1. 逻辑文件：`.js` → `.ts`
+2. 样式文件：`.wxss` → `.ddss` → `.less` → `.scss` → `.sass`
 
-#### 支持的 TypeScript 编译选项
+因此，同名 `.js` 与 `.ts` 同时存在时会使用 `.js`；样式文件也以排在前面的扩展名为准。
 
-```json
-{
-  "target": "ES2020",
-  "module": "CommonJS",
-  "strict": false,
-  "esModuleInterop": true,
-  "skipLibCheck": true
-}
+## TypeScript
+
+TypeScript 页面和组件沿用小程序原有的文件结构：
+
+```text
+pages/index/
+├── index.ts
+├── index.wxml
+├── index.scss
+└── index.json
 ```
 
-#### Import 语句支持
-
-编译器现在支持 ES6 import 语句，包括：
-
-- **相对路径导入**：`import { utils } from './utils'`
-- **npm 包导入**：`import Toast from '@vant/weapp/toast/toast'`
-- **绝对路径导入**：`import { api } from '/utils/api'`
-
-**Import 语句示例**：
-
-```typescript
-// 相对路径导入
-import { formatDate } from '../../utils/helper'
-
-// npm 包导入
-import Toast from '@vant/weapp/toast/toast'
-import Dialog from '@vant/weapp/dialog/dialog'
-
-// 绝对路径导入
-import { request } from '/utils/api'
-
-Page({
-  async onLoad() {
-    const now = formatDate(new Date())
-    
-    Toast.show({
-      message: '页面加载完成'
-    })
-    
-    const confirmed = await Dialog.confirm({
-      title: '提示',
-      message: '确认操作吗？'
-    })
-    
-    if (confirmed) {
-      const result = await request('/api/data', {})
-      console.log('请求结果:', result)
-    }
-  }
-})
-```
-
-#### 使用示例
-
-**页面文件 (pages/index/index.ts)**:
-```typescript
+```ts
 interface PageData {
-  message: string;
-  count: number;
+  message: string
+  count: number
 }
 
 Page<PageData>({
   data: {
     message: 'Hello TypeScript',
-    count: 0
+    count: 0,
   },
-  
-  onLoad(): void {
-    console.log('Page loaded with TypeScript')
+
+  increment() {
+    this.setData({ count: this.data.count + 1 })
   },
-  
-  increment(): void {
-    this.setData({
-      count: this.data.count + 1
-    })
-  }
 })
 ```
 
-**组件文件 (components/my-component/index.ts)**:
-```typescript
-interface ComponentData {
-  title: string;
-  visible: boolean;
-}
+编译器使用 esbuild 转换逻辑文件，固定输出 CommonJS，目标语法为 ES2020。相对路径、以 `/` 开头的小程序绝对路径和 `miniprogram_npm` 包路径都由 DMCC 的模块解析逻辑处理。
 
-interface ComponentMethods {
-  toggle(): void;
-  show(): void;
-  hide(): void;
-}
-
-Component<ComponentData, {}, ComponentMethods>({
-  data: {
-    title: 'TypeScript Component',
-    visible: false
-  },
-  
-  methods: {
-    toggle(): void {
-      this.setData({
-        visible: !this.data.visible
-      })
-    },
-    
-    show(): void {
-      this.setData({ visible: true })
-    },
-    
-    hide(): void {
-      this.setData({ visible: false })
-    }
-  }
-})
+```ts
+import { formatDate } from '../../utils/helper'
+import Toast from '@vant/weapp/toast/toast'
+import { request } from '/utils/api'
 ```
 
-### Less 支持
+DMCC 只移除类型语法并转换模块，不执行 TypeScript 类型检查，也不读取项目的 `tsconfig.json`。需要类型检查时，请在业务工程中单独运行 `tsc --noEmit` 或现有检查命令。
 
-- **文件扩展名**: `.less`
-- **变量支持**: 支持 Less 变量和 mixin
-- **嵌套支持**: 支持 CSS 嵌套语法
-- **函数支持**: 支持 Less 内置函数
+如果 esbuild 转换失败，编译器会记录错误并保留已经完成路径改写的源码。对于仍含 TypeScript 语法的文件，该产物通常无法在运行时执行，因此发布前应把编译日志中的转换错误视为失败处理。
 
-#### 使用示例
+## Less
+
+`.less` 文件由 Less 编译，支持变量、mixin、嵌套和 Less 内置函数：
 
 ```less
 @primary-color: #1890ff;
-@border-radius: 4px;
-
-.container {
-  background-color: @primary-color;
-  border-radius: @border-radius;
-  
-  .header {
-    font-size: 18px;
-    font-weight: bold;
-    
-    &:hover {
-      opacity: 0.8;
-    }
-  }
-  
-  .content {
-    padding: 16px;
-    
-    p {
-      margin: 0;
-      line-height: 1.5;
-    }
-  }
-}
-
-.mixin-example() {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 
 .button {
-  .mixin-example();
-  padding: 8px 16px;
-  background: lighten(@primary-color, 10%);
+  background: @primary-color;
+
+  &:hover {
+    opacity: 0.8;
+  }
 }
 ```
 
-### SCSS/Sass 支持
+## SCSS 和 Sass
 
-- **文件扩展名**: `.scss`, `.sass`
-- **变量支持**: 支持 SCSS 变量和 mixin
-- **嵌套支持**: 支持 CSS 嵌套语法
-- **模块系统**: 支持 `@use` 和 `@import`
-
-#### SCSS 使用示例
+`.scss` 使用 SCSS 语法，`.sass` 使用缩进语法。两者都由 Dart Sass 编译，并支持 Sass 模块、变量、mixin 和嵌套。
 
 ```scss
-@use "sass:color";
+@use 'sass:color';
 
 $primary-color: #ff6b35;
-$secondary-color: #f7931e;
-$border-radius: 8px;
 
-@mixin button-style($bg-color) {
-  background-color: $bg-color;
-  border: none;
-  border-radius: $border-radius;
-  padding: 12px 24px;
-  cursor: pointer;
-  
+.button {
+  background: $primary-color;
+
   &:hover {
-    background-color: color.adjust($bg-color, $lightness: -10%);
-  }
-}
-
-.page {
-  background: linear-gradient(45deg, $primary-color, $secondary-color);
-  min-height: 100vh;
-  
-  .nav {
-    display: flex;
-    justify-content: space-between;
-    padding: 16px;
-    
-    &__logo {
-      font-size: 24px;
-      font-weight: bold;
-      color: white;
-    }
-    
-    &__menu {
-      display: flex;
-      gap: 16px;
-      
-      a {
-        color: white;
-        text-decoration: none;
-        
-        &:hover {
-          text-decoration: underline;
-        }
-      }
-    }
-  }
-  
-  .btn {
-    &--primary {
-      @include button-style($primary-color);
-    }
-    
-    &--secondary {
-      @include button-style($secondary-color);
-    }
+    background: color.adjust($primary-color, $lightness: -10%);
   }
 }
 ```
 
-#### Sass 缩进语法示例
+预处理器的加载路径包含当前文件目录和小程序工程根目录。样式中的 `@import` 会进入 DMCC 的依赖图，以便 watch 和增量编译判断受影响文件。
 
-```sass
-$primary: #42b983
-$margin: 16px
+## 样式后处理
 
-.container
-  background: $primary
-  margin: $margin
-  
-  .title
-    font-size: 24px
-    color: white
-    
-    &:hover
-      opacity: 0.8
-  
-  .list
-    padding: $margin
-    
-    li
-      margin-bottom: 8px
-      
-      &:last-child
-        margin-bottom: 0
+Less 或 Sass 输出还会经过 Dimina 的统一样式管线，包括：
+
+- `rpx` 转换；
+- 内置组件标签改写；
+- 组件作用域与 `:host` 处理；
+- `url()` 资源路径处理；
+- Autoprefixer；
+- 启用 source map 时的映射串联。
+
+预处理、作用域转换或 PostCSS 处理失败时，编译器会抛出带阶段和文件路径的错误，不会静默使用原始样式。
+
+## 缓存与增量编译
+
+单次构建会复用已处理样式的内存缓存。通过仓库的编译入口运行时，持久化编译缓存还会根据文件指纹和依赖图跳过未变化工程，或只重建受影响的 logic、view、style 阶段。
+
+仓库示例批量编译需要忽略持久化缓存时使用：
+
+```sh
+cd fe
+pnpm compile --force
 ```
 
-## 编译流程
+`--force` 属于仓库的 `pnpm compile` 脚本，不是 `dmcc build` 的参数。
 
-### 文件查找优先级
+## 依赖与验证
 
-编译器在查找文件时会按以下优先级进行：
+Less、Sass 和 esbuild 已列入 `@dimina/compiler` 的运行依赖，业务项目无需重复声明。实际版本以 `packages/compiler/package.json` 和 `pnpm-lock.yaml` 为准。
 
-1. **逻辑文件**: `.js` → `.ts`
-2. **样式文件**: `.wxss` → `.ddss` → `.less` → `.scss` → `.sass`
+相关测试：
 
-### 错误处理
-
-- **TypeScript 编译失败**: 会回退到原始代码继续处理
-- **Less/SCSS 编译失败**: 会记录错误并使用原始内容
-- **PostCSS 解析失败**: 会返回空字符串，避免整个编译流程中断
-
-### 性能优化
-
-- **缓存机制**: 编译结果会被缓存，避免重复编译
-- **并行处理**: 不同类型的文件可以并行编译
-- **增量编译**: 只编译修改过的文件
-
-## 配置要求
-
-### package.json 依赖
-
-```json
-{
-  "dependencies": {
-    "less": "^4.2.1",
-    "sass": "^1.81.0",
-    "typescript": "^5.7.2"
-  }
-}
-```
-
-### 项目结构示例
-
-```
-project/
-├── pages/
-│   └── index/
-│       ├── index.ts          # TypeScript 页面逻辑
-│       ├── index.scss        # SCSS 样式
-│       ├── index.wxml        # 页面模板
-│       └── index.json        # 页面配置
-├── components/
-│   └── my-component/
-│       ├── index.ts          # TypeScript 组件逻辑
-│       ├── index.less        # Less 样式
-│       ├── index.wxml        # 组件模板
-│       └── index.json        # 组件配置
-├── app.json
-└── project.config.json
-```
-
-## 注意事项
-
-1. **TypeScript 配置**: 编译器使用内置的 TypeScript 配置，不支持自定义 `tsconfig.json`
-2. **样式作用域**: 编译后的样式会自动添加作用域，避免样式冲突
-3. **文件命名**: 保持与微信小程序的文件命名约定一致
-4. **兼容性**: 完全向后兼容，现有的 `.js` 和 `.wxss` 文件继续正常工作
-
-## 测试覆盖
-
-- **TypeScript 编译测试**: 3个测试用例，覆盖页面、组件和错误处理
-- **样式预处理器测试**: 覆盖 Less、SCSS 和 Sass 的基本编译功能
-- **错误处理测试**: 确保编译失败时不会中断整个构建流程
-
-通过这些新功能，开发者可以使用现代的前端开发工具和语法来开发微信小程序，提高开发效率和代码质量。 
+- [TypeScript 转换](../__tests__/typescript-support.spec.js)
+- [样式编译](../__tests__/style-compiler.spec.js)与[错误契约](../__tests__/style-error-contract.spec.js)
+- [增量缓存](../__tests__/compile-cache.spec.js)

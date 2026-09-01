@@ -1,21 +1,18 @@
 # Dimina Harmony SDK
 
-## 介绍
-
-可以快速将已有的小程序接入到 HarmonyOS 应用中，支持小程序的启动、跳转、分享、消息推送等能力。
+Dimina Harmony SDK 用于在 HarmonyOS 应用中加载和运行小程序，并提供导航、分享、消息及宿主扩展能力。
 
 ## 系统环境
 
 - HarmonyOS 5.0.0+
-- compatibleSdkVersion: 12
-- minSdkVersion: 12
+- `compatibleSdkVersion`: 12
 
 ## 快速接入
 
-### 步骤 1：安装说明
+### 步骤 1：安装 SDK
 
 ```sh
-ohpm install @didi-dimina/dimina
+ohpm install @didi-dimina/dimina@1.6.1
 ```
 
 ### 步骤 2：初始化

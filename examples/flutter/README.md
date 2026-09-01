@@ -34,7 +34,7 @@ Gradle 将仓库的 `shared/` 作为只读 assets 根目录，因此小程序保
 
 ## iOS
 
-Dimina SDK 支持 iOS 14+；当前 Flutter 3.47 模板的 Runner 部署目标是 iOS 15，并要求 Swift 6/Xcode 16+ 工具链：
+Dimina SDK 支持 iOS 14+；当前 Flutter 3.47 模板的 Runner 部署目标是 iOS 15，并使用 Xcode 16+。Runner 与 Dimina 源码均以 Swift 5 language mode 编译：
 
 ```bash
 cd examples/flutter

@@ -16,9 +16,10 @@
 }
 ```
 
-编译后：
+编译器先把 `:host` 改写为组件宿主标记（以下用 `component-id` 代表示例组件的作用域 ID）：
+
 ```css
-[data-v-component-id] {
+[data-dd-style-host~="component-id"] {
   display: block;
   background-color: #f5f5f5;
 }
@@ -40,12 +41,13 @@
 ```
 
 编译后：
+
 ```css
-[data-v-component-id].active {
+[data-dd-style-host~="component-id"].active {
   border: 2px solid blue;
 }
 
-[data-v-component-id].theme-dark {
+[data-dd-style-host~="component-id"].theme-dark {
   background-color: #333;
   color: white;
 }
@@ -66,12 +68,13 @@
 ```
 
 编译后：
+
 ```css
-[data-v-component-id]:hover {
+[data-dd-style-host~="component-id"]:hover {
   opacity: 0.8;
 }
 
-[data-v-component-id].highlighted {
+[data-dd-style-host~="component-id"].highlighted {
   box-shadow: 0 0 10px rgba(0, 0, 255, 0.3);
 }
 ```
@@ -91,12 +94,13 @@
 ```
 
 编译后：
+
 ```css
-[data-v-component-id] .content {
+[data-dd-style-host~="component-id"] .content {
   padding: 20px;
 }
 
-[data-v-component-id].compact .content {
+[data-dd-style-host~="component-id"].compact .content {
   padding: 10px;
 }
 ```
@@ -118,14 +122,15 @@
 ```
 
 编译后：
+
 ```css
-[data-v-component-id].theme-dark .header > .title:first-child {
+[data-dd-style-host~="component-id"].theme-dark .header > .title:first-child {
   color: #fff;
   font-weight: bold;
 }
 
-[data-v-component-id] .item,
-[data-v-component-id].active .selected-item {
+[data-dd-style-host~="component-id"] .item,
+[data-dd-style-host~="component-id"].active .selected-item {
   transition: all 0.3s ease;
 }
 ```
@@ -223,6 +228,6 @@
 ## 注意事项
 
 1. `:host` 选择器只在自定义组件的样式文件中生效
-2. 编译后的选择器使用 `[data-v-component-id]` 属性选择器来实现样式隔离
-3. 支持所有标准的 CSS 选择器语法与 `:host` 组合使用
-4. 与微信小程序的 `:host` 选择器语法完全兼容 
+2. 编译器使用 `[data-dd-style-host~="<scope-id>"]` 标记组件宿主；普通后代样式仍由组件作用域规则处理
+3. 当前已覆盖 `:host`、`:host(...)`、类名、伪类、后代选择器和选择器列表，具体范围见[回归测试](../__tests__/host-selector.test.js)
+4. 遇到尚未覆盖的复杂组合选择器时，应以编译产物和目标端实测结果为准

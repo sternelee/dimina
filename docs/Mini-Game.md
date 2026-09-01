@@ -42,7 +42,7 @@ Android、iOS 和 HarmonyOS 同样在解析 `app-config.json` 后读取 `app.run
 
 Canvas 节点、状态、位图限制和 native 导出生命周期见 [Canvas 运行架构](./canvas-architecture.md)。
 
-首版目标是运行以 Canvas 为主的小游戏入口，并非一次性覆盖微信小游戏的全部专属能力。开放数据域、游戏圈按钮、好友关系链、小游戏分包和独立 Worker 等专属接口目前未提供；业务应继续用 `wx.canIUse()` 做能力保护。
+当前运行时只覆盖以 Canvas 为主的小游戏入口。开放数据域、游戏圈按钮、好友关系链、小游戏分包和独立 Worker 等专属接口尚未提供；业务应继续用 `wx.canIUse()` 做能力保护。
 
 ## 本地验证
 

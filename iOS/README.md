@@ -3,18 +3,19 @@
 ## 系统要求
 
 - iOS 14.0+
-- Swift 6.0+
-- Xcode 16.0+
+- Xcode 16.0+（Swift 6 工具链）
+
+SDK 的 `Package.swift` 使用 Swift tools 6.0，但源码当前以 Swift 5 language mode 编译。宿主不需要开启 Swift 6 严格并发模式。
 
 ## 快速接入
 
 ### 步骤 1: 添加 SDK 到项目
 
-您可以通过以下方式将 Dimina SDK 添加到您的 iOS 项目中：
+通过 Swift Package Manager 将 Dimina SDK 添加到 iOS 项目：
 
 #### Swift Package Manager
 
-在 Xcode 中打开 `dimina.xcodeproj`，选择：
+在宿主应用的 Xcode 工程中选择：
 
 `File > Add Package Dependencies...`
 
@@ -24,7 +25,7 @@
 https://github.com/didi/dimina.git
 ```
 
-版本选择 `Up to Next Major Version`，或按需要固定到具体版本。
+版本可固定为 `1.6.1`；如果选择 `Up to Next Major Version`，发布前仍应检查实际解析到的版本。
 
 ### 步骤 2: 准备小程序资源
 
@@ -136,7 +137,7 @@ try await app.closeMiniProgram()
 
 ## 权限处理
 
-小程序可能需要访问设备的各种权限，如相机、位置等。请确保在 Info.plist 中添加相应的权限描述：
+如果小程序会使用相机、位置等系统能力，需要在 `Info.plist` 中添加对应的权限说明：
 
 ```xml
 <key>NSCameraUsageDescription</key>

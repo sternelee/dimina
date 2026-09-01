@@ -86,4 +86,4 @@ pnpm --filter compiler sync:compat
 git diff -- packages/compiler/src/common/compatibility-reference.js
 ```
 
-确认生成文件的变化与能力表一致；如果能力名称没有变化，生成文件应保持不变。该检查用于确保编译器的兼容性提示与[能力参考](./API-Reference.md)同步。
+确认生成文件的变化与能力表一致；如果能力名称没有变化，生成文件应保持不变。该检查用于核对编译器兼容性提示和[能力参考](./API-Reference.md)是否同步。

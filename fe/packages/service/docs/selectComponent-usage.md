@@ -179,13 +179,11 @@ Page({
 
 2. **返回第一个匹配的组件**：如果有多个组件匹配选择器，只返回第一个匹配的组件。如需获取所有匹配的组件，请使用 `selectAllComponents`。
 
-3. **插件和小程序之间的限制**：默认情况下，小程序与插件之间、不同插件之间的组件无法通过 `selectComponent` 获取。
-
-4. **生命周期时机**：
+3. **生命周期时机**：
    - 在页面中，建议在 `onReady` 生命周期之后调用，以保证页面和组件都已经渲染完成
    - 在组件中，建议在 `ready` 生命周期之后调用，以保证子组件已经创建完成
 
-5. **性能考虑**：`selectComponent` 会遍历所有实例进行匹配，建议合理使用，避免在频繁调用的方法中使用。
+4. **调用成本**：`selectComponent` 会遍历当前运行时的组件实例并检查父子关系，不适合在高频循环中反复调用。
 
 ## 相关方法
 
@@ -260,5 +258,6 @@ Page({
 ## 示例项目
 
 完整的示例代码可以在测试文件中找到：
-- 组件测试：`__tests__/select-component.spec.js`
-- 页面测试：`__tests__/page-select-component.spec.js` 
+
+- [组件测试](../__tests__/select-component.spec.js)
+- [页面测试](../__tests__/page-select-component.spec.js)

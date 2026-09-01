@@ -11,14 +11,14 @@
 - **container**：容器 demo，消费 container-sdk，`index.html` 为演示入口（应用列表 + 手机壳）。
 - **jdimina**：webview sdk，为 webview 组件提供调用协议。
 - **render**：渲染层，负责 UI 展示与消息处理。
-- **server**：网络请求代理服务器, 提供给 web 端网络请求代理，用以解决跨域问题。
+- **server**：Web 端网络请求代理服务器，用于处理跨域请求。
 - **service**：逻辑层（JavaScript 运行时、worker 线程、消息通道）。
 
 ## 环境要求
 
 要求使用 Node.js 22.22.3+ 和 pnpm 7+。仓库已配置 Volta Node.js 22.22.3；如果使用 Volta，可直接在 `fe/` 目录执行 pnpm 命令。
 
-## 开始上手
+## 开始使用
  
 ### 安装说明
 
@@ -48,7 +48,7 @@ pnpm build
 # 预览生产构建
 pnpm preview
 
-# Web开发
+# Web 开发
 pnpm dev
 
 # 原生容器调试
@@ -61,7 +61,7 @@ pnpm test
 # 注意：需要 shared/jsapp 目录存在
 pnpm generate:app
 
-# 生成SDK包
+# 生成 SDK 包
 # 注意：需要先执行构建命令
 pnpm generate:sdk
 ```
@@ -94,7 +94,7 @@ pnpm compile -f
 
 将编译好的小程序打包并复制到仓库根目录的 `shared/jsapp` 中。
 
-**注意事项：**
+注意事项：
 - 运行前必须确保 `shared/jsapp` 目录已存在，否则命令将终止
 - 会自动递增小程序的版本号
 - 生成的资源包括 `config.json` 配置文件和 `[appId].zip` 代码包
@@ -103,7 +103,7 @@ pnpm compile -f
 
 将构建好的 SDK 打包并复制到仓库根目录的 `shared/jssdk` 中。
 
-**注意事项：**
+注意事项：
 - 运行前必须先执行构建命令 `pnpm build` 或 `pnpm build:dev`
 - 会自动递增 SDK 的版本号
 - 生成的资源包括 `config.json` 配置文件和 `main.zip` SDK 包
