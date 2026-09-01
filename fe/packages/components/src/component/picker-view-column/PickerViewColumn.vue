@@ -11,6 +11,7 @@ const pickerItemStyle = inject('pickerItemStyle', computed(() => ({})))
 const pickerEvent = inject('pickerEvent', undefined)
 const pickerImmediateChange = inject('pickerImmediateChange', computed(() => false))
 const getPickerHeight = inject('getPickerHeight', () => 0)
+const pickerHeight = inject('pickerHeight', ref(0))
 const getItemIndex = inject('getItemIndex', () => 0)
 const itemIndex = getItemIndex()
 const setPickerValue = inject('setPickerValue', undefined)
@@ -29,14 +30,18 @@ let valueChanged = false
 let dragDistance = 0
 
 // 可选项最大索引。挂载后以真实 DOM 子节点为准，兼容 Fragment 和条件渲染。
-let itemsSize = 0
+// 在此之前不能按 0 夹紧，否则会把非零受控值在挂载阶段覆盖掉。
+let itemsSize = -1
+
+function normalizeIndex(value) {
+	const nextIndex = Math.max(Number(value) || 0, 0)
+	return itemsSize < 0 ? nextIndex : Math.min(nextIndex, itemsSize)
+}
 
 // 选中项索引, 数字大于可选项长度时，选择最后一项
-const currentIndex = ref(Math.min(itemValue.value[itemIndex] || 0, itemsSize))
+const currentIndex = ref(normalizeIndex(itemValue.value[itemIndex]))
 let itemHeight = 0
 let pendingEndEvent
-
-setPickerValue?.(itemIndex, currentIndex.value)
 
 function startDrag(event) {
 	// 上一次拖动的结算还挂在滚动动画上时又按了下去：这里把 duration 归零会取消那次
@@ -115,7 +120,7 @@ function finishScroll() {
 }
 
 watch(() => itemValue.value[itemIndex], (value) => {
-	const nextIndex = Math.min(Math.max(Number(value) || 0, 0), itemsSize)
+	const nextIndex = normalizeIndex(value)
 	currentIndex.value = nextIndex
 	currentY.value = -nextIndex * itemHeight
 })
@@ -123,6 +128,7 @@ watch(() => itemValue.value[itemIndex], (value) => {
 function applyLayoutStyles() {
 	if (!indicatorRef.value || !maskRef.value || !contentRef.value || !itemHeight) return
 	const pickerHeight = getPickerHeight()
+	if (pickerHeight <= 0) return
 	const pTop = (pickerHeight - itemHeight) / 2
 	indicatorRef.value.style.cssText = pickerItemStyle.value.indicatorStyle || ''
 	indicatorRef.value.style.height = `${itemHeight}px`
@@ -136,6 +142,7 @@ function applyLayoutStyles() {
 }
 
 watch(pickerItemStyle, () => applyLayoutStyles(), { deep: true })
+watch(pickerHeight, () => applyLayoutStyles())
 
 onMounted(async () => {
 	await nextTick()
@@ -154,7 +161,7 @@ onMounted(async () => {
 
 	itemHeight = indicatorRef.value.offsetHeight || Number.parseFloat(nodeLineHeight.value) || 34
 	itemsSize = Math.max(contentRef.value.children.length - 1, 0)
-	currentIndex.value = Math.min(Math.max(Number(itemValue.value[itemIndex]) || 0, 0), itemsSize)
+	currentIndex.value = normalizeIndex(itemValue.value[itemIndex])
 	setPickerValue?.(itemIndex, currentIndex.value)
 	applyLayoutStyles()
 	duration.value = '0s'
