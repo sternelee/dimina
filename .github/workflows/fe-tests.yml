@@ -18,7 +18,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
       
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -26,22 +26,26 @@ jobs:
           node-version-file: fe/.nvmrc
           
       - name: Setup pnpm
-        uses: pnpm/setup@v1
+        uses: pnpm/setup@v2
         with:
           version: 12.2.0
+          package-json-file: fe/package.json
           install: false
           
       - name: Get pnpm store directory
         id: pnpm-cache
+        working-directory: ./fe
         shell: bash
         run: |
-          echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+          store_path="$(pnpm store path)"
+          test -n "$store_path"
+          echo "STORE_PATH=$store_path" >> "$GITHUB_OUTPUT"
           
       - name: Setup pnpm cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('fe/**/package.json', 'fe/pnpm-workspace.yaml') }}
           restore-keys: |
             ${{ runner.os }}-pnpm-store-
             
