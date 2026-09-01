@@ -26,10 +26,10 @@ jobs:
           node-version-file: fe/.nvmrc
           
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/setup@v1
         with:
-          version: 8
-          run_install: false
+          version: 12.2.0
+          install: false
           
       - name: Get pnpm store directory
         id: pnpm-cache

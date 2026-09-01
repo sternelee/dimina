@@ -122,7 +122,7 @@ body:
         设备：Pixel 8 / iPhone 16 / 模拟器 / 不适用
         OS/API：Android 15 (API 35)
         WebView/浏览器：Chrome 138
-        工具链：Node.js 22.22.3, pnpm 10.29.2, JDK 17
+        工具链：Node.js 22.22.3, pnpm 12.2.0, JDK 17
     validations:
       required: true
 

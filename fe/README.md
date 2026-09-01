@@ -16,7 +16,7 @@
 
 ## 环境要求
 
-要求使用 Node.js 22.22.3+ 和 pnpm 7+。仓库已配置 Volta Node.js 22.22.3；如果使用 Volta，可直接在 `fe/` 目录执行 pnpm 命令。
+要求使用 Node.js 22.22.3+ 和 pnpm 12.2.0+。仓库已配置 Volta Node.js 22.22.3，并通过 `packageManager` 固定 pnpm 12.2.0；如果使用 Volta，可直接在 `fe/` 目录执行 pnpm 命令。
 
 ## 开始使用
  

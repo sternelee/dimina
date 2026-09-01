@@ -3,9 +3,10 @@
   "description": "星河前端框架",
   "private": true,
   "author": "doslin",
+  "packageManager": "pnpm@12.2.0",
   "engines": {
     "node": ">=22.22.3",
-    "pnpm": ">=7"
+    "pnpm": ">=12.2.0"
   },
   "scripts": {
     "build:dev": "pnpm --filter container... build --mode development",
