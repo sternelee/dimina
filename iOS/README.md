@@ -25,7 +25,7 @@ SDK 的 `Package.swift` 使用 Swift tools 6.0，但源码当前以 Swift 5 lang
 https://github.com/didi/dimina.git
 ```
 
-版本可固定为 `1.6.1`；如果选择 `Up to Next Major Version`，发布前仍应检查实际解析到的版本。
+版本可固定为当前已发布版本；如果选择 `Up to Next Major Version`，发布前仍应检查实际解析到的版本。
 
 ### 步骤 2: 准备小程序资源
 
