@@ -11,7 +11,8 @@ function isVConsoleEvalWarning(warning) {
 }
 
 export default defineConfig(({ command, mode }) => {
-	const useContainerSdkSource = command === 'serve' && mode === 'development'
+	// CI 不预构建 container-sdk；测试 mock 也需要先解析到存在的源码入口。
+	const useContainerSdkSource = command === 'serve' && (mode === 'development' || mode === 'test')
 	const containerSdkSource = resolve(import.meta.dirname, '../container-sdk/src')
 	const containerSdkEntry = resolve(containerSdkSource, 'index.ts')
 	const pageFrameEntry = resolve(containerSdkSource, 'pages/pageFrame/pageFrame.ts')
