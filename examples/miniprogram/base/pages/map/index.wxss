@@ -1,0 +1,5 @@
+.map-page { padding: 24rpx; background: transparent; }
+.map { width: 100%; height: 600rpx; }
+.caption { margin: 16rpx; padding: 12rpx; background: #fff; color: #333; }
+.status { margin: 24rpx 0; word-break: break-all; }
+button { margin-top: 16rpx; }

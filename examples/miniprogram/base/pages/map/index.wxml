@@ -1,0 +1,13 @@
+<view class="map-page">
+  <map id="places" class="map" longitude="{{longitude}}" latitude="{{latitude}}"
+    scale="{{scale}}" markers="{{markers}}" show-scale
+    show-location="{{showLocation}}" bindmarkertap="onMarkerTap"
+    bindcallouttap="onMarkerTap" bindregionchange="onRegionChange"
+    bindrendersuccess="onMapReady" binderror="onMapError">
+    <cover-view class="caption">点击标记查看地点</cover-view>
+  </map>
+  <view class="status">{{status}}</view>
+  <button bindtap="showAll">显示全部地点</button>
+  <button bindtap="readCenter">读取地图中心</button>
+  <button bindtap="moveToLocation">回到我的位置</button>
+</view>
