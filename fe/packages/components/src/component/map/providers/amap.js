@@ -1,4 +1,6 @@
 import { loadAMap } from './amap-loader'
+import { arcPoints, validateMapCommand } from '../map-command'
+import { markerMotion } from '../marker-motion'
 
 function point(value) {
 	if (!value || typeof value.longitude !== 'number' || typeof value.latitude !== 'number'
@@ -28,7 +30,7 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 	const AMap = await loadAMap(config, element.ownerDocument)
 	if (signal.aborted) throw new Error('map destroyed')
 	const map = new AMap.Map(element, {
-		center: point(props), zoom: props.scale, viewMode: '2D',
+		center: point(props), zoom: props.scale, viewMode: '3D',
 		zooms: [props.minScale, props.maxScale],
 	})
 	let destroyed = false
@@ -36,6 +38,11 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 	let locationRevision = 0
 	let locationMarker
 	let scaleControl
+	let compassControl
+	let centerOffset = [0.5, 0.5]
+	const arcs = new Map()
+	const animations = new Map()
+	let animationFrame = 0
 	let rejectReady
 	const ready = new Promise((resolve, reject) => {
 		rejectReady = reject
@@ -54,6 +61,8 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 		destroyed = true
 		rejectReady(new Error('map destroyed'))
 		locationRevision++
+		if (animationFrame) cancelAnimationFrame(animationFrame)
+		for (const id of animations.keys()) cancelMotion(id, 'map destroyed')
 		listeners.splice(0).forEach(off => off())
 		for (const entry of markers.values()) entry.dispose()
 		markers.clear()
@@ -94,12 +103,70 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 				map.add(marker)
 				if (data.callout?.display === 'ALWAYS') callout?.open(map, marker.getPosition())
 			},
-			dispose() {
+				dispose() {
+					cancelMotion(data.id, 'marker removed')
 				marker.off('click', tap)
 				calloutNode?.removeEventListener('click', calloutTap)
 				callout?.close()
 				map.remove(marker)
 			},
+		}
+	}
+	function cancelMotion(id, reason) {
+		const motion = animations.get(id)
+		if (!motion) return
+		animations.delete(id)
+		motion.reject(new Error(reason))
+		if (!animations.size && animationFrame) { cancelAnimationFrame(animationFrame); animationFrame = 0 }
+	}
+	function animate(command, args) {
+		const marker = markers.get(args.markerId)?.marker
+		if (!marker) throw new Error('marker not found')
+		const path = command === 'translateMarker' ? [coordinate(marker.getPosition()), args.destination] : args.path
+		const separateRotation = command === 'translateMarker' && !args.moveWithRotate && !args.autoRotate
+		const sample = markerMotion(path, { angle: marker.getAngle(), rotate: args.rotate, autoRotate: args.autoRotate, separateRotation })
+		cancelMotion(args.markerId, 'marker animation replaced')
+		const duration = (args.duration ?? 1000) * (separateRotation ? 2 : 1)
+		let lastDistance = 0
+		const apply = progress => {
+			const value = sample(progress)
+			marker.setPosition([value.longitude, value.latitude]); marker.setAngle(value.rotate)
+			if (args.precision > 0 && (progress === 1 || value.distance - lastDistance >= args.precision)) {
+				lastDistance = value.distance
+				fire('interpolatepoint', { markerId: args.markerId, longitude: value.longitude, latitude: value.latitude,
+					animationStatus: progress === 1 ? 'complete' : 'interpolating' })
+			}
+			return value
+		}
+		if (!duration) { apply(1); return }
+		apply(0)
+		return new Promise((resolve, reject) => {
+			animations.set(args.markerId, { start: performance.now(), duration, apply, resolve, reject })
+			if (!animationFrame) animationFrame = requestAnimationFrame(tick)
+		})
+	}
+	function tick(now) {
+		animationFrame = 0
+		for (const [id, motion] of animations) {
+			try {
+				const progress = Math.min(1, (now - motion.start) / motion.duration)
+				motion.apply(progress)
+				if (progress === 1) { animations.delete(id); motion.resolve({}) }
+			}
+			catch (error) { animations.delete(id); motion.reject(error) }
+		}
+		if (animations.size) animationFrame = requestAnimationFrame(tick)
+	}
+	function logicalCenter() {
+		if (centerOffset[0] === 0.5 && centerOffset[1] === 0.5) return map.getCenter()
+		const size = map.getSize()
+		return map.containerToLngLat(new AMap.Pixel(size.getWidth() * centerOffset[0], size.getHeight() * centerOffset[1]))
+	}
+	function moveCenter(center) {
+		map.setCenter(center, true)
+		if (centerOffset[0] !== 0.5 || centerOffset[1] !== 0.5) {
+			const size = map.getSize()
+			map.panBy((centerOffset[0] - 0.5) * size.getWidth(), (centerOffset[1] - 0.5) * size.getHeight(), 0)
 		}
 	}
 	function addMarkers(data, clear = false) {
@@ -109,7 +176,7 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 			for (const item of data) {
 				if (item.id !== undefined && (!Number.isInteger(item.id) || next.has(item.id))) throw new Error('marker id must be a unique integer')
 				// Symbols never collide with an explicit numeric ID and are never exposed.
-				next.set(item.id === undefined ? Symbol() : item.id, makeMarker(item))
+				next.set(item.id === undefined ? Symbol('anonymous marker') : item.id, makeMarker(item))
 			}
 		}
 		catch (error) {
@@ -186,17 +253,26 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 	function update(next) {
 		assertActive()
 		const changed = key => JSON.stringify(next[key]) !== JSON.stringify(previous[key])
-		if (changed('longitude') || changed('latitude')) map.setCenter(point(next), true)
+		const centerChanged = changed('longitude') || changed('latitude')
+		const cameraChanged = centerChanged || changed('scale') || changed('rotate') || changed('skew')
+		const offsetActive = centerOffset[0] !== 0.5 || centerOffset[1] !== 0.5
+		const center = centerChanged ? point(next) : cameraChanged && offsetActive ? logicalCenter() : undefined
 		if (changed('scale')) map.setZoom(number(next.scale, 16), true)
 		if (changed('minScale') || changed('maxScale')) map.setZooms([number(next.minScale, 3), number(next.maxScale, 22)])
-		map.setStatus({ dragEnable: next.enableScroll, zoomEnable: next.enableZoom, rotateEnable: next.enableRotate, pitchEnable: false })
+		map.setStatus({ dragEnable: next.enableScroll, zoomEnable: next.enableZoom, rotateEnable: next.enableRotate, pitchEnable: next.enableOverlooking })
 		if (changed('rotate')) map.setRotation(number(next.rotate, 0), true)
+		if (changed('skew')) map.setPitch(number(next.skew, 0), true)
+		if (center) moveCenter(center)
 		if (changed('markers')) addMarkers(next.markers || [], true)
 		for (const type of ['polyline', 'polygons', 'circles']) if (changed(type)) replaceGeometry(type, next[type] || [])
 		if (changed('includePoints') && next.includePoints?.length) includePoints({ points: next.includePoints })
 		if (changed('showScale')) {
 			if (next.showScale) { scaleControl = new AMap.Scale(); map.addControl(scaleControl) }
 			else if (scaleControl) { map.removeControl(scaleControl); scaleControl = null }
+		}
+		if (changed('showCompass')) {
+			if (next.showCompass) { compassControl = new AMap.ControlBar({ showControlButton: false }); map.addControl(compassControl) }
+			else if (compassControl) { map.removeControl(compassControl); compassControl = null }
 		}
 		if (changed('showLocation')) {
 			const revision = ++locationRevision
@@ -208,8 +284,28 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 		previous = next
 	}
 	const methods = {
-		getCenterLocation: () => coordinate(map.getCenter()),
+		getCenterLocation: () => coordinate(logicalCenter()),
 		getScale: () => ({ scale: map.getZoom() }),
+		getRotate: () => ({ rotate: map.getRotation() }),
+		getSkew: () => ({ skew: map.getPitch() }),
+		toScreenLocation(data) {
+			const pixel = map.lngLatToContainer(point(data))
+			return { x: pixel.getX(), y: pixel.getY() }
+		},
+		fromScreenLocation: data => coordinate(map.containerToLngLat(new AMap.Pixel(data.x, data.y))),
+		setCenterOffset(data) { const center = logicalCenter(); centerOffset = [...data.offset]; moveCenter(center) },
+		setBoundary(data) { map.setLimitBounds(new AMap.Bounds(point(data.southwest), point(data.northeast))) },
+		translateMarker: data => animate('translateMarker', data),
+		moveAlong: data => animate('moveAlong', data),
+		addArc(data) {
+			const path = arcPoints(data).map(point)
+			const [strokeColor, strokeOpacity] = color(data.color || '#000000')
+			const arc = new AMap.Polyline({ path, strokeColor, strokeOpacity, strokeWeight: data.width ?? 5 })
+			map.add(arc)
+			if (arcs.has(data.id)) map.remove(arcs.get(data.id))
+			arcs.set(data.id, arc)
+		},
+		removeArc(data) { if (arcs.has(data.id)) { map.remove(arcs.get(data.id)); arcs.delete(data.id) } },
 		getRegion: () => ({ southwest: coordinate(map.getBounds().getSouthWest()), northeast: coordinate(map.getBounds().getNorthEast()) }),
 		addMarkers: data => addMarkers(data.markers, data.clear === true),
 		removeMarkers(data) {
@@ -219,7 +315,7 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 		includePoints,
 		async moveToLocation(data) {
 			const position = data.longitude === undefined && data.latitude === undefined ? await locate() : point(data)
-			map.setCenter(position, true)
+			moveCenter(position)
 		},
 	}
 	try {
@@ -229,7 +325,7 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 			on(map, event, source => fire('regionchange', {
 				type: event.endsWith('start') ? 'begin' : 'end',
 				causedBy: source?.originEvent ? (event.startsWith('zoom') ? 'scale' : 'drag') : 'update',
-				centerLocation: coordinate(map.getCenter()), scale: map.getZoom(),
+				centerLocation: coordinate(logicalCenter()), scale: map.getZoom(),
 			}))
 		}
 		update(props)
@@ -240,6 +336,7 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 		update, destroy,
 		invoke(command, params) {
 			assertActive()
+			validateMapCommand(command, params)
 			if (!Object.hasOwn(methods, command)) throw new Error(`AMap provider does not support ${command}`)
 			return methods[command](params)
 		},

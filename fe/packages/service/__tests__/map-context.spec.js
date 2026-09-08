@@ -48,3 +48,29 @@ it('uses an explicitly supplied component owner even when another page is curren
 		bridgeId: 'previous-page', params: { moduleId: 'previous-component' },
 	})
 })
+
+it.each(['getRotate', 'getSkew', 'toScreenLocation', 'fromScreenLocation', 'moveAlong', 'setBoundary'])('forwards %s to the owning map', (command) => {
+    createMapContext('places')[command]({ success: vi.fn(), x: 3 })
+    expect(message.send.mock.calls[0][0].body).toMatchObject({ bridgeId: 'page-a', params: { command, mapId: 'places', moduleId: 'module-a', x: 3 } })
+})
+it('keeps animationEnd on the service side and fires it once after successful movement', () => {
+    const animationEnd = vi.fn(); const success = vi.fn(); const complete = vi.fn()
+    createMapContext('places').translateMarker({ markerId: 0, animationEnd, success, complete })
+    const { params } = message.send.mock.lastCall[0].body
+    expect(params).not.toHaveProperty('animationEnd')
+    callback.invoke(params.success, { errMsg: 'translateMarker:ok' })
+    callback.invoke(params.success, { errMsg: 'translateMarker:ok' })
+    callback.invoke(params.complete, {})
+    expect(success).toHaveBeenCalledTimes(1)
+    expect(animationEnd).toHaveBeenCalledTimes(1)
+    expect(complete).toHaveBeenCalledTimes(1)
+})
+it('does not call animationEnd after cancellation', () => {
+    const animationEnd = vi.fn(); const fail = vi.fn()
+    createMapContext('places').translateMarker({ markerId: 0, animationEnd, fail })
+    const { params } = message.send.mock.lastCall[0].body
+    callback.invoke(params.fail, { errMsg: 'translateMarker:fail cancelled' })
+    callback.invoke(params.success, {})
+    expect(fail).toHaveBeenCalledTimes(1)
+    expect(animationEnd).not.toHaveBeenCalled()
+})

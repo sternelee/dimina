@@ -82,3 +82,61 @@ describe('map provider lifecycle', () => {
 		session.destroy()
 	})
 })
+
+it('allows updates and removal while a long marker animation is running', async () => {
+    vi.useFakeTimers()
+    const { session, adapter } = fixture()
+    await session.ready
+    const motion = deferred()
+    adapter.invoke.mockImplementation(command => command === 'moveAlong' ? motion.promise : {})
+    const pending = session.invoke('moveAlong', { markerId: 0, path: [{ longitude: 0, latitude: 0 }, { longitude: 1, latitude: 1 }], duration: 30000 })
+    await session.invoke('getScale', {})
+    await session.update({ scale: 18 })
+    await session.invoke('removeMarkers', { markerIds: [0] })
+    expect(adapter.invoke.mock.calls.map(([command]) => command)).toEqual(['moveAlong', 'getScale', 'removeMarkers'])
+    await vi.advanceTimersByTimeAsync(16000)
+    expect(adapter.destroy).not.toHaveBeenCalled()
+    motion.resolve({}); await pending
+    session.destroy()
+})
+it('rejects an in-flight animation on destruction even if its provider never settles', async () => {
+    const { session, adapter } = fixture()
+    await session.ready
+    adapter.invoke.mockReturnValue(new Promise(() => {}))
+    const pending = session.invoke('translateMarker', { markerId: 0, destination: { longitude: 1, latitude: 2 }, duration: 30000 })
+    const rejected = expect(pending).rejects.toThrow('destroyed')
+    await Promise.resolve(); await Promise.resolve()
+    session.destroy(); await rejected
+})
+
+it('removes per-operation abort listeners after completed commands', async () => {
+	const add = vi.spyOn(AbortSignal.prototype, 'addEventListener')
+	const remove = vi.spyOn(AbortSignal.prototype, 'removeEventListener')
+	try {
+		const { session } = fixture()
+		await session.ready
+		for (let i = 0; i < 20; i++) await session.invoke('getScale', {})
+		const listeners = add.mock.calls.filter(([name]) => name === 'abort').map(([, listener]) => listener)
+		for (const listener of listeners) expect(remove).toHaveBeenCalledWith('abort', listener)
+		session.destroy()
+	} finally { add.mockRestore(); remove.mockRestore() }
+})
+
+it('starts later commands before animation completion without retaining expired callbacks', async () => {
+	vi.useFakeTimers()
+	const { session, adapter } = fixture({ timeout: 20 })
+	await session.ready
+	const motion = deferred()
+	adapter.invoke.mockImplementation(command => command === 'moveAlong' ? motion.promise : {})
+	const pending = session.invoke('moveAlong', { markerId: 0, path: [{ longitude: 0, latitude: 0 }, { longitude: 1, latitude: 1 }], duration: 2000 })
+	pending.catch(() => {})
+	const read = session.invoke('getScale', {})
+	read.catch(() => {})
+	try {
+		await vi.advanceTimersByTimeAsync(0)
+		expect(adapter.invoke.mock.calls.map(([command]) => command)).toEqual(['moveAlong', 'getScale'])
+		await vi.advanceTimersByTimeAsync(21)
+		expect(adapter.destroy).not.toHaveBeenCalled()
+		motion.resolve({}); await pending; await read
+	} finally { motion.resolve({}); session.destroy() }
+})

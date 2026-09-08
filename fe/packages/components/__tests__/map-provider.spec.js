@@ -23,7 +23,15 @@ function sdk() {
 			this.setZoomAndCenter = vi.fn()
 			this.setCenter = vi.fn(center => { this.center = center })
 			this.setZoom = vi.fn(zoom => { this.zoom = zoom })
-			this.setZooms = vi.fn(); this.setStatus = vi.fn(); this.setRotation = vi.fn()
+			this.rotation = 0; this.pitch = 0
+            this.setZooms = vi.fn(); this.setStatus = vi.fn(); this.setRotation = vi.fn(value => { this.rotation = value })
+            this.setPitch = vi.fn(value => { this.pitch = value })
+            this.getRotation = () => this.rotation; this.getPitch = () => this.pitch
+            this.getSize = () => ({ getWidth: () => 400, getHeight: () => 200 })
+            this.panBy = vi.fn()
+            this.setLimitBounds = vi.fn()
+            this.lngLatToContainer = vi.fn(([x, y]) => ({ getX: () => x * 2, getY: () => y * 3 }))
+            this.containerToLngLat = vi.fn(pixel => coordinate([pixel.x / 2, pixel.y / 3]))
 			this.addControl = vi.fn(); this.removeControl = vi.fn()
 			maps.push(this)
 			queueMicrotask(() => this.emit('complete'))
@@ -32,7 +40,12 @@ function sdk() {
 		getZoom() { return this.zoom }
 	}
 	class Overlay extends EventTarget {
-		constructor(options) { super(); this.options = options; this.setMap = vi.fn() }
+		constructor(options) {
+            super(); this.options = options; this.setMap = vi.fn()
+            this.setPosition = vi.fn(position => { this.options.position = position })
+            this.setAngle = vi.fn(angle => { this.options.angle = angle })
+        }
+        getAngle() { return this.options.angle || 0 }
 		getPosition() { return coordinate(this.options.position) }
 	}
 	class InfoWindow {
@@ -41,7 +54,7 @@ function sdk() {
 	class Bounds {
 		constructor(southwest, northeast) { this.southwest = southwest; this.northeast = northeast }
 	}
-	return { maps, windows, AMap: { Map: MapSDK, Bounds, Marker: Overlay, Circle: Overlay, CircleMarker: Overlay, Polyline: Overlay, Polygon: Overlay, InfoWindow, Scale: class {} } }
+	return { maps, windows, AMap: { Map: MapSDK, Bounds, Pixel: class { constructor(x, y) { this.x = x; this.y = y } }, ControlBar: class {}, Marker: Overlay, Circle: Overlay, CircleMarker: Overlay, Polyline: Overlay, Polygon: Overlay, InfoWindow, Scale: class {} } }
 }
 const base = { longitude: 116.4, latitude: 39.9, scale: 16, minScale: 3, maxScale: 22, enableScroll: true, enableZoom: true, markers: [], polyline: [], circles: [], polygons: [], includePoints: [], showLocation: false, showScale: false }
 const fixtures = []
@@ -163,7 +176,7 @@ it('emits anonymous callout taps without inventing an ID and disposes them', asy
 	expect(emit).not.toHaveBeenCalled()
 	expect(windows[0].close).toHaveBeenCalled()
 })
-it.each([null, '1', 1.5, NaN])('rejects an explicitly invalid ID %s without clearing anonymous markers', async (id) => {
+it.each([null, '1', 1.5, Number.NaN])('rejects an explicitly invalid ID %s without clearing anonymous markers', async (id) => {
 	const { adapter, map } = await fixture({ markers: [{ longitude: 1, latitude: 1 }] })
 	const original = map.add.mock.calls.find(([item]) => !Array.isArray(item))[0]
 	map.remove.mockClear()
@@ -205,7 +218,7 @@ it('ignores a late location result after show-location is disabled', async () =>
 it('rejects unsupported commands and prevents late location mutation after teardown', async () => {
 	let resolve
 	const { adapter, map, controller } = await fixture({}, () => new Promise(r => { resolve = r }))
-	expect(() => adapter.invoke('addArc', {})).toThrow('does not support')
+	expect(() => adapter.invoke('unknownCommand', {})).toThrow('does not support')
 	const pending = adapter.invoke('moveToLocation', {})
 	controller.abort(); adapter.destroy()
 	map.setCenter.mockClear()
@@ -246,4 +259,81 @@ it('maps RGBA geometry colors to SDK color and opacity fields', async () => {
 	const circle = map.add.mock.calls.flatMap(([value]) => Array.isArray(value) ? value : [value]).find(value => value.options.radius === 100)
 	expect(circle.options).toMatchObject({ strokeColor: '#ff0000', fillColor: '#000000', fillOpacity: 0 })
 	expect(circle.options.strokeOpacity).toBeCloseTo(128 / 255)
+})
+
+it('reads live camera angles, converts local coordinates and sets boundaries', async () => {
+    const { adapter, map } = await fixture({ rotate: 45, skew: 30 })
+    expect(adapter.invoke('getRotate', {})).toEqual({ rotate: 45 })
+    expect(adapter.invoke('getSkew', {})).toEqual({ skew: 30 })
+    expect(adapter.invoke('toScreenLocation', { longitude: 12, latitude: 30 })).toEqual({ x: 24, y: 90 })
+    expect(adapter.invoke('fromScreenLocation', { x: 24, y: 90 })).toEqual({ longitude: 12, latitude: 30 })
+    map.setLimitBounds.mockReturnValue(map)
+    expect(adapter.invoke('setBoundary', { southwest: { longitude: 1, latitude: 2 }, northeast: { longitude: 3, latitude: 4 } })).toBeUndefined()
+    expect(map.setLimitBounds).toHaveBeenCalledWith(expect.objectContaining({ southwest: [1, 2], northeast: [3, 4] }))
+    expect(() => adapter.invoke('setBoundary', { southwest: { longitude: 4, latitude: 2 }, northeast: { longitude: 3, latitude: 4 } })).toThrow('boundary')
+})
+it('applies normalized center offsets to subsequent explicit moves and rejects invalid offsets', async () => {
+    const { adapter, map } = await fixture()
+    adapter.invoke('setCenterOffset', { offset: [0.25, 0.75] })
+    expect(map.panBy).toHaveBeenLastCalledWith(-100, 50, 0)
+    await adapter.invoke('moveToLocation', { longitude: 1, latitude: 2 })
+    expect(map.panBy).toHaveBeenCalledTimes(2)
+    expect(() => adapter.invoke('setCenterOffset', { offset: [1, 0] })).toThrow('offset')
+})
+it('replaces and removes arcs independently from declarative polylines', async () => {
+    const { adapter, map } = await fixture()
+    const args = { id: 0, start: { longitude: 1, latitude: 2 }, end: { longitude: 3, latitude: 2 }, angle: 60, color: '#ff000080', width: 4 }
+    adapter.invoke('addArc', args)
+    const first = map.add.mock.lastCall[0]
+    expect(first.options.path[0]).toEqual([1, 2])
+    expect(first.options.path.at(-1)).toEqual([3, 2])
+    expect(first.options.strokeOpacity).toBeCloseTo(128 / 255)
+    adapter.invoke('addArc', args)
+    const second = map.add.mock.lastCall[0]
+    expect(map.remove).toHaveBeenCalledWith(first)
+    adapter.update({ ...base, polyline: [{ points: [{ longitude: 1, latitude: 2 }, { longitude: 3, latitude: 4 }] }] })
+    expect(map.remove).not.toHaveBeenCalledWith(second)
+    adapter.invoke('removeArc', { id: 0 })
+    expect(map.remove).toHaveBeenCalledWith(second)
+})
+it('runs a distance-weighted route locally, emits interpolation and finishes at its last point', async () => {
+    const { adapter, map, emit } = await fixture({ markers: [{ id: 0, longitude: 0, latitude: 0 }] })
+    vi.useFakeTimers()
+    const marker = map.add.mock.calls.find(([value]) => !Array.isArray(value))[0]
+    const pending = adapter.invoke('moveAlong', { markerId: 0, path: [{ longitude: 0, latitude: 0 }, { longitude: 1, latitude: 0 }, { longitude: 4, latitude: 0 }], duration: 1000, autoRotate: true, precision: 1000 })
+    await vi.advanceTimersByTimeAsync(512)
+    expect(marker.getPosition().getLng()).toBeCloseTo(2.048, 2)
+    expect(marker.getAngle()).toBeCloseTo(90)
+    expect(emit).toHaveBeenCalledWith('interpolatepoint', expect.objectContaining({ markerId: 0 }))
+    await vi.advanceTimersByTimeAsync(520)
+    await expect(pending).resolves.toEqual({})
+    expect(marker.getPosition().getLng()).toBe(4)
+    expect(emit).toHaveBeenLastCalledWith('interpolatepoint', { markerId: 0, longitude: 4, latitude: 0, animationStatus: 'complete' })
+})
+it('cancels replaced, removed and destroyed marker animations without late mutation', async () => {
+    const { adapter } = await fixture({ markers: [{ id: 0, longitude: 0, latitude: 0 }] })
+    vi.useFakeTimers()
+    const args = { markerId: 0, destination: { longitude: 1, latitude: 1 }, duration: 30000, autoRotate: true }
+    const first = adapter.invoke('translateMarker', args)
+    const rejected = expect(first).rejects.toThrow('replaced')
+    const second = adapter.invoke('translateMarker', args)
+    await rejected
+    const removed = expect(second).rejects.toThrow('removed')
+    adapter.invoke('removeMarkers', { markerIds: [0] })
+    await removed
+    adapter.invoke('addMarkers', { markers: [{ id: 0, longitude: 0, latitude: 0 }] })
+    const third = adapter.invoke('translateMarker', args)
+    const destroyed = expect(third).rejects.toThrow('destroyed')
+    adapter.destroy()
+    await destroyed
+    expect(vi.getTimerCount()).toBe(0)
+})
+it('rejects malformed and missing marker moves and applies zero-duration endpoints', async () => {
+    const { adapter, map } = await fixture({ markers: [{ id: 0, longitude: 0, latitude: 0 }] })
+    expect(() => adapter.invoke('moveAlong', { markerId: 0, path: [], duration: 1 })).toThrow('path')
+    expect(() => adapter.invoke('translateMarker', { markerId: 2, destination: { longitude: 1, latitude: 1 } })).toThrow('not found')
+    adapter.invoke('translateMarker', { markerId: 0, destination: { longitude: 1, latitude: 1 }, rotate: 180, duration: 0, moveWithRotate: true })
+    const marker = map.add.mock.calls.find(([value]) => !Array.isArray(value))[0]
+    expect(marker.getPosition().getLng()).toBe(1)
+    expect(Math.abs(marker.getAngle())).toBe(180)
 })

@@ -122,3 +122,16 @@ describe('Android native map composition', () => {
 		expect(sent.filter(message => message.body.name === 'mapUnmount')).toHaveLength(1)
 	})
 })
+
+it('sends one sampled arc command with the local CSS viewport and preserves public arguments', async () => {
+	const adapter = await mount()
+	const args = { id: 0, start: { longitude: 1, latitude: 2 }, end: { longitude: 3, latitude: 2 }, angle: 45 }
+	const pending = adapter.invoke('addArc', args)
+	const message = sent.at(-1)
+	expect(message.body.params.args).toMatchObject({ ...args, viewport: { width: 300, height: 200 } })
+	expect(message.body.params.args.arcPoints[0]).toEqual(args.start)
+	expect(message.body.params.args.arcPoints.at(-1)).toEqual(args.end)
+	expect(args).not.toHaveProperty('arcPoints')
+	reply(message)
+	await pending
+})

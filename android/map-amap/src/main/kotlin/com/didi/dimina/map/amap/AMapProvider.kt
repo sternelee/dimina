@@ -1,5 +1,11 @@
 package com.didi.dimina.map.amap
 
+import android.animation.Animator
+import android.animation.AnimatorListenerAdapter
+import android.animation.ValueAnimator
+import android.graphics.Point
+import android.view.animation.LinearInterpolator
+import com.amap.api.maps.model.Polyline
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
@@ -46,6 +52,9 @@ private class AMapInstance(private val activity: Activity, private val events: M
     private val markers = mutableMapOf<Int, Marker>()
     private val anonymousMarkers = mutableListOf<Marker>()
     private var overlays = mutableMapOf<String, List<() -> Unit>>()
+    private val arcs = mutableMapOf<Int, Polyline>()
+    private val animations = mutableMapOf<Int, ValueAnimator>()
+    private var centerOffset = doubleArrayOf(0.5, 0.5)
     private var destroyed = false
     private var resumed = false
     private var wantsLocation = false
@@ -55,6 +64,9 @@ private class AMapInstance(private val activity: Activity, private val events: M
     init {
         mapView.onCreate(Bundle())
         map = mapView.map
+        mapView.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
+            map.setPointToCenter((mapView.width * centerOffset[0]).toInt(), (mapView.height * centerOffset[1]).toInt())
+        }
         map.myLocationStyle = MyLocationStyle().myLocationType(MyLocationStyle.LOCATION_TYPE_SHOW)
         map.setOnMyLocationChangeListener { location ->
             if (!destroyed && location != null) {
@@ -134,6 +146,11 @@ private class AMapInstance(private val activity: Activity, private val events: M
     }
 
     override fun invoke(command: String, args: JSONObject, result: (Result<JSONObject>) -> Unit) {
+        if (command == "translateMarker" || command == "moveAlong") {
+            try { check(!destroyed) { "Map destroyed" }; animateMarker(command, args, result) }
+            catch (error: Exception) { result(Result.failure(error)) }
+            return
+        }
         if (command == "moveToLocation" && !args.has("longitude") && !args.has("latitude")) {
             ensureLocationPermission { allowed ->
                 if (destroyed) return@ensureLocationPermission
@@ -150,6 +167,38 @@ private class AMapInstance(private val activity: Activity, private val events: M
             check(!destroyed) { "Map destroyed" }
             when (command) {
                 "getCenterLocation" -> coordinate(map.cameraPosition.target)
+                "getRotate" -> JSONObject().put("rotate", map.cameraPosition.bearing)
+                "getSkew" -> JSONObject().put("skew", map.cameraPosition.tilt)
+                "setCenterOffset" -> {
+                    val offset = args.getJSONArray("offset")
+                    require(offset.length() == 2) { "Offset requires two values" }
+                    val values = DoubleArray(2) { offset.getDouble(it) }
+                    require(values.all { it.isFinite() && it in 0.25..0.75 }) { "Invalid offset" }
+                    centerOffset = values
+                    map.setPointToCenter((mapView.width * values[0]).toInt(), (mapView.height * values[1]).toInt()); JSONObject()
+                }
+                "toScreenLocation" -> {
+                    val pixel = map.projection.toScreenLocation(point(args))
+                    val viewport = args.getJSONObject("viewport")
+                    check(mapView.width > 0 && mapView.height > 0) { "Map has no size" }
+                    JSONObject().put("x", pixel.x * viewport.getDouble("width") / mapView.width)
+                        .put("y", pixel.y * viewport.getDouble("height") / mapView.height)
+                }
+                "fromScreenLocation" -> {
+                    val viewport = args.getJSONObject("viewport")
+                    require(viewport.getDouble("width") > 0 && viewport.getDouble("height") > 0) { "Map has no size" }
+                    coordinate(map.projection.fromScreenLocation(Point(
+                        (args.getDouble("x") * mapView.width / viewport.getDouble("width")).toInt(),
+                        (args.getDouble("y") * mapView.height / viewport.getDouble("height")).toInt())))
+                }
+                "setBoundary" -> { map.setMapStatusLimits(LatLngBounds(point(args.getJSONObject("southwest")), point(args.getJSONObject("northeast")))); JSONObject() }
+                "addArc" -> {
+                    val id = args.getInt("id")
+                    val overlay = map.addPolyline(PolylineOptions().addAll(points(args.getJSONArray("arcPoints")))
+                        .color(color(args.optString("color", "#000000"))).width((args.optDouble("width", 5.0) * activity.resources.displayMetrics.density).toFloat()))
+                    arcs.put(id, overlay)?.remove(); JSONObject()
+                }
+                "removeArc" -> { arcs.remove(args.getInt("id"))?.remove(); JSONObject() }
                 "getScale" -> JSONObject().put("scale", map.cameraPosition.zoom)
                 "getRegion" -> map.projection.visibleRegion.latLngBounds.let {
                     JSONObject().put("southwest", coordinate(it.southwest)).put("northeast", coordinate(it.northeast))
@@ -157,7 +206,7 @@ private class AMapInstance(private val activity: Activity, private val events: M
                 "addMarkers" -> { addMarkers(args.getJSONArray("markers"), args.optBoolean("clear")); JSONObject() }
                 "removeMarkers" -> {
                     val ids = args.getJSONArray("markerIds")
-                    for (i in 0 until ids.length()) markers.remove(ids.getInt(i))?.remove()
+                    for (i in 0 until ids.length()) { val id = ids.getInt(i); animations.remove(id)?.cancel(); markers.remove(id)?.remove() }
                     JSONObject()
                 }
                 "includePoints" -> { fit(args.getJSONArray("points"), args.optJSONArray("padding") ?: JSONArray()); JSONObject() }
@@ -173,6 +222,45 @@ private class AMapInstance(private val activity: Activity, private val events: M
             }
         })
     }
+    private fun animateMarker(command: String, args: JSONObject, result: (Result<JSONObject>) -> Unit) {
+        val id = args.getInt("markerId")
+        val marker = markers[id] ?: error("Marker not found")
+        val route = if (command == "translateMarker") listOf(marker.position, point(args.getJSONObject("destination"))) else points(args.getJSONArray("path"))
+        val separate = command == "translateMarker" && !args.optBoolean("moveWithRotate") && !args.optBoolean("autoRotate")
+        val duration = args.optDouble("duration", 1000.0) * if (separate) 2 else 1
+        require(duration.isFinite() && duration >= 0 && duration < Long.MAX_VALUE) { "Invalid duration" }
+        val motion = MarkerMotion(route.map { MotionPoint(it.longitude, it.latitude) }, -marker.rotateAngle.toDouble(),
+            args.optDouble("rotate", -marker.rotateAngle.toDouble()), args.optBoolean("autoRotate"), separate)
+        animations.remove(id)?.cancel()
+        var lastDistance = 0.0
+        var emittedComplete = false
+        val precision = args.optDouble("precision", 0.0)
+        fun apply(progress: Double) {
+            val sample = motion.sample(progress)
+            marker.position = LatLng(sample.point.latitude, sample.point.longitude)
+            // AMap Android angles are counter-clockwise; mini-program angles are clockwise.
+            marker.rotateAngle = -sample.rotate.toFloat()
+            if (precision > 0 && !emittedComplete && (progress == 1.0 || sample.distance - lastDistance >= precision)) {
+                emittedComplete = progress == 1.0
+                lastDistance = sample.distance
+                events.event("interpolatepoint", coordinate(marker.position).put("markerId", id).put("animationStatus", if (progress == 1.0) "complete" else "interpolating"))
+            }
+        }
+        if (duration == 0.0) { apply(1.0); result(Result.success(JSONObject())); return }
+        val animator = ValueAnimator.ofFloat(0f, 1f)
+        animator.duration = duration.toLong(); animator.interpolator = LinearInterpolator()
+        animator.addUpdateListener { apply((it.animatedValue as Float).toDouble()) }
+        animator.addListener(object : AnimatorListenerAdapter() {
+            private var cancelled = false
+            override fun onAnimationCancel(animation: Animator) { cancelled = true }
+            override fun onAnimationEnd(animation: Animator) {
+                if (animations[id] === animator) animations.remove(id)
+                if (cancelled) result(Result.failure(IllegalStateException("Marker animation cancelled")))
+                else { apply(1.0); result(Result.success(JSONObject())) }
+            }
+        })
+        animations[id] = animator; apply(0.0); animator.start()
+    }
     private fun addMarkers(data: JSONArray, clear: Boolean) {
         val options = mutableMapOf<Int, MarkerOptions>()
         val anonymousOptions = mutableListOf<MarkerOptions>()
@@ -180,7 +268,7 @@ private class AMapInstance(private val activity: Activity, private val events: M
             val item = data.getJSONObject(i)
             val option = MarkerOptions().position(point(item)).title(item.optString("title"))
                 .snippet(item.optJSONObject("callout")?.optString("content"))
-                .rotateAngle(item.optDouble("rotate", 0.0).toFloat()).zIndex(item.optDouble("zIndex", 0.0).toFloat())
+                .rotateAngle(-item.optDouble("rotate", 0.0).toFloat()).zIndex(item.optDouble("zIndex", 0.0).toFloat())
             if (item.has("id")) {
                 val rawId = item.getDouble("id")
                 require(rawId.isFinite() && rawId == rawId.toInt().toDouble()) { "Marker id must be an integer" }
@@ -192,10 +280,11 @@ private class AMapInstance(private val activity: Activity, private val events: M
             }
         }
         if (clear) {
+            animations.values.toList().forEach { it.cancel() }; animations.clear()
             markers.values.forEach { it.remove() }; markers.clear()
             anonymousMarkers.forEach { it.remove() }; anonymousMarkers.clear()
         }
-        options.forEach { (id, option) -> markers.remove(id)?.remove(); markers[id] = map.addMarker(option) }
+        options.forEach { (id, option) -> animations.remove(id)?.cancel(); markers.remove(id)?.remove(); markers[id] = map.addMarker(option) }
         anonymousOptions.forEach { anonymousMarkers.add(map.addMarker(it)) }
     }
     private fun markerEvent(type: String, marker: Marker) {
@@ -251,10 +340,11 @@ private class AMapInstance(private val activity: Activity, private val events: M
     override fun pause() {
         if (destroyed) return
         resumed = false
+        animations.values.toList().forEach { it.cancel() }
         map.isMyLocationEnabled = false
         mapView.onPause()
     }
-    override fun destroy() { if (!destroyed) { destroyed = true; pendingLocations.clear(); map.isMyLocationEnabled = false; mapView.onPause(); mapView.onDestroy(); markers.clear(); anonymousMarkers.clear() } }
+    override fun destroy() { if (!destroyed) { destroyed = true; animations.values.toList().forEach { it.cancel() }; animations.clear(); arcs.clear(); pendingLocations.clear(); map.isMyLocationEnabled = false; mapView.onPause(); mapView.onDestroy(); markers.clear(); anonymousMarkers.clear() } }
 }
 private fun coordinate(point: LatLng) = JSONObject().put("longitude", point.longitude).put("latitude", point.latitude)
 private fun point(value: JSONObject): LatLng {

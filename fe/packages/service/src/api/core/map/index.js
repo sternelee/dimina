@@ -46,8 +46,12 @@ class MapContext {
 		return this.invoke('moveToLocation', data)
 	}
 
-	translateMarker(data) {
-		return this.invoke('translateMarker', data)
+	translateMarker(data = {}) {
+		const { animationEnd, success, ...params } = data
+		if (typeof animationEnd !== 'function') return this.invoke('translateMarker', data)
+		return this.invoke('translateMarker', { ...params, success: (result) => {
+			try { success?.(result) } finally { animationEnd() }
+		} })
 	}
 
 	addArc(data) {
@@ -56,6 +60,30 @@ class MapContext {
 
 	removeArc(data) {
 		return this.invoke('removeArc', data)
+	}
+
+	getRotate(data) {
+		return this.invoke('getRotate', data)
+	}
+
+	getSkew(data) {
+		return this.invoke('getSkew', data)
+	}
+
+	toScreenLocation(data) {
+		return this.invoke('toScreenLocation', data)
+	}
+
+	fromScreenLocation(data) {
+		return this.invoke('fromScreenLocation', data)
+	}
+
+	moveAlong(data) {
+		return this.invoke('moveAlong', data)
+	}
+
+	setBoundary(data) {
+		return this.invoke('setBoundary', data)
 	}
 
 	invoke(apiName, data = {}) {

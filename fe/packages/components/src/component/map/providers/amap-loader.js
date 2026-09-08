@@ -15,7 +15,7 @@ export function loadAMap(config, doc = document) {
 		? { serviceHost: config.serviceHost }
 		: { securityJsCode: config.securityJsCode }
 	const script = doc.createElement('script')
-	const query = new URLSearchParams({ v: '2.0', key: config.key, plugin: 'AMap.Scale' })
+	const query = new URLSearchParams({ v: '2.0', key: config.key, plugin: 'AMap.Scale,AMap.ControlBar' })
 	script.src = `https://webapi.amap.com/maps?${query}`
 	script.async = true
 	const promise = new Promise((resolve, reject) => {

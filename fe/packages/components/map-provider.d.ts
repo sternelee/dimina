@@ -10,7 +10,10 @@ export interface MapProperties extends MapCoordinate {
 export interface MapAdapter {
 	/** Apply a complete property snapshot; unchanged fields must preserve imperative state. */
 	update(props: MapProperties): void | Promise<void>
-	/** Return serializable data, or throw/reject for failure and unsupported commands. */
+	/** Return serializable data, or throw/reject for failure and unsupported commands.
+	 * Marker animation promises settle on completion; replacement/removal must reject
+	 * the previous animation. Other commands may run while that promise is pending.
+	 */
 	invoke(command: string, params: Record<string, unknown>): unknown | Promise<unknown>
 	/** Release all SDK objects/listeners. Must be safe after abort and when called again. */
 	destroy(): void
@@ -38,6 +41,6 @@ export interface MapConfig {
 	/** Called before loading any third-party script or creating a provider. */
 	authorize(): boolean | Promise<boolean>
 	getLocation?: MapProviderContext['getLocation']
-	/** Initialization/operation deadline in milliseconds; default 15000. */
+	/** Initialization/operation deadline in milliseconds; default 15000. Marker animation duration is added to its deadline. */
 	timeout?: number
 }

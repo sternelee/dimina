@@ -2,6 +2,7 @@ import { isAndroid, isHarmonyOS, uuid } from '@dimina/common'
 import { ensureNativeLayerTouchBridge } from '@/common/nativeLayerTouchBridge'
 import { acquireNativePageBackground } from '@/common/nativePageBackground'
 import { nativeMapLayout } from './native-layout'
+import { arcPoints } from '../map-command'
 
 // This adapter transports the common map contract only. Vendor SDKs live in the native host.
 export async function createNativeMap({ element, props, emit, signal, bridgeId }) {
@@ -93,7 +94,11 @@ export async function createNativeMap({ element, props, emit, signal, bridgeId }
 	catch (error) { destroy(); throw error }
 	return {
 		update: next => request('mapUpdate', { props: next, ...layout() }),
-		invoke: (command, params) => request('mapContext', { command, args: params }),
+		invoke: (command, params) => request('mapContext', { command, args: {
+			...params,
+			...(command === 'addArc' ? { arcPoints: arcPoints(params) } : {}),
+			viewport: { width: element.clientWidth, height: element.clientHeight },
+		} }),
 		destroy,
 	}
 }

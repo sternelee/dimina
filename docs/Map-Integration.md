@@ -167,18 +167,40 @@ Web 自定义 provider 的类型从 `@dimina/components/map-provider` 导入；�
 | 中心/缩放/拖动 | 支持 | 支持 | 支持 | 支持 |
 | markers 增删改、默认图钉、title/文本气泡 | 支持 | 支持 | 支持 | 支持 |
 | 自定义 iconPath | 未实现 | 未实现 | 未实现 | 完整 URL；不解析包内相对路径 |
-| polyline / circles / polygons | 基础样式 | 未实现 | 未实现 | 基础样式 |
+| polyline / circles / polygons | 基础样式 | 基础样式 | 基础样式 | 基础样式 |
 | 定位点/移动到当前位置 | 高德原生定位 | 高德原生定位 | 高德原生定位 | 宿主一次定位 |
 | show-scale | 支持 | 支持 | 支持 | 支持 |
-| show-compass | 支持 | 支持 | 支持 | 未实现 |
-| min/max-scale、rotate/skew | 支持 | 支持 | 缩放范围与角度属性未实现 | 缩放范围/rotate，二维 |
+| show-compass | 支持 | 支持 | 支持 | 支持 |
+| min/max-scale、rotate/skew | 支持 | 支持 | 支持 | 支持，使用 3D 视图 |
 | includePoints padding | 最大边距的对称留白 | 四边 | 最大边距的对称留白 | 四边 |
 
-四端实现 `getCenterLocation`、`getScale`、`getRegion`、`moveToLocation`、`includePoints`、`addMarkers`、`removeMarkers`。结果分别为 `{longitude,latitude}`、`{scale}`、`{southwest,northeast}` 或空对象。padding 顺序为 `[top,right,bottom,left]`。坐标为 GCJ-02。
+四端高德适配器实现以下 17 个 MapContext 方法。坐标为 GCJ-02，屏幕坐标以地图左上角为原点，单位为 CSS px；桥接层按地图实际尺寸换算原生像素。
+
+| 方法 | 参数 / 结果 |
+| --- | --- |
+| getCenterLocation / getScale / getRegion | 返回 `{longitude,latitude}` / `{scale}` / `{southwest,northeast}` |
+| getRotate / getSkew | 返回 `{rotate}` / `{skew}`，单位为度 |
+| toScreenLocation / fromScreenLocation | `{longitude,latitude}` → `{x,y}` / `{x,y}` → `{longitude,latitude}` |
+| moveToLocation | 指定经纬度，或通过已授权的定位能力获取当前位置 |
+| includePoints | `points`、`padding`；padding 顺序为 `[top,right,bottom,left]` |
+| addMarkers / removeMarkers | `markers, clear` / `markerIds` |
+| setCenterOffset | `offset: [x,y]`，每项范围为 0.25～0.75，默认 `[0.5,0.5]` |
+| setBoundary | `southwest, northeast`，限制可移动范围；不接受跨日界线的边界 |
+| translateMarker | `markerId, destination, duration, rotate, autoRotate, moveWithRotate`；支持 `animationEnd` |
+| moveAlong | `markerId, path, duration, autoRotate, precision`；path 至少包含两个点 |
+| addArc / removeArc | `id, start, end, pass/angle, width, color` / `id` |
+
+动画默认持续 1000ms，0 表示立即到达终点。translateMarker 未设置 moveWithRotate 且未开启 autoRotate 时，旋转和平移分别使用 duration；其他情况同时执行。moveAlong 按各段实际距离分配时间，动画结束后返回 success/complete；translateMarker 在成功结束后额外执行 animationEnd。删除、替换标记、再次移动同一标记、原生页面暂停/卸载或销毁地图会取消旧动画，通过 fail/complete 结束旧调用，不触发 animationEnd。
+
+moveAlong 设置正数 precision 时，按行进距离触发 interpolatepoint，包含 `{markerId,longitude,latitude,animationStatus}`；animationStatus 为 interpolating 或 complete。事件频率受显示帧率限制，不补发同一帧跨过的每一个距离刻度。未设置 precision 时不发送插值事件。
+
+弧线在渲染层按 Mercator 坐标一次采样，四端使用相同路径。非零 angle 优先于 pass；同 ID 替换，独立于 polyline 属性。当前不支持跨日界线的弧线、Mercator 极区或共线的三个点，这些输入通过 fail 返回错误。
+
+动画在各端地图实例内执行，不逐帧跨 Service/Render/Native 桥发送坐标。路径距离在启动时计算，逐帧通过二分查找定位路段。命令队列保持启动顺序，动画期间允许读取、更新和删除标记；超时计入动画时长。每次操作结束即移除取消监听，避免长时间使用地图时积累已经完成的回调。
 
 四端派发 tap、markertap、callouttap、regionchange、rendersuccess、error。regionchange 包含 begin/end、centerLocation、scale；不能识别来源时 causedBy 为 update。Web 另有 updated。标记 id 可省略；显式 id 为唯一整数，建议限定在 32 位范围，支持 0 和负数。无 ID 标记独立保存，不占用数字 ID；点击与气泡事件不返回 markerId。addMarkers 默认替换同 ID 标记、追加无 ID 标记，clear=true 替换全量；修改 markers 属性也替换全量。removeMarkers 仅删除指定的显式 ID，无 ID 标记通过属性全量更新或 clear 清理。Harmony 节点重建保留两类标记。
 
-原生气泡使用 SDK 默认样式，未实现 callout.display 的 ALWAYS、多气泡及富文本。Web InfoWindow 同时显示一个气泡。setCenterOffset、translateMarker、addArc、removeArc 入口保留但返回不支持。高级 3D、卫星/路况/室内、POI、聚合、截图与 SelectorQuery.context 获取 MapContext 未实现；保留的组件属性声明不代表对应能力已经实现。
+原生气泡使用 SDK 默认样式，未实现 callout.display 的 ALWAYS、多气泡及富文本。Web InfoWindow 同时显示一个气泡。卫星/路况/室内、POI、聚合、图片覆盖图层、个性化/可视化图层、擦除路线、定位图标设置、调起外部地图、截图与 SelectorQuery.context 获取 MapContext 尚未实现。独立的 getLocation/openLocation/持续定位接口仍需宿主接入，不等同于地图内定位；保留的组件属性声明不代表对应能力已经实现。
 
 ## 使用与失败处理
 

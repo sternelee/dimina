@@ -33,7 +33,7 @@ it('reports location failure without returning a fabricated position', async () 
 })
 it('rejects invalid coordinates', async () => {
 	const f = fixture(); const result = f.start(); f.ready()
-	f.result('complete', { position: { getLng: () => NaN, getLat: () => 200 } })
+	f.result('complete', { position: { getLng: () => Number.NaN, getLat: () => 200 } })
 	await expect(result).rejects.toThrow('无效坐标')
 })
 it('does not start positioning when aborted before the plugin arrives', async () => {
