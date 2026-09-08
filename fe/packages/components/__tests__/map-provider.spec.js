@@ -98,6 +98,80 @@ it('rejects invalid replacement data without clearing existing markers', async (
 	expect(() => adapter.invoke('addMarkers', { clear: true, markers: [{ id: 2, longitude: 200, latitude: 0 }] })).toThrow('invalid')
 	expect(map.remove).not.toHaveBeenCalled()
 })
+it('initializes the legacy subpackage marker without an ID', async () => {
+	const marker = { latitude: 23.099994, longitude: 113.324520, name: 'T.I.T 创意园' }
+	const { map, emit } = await fixture({ markers: [marker] })
+	const overlay = map.add.mock.calls.find(([item]) => !Array.isArray(item))[0]
+	expect(overlay.getPosition().getLng()).toBe(marker.longitude)
+	overlay.emit('click')
+	expect(emit).toHaveBeenCalledWith('markertap', {})
+	expect(marker).not.toHaveProperty('id')
+})
+it('keeps multiple anonymous markers separate from zero and negative IDs', async () => {
+	const { adapter, map, emit } = await fixture({ markers: [
+		{ longitude: 1, latitude: 1 }, { id: 0, longitude: 2, latitude: 2 },
+		{ longitude: 3, latitude: 3 }, { id: -1, longitude: 4, latitude: 4 },
+	] })
+	const overlays = map.add.mock.calls.map(([item]) => item).filter(item => !Array.isArray(item))
+	expect(overlays).toHaveLength(4)
+	map.remove.mockClear()
+	adapter.invoke('removeMarkers', { markerIds: [0, -1] })
+	expect(map.remove.mock.calls.map(([item]) => item)).toEqual([overlays[1], overlays[3]])
+	emit.mockClear()
+	overlays.forEach(overlay => overlay.emit('click'))
+	expect(emit.mock.calls).toEqual([['markertap', {}], ['markertap', {}]])
+})
+it('appends anonymous markers and removes them on clear without leaving listeners', async () => {
+	const { adapter, map, emit } = await fixture({ markers: [{ longitude: 1, latitude: 1 }] })
+	const original = map.add.mock.calls.find(([item]) => !Array.isArray(item))[0]
+	map.add.mockClear(); map.remove.mockClear()
+	adapter.invoke('addMarkers', { markers: [{ longitude: 2, latitude: 2 }, { id: 0, longitude: 3, latitude: 3 }] })
+	const appended = map.add.mock.calls.map(([item]) => item)
+	expect(appended).toHaveLength(2)
+	expect(map.remove).not.toHaveBeenCalled()
+	adapter.invoke('addMarkers', { clear: true, markers: [] })
+	expect(map.remove.mock.calls.map(([item]) => item)).toEqual([original, ...appended])
+	emit.mockClear()
+	;[original, ...appended].forEach(overlay => overlay.emit('click'))
+	expect(emit).not.toHaveBeenCalled()
+})
+it('preserves anonymous markers on unrelated props and replaces them on markers changes', async () => {
+	const markers = [{ longitude: 1, latitude: 1 }, { longitude: 2, latitude: 2 }]
+	const { adapter, map, emit } = await fixture({ markers })
+	const originals = map.add.mock.calls.map(([item]) => item).filter(item => !Array.isArray(item))
+	map.add.mockClear(); map.remove.mockClear()
+	adapter.update({ ...base, markers, showScale: true })
+	expect(map.add).not.toHaveBeenCalled()
+	expect(map.remove).not.toHaveBeenCalled()
+	adapter.update({ ...base, markers: [{ longitude: 3, latitude: 3 }] })
+	expect(map.remove.mock.calls.map(([item]) => item)).toEqual(originals)
+	expect(map.add).toHaveBeenCalledTimes(1)
+	emit.mockClear(); originals.forEach(overlay => overlay.emit('click'))
+	expect(emit).not.toHaveBeenCalled()
+})
+it('emits anonymous callout taps without inventing an ID and disposes them', async () => {
+	const { adapter, windows, map, emit } = await fixture({ markers: [
+		{ longitude: 1, latitude: 1, callout: { content: 'Anonymous place' } },
+	] })
+	const overlay = map.add.mock.calls.find(([item]) => !Array.isArray(item))[0]
+	overlay.emit('click')
+	expect(windows[0].open).toHaveBeenCalled()
+	windows[0].options.content.click()
+	expect(emit).toHaveBeenCalledWith('callouttap', {})
+	adapter.destroy(); emit.mockClear()
+	overlay.emit('click'); windows[0].options.content.click()
+	expect(emit).not.toHaveBeenCalled()
+	expect(windows[0].close).toHaveBeenCalled()
+})
+it.each([null, '1', 1.5, NaN])('rejects an explicitly invalid ID %s without clearing anonymous markers', async (id) => {
+	const { adapter, map } = await fixture({ markers: [{ longitude: 1, latitude: 1 }] })
+	const original = map.add.mock.calls.find(([item]) => !Array.isArray(item))[0]
+	map.remove.mockClear()
+	expect(() => adapter.invoke('addMarkers', { clear: true, markers: [
+		{ longitude: 2, latitude: 2 }, { id, longitude: 3, latitude: 3 },
+	] })).toThrow('marker id')
+	expect(map.remove).not.toHaveBeenCalledWith(original)
+})
 it('fits only supplied points and translates padding order', async () => {
 	const { adapter, map } = await fixture()
 	map.add.mockClear(); map.remove.mockClear()

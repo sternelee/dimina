@@ -1,0 +1,251 @@
+# 地图接入与 provider 扩展
+
+移动端接入地图**原生 SDK**：Android、iOS、HarmonyOS 首个 provider 为高德；Web 使用高德 JS API 2.0。厂商依赖为可选接入，核心容器不强制依赖高德。小程序使用同一套 `map` 和 `wx.createMapContext()`。
+
+## 架构与扩展约定
+
+| 层级 | 职责 |
+| --- | --- |
+| 小程序 | 声明属性、绑定事件、调用 MapContext |
+| Service / Render | 按页面、组件实例和地图 id 查找目标；命令排队、超时、回调结算、销毁 |
+| 移动端传输适配器 | 创建原生占位节点；发送 mapMount / mapUpdate / mapContext / mapUnmount；同步布局 |
+| 原生宿主 | 承载 View / UIView / ArkUI Builder，派发触摸与事件，管理生命周期 |
+| Android 承载后端 | 独立于地图 provider，统一处理原生组件挂载、布局、裁剪、层级和触摸 |
+| 地图 provider | 转换厂商属性和命令，创建并释放 SDK 实例 |
+| 集成应用 | 注册 provider、提供平台 Key、确认隐私授权、声明定位权限 |
+
+原生接口分别位于 Android `map/MapProvider.kt`、iOS `Map/DMPMapProvider.swift`、HarmonyOS `Map/DMPMapProvider.ets`。接口包含 `create`、`update`、`invoke`、`destroy` 和 `ready/event/error` 回调，Android 另有 `resume/pause`，Harmony 的可选 `detach` 用于释放重建中的原生节点并保留地图状态。SDK 可接收命令后才能报告 ready；初始化失败应释放部分创建的资源。所有原生接口在 UI 线程调用，销毁应可重复执行。
+
+接入其他地图 SDK 时，实现对应平台接口并通过 `MapProviders` / `DMPMapProviders` 注册和选择即可。无需修改 Map.vue、Service、编译器或小程序。注册表只影响随后创建的地图，已有实例保持其 provider。厂商对象和 Key 不经过小程序桥接。
+
+`update` 接收完整属性快照，适配器只应用发生变化的字段，避免无关 setData 重置用户拖动位置或命令新增的标记。`invoke` 返回命令结果；不支持的方法必须失败，不能返回伪成功。
+
+## Android
+
+仓库示例 App 不预置高德接入配置。宿主负责提供平台 Key、隐私授权和定位权限，并在打开小程序前注册 provider。
+
+应用从源码依赖可选模块，现有核心依赖可保留：
+
+```kotlin
+// 宿主 app/build.gradle.kts
+implementation(project(":map-amap"))
+```
+
+在打开小程序之前，在主线程注册：
+
+```kotlin
+import com.didi.dimina.map.MapProviders
+import com.didi.dimina.map.amap.AMapProvider
+
+MapProviders.register("amap", AMapProvider(apiKey) { privacyConsentGranted })
+```
+
+`apiKey` 与 `privacyConsentGranted` 由宿主提供。适配器确认同意后才调用高德隐私初始化和创建地图。模块使用 Maven `com.amap.api:3dmap-location-search:11.2.100_loc11.2.100_sea9.8.1`；不要再同时引入另一个版本的高德地图/定位聚合包。
+
+地图展示只需网络权限；定位另需在宿主 manifest 声明：
+
+```xml
+<uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+```
+
+定位使用 DiminaActivity 的授权流程，接受粗略或精确位置授权。不请求后台定位。可选模块的 manifest 已包含以下定位服务，由 manifest merger 合并进宿主：
+
+```xml
+<service android:name="com.amap.api.location.APSService" android:exported="false" />
+```
+
+### 同层渲染兼容
+
+承载逻辑由独立的 `NativeComponentBackend` 接口管理，默认实现为 `WebViewUnderlayBackend`。地图、视频、cover-view、cover-image 和内嵌 web-view 共用该抽象；宿主可以按页面创建后端，地图 provider 继续只负责厂商 SDK。注册方法、接口契约与后续内核接入边界见[原生组件承载后端](./Native-Component-Backend.md)。
+
+Android 使用仓库现有的原生组件兼容路径：原生组件层位于透明 WebView 下方，Render 中保留 `application/view` embed 和 `data-dimina-native-*` 触摸目标。高德适配器使用 **TextureMapView**，使地图参与普通 View 合成，避免 GLSurfaceView 的独立 Surface 穿透与滚动黑边（[高德说明](https://a.amap.com/lbs/static/unzip/Android_Map_Doc/3D/com/amap/api/maps/TextureMapView.html)）。没有依赖仅新版本 WebView 才具备的厂商同层接口。
+
+- 复用现有多指触摸桥接，支持拖动、双指缩放及取消；DOM 顶层命中为按钮时由页面处理。
+- 页面滚动、嵌套 scroll-view、尺寸改变、祖先 hidden/class/style 改变时同步矩形；用原生 clipBounds 裁剪，保持地图原尺寸，避免滚动时改变相机可视范围。
+- 原生 cover-view / cover-image 的层级高于地图，不依赖挂载先后顺序。
+- 页面清理时销毁地图；Activity 前后台切换及地图隐藏时同步暂停/恢复。
+
+这条兼容路径有明确限制：**地图及其 DOM 祖先背景必须透明**，否则 WebView 中的不透明背景仍会盖住下方原生地图。应把页面背景设在宿主容器，或放在地图区域之外的兄弟节点。它不等同于任意 CSS 的完整同层合成；旋转/斜切 transform、复杂 mask、圆角祖先裁剪、CSS 动画位移和多个原生组件的任意 CSS stacking context 不在本次支持范围。升级或更换系统 WebView 后仍需真机验证合成、滚动与触摸；单元测试不能证明 GPU 合成效果。
+
+## iOS
+
+仓库示例 App 不预置高德接入配置。宿主需自行添加官方 Framework、链接所需系统库，将 `MAMapKit.framework/AMap.bundle` 加入应用资源，并提供平台 Key 和实际的隐私授权状态。
+
+高德实现位于 `DiminaKit/Map/DMPAMapProvider.swift`，以 `canImport(MAMapKit)` 和 `canImport(AMapFoundationKit)` 条件编译。**从源码构建 DiminaKit 的 target** 需要配置高德 Framework Search Paths 和链接依赖；仅在应用 target 链接高德，不能给已经构建的 DiminaKit 二进制补出该类型。
+
+本次核对版本为 AMap3DMap **11.2.100**、AMapFoundation **1.9.1**。按[高德 iOS 接入说明](https://developer.amap.com/api/ios-sdk/guide/create-project/note) 添加官方 framework 及要求的系统库，然后在主线程注册：
+
+```swift
+DMPMapProviders.register("amap", provider: DMPAMapProvider(
+    apiKey: apiKey,
+    hasPrivacyConsent: { privacyConsentGranted }
+))
+```
+
+定位需在应用 Info.plist 添加 `NSLocationWhenInUseUsageDescription`，说明实际用途。适配器在请求定位时申请前台权限；拒绝或未配置用途说明返回错误。
+
+UIView 在 WKWebView 的原生 overlay 中显示，支持页面滚动及矩形祖先裁剪、区域外触摸穿透。**当前 HTML slot 无法覆盖这层原生地图**；不要把必要的操作按钮放在地图内部，示例操作按钮和说明均在地图外。“点按地图上的标记查看地点”是地图上方的文字提示，实际点击目标是地图标记。此限制与 Android/Harmony 的承载方式不同。
+
+## HarmonyOS NEXT
+
+仓库示例 App 不预置高德接入配置。宿主需自行添加模块依赖、提供平台 Key 和实际的隐私授权状态，并在打开小程序前注册 provider。
+
+可选 HAR 源码模块为 `harmony/map_amap`，依赖 `@amap/amap_lbs_map3d:11.2.0` 与 `@amap/amap_lbs_common:11.2.0`。在宿主 module 的 `oh-package.json5` 加入源码依赖：
+
+```json
+{ "dependencies": { "@didi-dimina/map-amap": "file:../map_amap" } }
+```
+
+在 UIAbility 初始化后、打开小程序前注册：
+
+```ts
+import { DMPMapProviders } from '@didi-dimina/dimina'
+import { DMPAMapProvider } from '@didi-dimina/map-amap'
+
+DMPMapProviders.register('amap', new DMPAMapProvider(context, apiKey, () => privacyConsentGranted))
+```
+
+`context` 为宿主 UIAbilityContext。宿主声明 `ohos.permission.INTERNET`；定位另需 `ohos.permission.APPROXIMATELY_LOCATION` 和 `ohos.permission.LOCATION`，在 module.json5 中配置真实的 reason 与 usedScene。适配器按需发起运行时授权。
+
+原生地图通过现有 Web native/map embed → DMPNodeController → 高德 MapViewComponent 承载；用唯一 mapViewName 关联 SDK 回调，多个地图不会共用实例。不要使用旧版 Harmony Java SDK 的接入步骤，参考 [HarmonyOS NEXT 地图文档](https://lbs.amap.com/api/harmonyosnext-map3d-sdk/guide/create-map/show-map)。可选 HAR 的本地 Dimina 依赖适合仓库源码集成；发布 HAR 前应改为已发布的 Dimina 版本依赖。
+
+同层 `NodeContainer` 使用 embed 的实际尺寸约束内容，px 通过所属 `UIContext` 转成 vp 并保留小数；尺寸状态在创建、更新、销毁时同步，避免整页地图纹理缩放到较小 embed 后变形。高德 `getMapAsync` 完成初始化后通知 ready；地图结果和事件通过 `ContainerToRender` 发给小程序 Render，不能走内嵌 `<web-view>` 的 `subController` 通道。
+
+2026-09-08 真机验证：修复前首页列表滑动无变化、地图文字图标被纵向压缩且 15 秒后超时；修复后首页可滚动到底部，基础组件和官方分包地图显示正常，读取中心与显示全部地点返回成功。动态改为 260×160 CSS px 并恢复原尺寸后，地图比例正常。签名 HAP 构建、安装通过；本轮未验证真实定位、横屏和其他同层原生组件，未新增自动化回归用例或执行独立机制消融。
+
+## Web
+
+### 运行仓库中的 Web 演示
+
+在高德控制台申请 **Web 端（JS API）** 的 Key。`serviceHost` 和 `securityJsCode` 在框架中均为可选项，可同时为空；按 Key 的实际设置选填，服务端要求见[高德说明](https://lbs.amap.com/api/javascript-api-v2/guide/abc/jscode)。原生 SDK 的平台 Key 不用于此处。
+
+复制 `fe/packages/container/.env.example` 为同目录的 `.env.local`，填写：
+
+```dotenv
+VITE_AMAP_WEB_KEY=你的Web端Key
+VITE_AMAP_PRIVACY_CONSENT=true
+```
+
+最后一项表示你同意在本地演示中使用高德地图服务；未同意时保留 false。保存后重启 Web 开发服务，进入“基础组件演示 → Map”。生产部署可改用 `VITE_AMAP_SERVICE_HOST=https://你的域名/_AMapService`，并在服务端配置安全密钥。所有 `VITE_` 变量会进入前端产物，`.env.local` 仅避免误提交，不会把它们变成服务端秘密。
+
+演示入口会将配置安装到每个 pageFrame，缺少 Key 或授权时显示对应原因，不请求地图服务；不会因 `serviceHost` 和 `securityJsCode` 为空阻止加载。演示已提供 `getLocation`：点击“回到我的位置”时按需加载高德定位插件，请求一次定位并转换为 GCJ-02；不使用 IP 城市定位兜底。定位要求浏览器授权及安全上下文（HTTPS 或 localhost），加载插件和定位合计最多等待 10 秒；页面销毁后忽略晚到结果。接口说明见[高德 Web 定位文档](https://lbs.amap.com/api/javascript-api-v2/guide/services/geolocation)。生产宿主应通过自己的授权流程提供 `authorize`，不要照搬本地演示的固定授权开关。
+
+pageFrame 产物也用于原生 SDK，因此演示配置仅在 Web 容器设置 `mapRenderer=web` 后生效，原生端仍使用原生 provider。已有的宿主自定义配置优先。
+
+### 集成自己的 Web 宿主
+
+Web 宿主在**每一个渲染 pageFrame 的 window** 上、创建小程序页面前配置。仅在父窗口或小程序 App() 中设置无效：
+
+```js
+window.__DIMINA_MAP_CONFIG__ = {
+  provider: 'amap',
+  providerOptions: { amap: {
+    key: 'YOUR_AMAP_WEB_KEY',
+    serviceHost: 'https://your-host.example/_AMapService',
+  } },
+  authorize: () => hostPrivacy.ensureMapConsent(),
+  getLocation: ({ type, signal }) => hostLocation.getLocation({ type, signal }),
+  timeout: 15000,
+}
+```
+
+`hostPrivacy`、`hostLocation` 为宿主自行实现的对象。`authorize` 必须返回或 resolve true，之后才加载 SDK。`getLocation` 必须返回 GCJ-02 坐标；仅 show-location 或无坐标 moveToLocation 时调用。浏览器原始 WGS-84 不能直接当作 GCJ-02 使用。
+
+生产环境按[高德安全密钥说明](https://developer.amap.com/api/javascript-api-v2/guide/abc/jscode) 配置 serviceHost 服务代理；开发环境可传 securityJsCode，但会暴露在客户端。预加载的宿主可传 `providerOptions.amap.AMap` 并自行负责授权前不加载。自动加载器按 document 复用 SDK，拒绝同一 document 内不同 Key/安全配置混用。
+
+Web 自定义 provider 的类型从 `@dimina/components/map-provider` 导入；在配置 `providers` 中注册 `{ create(context) }`，返回 `{ update, invoke, destroy }`。context 包含 element、props、options、signal、emit、getLocation。销毁/中止后不得继续修改地图或发事件，异步创建晚返回的实例会被立即销毁。
+
+移动端默认选择 `native` 传输适配器，无需这段 Web 配置；未注册原生 provider 时明确失败，不自动回退到 JS SDK。Web 容器会标记 mapRenderer=web，避免手机浏览器误走原生桥接。
+
+## 基础能力与差异
+
+兼容目标参考[微信 map 组件](https://developers.weixin.qq.com/miniprogram/dev/component/map.html)。本次实现基础子集：
+
+| 能力 | Android 原生 | iOS 原生 | Harmony 原生 | Web |
+| --- | --- | --- | --- | --- |
+| 中心/缩放/拖动 | 支持 | 支持 | 支持 | 支持 |
+| markers 增删改、默认图钉、title/文本气泡 | 支持 | 支持 | 支持 | 支持 |
+| 自定义 iconPath | 未实现 | 未实现 | 未实现 | 完整 URL；不解析包内相对路径 |
+| polyline / circles / polygons | 基础样式 | 未实现 | 未实现 | 基础样式 |
+| 定位点/移动到当前位置 | 高德原生定位 | 高德原生定位 | 高德原生定位 | 宿主一次定位 |
+| show-scale | 支持 | 支持 | 支持 | 支持 |
+| show-compass | 支持 | 支持 | 支持 | 未实现 |
+| min/max-scale、rotate/skew | 支持 | 支持 | 缩放范围与角度属性未实现 | 缩放范围/rotate，二维 |
+| includePoints padding | 最大边距的对称留白 | 四边 | 最大边距的对称留白 | 四边 |
+
+四端实现 `getCenterLocation`、`getScale`、`getRegion`、`moveToLocation`、`includePoints`、`addMarkers`、`removeMarkers`。结果分别为 `{longitude,latitude}`、`{scale}`、`{southwest,northeast}` 或空对象。padding 顺序为 `[top,right,bottom,left]`。坐标为 GCJ-02。
+
+四端派发 tap、markertap、callouttap、regionchange、rendersuccess、error。regionchange 包含 begin/end、centerLocation、scale；不能识别来源时 causedBy 为 update。Web 另有 updated。标记 id 可省略；显式 id 为唯一整数，建议限定在 32 位范围，支持 0 和负数。无 ID 标记独立保存，不占用数字 ID；点击与气泡事件不返回 markerId。addMarkers 默认替换同 ID 标记、追加无 ID 标记，clear=true 替换全量；修改 markers 属性也替换全量。removeMarkers 仅删除指定的显式 ID，无 ID 标记通过属性全量更新或 clear 清理。Harmony 节点重建保留两类标记。
+
+原生气泡使用 SDK 默认样式，未实现 callout.display 的 ALWAYS、多气泡及富文本。Web InfoWindow 同时显示一个气泡。setCenterOffset、translateMarker、addArc、removeArc 入口保留但返回不支持。高级 3D、卫星/路况/室内、POI、聚合、截图与 SelectorQuery.context 获取 MapContext 未实现；保留的组件属性声明不代表对应能力已经实现。
+
+## 使用与失败处理
+
+完整示例位于[基础组件演示的地图页](../examples/miniprogram/base/pages/map)，从基础示例首页的 **Map** 入口进入，与其他基础组件共用 appid 和打包流程。示例不含 Key 和厂商依赖。
+
+```xml
+<map id="places" longitude="{{longitude}}" latitude="{{latitude}}"
+  markers="{{markers}}" binderror="onMapError" />
+```
+
+```js
+Page({
+  data: { longitude: 116.397428, latitude: 39.90923, markers: [] },
+  onReady() {
+    this.map = wx.createMapContext('places')
+    this.map.getCenterLocation({
+      success: result => console.log(result.longitude, result.latitude),
+      fail: error => console.log(error.errMsg),
+    })
+  },
+  onMapError(event) { console.log(event.detail.errMsg) },
+})
+```
+
+自定义组件使用 `wx.createMapContext('places', this)`。上下文分别记录通信所用的 `bridgeId` 和查找组件所用的页面/组件实例 `__id__`，两者不能混用。上下文记住创建页和组件归属，跨页后不会误操作新页的同名地图；重复 id、地图不存在或页面已销毁返回失败。
+
+命令在 SDK 初始化后顺序执行。缺少 provider/Key、隐私拒绝、定位拒绝、不支持的方法均有错误；success/fail 后调用 complete，不传回调时返回 Promise。初始化与命令默认 15 秒超时；命令超时会销毁实例，避免晚完成的操作在报告失败后继续修改地图，重试需重建组件。
+
+SDK 隐私授权与系统定位权限分别处理，Key 使用对应平台产品并配置包名/签名或 Bundle ID。隐私拒绝时不初始化 SDK。本次只接通地图自身的定位能力，没有改变独立 `wx.getLocation` 的既有原生实现状态。
+
+## 验证边界
+
+回归覆盖授权前不加载、provider 替换/配置隔离、命令顺序、卸载与超时、页面/组件作用域、错误与回调结算、标记与坐标映射，以及 Android 裁剪与多指转发。Web SDK 测试使用调用记录替身，不访问真实地图服务。
+
+原生编译和这些回归不能证明真实底图、Key 校验、GPU 合成或定位效果。使用合法平台 Key 后仍需分别验收真机：地图/标记、缩放拖动、scroll-view 裁剪、覆盖按钮、多地图、页面重建、前后台、拒绝权限后恢复、弱网/错误 Key、不同系统 WebView 版本。
+
+### 本次本地验证（2026-09-08）
+
+- 无 ID 标记兼容：Components 263 项通过，其中高德适配器 22 项覆盖初始化、多个无 ID 标记与 0/负数 ID 共存、追加/清理、无关属性更新、点击和气泡回调及显式非法 ID。隔离副本恢复 ID 必填校验后 9 项失败，改用数字 0 作为无 ID 标记的内部标识后 2 项因冲突失败；恢复后 22 项通过。Android Debug、iOS x86_64 高德模拟器完整构建、Harmony 高德 HAR 编译通过。
+- 保持 `subpackages/page/component/pages/map/map.js` 原始无 ID 数据不变，iOS 18.5 模拟器进入“小程序官方组件展示 → 地图 → map”后实际显示高德底图和标记，无“地图暂不可用”。此次未验收 Android/Harmony 真机上的无 ID 标记交互；Harmony 节点重建保存逻辑通过编译，尚未做设备运行验证。
+
+- 地图示例的说明文字移至地图外，明确点击目标是地图标记；基础组件示例重新编译打包，Android Debug 与 iOS x86_64 模拟器构建通过。iOS 18.5 模拟器已实际显示高德底图及地图上方的完整说明，不再被原生地图遮挡。本次布局验证没有验收定位权限和真机效果。
+
+- iOS 示例本地配置接入后，Debug 的 iPhoneOS arm64 无签名完整构建通过；核对应用 Info.plist 中的 Key 与本地配置一致，`AMap.bundle` 已打包，产物包含 `DMPAMapProvider` 与 `MAMapView` 链接符号。未验证签名安装、真实底图和定位。
+
+- Android 示例宿主接入本地 Key、BuildConfig、provider 依赖和定位权限声明；`app:assembleDebug --offline` 通过。同步更新旧版 `shared/jssdk` 后，在 arm64 Android 模拟器上实际显示高德原生底图，并通过“显示全部地点”和“读取地图中心”按钮验证。未申请定位权限，未验收真实定位或发布版签名。此次打包显式清空 Web 地图凭据，不将本地 Web Key 带入共享 SDK。
+
+- Components 231、Render 187、Service 731、Web 容器 SDK 307、Compiler 341 项测试通过，共 1,797 项。Compiler 使用项目规定的 `--no-file-parallelism`。
+- Android 核心 316 项单元测试通过（包含承载后端新增的 4 项）；可选高德模块 `assembleDebug` 通过。
+- iOS 示例工程 Simulator 无签名构建通过；高德可选源码另用真实 MAMapKit 11.2.100 / Foundation 1.9.1 做 iOS arm64 类型检查。
+- Harmony 核心及高德模块 HAR 构建通过；未签名、未发布。
+- 前端生产构建、容器 SDK TypeScript 检查、编译器兼容表同步检查、包含地图页的基础组件示例编译通过。
+- 在隔离临时副本中分别禁用祖先裁剪、Android 触摸桥、授权门控、晚返回实例销毁、组件作用域过滤：原用例均因对应断言失败；恢复后用同一命令通过。
+- 浏览器使用本地 provider 替身，实际查看布局并验证覆盖按钮、读取缩放、销毁失败、重建恢复。该验证未加载高德服务，也不代表原生同层渲染的设备验收。
+- Android 承载后端另通过 3 项模拟器测试：隐藏/卸载手势取消、重复清理、外部子视图保留、页面隔离和工厂替换，以及实际窗口中原生 View 与 HTML 覆盖层的像素、完整尺寸裁剪和动态页面底色恢复。已查看窗口合成截图；这里使用普通原生 View，不包含高德底图或 TextureMapView 的 GPU 验收。
+- 承载后端在隔离工程中分别禁用隐藏时的手势取消和 WebView 底色恢复：同一套测试分别因缺少 ACTION_CANCEL、恢复后透出底层蓝色而失败；恢复源码后 3 项全部通过，真实项目最终 APK 也通过。另复测前端地图/内嵌 web-view 原生协议 6 项通过。
+- Web 演示环境配置接入后，容器 18 项测试与生产构建通过。浏览器确认缺少 Key 时显示配置文件及字段提示；在隔离副本中禁用 pageFrame 配置注入或 Web 平台判断，对应回归断言失败，恢复后 6 项通过。此阶段未配置真实 Web Key；后续真实服务验证见下。
+- 安全配置改为可选后，容器 21 项测试及 native configLoader 构建通过。覆盖仅 Key、两个安全字段为空字符串或空白字符串；隔离副本恢复旧必填校验后这 3 项失败，移除后 9 项配置回归通过。
+- Web 三个按钮回归修复：Service 735、Render 190、Components 254、容器 28 项测试通过。使用真实 Service Page 的不同桥接/实例 ID，经 MapContext → Render → Map.vue 验证三个命令；隔离副本恢复旧 ID 逻辑后三项均因 `map not found` 失败，恢复后 7 项通过。视野适配改用坐标 Bounds 计算，避免临时标记的 SDK 几何错误；四边 padding 转换、定位 GCJ-02 转换开关也分别完成隔离反证并恢复通过。
+- 浏览器加载真实高德底图，点击“显示全部地点”成功调整视野，“读取地图中心”返回两个演示地点的中心。定位按钮已进入 Web 定位流程，本机返回定位超时，未再出现 `map not found` 或缺少定位 provider；未操作浏览器定位授权，真实位置获取及授权后的效果尚未验收。定位成功、拒绝、无效坐标、超时与取消使用 SDK 替身回归覆盖。
+
+### Android 原分包页面显示修复
+
+原分包地图空白的原因是根页面 CSS 底色遮住 WebView 下方原生地图；现在通过承载后端协商转移根页面纯色，无需修改示例。背景图片和嵌套不透明背景的边界见[原生组件承载后端](./Native-Component-Backend.md)。
+
+同时修复 Android 首次相机初始化：中心、缩放、倾斜和旋转合并为一次相机更新，避免连续异步操作读取旧相机状态而将示例广州坐标覆盖回默认北京视角。旋转单独变化时保留用户当前中心和缩放。AMap 模块 2 项相机回归和 Debug 构建通过。
+
+最终调试包已在 Android 真机验证：官方分包 `page/component/pages/map/map` 显示广州 T.I.T 创意园附近底图及无 ID 标记，`getCenterLocation` 返回约 `23.099994, 113.324520`，与未修改的示例配置一致。隔离相机消融恢复旧中心/缩放覆盖后，初始相机断言失败；恢复修复后 2 项通过。完整验证包括 Components 267 项、Android 核心 316 项、AMap 2 项单元测试及 4 项真实 WebView 合成测试；Debug 构建通过。
+
+返回官方组件列表后，DOM 页面底色恢复为 `rgb(248, 248, 248)`；再次进入分包地图，底图、标记和广州中心坐标保持正确。

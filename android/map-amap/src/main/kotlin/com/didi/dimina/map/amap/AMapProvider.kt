@@ -44,6 +44,7 @@ private class AMapInstance(private val activity: Activity, private val events: M
     private val map: AMap
     private var previous = JSONObject()
     private val markers = mutableMapOf<Int, Marker>()
+    private val anonymousMarkers = mutableListOf<Marker>()
     private var overlays = mutableMapOf<String, List<() -> Unit>>()
     private var destroyed = false
     private var resumed = false
@@ -66,14 +67,11 @@ private class AMapInstance(private val activity: Activity, private val events: M
         map.setOnMapLoadedListener { if (!destroyed) events.ready() }
         map.setOnMapClickListener { events.event("tap", coordinate(it)) }
         map.setOnMarkerClickListener { marker ->
-            val id = markers.entries.firstOrNull { it.value == marker }?.key
-            if (id != null) events.event("markertap", JSONObject().put("markerId", id))
+            markerEvent("markertap", marker)
             false
         }
         map.setOnInfoWindowClickListener { marker ->
-            markers.entries.firstOrNull { it.value == marker }?.key?.let {
-                events.event("callouttap", JSONObject().put("markerId", it))
-            }
+            markerEvent("callouttap", marker)
         }
         map.setOnCameraChangeListener(object : AMap.OnCameraChangeListener {
             private var changing = false
@@ -92,8 +90,6 @@ private class AMapInstance(private val activity: Activity, private val events: M
     override fun update(props: JSONObject) {
         check(!destroyed) { "Map destroyed" }
         fun changed(key: String) = props.opt(key)?.toString() != previous.opt(key)?.toString()
-        if (changed("longitude") || changed("latitude")) map.moveCamera(CameraUpdateFactory.changeLatLng(point(props)))
-        if (changed("scale")) map.moveCamera(CameraUpdateFactory.zoomTo(props.optDouble("scale", 16.0).toFloat()))
         if (changed("minScale")) map.minZoomLevel = props.optDouble("minScale", 3.0).toFloat()
         if (changed("maxScale")) map.maxZoomLevel = props.optDouble("maxScale", 22.0).toFloat()
         map.uiSettings.isScrollGesturesEnabled = props.optBoolean("enableScroll", true)
@@ -103,9 +99,13 @@ private class AMapInstance(private val activity: Activity, private val events: M
         map.uiSettings.isScaleControlsEnabled = props.optBoolean("showScale", false)
         map.uiSettings.isCompassEnabled = props.optBoolean("showCompass", false)
         map.uiSettings.isZoomControlsEnabled = false
-        if (changed("rotate") || changed("skew")) map.moveCamera(CameraUpdateFactory.newCameraPosition(
-            CameraPosition(map.cameraPosition.target, map.cameraPosition.zoom,
-                props.optDouble("skew", 0.0).toFloat(), props.optDouble("rotate", 0.0).toFloat())))
+        val currentCamera = map.cameraPosition
+        resolveCameraState(previous, props, AMapCameraState(currentCamera.target.latitude,
+            currentCamera.target.longitude, currentCamera.zoom, currentCamera.tilt, currentCamera.bearing))?.let { camera ->
+            val center = point(JSONObject().put("latitude", camera.latitude).put("longitude", camera.longitude))
+            map.moveCamera(CameraUpdateFactory.newCameraPosition(
+                CameraPosition(center, camera.scale, camera.skew, camera.rotate)))
+        }
         if (changed("markers")) addMarkers(props.optJSONArray("markers") ?: JSONArray(), true)
         for (kind in listOf("polyline", "polygons", "circles")) {
             if (changed(kind)) replaceGeometry(kind, props.optJSONArray(kind) ?: JSONArray())
@@ -175,18 +175,33 @@ private class AMapInstance(private val activity: Activity, private val events: M
     }
     private fun addMarkers(data: JSONArray, clear: Boolean) {
         val options = mutableMapOf<Int, MarkerOptions>()
+        val anonymousOptions = mutableListOf<MarkerOptions>()
         for (i in 0 until data.length()) {
             val item = data.getJSONObject(i)
-            val rawId = item.getDouble("id")
-            require(rawId.isFinite() && rawId == rawId.toInt().toDouble()) { "Marker id must be an integer" }
-            val id = rawId.toInt()
-            require(!options.containsKey(id)) { "Duplicate marker id" }
-            options[id] = MarkerOptions().position(point(item)).title(item.optString("title"))
+            val option = MarkerOptions().position(point(item)).title(item.optString("title"))
                 .snippet(item.optJSONObject("callout")?.optString("content"))
                 .rotateAngle(item.optDouble("rotate", 0.0).toFloat()).zIndex(item.optDouble("zIndex", 0.0).toFloat())
+            if (item.has("id")) {
+                val rawId = item.getDouble("id")
+                require(rawId.isFinite() && rawId == rawId.toInt().toDouble()) { "Marker id must be an integer" }
+                val id = rawId.toInt()
+                require(!options.containsKey(id)) { "Duplicate marker id" }
+                options[id] = option
+            } else {
+                anonymousOptions.add(option)
+            }
         }
-        if (clear) { markers.values.forEach { it.remove() }; markers.clear() }
+        if (clear) {
+            markers.values.forEach { it.remove() }; markers.clear()
+            anonymousMarkers.forEach { it.remove() }; anonymousMarkers.clear()
+        }
         options.forEach { (id, option) -> markers.remove(id)?.remove(); markers[id] = map.addMarker(option) }
+        anonymousOptions.forEach { anonymousMarkers.add(map.addMarker(it)) }
+    }
+    private fun markerEvent(type: String, marker: Marker) {
+        val id = markers.entries.firstOrNull { it.value == marker }?.key
+        if (id != null) events.event(type, JSONObject().put("markerId", id))
+        else if (anonymousMarkers.contains(marker)) events.event(type)
     }
     private fun replaceGeometry(kind: String, data: JSONArray) {
         val creates: List<() -> (() -> Unit)> = (0 until data.length()).map { index ->
@@ -239,7 +254,7 @@ private class AMapInstance(private val activity: Activity, private val events: M
         map.isMyLocationEnabled = false
         mapView.onPause()
     }
-    override fun destroy() { if (!destroyed) { destroyed = true; pendingLocations.clear(); map.isMyLocationEnabled = false; mapView.onPause(); mapView.onDestroy() } }
+    override fun destroy() { if (!destroyed) { destroyed = true; pendingLocations.clear(); map.isMyLocationEnabled = false; mapView.onPause(); mapView.onDestroy(); markers.clear(); anonymousMarkers.clear() } }
 }
 private fun coordinate(point: LatLng) = JSONObject().put("longitude", point.longitude).put("latitude", point.latitude)
 private fun point(value: JSONObject): LatLng {

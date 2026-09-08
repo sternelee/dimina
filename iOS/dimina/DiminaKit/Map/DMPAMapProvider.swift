@@ -26,6 +26,7 @@ import AMapFoundationKit
     private let events: DMPMapEvents
     private var previous: [String: Any] = [:]
     private var markers: [Int: MAPointAnnotation] = [:]
+    private var anonymousMarkers: [MAPointAnnotation] = []
     private var destroyed = false
     private var wantsLocation = false
     private let locationManager = CLLocationManager()
@@ -111,22 +112,32 @@ import AMapFoundationKit
     }
     private func addMarkers(_ values: [[String: Any]], clear: Bool) throws {
         var next: [Int: MAPointAnnotation] = [:]
+        var anonymous: [MAPointAnnotation] = []
         for value in values {
-            guard let number = value["id"] as? NSNumber, number.doubleValue.isFinite,
-                  number.doubleValue >= Double(Int32.min), number.doubleValue <= Double(Int32.max),
-                  number.doubleValue == Double(number.intValue), next[number.intValue] == nil else { throw DMPMapError("Marker id must be a unique integer") }
             let annotation = MAPointAnnotation()
             annotation.coordinate = try point(value)
             annotation.title = value["title"] as? String ?? ""
             annotation.subtitle = (value["callout"] as? [String: Any])?["content"] as? String
-            next[number.intValue] = annotation
+            if let rawID = value["id"] {
+                guard let number = rawID as? NSNumber, number.doubleValue.isFinite,
+                      number.doubleValue >= Double(Int32.min), number.doubleValue <= Double(Int32.max),
+                      number.doubleValue == Double(number.intValue), next[number.intValue] == nil else { throw DMPMapError("Marker id must be a unique integer") }
+                next[number.intValue] = annotation
+            } else {
+                anonymous.append(annotation)
+            }
         }
-        if clear { map.removeAnnotations(Array(markers.values)); markers.removeAll() }
+        if clear {
+            map.removeAnnotations(Array(markers.values) + anonymousMarkers)
+            markers.removeAll(); anonymousMarkers.removeAll()
+        }
         for (id, annotation) in next {
             if let old = markers.removeValue(forKey: id) { map.removeAnnotation(old) }
             markers[id] = annotation
             map.addAnnotation(annotation)
         }
+        anonymousMarkers.append(contentsOf: anonymous)
+        map.addAnnotations(anonymous)
     }
     private func fit(_ values: [[String: Any]], padding: [Double]) throws {
         guard !values.isEmpty, padding.isEmpty || padding.count == 4, padding.allSatisfy({ $0.isFinite && $0 >= 0 }) else { throw DMPMapError("Invalid points or padding") }
@@ -187,6 +198,7 @@ import AMapFoundationKit
     func mapView(_ mapView: MAMapView!, didAnnotationViewCalloutTapped view: MAAnnotationView!) { markerEvent("callouttap", view) }
     private func markerEvent(_ type: String, _ view: MAAnnotationView) {
         if let id = markers.first(where: { $0.value === view.annotation })?.key { events.event(type, ["markerId": id]) }
+        else if anonymousMarkers.contains(where: { $0 === view.annotation }) { events.event(type, [:]) }
     }
     func mapView(_ mapView: MAMapView!, didFailToLocateUserWithError error: Error!) { failLocation("Location failed") }
     func destroy() {
@@ -197,8 +209,8 @@ import AMapFoundationKit
         locationManager.delegate = nil
         map.showsUserLocation = false
         map.delegate = nil
-        map.removeAnnotations(Array(markers.values))
-        markers.removeAll()
+        map.removeAnnotations(Array(markers.values) + anonymousMarkers)
+        markers.removeAll(); anonymousMarkers.removeAll()
         map.removeFromSuperview()
     }
     private func point(_ value: [String: Any]) throws -> CLLocationCoordinate2D {

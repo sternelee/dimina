@@ -74,17 +74,17 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 			options.content = img
 		}
 		const marker = new AMap.Marker(options)
-		const markerId = data.id
+		const markerDetail = data.id === undefined ? {} : { markerId: data.id }
 		let callout
 		let calloutNode
-		const calloutTap = () => fire('callouttap', { markerId })
+		const calloutTap = () => fire('callouttap', markerDetail)
 		if (data.callout?.content) {
 			calloutNode = textNode(element.ownerDocument, data.callout.content)
 			calloutNode.addEventListener('click', calloutTap)
 			callout = new AMap.InfoWindow({ content: calloutNode })
 		}
 		const tap = () => {
-			fire('markertap', { markerId })
+			fire('markertap', markerDetail)
 			callout?.open(map, marker.getPosition())
 		}
 		marker.on('click', tap)
@@ -107,8 +107,9 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 		const next = new Map()
 		try {
 			for (const item of data) {
-				if (!Number.isInteger(item.id) || next.has(item.id)) throw new Error('marker id must be a unique integer')
-				next.set(item.id, makeMarker(item))
+				if (item.id !== undefined && (!Number.isInteger(item.id) || next.has(item.id))) throw new Error('marker id must be a unique integer')
+				// Symbols never collide with an explicit numeric ID and are never exposed.
+				next.set(item.id === undefined ? Symbol() : item.id, makeMarker(item))
 			}
 		}
 		catch (error) {

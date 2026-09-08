@@ -13,6 +13,7 @@ data class NativeComponentCapabilities(
     val requiresTransparentDomAncestors: Boolean,
     val requiresDomTouchForwarding: Boolean,
     val embedsIntoDom: Boolean,
+    val supportsPageBackground: Boolean = false,
 )
 
 /** A backend owns presentation only. The component still owns and destroys its SDK View. */

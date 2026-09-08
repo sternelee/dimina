@@ -3,7 +3,8 @@ export interface MapCoordinate { longitude: number; latitude: number }
 export interface MapProperties extends MapCoordinate {
 	id: string
 	scale: number
-	markers: Array<MapCoordinate & { id: number; [key: string]: unknown }>
+	/** Omitted IDs are anonymous: append on addMarkers, replace on a new markers snapshot. */
+	markers: Array<MapCoordinate & { id?: number; [key: string]: unknown }>
 	[key: string]: unknown
 }
 export interface MapAdapter {

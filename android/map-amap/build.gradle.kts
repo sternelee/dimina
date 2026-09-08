@@ -15,4 +15,6 @@ dependencies {
     api(project(":dimina"))
     implementation(libs.androidx.activity.compose)
     implementation("com.amap.api:3dmap-location-search:11.2.100_loc11.2.100_sea9.8.1")
+    testImplementation(libs.junit)
+    testImplementation(libs.org.json)
 }

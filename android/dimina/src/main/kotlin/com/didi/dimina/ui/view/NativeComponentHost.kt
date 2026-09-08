@@ -194,7 +194,9 @@ class NativeComponentHost(
             webView.post {
                 if (released || mounted) return@post
                 mounted = true
-                mapResult(mount, Result.success(JSONObject()))
+                mapResult(mount, Result.success(JSONObject().put("nativeComponentBackend", JSONObject()
+                    .put("name", backend.capabilities.name)
+                    .put("supportsPageBackground", backend.capabilities.supportsPageBackground))))
                 event("rendersuccess")
             }
         }

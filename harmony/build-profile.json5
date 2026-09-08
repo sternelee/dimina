@@ -27,7 +27,10 @@
     ]
   },
   "modules": [
-    { "name": "map_amap", "srcPath": "./map_amap" },
+    {
+      "name": "map_amap",
+      "srcPath": "./map_amap"
+    },
     {
       "name": "entry",
       "srcPath": "./entry",

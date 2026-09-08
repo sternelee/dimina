@@ -17,6 +17,7 @@ data class NativeComponentLayout(
     val zIndex: Float = 0f,
     val opacity: Float = 1f,
     val clip: NativeComponentClip? = null,
+    val pageBackgroundColors: List<Int>? = null,
 ) {
     companion object {
         fun from(params: JSONObject): NativeComponentLayout? {
@@ -34,6 +35,9 @@ data class NativeComponentLayout(
                     else style?.optString("opacity")?.toFloatOrNull() ?: 1f,
                 clip = params.optJSONObject("clip")?.let {
                     NativeComponentClip(it.optDouble("left"), it.optDouble("top"), it.optDouble("right"), it.optDouble("bottom"))
+                },
+                pageBackgroundColors = params.optJSONArray("pageBackgroundColors")?.let { colors ->
+                    (0 until colors.length()).map { colors.getInt(it) }
                 },
             )
         }

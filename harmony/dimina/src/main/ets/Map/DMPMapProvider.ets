@@ -51,7 +51,7 @@ export class DMPNativeMapManager {
     return DMPNativeMapManager.sessions.get(DMPNativeMapManager.key(appIndex, webViewId, id))?.handle
   }
   private static send(app: DMPApp, webViewId: number, type: string, body: DMPMap): void {
-    DMPChannelProxyNext.ContainerToWebviewRender(new DMPMap({ type: type, body: body.toJSON() }), app, webViewId)
+    DMPChannelProxyNext.ContainerToRender(new DMPMap({ type: type, body: body.toJSON() }), app, webViewId)
   }
   private static result(app: DMPApp, webViewId: number, params: DMPMap, ok: boolean, data: DMPMap): void {
     const requestId = params.getString('requestId')

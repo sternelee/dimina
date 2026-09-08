@@ -36,6 +36,8 @@ class AMapHandle implements DMPNativeMapHandle {
   private previous: DMPMap = new DMPMap()
   private markers: Map<number, Marker> = new Map()
   private markerValues: Map<number, Object> = new Map()
+  private anonymousMarkers: Marker[] = []
+  private anonymousMarkerValues: Object[] = []
   private lastCamera?: CameraPosition
   private initialized: boolean = false
   private createdCallback: MapViewCreateCallback
@@ -57,11 +59,11 @@ class AMapHandle implements DMPNativeMapHandle {
       view.onCreate()
       view.onResume()
       view.getMapAsync((map: AMap) => {
-        if (this.destroyed) return
+        if (this.destroyed || this.view !== view) return
         this.map = map
         this.bind(map)
         try {
-          const markers = Array.from(this.markerValues.values())
+          const markers = Array.from(this.markerValues.values()).concat(this.anonymousMarkerValues)
           this.previous = new DMPMap()
           this.update(this.props)
           if (this.initialized) {
@@ -69,13 +71,14 @@ class AMapHandle implements DMPNativeMapHandle {
             this.addMarkers(markers, true)
           }
           this.initialized = true
+          // getMapAsync 已回调地图就绪；此时再监听同一个 ready 事件会错过首次通知。
+          this.events.ready()
         } catch (error) { this.events.error((error as Error).message) }
       })
     }
     MapViewManager.getInstance().registerMapViewCreatedCallback(this.createdCallback)
   }
   private bind(map: AMap): void {
-    map.setOnMapLoadedListener(() => { if (!this.destroyed) this.events.ready() })
     map.setOnMapClickListener((point: LatLng) => this.events.event('tap', coordinate(point)))
     map.setOnMarkerClickListener((marker: Marker): boolean => { this.markerEvent('markertap', marker); return false })
     map.setOnInfoWindowClickListener((marker: Marker) => this.markerEvent('callouttap', marker))
@@ -96,6 +99,7 @@ class AMapHandle implements DMPNativeMapHandle {
     this.markers.forEach((value: Marker, id: number) => {
       if (value === marker) this.events.event(type, new DMPMap({ markerId: id }))
     })
+    if (this.anonymousMarkers.includes(marker)) this.events.event(type, new DMPMap())
   }
   private region(type: string, position: CameraPosition): void {
     this.events.event('regionchange', new DMPMap({ type: type, causedBy: 'update', centerLocation: coordinate(position.target).toJSON(), scale: position.zoom }))
@@ -192,20 +196,37 @@ class AMapHandle implements DMPNativeMapHandle {
   }
   private addMarkers(values: Object[], clear: boolean): void {
     const options: Map<number, MarkerOptions> = new Map()
+    const anonymousOptions: MarkerOptions[] = []
     values.forEach(value => {
       const item = new DMPMap(value)
       const id = item.getNumber('id')
-      if (id === undefined || !Number.isInteger(id) || options.has(id)) throw new Error('Marker id must be a unique integer')
-      options.set(id, new MarkerOptions().setPosition(point(item)).setTitle(item.getString('title') ?? '')
+      const option = new MarkerOptions().setPosition(point(item)).setTitle(item.getString('title') ?? '')
         .setSnippet(new DMPMap(item.get('callout')).getString('content') ?? '')
-        .setRotateAngle(item.getNumber('rotate') ?? 0).setZIndex(item.getNumber('zIndex') ?? 0))
+        .setRotateAngle(item.getNumber('rotate') ?? 0).setZIndex(item.getNumber('zIndex') ?? 0)
+      if (item.get('id') !== undefined) {
+        if (id === undefined || !Number.isInteger(id) || options.has(id)) throw new Error('Marker id must be a unique integer')
+        options.set(id, option)
+      } else {
+        anonymousOptions.push(option)
+      }
     })
-    if (clear) { this.markers.forEach(marker => marker.remove()); this.markers.clear(); this.markerValues.clear() }
-    values.forEach(value => { this.markerValues.set(new DMPMap(value).getNumber('id') ?? 0, value) })
+    if (clear) {
+      this.markers.forEach(marker => marker.remove()); this.markers.clear(); this.markerValues.clear()
+      this.anonymousMarkers.forEach(marker => marker.remove()); this.anonymousMarkers = []; this.anonymousMarkerValues = []
+    }
+    values.forEach(value => {
+      const item = new DMPMap(value)
+      if (item.get('id') === undefined) this.anonymousMarkerValues.push(value)
+      else this.markerValues.set(item.getNumber('id')!, value)
+    })
     options.forEach((value, id) => {
       this.markers.get(id)?.remove()
       const marker = this.map?.addMarker(value)
       if (marker) this.markers.set(id, marker)
+    })
+    anonymousOptions.forEach(value => {
+      const marker = this.map?.addMarker(value)
+      if (marker) this.anonymousMarkers.push(marker)
     })
   }
   private fit(values: Object[], padding: number[]): void {
@@ -224,6 +245,7 @@ class AMapHandle implements DMPNativeMapHandle {
     this.view?.onPause()
     this.view?.onDestroy()
     this.markers.clear()
+    this.anonymousMarkers = []
     this.map = undefined
     this.view = undefined
   }
@@ -233,6 +255,7 @@ class AMapHandle implements DMPNativeMapHandle {
     MapViewManager.getInstance().unregisterMapViewCreatedCallback(this.createdCallback)
     this.detach()
     this.markerValues.clear()
+    this.anonymousMarkerValues = []
   }
 }
 function point(value: DMPMap): LatLng {

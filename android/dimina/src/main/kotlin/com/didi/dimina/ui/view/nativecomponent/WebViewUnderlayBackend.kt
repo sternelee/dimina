@@ -2,6 +2,7 @@ package com.didi.dimina.ui.view.nativecomponent
 
 import android.graphics.Color
 import android.graphics.Rect
+import android.graphics.drawable.ColorDrawable
 import android.os.SystemClock
 import android.view.InputDevice
 import android.view.MotionEvent
@@ -10,6 +11,7 @@ import android.view.ViewTreeObserver
 import android.webkit.WebView
 import android.widget.FrameLayout
 import androidx.annotation.MainThread
+import androidx.core.graphics.ColorUtils
 import org.json.JSONArray
 import org.json.JSONObject
 
@@ -20,7 +22,7 @@ class WebViewUnderlayBackend(
     private val layer: FrameLayout,
     private var pageBackgroundColor: Int = Color.WHITE,
 ) : NativeComponentBackend {
-    override val capabilities = NativeComponentCapabilities("webview-underlay", true, true, false)
+    override val capabilities = NativeComponentCapabilities("webview-underlay", true, true, false, true)
     private class Entry(val type: String, val view: View, val visibilityChanged: (Boolean) -> Unit) {
         var layout: NativeComponentLayout? = null
         var visible = false
@@ -29,6 +31,10 @@ class WebViewUnderlayBackend(
     }
     private val entries = mutableMapOf<String, Entry>()
     private val originalBackground = webView.background
+    private val originalLayerBackground = layer.background
+    private var appliedBackgroundColors: List<Int>? = null
+    private var appliedBaseColor: Int? = null
+    private var appliedLayerColor: Int? = null
     private val originalBackgroundCopy = originalBackground?.constantState?.newDrawable()?.mutate()
     private var transparent = false
     private var destroyed = false
@@ -88,7 +94,27 @@ class WebViewUnderlayBackend(
     }
 
     private fun updateBackground() {
-        val visible = entries.values.any { it.visible }
+        val colors = entries.values.lastOrNull { it.layout?.pageBackgroundColors != null }
+            ?.layout?.pageBackgroundColors
+        val visible = colors != null || entries.values.any { it.visible }
+        if (colors != null) {
+            if (colors != appliedBackgroundColors || pageBackgroundColor != appliedBaseColor) {
+                val color = colors.fold(pageBackgroundColor) { background, foreground ->
+                    ColorUtils.compositeColors(foreground, background)
+                }
+                if (color != appliedLayerColor) {
+                    layer.background = ColorDrawable(color)
+                    appliedLayerColor = color
+                }
+                appliedBackgroundColors = colors
+                appliedBaseColor = pageBackgroundColor
+            }
+        } else if (appliedLayerColor != null) {
+            layer.background = originalLayerBackground
+            appliedBackgroundColors = null
+            appliedBaseColor = null
+            appliedLayerColor = null
+        }
         if (visible && !transparent) {
             webView.setBackgroundColor(Color.TRANSPARENT)
             transparent = true
@@ -106,6 +132,7 @@ class WebViewUnderlayBackend(
         if (destroyed) return
         pageBackgroundColor = color
         if (!transparent) webView.setBackgroundColor(color)
+        updateBackground()
     }
 
     override fun dispatchTouch(message: JSONObject): Boolean {

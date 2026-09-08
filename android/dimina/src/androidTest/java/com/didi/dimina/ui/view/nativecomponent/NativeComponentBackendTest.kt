@@ -166,6 +166,77 @@ class NativeComponentBackendTest {
         }
     }
 
+    @Test fun cssPageBackgroundIsBehindNativeViewsAndSurvivesHiddenMaps() {
+        launch().use { scenario ->
+            lateinit var backend: WebViewUnderlayBackend
+            lateinit var view: View
+            var x = 0; var y = 0; var outsideX = 0
+            val original = android.graphics.drawable.ColorDrawable(Color.MAGENTA)
+            scenario.onActivity { activity ->
+                activity.layer.background = original
+                backend = WebViewUnderlayBackend(activity.web, activity.layer)
+                view = View(activity).apply { setBackgroundColor(Color.GREEN) }
+                backend.attach("map", "native/map", view) {}
+                backend.updateLayout("map", layout(activity).copy(pageBackgroundColors = listOf(Color.TRANSPARENT, Color.YELLOW)))
+            }
+            awaitFrame(scenario)
+            scenario.onActivity { activity ->
+                val origin = IntArray(2); view.getLocationInWindow(origin)
+                val density = activity.resources.displayMetrics.density
+                x = origin[0] + (150 * density).toInt(); y = origin[1] + (100 * density).toInt()
+                outsideX = origin[0] + (210 * density).toInt()
+            }
+            val shown = captureWindow(scenario)
+            try {
+                assertEquals("Map stays above page CSS color", Color.GREEN, shown.getPixel(x, y))
+                assertEquals("Page CSS color outside the map", Color.YELLOW, shown.getPixel(outsideX, y))
+            } finally { shown.recycle() }
+            scenario.onActivity { activity ->
+                backend.updateLayout("map", layout(activity).copy(hidden = true, pageBackgroundColors = listOf(Color.TRANSPARENT, Color.CYAN)))
+            }
+            awaitFrame(scenario)
+            val hidden = captureWindow(scenario)
+            try { assertEquals("Hidden map retains updated CSS background", Color.CYAN, hidden.getPixel(x, y)) }
+            finally { hidden.recycle() }
+            scenario.onActivity { activity ->
+                backend.destroy()
+                assertSame(original, activity.layer.background)
+                assertEquals(Color.MAGENTA, original.color)
+            }
+        }
+    }
+
+    @Test fun unchangedPageColorDoesNotReplaceBackgroundDuringLayoutUpdates() {
+        launch().use { scenario ->
+            scenario.onActivity { activity ->
+                val backend = WebViewUnderlayBackend(activity.web, activity.layer)
+                val view = View(activity)
+                backend.attach("map", "native/map", view) {}
+                val layout = layout(activity).copy(pageBackgroundColors = listOf(Color.TRANSPARENT, Color.YELLOW))
+                backend.updateLayout("map", layout)
+                val initial = activity.layer.background
+                repeat(300) { index ->
+                    backend.updateLayout("map", layout.copy(top = index.toDouble(), pageBackgroundColors = listOf(Color.TRANSPARENT, Color.YELLOW)))
+                    assertSame("Layout must not allocate/replace the background", initial, activity.layer.background)
+                }
+                // Opaque CSS hides base-color changes; compare the composed result too.
+                backend.updatePageBackgroundColor(Color.BLUE)
+                assertSame("Same composed color", initial, activity.layer.background)
+                backend.updateLayout("map", layout.copy(pageBackgroundColors = listOf(Color.TRANSPARENT)))
+                val blue = activity.layer.background as android.graphics.drawable.ColorDrawable
+                assertEquals(Color.BLUE, blue.color)
+                backend.updatePageBackgroundColor(Color.RED)
+                assertEquals(Color.RED, (activity.layer.background as android.graphics.drawable.ColorDrawable).color)
+                backend.detach("map")
+                assertNull(activity.layer.background)
+                backend.attach("map", "native/map", view) {}
+                backend.updateLayout("map", layout)
+                assertEquals(Color.YELLOW, (activity.layer.background as android.graphics.drawable.ColorDrawable).color)
+                backend.destroy()
+            }
+        }
+    }
+
     @Test fun nativePixelsAndHtmlOverlayComposeAndClippingKeepsFullViewSize() {
         launch().use { scenario ->
             lateinit var backend: WebViewUnderlayBackend

@@ -1,5 +1,6 @@
 import { isAndroid, isHarmonyOS, uuid } from '@dimina/common'
 import { ensureNativeLayerTouchBridge } from '@/common/nativeLayerTouchBridge'
+import { acquireNativePageBackground } from '@/common/nativePageBackground'
 import { nativeMapLayout } from './native-layout'
 
 // This adapter transports the common map contract only. Vendor SDKs live in the native host.
@@ -10,6 +11,7 @@ export async function createNativeMap({ element, props, emit, signal, bridgeId }
 	let frame = 0
 	let resizeObserver
 	let mutationObserver
+	let pageBackground
 	const placeholder = element.ownerDocument.createElement(isAndroid || isHarmonyOS ? 'embed' : 'div')
 	placeholder.id = id
 	placeholder.style.cssText = 'display:block;width:100%;height:100%'
@@ -22,7 +24,7 @@ export async function createNativeMap({ element, props, emit, signal, bridgeId }
 		ensureNativeLayerTouchBridge()
 	}
 	element.appendChild(placeholder)
-	const layout = () => nativeMapLayout(element)
+	const layout = () => ({ ...nativeMapLayout(element), pageBackgroundColors: pageBackground?.snapshot() })
 	const send = (name, data = {}) => window.__message.invoke({ type: 'invokeAPI', target: 'container',
 		body: { name, bridgeId, params: { ...data, id, type: 'native/map' } } })
 	const request = (name, data) => new Promise((resolve, reject) => {
@@ -65,10 +67,16 @@ export async function createNativeMap({ element, props, emit, signal, bridgeId }
 		pending.clear()
 		try { send('mapUnmount') } catch { /* The container may already be gone. */ }
 		placeholder.remove()
+		pageBackground?.release()
 	}
 	signal.addEventListener('abort', destroy, { once: true })
 	try {
-		await request('mapMount', { props, ...layout() })
+		const mounted = await request('mapMount', { props, ...layout() })
+		if (destroyed) throw new Error('map destroyed')
+		if (isAndroid && mounted.nativeComponentBackend?.supportsPageBackground === true) {
+			pageBackground = acquireNativePageBackground(element.ownerDocument, syncLayout)
+			await request('mapUpdate', { ...layout(), layoutOnly: true })
+		}
 		window.addEventListener('resize', syncLayout)
 		window.addEventListener('scroll', syncLayout, true)
 		if (window.ResizeObserver) {

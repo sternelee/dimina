@@ -31,6 +31,28 @@ beforeEach(() => {
 afterEach(() => { controller.abort(); vi.unstubAllGlobals(); delete window.DiminaNativeComponentBridge })
 
 describe('Android native map composition', () => {
+	it('only transfers page backgrounds after backend negotiation and restores them on abort', async () => {
+		const style = document.createElement('style')
+		style.textContent = 'body {background-color:#f8f8f8}'
+		document.head.append(style)
+		try {
+			const promise = createNativeMap({ element, props: {}, emit: vi.fn(), signal: controller.signal, bridgeId: 'page-a' })
+			expect(getComputedStyle(document.body).backgroundColor).toBe('rgb(248, 248, 248)')
+			reply(sent.at(-1), true, { nativeComponentBackend: { supportsPageBackground: true } })
+			await Promise.resolve()
+			const update = sent.at(-1)
+			expect(update.body.name).toBe('mapUpdate')
+			expect(update.body.params.pageBackgroundColors).toEqual([0, -460552])
+			expect(update.body.params.layoutOnly).toBe(true)
+			reply(update)
+			await promise
+			expect(getComputedStyle(document.body).backgroundColor).toBe('rgba(0, 0, 0, 0)')
+			style.textContent = 'body {background-color:red}'
+			await vi.waitFor(() => expect(sent.at(-1).body.params.pageBackgroundColors).toEqual([0, -65536]))
+			controller.abort()
+			expect(getComputedStyle(document.body).backgroundColor).toBe('rgb(255, 0, 0)')
+		} finally { style.remove() }
+	})
 	it('clips to scrolling ancestors without resizing the SDK view and hides clipped maps', () => {
 		const parent = element.parentElement
 		parent.style.overflowX = 'hidden'
