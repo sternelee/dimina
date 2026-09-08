@@ -273,7 +273,7 @@ const unregisterFormControl = registerFormControl?.({
 	getName: () => props.name,
 	getValue: () => iValue.value,
 	reset: () => {
-		iValue.value = ''
+		applyExternalValue('')
 		collectFormValue?.(props.name, iValue.value)
 	},
 })
@@ -307,6 +307,14 @@ function applySelection(element = inputRef.value) {
 	}
 }
 
+// 输入法组合期间（拼音还没选词）的中间值不是用户输入的结果，和微信一样不派发 bindinput，
+// 等 compositionend 再用最终值补发一次
+let composing = false
+// Safari/Firefox 在 compositionend 之后还会补一次 isComposing=false 的 input，值就是刚提交的文本；
+// 记住 compositionend 已派发的值，紧接着到达的同值 input 不再重复派发。
+// 真实按键或外部改 value 之后到达的 input 都不可能是这次补发，标记随之作废
+let committedValue = null
+
 watch(
 	[() => props.focus, () => props.value],
 	([nF, nV], [, preV]) => {
@@ -315,10 +323,19 @@ watch(
 			applySelection()
 		}
 		if (preV !== nV) {
-			iValue.value = nV
+			applyExternalValue(nV)
 		}
 	},
 )
+
+// props 或 bindinput 回调从 DOM 之外改写内部值：DOM 里那次组合提交的文本不再是当前值，
+// 之后到达的同值 input 只能是真实输入（比如菜单粘贴），去重标记随之作废
+function applyExternalValue(nextValue) {
+	if (iValue.value !== nextValue) {
+		committedValue = null
+	}
+	iValue.value = nextValue
+}
 
 const wrapperRef = ref(null)
 // label 的激活入口登记在包裹层上：原生 <label> 的 click 转发已被 label 组件取消，
@@ -338,7 +355,9 @@ useKeyboardHeight(info, keyboardAccessoryVisible)
 
 function handleKeydown(event) {
 	keyCode.value = event.keyCode
-	if (event.keyCode === 13) {
+	committedValue = null
+	// 组合期间的回车是在选词，不是确认输入；部分浏览器此时 keyCode 仍是 13
+	if (event.keyCode === 13 && !event.isComposing && !composing) {
 		if (!props.confirmHold) {
 			event.target.blur()
 		}
@@ -360,27 +379,32 @@ function handleWrapperEvent(event) {
 	}
 	const value = event.target.value
 	switch (event.type) {
+		case 'compositionstart':
+			composing = true
+			committedValue = null
+			break
+
+		case 'compositionend':
+			composing = false
+			committedValue = value
+			publishInput(event)
+			break
+
 		case 'input':
-			collectFormValue?.(props.name, value)
-			iValue.value = value
-
-			// Emit update:value event for v-model binding with parent component
-			emit('update:value', value)
-
-			triggerEvent('input', {
-				event,
-				info,
-				detail: {
-					value,
-					cursor: event.target.selectionEnd,
-					keyCode: keyCode.value,
-				},
-				success: (data) => {
-					iValue.value = data.value ?? data
-					// Also update the parent when success callback modifies the value
-					emit('update:value', data.value ?? data)
-				},
-			})
+			// isComposing 由浏览器按规范维护：为 false 说明组合已经结束，即使没收到 compositionend 也要解除抑制
+			if (composing && event.isComposing === false) {
+				composing = false
+			}
+			if (composing) {
+				// 组合期间只同步内部值，让 :value 绑定跟上 DOM，不派发给业务层
+				collectFormValue?.(props.name, value)
+				iValue.value = value
+				break
+			}
+			if (consumeCommittedEcho(value)) {
+				break
+			}
+			publishInput(event)
 			break
 
 		case 'focusin':
@@ -409,6 +433,9 @@ function handleWrapperEvent(event) {
 			break
 
 		case 'focusout':
+			// 失焦后不可能还在组合，即使输入法没有补发 compositionend 也要解除抑制
+			composing = false
+			committedValue = null
 			keyboardAccessoryVisible.value = false
 			triggerEvent('blur', {
 				event,
@@ -425,12 +452,44 @@ function handleWrapperEvent(event) {
 			break
 	}
 }
+
+// 只吞掉紧跟 compositionend、值未变的那一次 input；之后任何 input 都按真实输入派发
+function consumeCommittedEcho(value) {
+	if (committedValue === null) return false
+	const echoed = value === committedValue
+	committedValue = null
+	return echoed
+}
+
+function publishInput(event) {
+	const value = event.target.value
+	collectFormValue?.(props.name, value)
+	iValue.value = value
+	// Emit update:value event for v-model binding with parent component
+	emit('update:value', value)
+
+	triggerEvent('input', {
+		event,
+		info,
+		detail: {
+			value,
+			cursor: event.target.selectionEnd,
+			keyCode: keyCode.value,
+		},
+		success: (data) => {
+			const nextValue = data.value ?? data
+			applyExternalValue(nextValue)
+			emit('update:value', nextValue)
+		},
+	})
+}
 </script>
 
 <template>
 	<div
 		ref="wrapperRef" v-bind="$attrs" :class="wrapperClass" role="textbox" data-dd-label-target @input="handleWrapperEvent"
 		@focusin="handleWrapperEvent" @focusout="handleWrapperEvent" @change="handleWrapperEvent"
+		@compositionstart="handleWrapperEvent" @compositionend="handleWrapperEvent"
 	>
 		<input
 			:id="id" ref="inputRef" v-focus class="dd-input" :type="inputType" :inputmode="inputMode"
