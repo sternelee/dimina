@@ -1,4 +1,5 @@
 import { invokeAPI } from '@/api/common'
+import router from '@/core/router'
 
 export function createMapContext(mapId, obj) {
 	return new MapContext({ mapId, obj })
@@ -7,6 +8,10 @@ export function createMapContext(mapId, obj) {
 class MapContext {
 	constructor(opts) {
 		this.opts = opts
+		const page = router.getPageInfo()
+		// A page's bridge ID routes the message; __id__ identifies its render module.
+		this.bridgeId = opts.obj?.bridgeId || page?.bridgeId || page?.id
+		this.moduleId = opts.obj?.__id__ || page?.__id__ || this.bridgeId
 	}
 
 	addMarkers(data) {
@@ -33,6 +38,10 @@ class MapContext {
 		return this.invoke('getScale', data)
 	}
 
+	getRegion(data) {
+		return this.invoke('getRegion', data)
+	}
+
 	moveToLocation(data) {
 		return this.invoke('moveToLocation', data)
 	}
@@ -50,9 +59,12 @@ class MapContext {
 	}
 
 	invoke(apiName, data = {}) {
-		return invokeAPI(apiName, {
-			mapId: this.opts.mapId,
+		return invokeAPI('mapContext', {
 			...data,
-		})
+			command: apiName,
+			mapId: this.opts.mapId,
+			moduleId: this.moduleId,
+			mapBridgeId: this.bridgeId,
+		}, 'render')
 	}
 }

@@ -217,6 +217,7 @@ export interface BridgeMessage {
  * 只挂在 iframe contentWindow 上，故不进全局 Window 类型增强，由 WebView 按需断言。
  */
 export interface DiminaRenderBridge {
+	mapRenderer?: 'web'
 	invoke: ((msg: BridgeMessage) => void) | null
 	publish: ((msg: BridgeMessage) => void) | null
 	onMessage: (msg: BridgeMessage) => void

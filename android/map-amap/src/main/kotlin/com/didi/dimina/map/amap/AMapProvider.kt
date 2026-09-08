@@ -1,0 +1,255 @@
+package com.didi.dimina.map.amap
+
+import android.Manifest
+import android.app.Activity
+import android.content.pm.PackageManager
+import android.graphics.Color
+import android.os.Bundle
+import android.view.View
+import com.amap.api.maps.AMap
+import com.amap.api.maps.CameraUpdateFactory
+import com.amap.api.maps.TextureMapView
+import com.amap.api.maps.MapsInitializer
+import com.amap.api.maps.model.CameraPosition
+import com.amap.api.maps.model.LatLng
+import com.amap.api.maps.model.LatLngBounds
+import com.amap.api.maps.model.Marker
+import com.amap.api.maps.model.MarkerOptions
+import com.amap.api.maps.model.PolylineOptions
+import com.amap.api.maps.model.PolygonOptions
+import com.amap.api.maps.model.CircleOptions
+import com.didi.dimina.ui.container.DiminaActivity
+import com.amap.api.maps.model.MyLocationStyle
+import com.didi.dimina.map.MapEvents
+import com.didi.dimina.map.MapInstance
+import com.didi.dimina.map.MapProvider
+import org.json.JSONArray
+import org.json.JSONObject
+
+/** Construct/register on the UI thread. Consent must include AMap's SDK disclosure. */
+class AMapProvider(private val apiKey: String, private val hasPrivacyConsent: () -> Boolean) : MapProvider {
+    override fun create(activity: Activity, events: MapEvents): MapInstance {
+        check(hasPrivacyConsent()) { "Map privacy authorization denied" }
+        require(apiKey.isNotBlank()) { "AMap Android key is required" }
+        MapsInitializer.updatePrivacyShow(activity, true, true)
+        MapsInitializer.updatePrivacyAgree(activity, true)
+        MapsInitializer.setApiKey(apiKey)
+        return AMapInstance(activity, events)
+    }
+}
+
+private class AMapInstance(private val activity: Activity, private val events: MapEvents) : MapInstance {
+    // TextureView participates in the host/WebView composition and ancestor clipping.
+    private val mapView = TextureMapView(activity)
+    private val map: AMap
+    private var previous = JSONObject()
+    private val markers = mutableMapOf<Int, Marker>()
+    private var overlays = mutableMapOf<String, List<() -> Unit>>()
+    private var destroyed = false
+    private var resumed = false
+    private var wantsLocation = false
+    private val pendingLocations = mutableListOf<(LatLng) -> Unit>()
+    override val view: View get() = mapView
+
+    init {
+        mapView.onCreate(Bundle())
+        map = mapView.map
+        map.myLocationStyle = MyLocationStyle().myLocationType(MyLocationStyle.LOCATION_TYPE_SHOW)
+        map.setOnMyLocationChangeListener { location ->
+            if (!destroyed && location != null) {
+                val callbacks = pendingLocations.toList()
+                pendingLocations.clear()
+                callbacks.forEach { it(LatLng(location.latitude, location.longitude)) }
+                if (!wantsLocation) map.isMyLocationEnabled = false
+            }
+        }
+        map.setOnMapLoadedListener { if (!destroyed) events.ready() }
+        map.setOnMapClickListener { events.event("tap", coordinate(it)) }
+        map.setOnMarkerClickListener { marker ->
+            val id = markers.entries.firstOrNull { it.value == marker }?.key
+            if (id != null) events.event("markertap", JSONObject().put("markerId", id))
+            false
+        }
+        map.setOnInfoWindowClickListener { marker ->
+            markers.entries.firstOrNull { it.value == marker }?.key?.let {
+                events.event("callouttap", JSONObject().put("markerId", it))
+            }
+        }
+        map.setOnCameraChangeListener(object : AMap.OnCameraChangeListener {
+            private var changing = false
+            override fun onCameraChange(position: CameraPosition) {
+                if (!changing) { changing = true; region("begin", position) }
+            }
+            override fun onCameraChangeFinish(position: CameraPosition) {
+                changing = false; region("end", position)
+            }
+        })
+    }
+    private fun region(type: String, position: CameraPosition) {
+        events.event("regionchange", JSONObject().put("type", type).put("causedBy", "update")
+            .put("centerLocation", coordinate(position.target)).put("scale", position.zoom))
+    }
+    override fun update(props: JSONObject) {
+        check(!destroyed) { "Map destroyed" }
+        fun changed(key: String) = props.opt(key)?.toString() != previous.opt(key)?.toString()
+        if (changed("longitude") || changed("latitude")) map.moveCamera(CameraUpdateFactory.changeLatLng(point(props)))
+        if (changed("scale")) map.moveCamera(CameraUpdateFactory.zoomTo(props.optDouble("scale", 16.0).toFloat()))
+        if (changed("minScale")) map.minZoomLevel = props.optDouble("minScale", 3.0).toFloat()
+        if (changed("maxScale")) map.maxZoomLevel = props.optDouble("maxScale", 22.0).toFloat()
+        map.uiSettings.isScrollGesturesEnabled = props.optBoolean("enableScroll", true)
+        map.uiSettings.isZoomGesturesEnabled = props.optBoolean("enableZoom", true)
+        map.uiSettings.isRotateGesturesEnabled = props.optBoolean("enableRotate", false)
+        map.uiSettings.isTiltGesturesEnabled = props.optBoolean("enableOverlooking", false)
+        map.uiSettings.isScaleControlsEnabled = props.optBoolean("showScale", false)
+        map.uiSettings.isCompassEnabled = props.optBoolean("showCompass", false)
+        map.uiSettings.isZoomControlsEnabled = false
+        if (changed("rotate") || changed("skew")) map.moveCamera(CameraUpdateFactory.newCameraPosition(
+            CameraPosition(map.cameraPosition.target, map.cameraPosition.zoom,
+                props.optDouble("skew", 0.0).toFloat(), props.optDouble("rotate", 0.0).toFloat())))
+        if (changed("markers")) addMarkers(props.optJSONArray("markers") ?: JSONArray(), true)
+        for (kind in listOf("polyline", "polygons", "circles")) {
+            if (changed(kind)) replaceGeometry(kind, props.optJSONArray(kind) ?: JSONArray())
+        }
+        if (changed("includePoints")) props.optJSONArray("includePoints")?.takeIf { it.length() > 0 }?.let { fit(it, JSONArray()) }
+        if (changed("showLocation")) {
+            wantsLocation = props.optBoolean("showLocation")
+            if (wantsLocation) ensureLocationPermission { allowed ->
+                if (!destroyed && wantsLocation) {
+                    if (allowed) map.isMyLocationEnabled = resumed else events.error("Location permission denied")
+                }
+            } else map.isMyLocationEnabled = false
+        }
+        previous = JSONObject(props.toString())
+    }
+    private fun hasLocationPermission() = listOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)
+        .any { activity.checkSelfPermission(it) == PackageManager.PERMISSION_GRANTED }
+
+    private fun ensureLocationPermission(callback: (Boolean) -> Unit) {
+        if (hasLocationPermission()) { callback(true); return }
+        val host = activity as? DiminaActivity
+        if (host == null) { callback(false); return }
+        host.handleAuthorization(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION)) {
+            callback(hasLocationPermission())
+        }
+    }
+
+    override fun invoke(command: String, args: JSONObject, result: (Result<JSONObject>) -> Unit) {
+        if (command == "moveToLocation" && !args.has("longitude") && !args.has("latitude")) {
+            ensureLocationPermission { allowed ->
+                if (destroyed) return@ensureLocationPermission
+                if (!allowed) { result(Result.failure(IllegalStateException("Location permission denied"))); return@ensureLocationPermission }
+                pendingLocations.add { target ->
+                    map.moveCamera(CameraUpdateFactory.changeLatLng(target))
+                    result(Result.success(JSONObject()))
+                }
+                map.isMyLocationEnabled = resumed
+            }
+            return
+        }
+        result(runCatching {
+            check(!destroyed) { "Map destroyed" }
+            when (command) {
+                "getCenterLocation" -> coordinate(map.cameraPosition.target)
+                "getScale" -> JSONObject().put("scale", map.cameraPosition.zoom)
+                "getRegion" -> map.projection.visibleRegion.latLngBounds.let {
+                    JSONObject().put("southwest", coordinate(it.southwest)).put("northeast", coordinate(it.northeast))
+                }
+                "addMarkers" -> { addMarkers(args.getJSONArray("markers"), args.optBoolean("clear")); JSONObject() }
+                "removeMarkers" -> {
+                    val ids = args.getJSONArray("markerIds")
+                    for (i in 0 until ids.length()) markers.remove(ids.getInt(i))?.remove()
+                    JSONObject()
+                }
+                "includePoints" -> { fit(args.getJSONArray("points"), args.optJSONArray("padding") ?: JSONArray()); JSONObject() }
+                "moveToLocation" -> {
+                    val target = if (args.has("longitude") || args.has("latitude")) point(args) else {
+                        check(hasLocationPermission()) { "Location permission denied" }
+                        val location = map.myLocation ?: error("Location is not ready; enable show-location first")
+                        LatLng(location.latitude, location.longitude)
+                    }
+                    map.moveCamera(CameraUpdateFactory.changeLatLng(target)); JSONObject()
+                }
+                else -> error("AMap Android provider does not support $command")
+            }
+        })
+    }
+    private fun addMarkers(data: JSONArray, clear: Boolean) {
+        val options = mutableMapOf<Int, MarkerOptions>()
+        for (i in 0 until data.length()) {
+            val item = data.getJSONObject(i)
+            val rawId = item.getDouble("id")
+            require(rawId.isFinite() && rawId == rawId.toInt().toDouble()) { "Marker id must be an integer" }
+            val id = rawId.toInt()
+            require(!options.containsKey(id)) { "Duplicate marker id" }
+            options[id] = MarkerOptions().position(point(item)).title(item.optString("title"))
+                .snippet(item.optJSONObject("callout")?.optString("content"))
+                .rotateAngle(item.optDouble("rotate", 0.0).toFloat()).zIndex(item.optDouble("zIndex", 0.0).toFloat())
+        }
+        if (clear) { markers.values.forEach { it.remove() }; markers.clear() }
+        options.forEach { (id, option) -> markers.remove(id)?.remove(); markers[id] = map.addMarker(option) }
+    }
+    private fun replaceGeometry(kind: String, data: JSONArray) {
+        val creates: List<() -> (() -> Unit)> = (0 until data.length()).map { index ->
+            val item = data.getJSONObject(index)
+            val stroke = color(item.optString("color", item.optString("strokeColor", "#000000")))
+            val width = item.optDouble("width", item.optDouble("strokeWidth", 1.0)).toFloat()
+            val fill = color(item.optString("fillColor", "#00000000"))
+            when (kind) {
+                "circles" -> {
+                    val center = point(item); val radius = item.getDouble("radius")
+                    require(radius.isFinite() && radius >= 0) { "Invalid radius" }
+                    val options = CircleOptions().center(center).radius(radius).strokeColor(stroke).strokeWidth(width).fillColor(fill)
+                    val create: () -> (() -> Unit) = { map.addCircle(options).let { circle -> { circle.remove() } } }
+                    create
+                }
+                "polyline" -> {
+                    val options = PolylineOptions().addAll(points(item.getJSONArray("points"))).color(stroke).width(width).setDottedLine(item.optBoolean("dottedLine"))
+                    val create: () -> (() -> Unit) = { map.addPolyline(options).let { line -> { line.remove() } } }
+                    create
+                }
+                else -> {
+                    val options = PolygonOptions().addAll(points(item.getJSONArray("points"))).strokeColor(stroke).strokeWidth(width).fillColor(fill)
+                    val create: () -> (() -> Unit) = { map.addPolygon(options).let { polygon -> { polygon.remove() } } }
+                    create
+                }
+            }
+        }
+        overlays.remove(kind)?.forEach { it() }
+        overlays[kind] = creates.map { it() }
+    }
+    private fun fit(data: JSONArray, padding: JSONArray) {
+        val points = points(data)
+        require(points.isNotEmpty()) { "Points cannot be empty" }
+        require(padding.length() == 0 || padding.length() == 4) { "Padding requires four values" }
+        val inset = (0 until padding.length()).map { padding.getDouble(it).also { n -> require(n.isFinite() && n >= 0) } }.maxOrNull() ?: 0.0
+        val density = activity.resources.displayMetrics.density
+        val bounds = LatLngBounds.builder().also { builder -> points.forEach { builder.include(it) } }.build()
+        // Android camera API uses a symmetric inset; retain the largest requested edge.
+        map.moveCamera(CameraUpdateFactory.newLatLngBounds(bounds, (inset * density).toInt()))
+    }
+    override fun resume() {
+        if (destroyed) return
+        resumed = true
+        mapView.onResume()
+        if ((wantsLocation || pendingLocations.isNotEmpty()) && hasLocationPermission()) map.isMyLocationEnabled = true
+    }
+    override fun pause() {
+        if (destroyed) return
+        resumed = false
+        map.isMyLocationEnabled = false
+        mapView.onPause()
+    }
+    override fun destroy() { if (!destroyed) { destroyed = true; pendingLocations.clear(); map.isMyLocationEnabled = false; mapView.onPause(); mapView.onDestroy() } }
+}
+private fun coordinate(point: LatLng) = JSONObject().put("longitude", point.longitude).put("latitude", point.latitude)
+private fun point(value: JSONObject): LatLng {
+    val longitude = value.getDouble("longitude"); val latitude = value.getDouble("latitude")
+    require(longitude.isFinite() && latitude.isFinite() && longitude in -180.0..180.0 && latitude in -90.0..90.0) { "Invalid coordinate" }
+    return LatLng(latitude, longitude)
+}
+private fun points(values: JSONArray) = (0 until values.length()).map { point(values.getJSONObject(it)) }
+private fun color(value: String): Int {
+    // Mini-program uses #RRGGBBAA; Android uses #AARRGGBB.
+    val normalized = if (value.length == 9 && value.startsWith("#")) "#" + value.takeLast(2) + value.substring(1, 7) else value
+    return Color.parseColor(normalized)
+}

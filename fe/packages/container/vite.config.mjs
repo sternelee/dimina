@@ -12,7 +12,7 @@ function isVConsoleEvalWarning(warning) {
 
 export default defineConfig(({ command, mode }) => {
 	const useContainerSdkSource = command === 'serve' && mode === 'development'
-	const containerSdkSource = resolve(__dirname, '../container-sdk/src')
+	const containerSdkSource = resolve(import.meta.dirname, '../container-sdk/src')
 	const containerSdkEntry = resolve(containerSdkSource, 'index.ts')
 	const pageFrameEntry = resolve(containerSdkSource, 'pages/pageFrame/pageFrame.ts')
 
@@ -36,10 +36,10 @@ export default defineConfig(({ command, mode }) => {
 						{ find: /^@dimina\/fe-container-sdk$/, replacement: containerSdkEntry },
 					]
 					: []),
-				{ find: '@', replacement: resolve(__dirname, 'src') },
+				{ find: '@', replacement: resolve(import.meta.dirname, 'src') },
 				{ find: '@images', replacement: '/images' },
 				...(mode === 'test'
-					? [{ find: '@dimina/service?url', replacement: resolve(__dirname, '__tests__/fixtures/service-worker-url.js') }]
+					? [{ find: '@dimina/service?url', replacement: resolve(import.meta.dirname, '__tests__/fixtures/service-worker-url.js') }]
 					: []),
 			],
 		},
@@ -48,7 +48,7 @@ export default defineConfig(({ command, mode }) => {
 				scss: {
 					// logic() 缩放函数的唯一实现在 container-sdk（demo 与 SDK 的样式都要用它）。
 					// 用绝对文件路径直接 @use，不经 Vite alias，避免 Sass 解析歧义。
-					additionalData: `@use "${resolve(__dirname, '../container-sdk/src/styles/funcs.scss').replace(/\\/g, '/')}" as *;`,
+					additionalData: `@use "${resolve(import.meta.dirname, '../container-sdk/src/styles/funcs.scss').replace(/\\/g, '/')}" as *;`,
 				},
 			},
 		},
@@ -57,8 +57,8 @@ export default defineConfig(({ command, mode }) => {
 			minify: mode === 'production',
 			rollupOptions: {
 				input: {
-					index: resolve(__dirname, 'index.html'),
-					pageFrame: resolve(__dirname, 'pageFrame.html'),
+					index: resolve(import.meta.dirname, 'index.html'),
+					pageFrame: resolve(import.meta.dirname, 'pageFrame.html'),
 				},
 				onwarn(warning, warn) {
 					if (isVConsoleEvalWarning(warning)) {

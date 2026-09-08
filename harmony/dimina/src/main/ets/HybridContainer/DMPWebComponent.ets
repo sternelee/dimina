@@ -1,3 +1,4 @@
+import { DMPNativeMapManager } from '../Map/DMPMapProvider'
 
 import web_webview from '@ohos.web.webview'
 import { DMPWebViewController } from './DMPWebViewController'
@@ -53,6 +54,7 @@ export struct DMPWebComponent {
     DMPLogger.i(Tags.DMP_WEB_COMPONENT, "aboutToDisappear")
     this.controller.webContainer = null;
     this.controller.notifyControllerDetached()
+    DMPNativeMapManager.clearPage(this.appIndex, this.webViewId)
     this.render.removeController(this.webViewId)
   }
 

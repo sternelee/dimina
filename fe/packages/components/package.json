@@ -5,7 +5,8 @@
 	"description": "内置组件",
 	"type": "module",
 	"files": [
-		"dist"
+		"dist",
+		"map-provider.d.ts"
 	],
 	"module": "./dist/components.js",
 	"exports": {
@@ -14,6 +15,9 @@
 		},
 		"./style": {
 			"import": "./dist/components.css"
+		},
+		"./map-provider": {
+			"types": "./map-provider.d.ts"
 		}
 	},
 	"scripts": {

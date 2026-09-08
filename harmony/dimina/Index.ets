@@ -9,3 +9,5 @@ export { DMPContainerBridgesModule } from './src/main/ets/Bridges/DMPContainerBr
 export { DMPBridgeCallback, DMPBridgeCallbackType } from './src/main/ets/Bridges/DMPTSUtil';
 export { DMPMap } from './src/main/ets/Utils/DMPMap';
 export { DMPDefaultVirtualFilePrefix, DMPVirtualFileConfig } from './src/main/ets/Bundle/Util/DMPFileUrlConvertor';
+
+export { DMPMapProviders, DMPNativeMapProvider, DMPNativeMapHandle, DMPNativeMapEvents } from './src/main/ets/Map/DMPMapProvider';

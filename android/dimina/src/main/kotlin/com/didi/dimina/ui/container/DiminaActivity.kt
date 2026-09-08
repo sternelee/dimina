@@ -802,6 +802,14 @@ class DiminaActivity : ComponentActivity() {
     private fun updateWebViewBackgroundColor(color: String) {
         val backgroundColor = parseCssColor(color).toArgb()
         val activeWebView = getWebViewForBridge(apiBridgeContext)
+        val activeHost = if (activeWebView != null) {
+            tabPageStates.values.firstOrNull { it.webView === activeWebView }?.nativeComponentHost
+                ?: nativeComponentHost.takeIf { webView === activeWebView }
+        } else nativeComponentHost
+        activeHost?.let {
+            it.updatePageBackgroundColor(backgroundColor)
+            return
+        }
         if (activeWebView != null) {
             activeWebView.setBackgroundColor(backgroundColor)
         } else {
@@ -1462,7 +1470,7 @@ class DiminaActivity : ComponentActivity() {
         val overlay = nativeOverlay ?: return
         nativeComponentHost = NativeComponentHost(this, currentWebView, overlay) { message ->
             bridgeForWebView(currentWebView)?.handleEmbeddedWebViewMessage(message)
-        }
+        }.also { it.updatePageBackgroundColor(parseCssColor(backgroundColor.value).toArgb()) }
     }
 
     private fun bindNativeComponentHost(index: Int) {
@@ -1471,7 +1479,7 @@ class DiminaActivity : ComponentActivity() {
         val overlay = state.nativeOverlay ?: return
         state.nativeComponentHost = NativeComponentHost(this, currentWebView, overlay) { message ->
             bridgeForWebView(currentWebView)?.handleEmbeddedWebViewMessage(message)
-        }
+        }.also { it.updatePageBackgroundColor(parseCssColor(state.configInfo.backgroundColor).toArgb()) }
         if (index == selectedTabIndex.intValue) {
             nativeComponentHost = state.nativeComponentHost
         }

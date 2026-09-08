@@ -123,7 +123,8 @@ function invokeMessage(name, params, target) {
 		target,
 		body: {
 			name,
-			bridgeId: router.getPageInfo().id,
+			// MapContext belongs to its creation page, including after another page opens.
+			bridgeId: name === 'mapContext' ? params.mapBridgeId : router.getPageInfo().id,
 			params,
 		},
 	}
