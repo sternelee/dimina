@@ -72,29 +72,3 @@ NativeComponentBackends.resetFactory()
 后续接入有原生 embed 能力的 WebView 内核时，可以在此边界实现新的后端，但还需要对应内核、Render 节点关联、布局/触摸协议以及 SDK 渲染适配。仅替换这个工厂不会获得完整同层渲染。
 
 源码入口：[`NativeComponentBackend.kt`](../android/dimina/src/main/kotlin/com/didi/dimina/ui/view/nativecomponent/NativeComponentBackend.kt)、[`NativeComponentLayout.kt`](../android/dimina/src/main/kotlin/com/didi/dimina/ui/view/nativecomponent/NativeComponentLayout.kt)、[`WebViewUnderlayBackend.kt`](../android/dimina/src/main/kotlin/com/didi/dimina/ui/view/nativecomponent/WebViewUnderlayBackend.kt)。地图 SDK 扩展见[地图接入](./Map-Integration.md)。
-
-## 本地验证（2026-09-08）
-
-Android 核心 316 项单元测试、可选高德模块构建、3 项后端模拟器测试和 6 项前端原生协议回归通过。模拟器测试使用普通原生 View 与真实系统 WebView，检查窗口合成像素、HTML 覆盖、裁剪尺寸、动态底色、手势取消、页面隔离和清理。手势取消和底色恢复分别完成隔离消融，禁用后对应断言失败，恢复后通过。
-
-这些测试未加载地图 SDK 的真实底图，不能证明 TextureMapView GPU、不同厂商设备或 WebView 版本的表现；各组件的完整业务生命周期、实际视频播放和高德地图仍需真机验收。
-
-### Android 页面底色与分包地图回归
-
-官方分包示例的 `page { background-color: #F8F8F8 }` 会遮住 WebView 下方的原生地图。Render 在后端明确支持时，采集 `html/body` 的纯色背景并随布局传递 `pageBackgroundColors`，使用独立样式规则临时使这两个根节点透明；后端将颜色按顺序合成在配置底色之上，在原生组件层绘制。示例源码和原有内联样式不改动。多个地图共享页面规则，最后一个销毁时撤销；隐藏地图期间保留底色，根节点 class/style 变化随布局更新重新采样。
-
-这项兼容只处理根页面纯色。根背景图片/渐变、无法解析的颜色和优先级更高的内联 `!important` 保留原样；嵌套容器的不透明背景仍需要透明祖先或更完整的合成后端。不能据此宣称支持任意 CSS 同层渲染。
-
-验证：Components 267 项、Android 核心 316 项、4 项模拟器真实 WebView 合成测试通过。隔离消融分别禁用 DOM 透明规则和原生底色合成，前者 3 项断言失败，后者在地图外区域像素断言失败；恢复后通过。真机已确认原分包底图显示且页面底色保留。
-
-### 页面背景更新的性能优化
-
-背景采样按 Document 共享缓存，滚动和地图位置变化直接复用结果，不再反复移除/写回样式规则。根节点属性、head 中样式表增删/内容变更、外链样式加载、窗口 resize 和系统深浅色变化会使缓存失效，并通知同页面地图更新。同步读取先消费尚未投递的 MutationObserver 记录，避免属性刚改变时读到旧缓存；自身兼容样式的变更不会触发循环。最后一个地图释放时清理观察者、主题监听和透明规则。直接 CSSOM 修改规则、持续 CSS 背景动画不在本次验证范围。
-
-Android 后端缓存背景输入与合成色：相同输入不重复合成，相同最终颜色不重新创建或设置 ColorDrawable；最后一个背景承载节点移除后恢复原背景对象并清空缓存。
-
-在真机系统 WebView 的隔离文档中，对相同的双地图、300 次布局背景读取进行对比：初始化后的额外 getComputedStyle 调用从 2400 次降为 0 次；本次测量总耗时约 50.4 ms → 0.4 ms。该结果只衡量背景采样函数，不代表整页帧率、CPU 或功耗提升比例。
-
-验证：Components 272 项、Android 核心 316 项通过，5 项真实 WebView/原生层设备回归通过，其中连续 300 次布局更新复用同一背景对象，并检查配置底色变化、隐藏、销毁与重建。隔离消融分别禁用前端缓存、根属性失效机制、原生背景缓存，出现额外样式读取、漏掉换色通知、背景对象被替换的预期断言失败；全部恢复后通过。
-
-最终调试包已安装到 Android 真机。原分包地图显示正常；在实际地图 WebView 连续触发 30 帧 scroll 布局同步，背景样式规则写入为 0 次。临时修改 body 底色后原生背景正确换色、地图继续显示；恢复样式并返回列表后底色恢复，重进地图中心仍为广州示例坐标。临时样式和调试转发已清理。
