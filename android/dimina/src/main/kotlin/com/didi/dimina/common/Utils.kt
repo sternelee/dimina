@@ -163,15 +163,20 @@ object Utils {
     // Mini program system APIs expect CSS/logical px, not Android physical px.
     @SuppressLint("InternalInsetResource")
     fun getStatusBarHeight(currentActivity: Activity): Int {
-        val statusBarInsetPx = ViewCompat.getRootWindowInsets(currentActivity.window.decorView)
-            ?.getInsets(WindowInsetsCompat.Type.statusBars())
-            ?.top
-            ?: 0
-        val statusBarHeightPx = listOf(
-            getAndroidDimensionPixelSize(currentActivity, "status_bar_height_default"),
-            getAndroidDimensionPixelSize(currentActivity, "status_bar_height"),
-            statusBarInsetPx
-        ).filter { it > 0 }.minOrNull() ?: 0
+        val windowInsets = ViewCompat.getRootWindowInsets(currentActivity.window.decorView)
+        val statusBarHeightPx = StatusBarInsetResolver.resolveTopInsetPx(
+            statusBarInsetPx = windowInsets
+                ?.getInsets(WindowInsetsCompat.Type.statusBars())
+                ?.top
+                ?: 0,
+            displayCutoutInsetPx = windowInsets
+                ?.getInsets(WindowInsetsCompat.Type.displayCutout())
+                ?.top
+                ?: 0,
+            statusBarResourcePx = getAndroidDimensionPixelSize(currentActivity, "status_bar_height"),
+            defaultStatusBarResourcePx =
+                getAndroidDimensionPixelSize(currentActivity, "status_bar_height_default"),
+        )
         return pxToDpInt(statusBarHeightPx, currentActivity)
     }
 
