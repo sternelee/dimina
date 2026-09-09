@@ -20,6 +20,7 @@ export default defineConfig(({ command, mode }) => {
 	return {
 		base: process.env.GITHUB_ACTIONS ? '/dimina/' : '/',
 		server: {
+			strictPort: true,
 			open: true, // 启动后是否自动打开浏览器
 		},
 		define: {
