@@ -82,6 +82,16 @@ public class DMPApp {
             return false
         }
 
+        if navigator?.isRetainedInBackground == true {
+            currentLaunchConfig?.scene = launchConfig.scene ?? DMPScene.fromMainEntry.rawValue
+            currentLaunchConfig?.referrerInfo = launchConfig.referrerInfo
+            return navigator?.resumeRetainedMiniProgram() == true
+        }
+        if service != nil, navigator?.getTopPageRecord() != nil {
+            // Reopening a presented app is idempotent as well.
+            return true
+        }
+
         isLaunching = true
         defer {
             isLaunching = false
@@ -591,10 +601,13 @@ public class DMPApp {
         container?.registerExtModule(moduleName, handler: handler)
     }
 
-    /// Requests a normal mini-program exit from the host application.
-    ///
-    /// Unlike `destroy()`, this first closes the owned pages through the navigator, delivers the
-    /// Page/App hide sequence, and restores a live opener mini program when one exists.
+    /// Hide the UI without resetting JavaScript or the current page stack.
+    @MainActor
+    public func hideMiniProgram() async throws {
+        try await DMPAppManager.sharedInstance().hideMiniProgram(self)
+    }
+
+    /// Close the owned pages, deliver hide callbacks, then destroy this instance and restore its opener.
     @MainActor
     public func closeMiniProgram() async throws {
         try await DMPAppManager.sharedInstance().exitMiniProgram(self, onAccepted: {})
@@ -606,6 +619,7 @@ public class DMPApp {
             return
         }
         isDestroyed = true
+        navigator?.destroyRetainedPages()
         DMPLogger.debug("app destroy")
         BluetoothAPIManager.shared.clearApp(appId)
         LocalNetworkAPIManager.shared.clearApp(appId)

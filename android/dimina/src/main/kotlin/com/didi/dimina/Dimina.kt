@@ -130,6 +130,14 @@ class Dimina private constructor(context: Context) {
         miniApp.openApp(context, miniProgram)
     }
 
+    /** Hide an app while retaining its page stack and runtime for the next startMiniProgram. */
+    @MainThread
+    fun hideMiniProgram(appId: String): Boolean {
+        val normalizedAppId = appId.trim()
+        if (normalizedAppId.isEmpty()) return false
+        return DiminaActivity.hideMiniProgramFromHost(normalizedAppId)
+    }
+
     /**
      * Requests a normal mini-program exit from the host application.
      *

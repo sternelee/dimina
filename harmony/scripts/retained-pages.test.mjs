@@ -1,0 +1,121 @@
+// Run with `node --test harmony/scripts/retained-pages.test.mjs` after installing fe dependencies.
+// Exercise ArkTS navigation bookkeeping on Node; HAR/device checks cover ArkUI itself.
+import assert from 'node:assert/strict'
+import fs from 'node:fs'
+import { createRequire } from 'node:module'
+import { test } from 'node:test'
+import vm from 'node:vm'
+
+const require = createRequire(new URL('../../fe/packages/compiler/package.json', import.meta.url))
+const { transformSync } = require('esbuild')
+const sourceRoot = new URL('../dimina/src/main/ets/', import.meta.url)
+
+function load(name, dependencies = {}) {
+  const source = fs.readFileSync(new URL(name, sourceRoot), 'utf8')
+  const { code } = transformSync(source, { loader: 'ts', format: 'cjs', target: 'es2022' })
+  const module = { exports: {} }
+  vm.runInNewContext(code, {
+    module,
+    exports: module.exports,
+    require: name => {
+      assert.ok(name in dependencies, `Unexpected runtime dependency: ${name}`)
+      return dependencies[name]
+    },
+  })
+  return module.exports
+}
+
+function fixture() {
+  const popped = []
+  const pushed = []
+  const disposed = []
+  const router = {
+    popEntries: count => popped.push(count),
+    build: name => {
+      const route = { name, extras: {} }
+      const request = {
+        putExtra(key, value) { route.extras[key] = value; return request },
+        setNavMode() { return request },
+        start() { pushed.push(route) },
+      }
+      return request
+    },
+  }
+  const { DMPNavigatorManager } = load('Navigator/DMPNavigatorManager.ets', {
+    '../Utils/DMPStack': load('Utils/DMPStack.ets'),
+    '../EventTrack/DMPLogger': { DMPLogger: { d() {}, i() {} } },
+    '../EventTrack/Tags': { Tags: {} },
+    '../DPages/DMPPageLifecycle': { DMPPageLifecycle: class {} },
+    './DRouter': { DRouter: { getInstance: () => router } },
+  })
+  const manager = new DMPNavigatorManager(null, { onShow() {}, onHide() {} })
+  const records = [1, 2].map(webViewId => ({
+    appIndex: 7, webViewId, ownsRouterEntry: true, retainsNativeView: false,
+    webViewNodeController: { dispose() { disposed.push(webViewId) } },
+  }))
+  const navigator = {
+    stacks: { data: records },
+    routerEntryCount: () => records.length,
+    closeAllPages() { while (records.length) { records.pop(); manager.popGlobalPageRecord() } },
+  }
+  manager.pushNavigator({ id: 42, getNavigator: () => navigator })
+  records.forEach(record => manager.pushGlobalPageRecord(record))
+  return { manager, records, popped, pushed, disposed }
+}
+
+test('hide/resume retains page identities and restores ordered route ownership', () => {
+  const f = fixture()
+  const first = f.records[0]
+  const second = f.records[1]
+  for (let i = 0; i < 2; i++) {
+    f.manager.hidePresentation()
+    assert.equal(f.manager.isRetainedInBackground, true)
+    assert.equal(f.manager.getPageRecordById(2), second)
+    assert.equal(f.manager.getTopPageRecord(), second)
+    assert.equal(first.retainsNativeView, true)
+    assert.deepEqual(f.disposed, [])
+    assert.equal(f.manager.resumePresentation(), true)
+    assert.equal(f.manager.isRetainedInBackground, false)
+    assert.deepEqual(f.pushed.slice(-2).map(route => route.extras), [
+      { appIndex: 7, webViewId: 1, stackId: 42 },
+      { appIndex: 7, webViewId: 2, stackId: 42 },
+    ])
+  }
+})
+
+test('destroying a retained app releases its nodes without popping the foreground app', () => {
+  const f = fixture()
+  f.manager.hidePresentation()
+  f.popped.length = 0
+  f.manager.closeAllNavigators('exit')
+  assert.deepEqual(f.popped, [])
+  assert.deepEqual(f.disposed, [2, 1])
+  assert.equal(f.manager.getPageRecordById(1), undefined)
+  assert.equal(f.manager.isRetainedInBackground, false)
+})
+
+test('capture native tab state before detaching and make repeated hide/resume idempotent', () => {
+  const f = fixture()
+  let captures = 0
+  f.manager.captureTabState = () => {
+    assert.equal(f.popped.length, 0)
+    captures++
+  }
+  f.manager.hidePresentation()
+  f.manager.hidePresentation()
+  assert.equal(captures, 1)
+  assert.deepEqual(f.popped, [2])
+  assert.equal(f.manager.resumePresentation(), true)
+  assert.equal(f.manager.resumePresentation(), false)
+  assert.equal(f.pushed.length, 2)
+})
+
+test('rejects host-managed pages before notifying hide or detaching routes', () => {
+  const f = fixture()
+  f.records.length = 0
+  let hides = 0
+  assert.throws(() => f.manager.hidePresentation(() => hides++), /host-managed pages/)
+  assert.equal(hides, 0)
+  assert.equal(f.manager.isRetainedInBackground, false)
+  assert.deepEqual(f.popped, [])
+})

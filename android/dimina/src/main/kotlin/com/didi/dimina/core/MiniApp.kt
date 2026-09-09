@@ -98,7 +98,7 @@ class MiniApp private constructor() {
         getOrCreateJsCore(miniProgram.appId, context)
 
         try {
-            DiminaActivity.launch(context, miniProgram)
+            DiminaActivity.openMiniProgram(context, miniProgram)
         } catch (error: Exception) {
             // The runtime is registered before the Activity exists. A start that never happened
             // would otherwise leave [isRunning] true with no Activity to ever clear it, and every

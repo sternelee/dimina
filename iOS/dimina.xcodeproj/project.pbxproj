@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		44A000002609090000000001 /* DMPRetainedMiniProgramTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A000002609090000000002 /* DMPRetainedMiniProgramTests.swift */; };
 		14603AA5921BC560B952F3E9 /* DMPUtilPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61DD3E623362F9D7264941CD /* DMPUtilPathTests.swift */; };
 		1A2B3C4D5E6F700000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000101 /* Alamofire */; };
 		1A2B3C4D5E6F700000000002 /* MMKV in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000102 /* MMKV */; };
@@ -42,6 +43,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		44A000002609090000000002 /* DMPRetainedMiniProgramTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMPRetainedMiniProgramTests.swift; sourceTree = "<group>"; };
 		0A6F85D82DAE3D7D0047A006 /* dimina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dimina.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23EDE52DA8E2C3DFF607829B /* DMPWebSocketManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPWebSocketManagerTests.swift; sourceTree = "<group>"; };
 		2EAA9C0614F7638987B22EAC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
@@ -150,6 +152,7 @@
 				4F8C9A102F23000100000002 /* DMPWebResourceLoaderTests.swift */,
 				7C4A5E132F23000100000002 /* CanvasTempFileValidationTests.swift */,
 				9A1D30A12F12000100000002 /* DMPNavigatorCapsuleTests.swift */,
+				44A000002609090000000002 /* DMPRetainedMiniProgramTests.swift */,
 				61DD3E623362F9D7264941CD /* DMPUtilPathTests.swift */,
 			);
 			path = diminaTests;
@@ -344,6 +347,7 @@
 				4F8C9A102F23000100000001 /* DMPWebResourceLoaderTests.swift in Sources */,
 				7C4A5E132F23000100000001 /* CanvasTempFileValidationTests.swift in Sources */,
 				9A1D30A12F12000100000001 /* DMPNavigatorCapsuleTests.swift in Sources */,
+				44A000002609090000000001 /* DMPRetainedMiniProgramTests.swift in Sources */,
 				14603AA5921BC560B952F3E9 /* DMPUtilPathTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

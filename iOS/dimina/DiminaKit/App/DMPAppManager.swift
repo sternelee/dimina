@@ -446,6 +446,25 @@ public class DMPAppManager {
     }
 
     @MainActor
+    func hideMiniProgram(_ app: DMPApp) async throws {
+        try await withMiniProgramOperation {
+            guard getApp(appIndex: app.getAppIndex()) === app else {
+                throw DMPMiniProgramNavigationError.sourceUnavailable
+            }
+            if app.getNavigator()?.isRetainedInBackground == true { return }
+            guard let navigator = app.getNavigator(), navigator.isActiveNavigationOwner() else {
+                throw DMPMiniProgramNavigationError.sourceNotPresented
+            }
+            guard !navigator.hasPageRouteOperationInProgress() else {
+                throw DMPMiniProgramNavigationError.operationInProgress
+            }
+            let opener = removeOpenerContext(for: app.getAppIndex())
+            await navigator.hideMiniProgram()
+            if let opener { restoreOpener(opener, extraData: nil) }
+        }
+    }
+
+    @MainActor
     func exitMiniProgram(
         _ app: DMPApp,
         onAccepted: () -> Void
@@ -453,6 +472,12 @@ public class DMPAppManager {
         try await withMiniProgramOperation {
             guard getApp(appIndex: app.getAppIndex()) === app else {
                 throw DMPMiniProgramNavigationError.sourceUnavailable
+            }
+            if app.getNavigator()?.isRetainedInBackground == true {
+                onAccepted()
+                await app.service?.drainPendingContainerMessages()
+                app.destroy()
+                return
             }
             guard app.getNavigator()?.isActiveNavigationOwner() == true else {
                 throw DMPMiniProgramNavigationError.sourceNotPresented

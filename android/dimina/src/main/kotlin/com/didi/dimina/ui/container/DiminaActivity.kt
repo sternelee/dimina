@@ -2,6 +2,7 @@ package com.didi.dimina.ui.container
 
 import android.Manifest
 import android.app.Activity
+import android.app.ActivityManager
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
 import android.animation.ValueAnimator
@@ -20,6 +21,7 @@ import android.view.WindowInsets
 import android.view.animation.AccelerateDecelerateInterpolator
 import android.webkit.WebView
 import android.widget.FrameLayout
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.ComponentActivity
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.setContent
@@ -530,6 +532,7 @@ class DiminaActivity : ComponentActivity() {
             miniApp = MiniApp.getInstance()
             miniProgram = program
             activityRegistry.register(miniProgram.appId, this)
+            pendingLaunches.remove(miniProgram.appId)
             LogUtils.d(
                 tag,
                 "Successfully obtained MiniApp instance and JsCore for appId: ${miniProgram.appId}"
@@ -539,6 +542,12 @@ class DiminaActivity : ComponentActivity() {
             finish()
             return
         }
+
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (miniProgram.root) hideMiniProgram() else finish()
+            }
+        })
 
         // Initialize the ContactPicker
         contactPicker = ContactPicker(this)
@@ -1628,6 +1637,9 @@ class DiminaActivity : ComponentActivity() {
     override fun onDestroy() {
         if (isMiniProgramInitialized) {
             activityRegistry.unregister(miniProgram.appId, this)
+            if (activityRegistry.lastRegistered(miniProgram.appId) == null) {
+                returnTasks.remove(miniProgram.appId)
+            }
         }
 
         releasePageResources(pageStateTeardownReason)
@@ -1673,7 +1685,7 @@ class DiminaActivity : ComponentActivity() {
                 },
                 onCloseClick = {
                     showMiniProgramMenu.value = false
-                    exitMiniProgram()
+                    hideMiniProgram()
                 },
                 onDismiss = {
                     showMiniProgramMenu.value = false
@@ -1876,7 +1888,7 @@ class DiminaActivity : ComponentActivity() {
                     onMoreClick = {
                         showMiniProgramMenu.value = true
                     },
-                    onCloseClick = { exitMiniProgram() },
+                    onCloseClick = { hideMiniProgram() },
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(
@@ -1887,6 +1899,20 @@ class DiminaActivity : ComponentActivity() {
                 )
             }
         }
+    }
+
+    /** Hide the owned task without destroying its Activities, WebViews or JS runtime. */
+    fun isMiniProgramForeground(): Boolean = isMiniProgramInitialized && visibilityTracker.isForeground(miniProgram.appId)
+
+    fun hideMiniProgram() {
+        if (!isMiniProgramForeground() || isFinishing) return
+        window.decorView.clearFocus()
+        // Queue options before another task can receive onStart.
+        queueOpenerReturn(null)
+        moveTaskToBack(true)
+        val returnTask = returnTasks[miniProgram.appId]
+        getSystemService(ActivityManager::class.java).appTasks
+            .firstOrNull { it.taskInfo.taskId == returnTask }?.moveToFront()
     }
 
     private fun closeMiniProgram() {
@@ -2479,6 +2505,60 @@ class DiminaActivity : ComponentActivity() {
 
         /** 小程序前后台判据的唯一真相源，见 [DiminaActivity.onStart]/[DiminaActivity.onStop]。 */
         private val visibilityTracker = MiniProgramVisibilityTracker<DiminaActivity>()
+
+        private val pendingLaunches = mutableSetOf<String>()
+        private val returnTasks = mutableMapOf<String, Int>()
+
+        /** Move the entire task to the front; CLEAR_TOP would discard the retained page stack. */
+        internal fun resumeRetainedMiniProgram(context: Context, appId: String): Boolean {
+            val activity = activityRegistry.lastRegistered(appId) ?: return false
+            if (activity.isFinishing || activity.isDestroyed) return false
+            val manager = context.getSystemService(ActivityManager::class.java)
+            val task = manager.appTasks.firstOrNull { it.taskInfo.taskId == activity.taskId } ?: return false
+            task.moveToFront()
+            return true
+        }
+
+        internal fun openMiniProgram(context: Activity, program: MiniProgram) {
+            // Page navigation belongs to the current task; only app launches may reuse a task.
+            if (!program.root) {
+                launch(context, program)
+                return
+            }
+            val existing = activityRegistry.lastRegistered(program.appId)
+            if (existing?.taskId != context.taskId) returnTasks[program.appId] = context.taskId
+            if (existing != null && !existing.isFinishing && !existing.isDestroyed) {
+                activityRegistry.snapshot(program.appId).forEach { activity ->
+                    activity.miniProgram = activity.miniProgram.copy(
+                        openerAppId = program.openerAppId,
+                        referrerExtraData = program.referrerExtraData,
+                        scene = program.scene,
+                    )
+                }
+                MiniApp.getInstance().setPendingAppShowOptions(program.appId, JSONObject().apply {
+                    put("scene", program.scene)
+                    put("referrerInfo", existing.getLaunchReferrerInfo() ?: JSONObject())
+                })
+            }
+            if (resumeRetainedMiniProgram(context, program.appId)) return
+            // A second tap can arrive before the first Activity's onCreate registers its task.
+            if (!pendingLaunches.add(program.appId)) return
+            try {
+                // Excluded tasks are trimmed by Android when another task becomes active.
+                // Keep a normal task so switching mini programs does not destroy its pages.
+                launch(context, program, Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+            } catch (error: Exception) {
+                pendingLaunches.remove(program.appId)
+                throw error
+            }
+        }
+
+        @androidx.annotation.MainThread
+        internal fun hideMiniProgramFromHost(appId: String): Boolean {
+            val activity = activityRegistry.lastRegistered(appId) ?: return false
+            activity.hideMiniProgram()
+            return true
+        }
 
         fun launch(
             context: Context,

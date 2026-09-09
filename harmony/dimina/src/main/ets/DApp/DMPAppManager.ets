@@ -254,9 +254,40 @@ export class DMPAppManager {
     }
   }
 
+  async hideMiniProgram(app: DMPApp): Promise<void> {
+    if (app.navigatorManager.isRetainedInBackground) return
+    this.beginMiniProgramOperation(app, 'hideMiniProgram')
+    try {
+      if (app.container.isNavigating) throw new Error('hideMiniProgram: navigation in progress')
+      const openerIndex = this.miniProgramPresentations.openerAppIndex(app.appIndex)
+      const opener = openerIndex === undefined ? undefined : this.appPools.get(openerIndex)
+      app.navigatorManager.hidePresentation((): void => app.notifyMiniProgramHide())
+      this.miniProgramPresentations.removeApp(app.appIndex)
+      if (opener) this.resumeOpener(opener, DMPScene.fromMiniProgramBack,
+        new DMPMap({ appId: app.appConfig.appId }))
+    } finally {
+      this.endMiniProgramOperation()
+    }
+  }
+
+  resumeRetainedApp(app: DMPApp, config: DMPLaunchConfig): void {
+    if (!this.miniProgramPresentations.ensureRoot(app.appIndex, app.appConfig.appId)) {
+      throw new Error('resumeMiniProgram: another mini program is presented')
+    }
+    app.navigatorManager.resumePresentation()
+    this.resumeOpener(app, config.scene ?? DMPScene.fromMainEntry, config.referrerInfo)
+    const completion = config.completion
+    config.completion = undefined
+    completion?.(true)
+  }
+
   async exitMiniProgram(currentApp: DMPApp,
     beforeClose: DMPMiniProgramBeforeDestructiveAction): Promise<void> {
     const apiName = 'exitMiniProgram'
+    if (currentApp.navigatorManager.isRetainedInBackground) {
+      await currentApp.closeDimina(beforeClose)
+      return
+    }
     this.beginMiniProgramOperation(currentApp, apiName)
     try {
       const openerIndex = this.miniProgramPresentations.openerAppIndex(currentApp.appIndex)

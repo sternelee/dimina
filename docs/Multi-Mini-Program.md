@@ -2,6 +2,8 @@
 
 Dimina 在 Android、iOS、HarmonyOS 和 Web 上支持多个不同 `appId` 的小程序运行时并存。该能力用于解决 [Issue #44](https://github.com/didi/dimina/issues/44)：一个小程序打开另一个小程序后，来源实例进入后台但不被销毁，目标实例退出后可以恢复原来的运行状态。
 
+宿主入口也支持保留实例：点击胶囊关闭后，再次打开同一 `appId` 会恢复原页面栈。各端隐藏、恢复、主动销毁接口及资源边界见[宿主后台留存](./MiniProgram-Retention.md)。
+
 ## 运行模型
 
 每个宿主容器或 AppManager 对一个 `appId` 只保留一个权威运行时。多个不同 `appId` 可以同时存在，但任一时刻只有呈现栈栈顶的小程序处于前台：

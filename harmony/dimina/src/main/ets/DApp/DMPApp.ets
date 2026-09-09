@@ -476,10 +476,12 @@ export class DMPApp {
     return this._closeInProgress
   }
 
-  /**
-   * 宿主主动关闭小程序的稳定入口。通过 AppManager 的 exit 链路关闭，确保存在来源
-   * 小程序时恢复来源，而不是只销毁当前 Worker 和页面。
-   */
+  /** 隐藏界面，保留当前页面和运行时，再次打开时恢复。 */
+  public hideMiniProgram(): Promise<void> {
+    return DMPAppManager.sharedInstance().hideMiniProgram(this)
+  }
+
+  /** 销毁当前实例，通过 AppManager 恢复仍在运行的来源小程序。 */
   public closeMiniProgram(): Promise<void> {
     return DMPAppManager.sharedInstance().exitMiniProgram(this, async (): Promise<void> => {})
   }
@@ -754,6 +756,14 @@ export class DMPApp {
   }
 
   private launchInner(launchConfig: DMPLaunchConfig) {
+    if (this.navigatorManager.isRetainedInBackground) {
+      DMPAppManager.sharedInstance().resumeRetainedApp(this, launchConfig)
+      return
+    }
+    if (!this.navigatorManager.isEmpty()) {
+      this.settleLaunchCompletion(launchConfig, true)
+      return
+    }
     DMPLogger.i(Tags.LAUNCH, "launchInner start");
     const appModuleConfig = this.bundleManager.getJsAppModuleConfig()
     if (appModuleConfig.runtimeType === 'game') {
