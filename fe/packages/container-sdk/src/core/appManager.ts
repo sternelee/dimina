@@ -131,6 +131,16 @@ export class AppManager {
 		const cacheApp = this.getAppById(appId)
 
 		if (cacheApp) {
+			// A host entry starts a new presentation relationship while retaining the page stack.
+			cacheApp.opener = opts.opener ?? null
+			if (dimina.views.at(-1) !== cacheApp) {
+				cacheApp.queueAppShowOptions({
+					scene: scene ?? 1001,
+					path: cacheApp.getCurrentPagePath(),
+					query: cacheApp.getCurrentPageQuery(),
+					referrerInfo: opts.referrerInfo ?? {},
+				})
+			}
 			// 等呈现动画完整跑完再返回，下一个排队中的 openApp() 才开始处理。
 			await dimina.presentView(cacheApp, true)
 			return cacheApp

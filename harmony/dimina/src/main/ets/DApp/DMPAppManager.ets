@@ -274,6 +274,12 @@ export class DMPAppManager {
     if (!this.miniProgramPresentations.ensureRoot(app.appIndex, app.appConfig.appId)) {
       throw new Error('resumeMiniProgram: another mini program is presented')
     }
+    // The next windowStage SHOWN also reads this config; do not restore an old opener/scene.
+    const retainedConfig = app.getLaunchConfig()
+    if (retainedConfig) {
+      retainedConfig.scene = config.scene ?? DMPScene.fromMainEntry
+      retainedConfig.referrerInfo = config.referrerInfo
+    }
     app.navigatorManager.resumePresentation()
     this.resumeOpener(app, config.scene ?? DMPScene.fromMainEntry, config.referrerInfo)
     const completion = config.completion

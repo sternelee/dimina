@@ -903,7 +903,7 @@ public class DMPNavigator: NSObject {
         retainedControllers = []
         attach(to: navigationController)
         navigationController.setViewControllers(hostControllers + controllers, animated: false)
-        app?.notifyMiniProgramShow()
+        if let app { DMPAppManager.sharedInstance().restoreRetainedAppVisibility(app) }
         setCapsuleVisible(true)
         return true
     }

@@ -2035,6 +2035,11 @@ class DiminaActivity : ComponentActivity() {
                 put("referrerInfo", referrerInfo)
             },
         )
+        // Returning ends this presentation's opener relationship. A later host-side cleanup
+        // of the retained task must not enqueue a second return on the already-restored app.
+        activityRegistry.snapshot(miniProgram.appId).forEach { activity ->
+            activity.miniProgram = activity.miniProgram.copy(openerAppId = null, referrerExtraData = null)
+        }
         return true
     }
 

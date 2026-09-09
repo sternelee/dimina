@@ -446,6 +446,16 @@ public class DMPAppManager {
     }
 
     @MainActor
+    func restoreRetainedAppVisibility(_ app: DMPApp) {
+        let config = app.getCurrentLaunchConfig()
+        app.getNavigator()?.resumeAfterMiniProgramNavigation(
+            scene: config?.scene ?? DMPScene.fromMainEntry.rawValue,
+            referrerInfo: config?.referrerInfo,
+            hostVisible: hostVisible
+        )
+    }
+
+    @MainActor
     func hideMiniProgram(_ app: DMPApp) async throws {
         try await withMiniProgramOperation {
             guard getApp(appIndex: app.getAppIndex()) === app else {

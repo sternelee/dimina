@@ -231,6 +231,17 @@ class DiminaActivityBackgroundHookTest {
     }
 
     @Test
+    fun `returning consumes the opener on every retained page after queueing its payload`() {
+        val returning = bodyOf("queueOpenerReturn")
+        val queue = returning.indexOf("miniApp.setPendingAppShowOptions(")
+        val consume = returning.indexOf("activityRegistry.snapshot(miniProgram.appId)")
+        assertTrue(queue >= 0)
+        assertTrue("All retained pages must drop the completed opener relation after queueing the return", consume > queue)
+        assertTrue(returning.substring(consume).contains("openerAppId = null"))
+        assertTrue(returning.substring(consume).contains("referrerExtraData = null"))
+    }
+
+    @Test
     fun `cross mini program suspension dispatches page hide before app hide`() {
         val suspend = bodyOf("suspendForMiniProgramNavigation")
         val pageHide = suspend.indexOf(".pageHide(")

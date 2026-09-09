@@ -119,3 +119,46 @@ test('rejects host-managed pages before notifying hide or detaching routes', () 
   assert.equal(f.manager.isRetainedInBackground, false)
   assert.deepEqual(f.popped, [])
 })
+
+
+function appManagerFixture() {
+  const { DMPAppManager } = load('DApp/DMPAppManager.ets', {
+    './DMPMiniProgramPresentationStack': load('DApp/DMPMiniProgramPresentationStack.ets', { '../Utils/DMPMap': {} }),
+    './config/DMPLaunchConfig': load('DApp/config/DMPLaunchConfig.ets'),
+    './config/DMPAppConfig': {},
+    './DMPApp': {},
+    '../EventTrack/DMPLogger': { DMPLogger: { d() {}, i() {} } },
+    '../EventTrack/Tags': { Tags: {} },
+    '../Utils/DMPContextUtils': {},
+    '../Utils/DMPRawFileUtils': {},
+    '../Utils/DMPMap': {},
+    '../Bundle/DMPRemoteUpdateManager': {},
+    '../Bundle/Util/DMPMMKVManager': {},
+    '../Utils/DMPPreference': {},
+  })
+  const manager = new DMPAppManager()
+  const storedConfig = { scene: 1037, referrerInfo: { appId: 'old-opener' }, appEntryPath: 'pages/detail' }
+  const shown = []
+  const app = {
+    appIndex: 17, appConfig: { appId: 'retained' },
+    getLaunchConfig: () => storedConfig,
+    navigatorManager: { resumePresentation() {} },
+    notifyMiniProgramShow: (scene, referrerInfo) => shown.push({ scene, referrerInfo }),
+  }
+  return { manager, app, storedConfig, shown }
+}
+
+test('host re-entry refreshes the config used by later system foreground events', () => {
+  const f = appManagerFixture()
+  let completed = false
+  f.manager.resumeRetainedApp(f.app, { scene: 1011, completion: success => { completed = success } })
+  assert.equal(completed, true)
+  assert.equal(f.storedConfig.scene, 1011)
+  assert.equal(f.storedConfig.referrerInfo, undefined)
+  assert.equal(f.storedConfig.appEntryPath, 'pages/detail')
+  // DMPAppLifecycle reads this config again after a system background/foreground cycle.
+  f.app.notifyMiniProgramShow(f.storedConfig.scene, f.storedConfig.referrerInfo)
+  assert.deepEqual(f.shown, [{ scene: 1011, referrerInfo: undefined }, { scene: 1011, referrerInfo: undefined }])
+  f.manager.resumeRetainedApp(f.app, {})
+  assert.equal(f.storedConfig.scene, 1001)
+})

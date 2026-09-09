@@ -22,14 +22,14 @@ B 返回 A         A(前台)
 
 A 通过 `navigateToMiniProgram` 打开 B 时：
 
-1. A 依次触发 App Hide 和当前 Page Hide。
+1. A 依次触发当前 Page Hide 和 App Hide。
 2. A 的 Worker/JS 引擎、页面栈、全局数据和宿主扩展订阅继续保留。
 3. B 以场景值 `1037` 启动，`referrerInfo.appId` 指向 A。
 4. B 成为唯一可操作的前台小程序；隐藏的 A 不能发起页面或跨小程序导航。
 
 B 调用 `navigateBackMiniProgram` 或 `exitMiniProgram` 后：
 
-1. B 的 Hide、成功/完成回调和页面卸载消息按各端协议进入旧运行时队列。
+1. B 的隐藏消息和成功/完成回调进入旧运行时队列；整个实例退出不额外派发 `Page.onUnload`。
 2. 终止性消息排空后才销毁 B 的页面、Worker/JS 引擎和原生资源。
 3. 恢复的仍是原来的 A 实例，不重新触发 `App.onLaunch`。
 4. A 以场景值 `1038` 触发 App Show 和当前 Page Show；`navigateBackMiniProgram` 的 `extraData` 放在 `referrerInfo.extraData` 中返回。
@@ -52,7 +52,7 @@ B 调用 `navigateBackMiniProgram` 或 `exitMiniProgram` 后：
 - `restartMiniProgram` 会替换当前实例的完整运行时，不属于后台恢复。
 - `exitMiniProgram` 会销毁当前目标实例；它不会销毁仍在呈现栈中的来源实例。
 - 后台保留是进程内能力，不是系统级持久化。宿主进程被系统终止后，需要按冷启动或宿主保存的恢复数据重新创建。
-- JavaScript 定时器、WebSocket、蓝牙和局域网等能力仍受微信语义及各操作系统后台策略约束。保留运行时不代表这些能力可以无限期在系统后台执行；例如 WebSocket 会按既有后台宽限策略中断。
+- JavaScript 定时器、WebSocket、蓝牙和局域网等能力仍受各能力自身的后台限制及操作系统策略约束；例如 WebSocket 会按既有后台宽限策略中断。框架尚未实现统一的 JS 挂起或实例自动淘汰，详见[资源边界](./MiniProgram-Retention.md#生命周期与资源边界)。
 
 ## 验证建议
 
