@@ -16,6 +16,8 @@ function load(name, dependencies = {}) {
   const module = { exports: {} }
   vm.runInNewContext(code, {
     module,
+    setTimeout: (fn, ms) => setTimeout(fn, ms).unref(),
+    clearTimeout,
     exports: module.exports,
     require: name => {
       assert.ok(name in dependencies, `Unexpected runtime dependency: ${name}`)
@@ -122,10 +124,12 @@ test('rejects host-managed pages before notifying hide or detaching routes', () 
 
 
 function appManagerFixture() {
+  let now = 0
   const { DMPAppManager } = load('DApp/DMPAppManager.ets', {
     './DMPMiniProgramPresentationStack': load('DApp/DMPMiniProgramPresentationStack.ets', { '../Utils/DMPMap': {} }),
     './config/DMPLaunchConfig': load('DApp/config/DMPLaunchConfig.ets'),
     './config/DMPAppConfig': {},
+    '@kit.BasicServicesKit': { systemDateTime: { TimeType: { STARTUP: 0 }, getUptime: () => now } },
     './DMPApp': {},
     '../EventTrack/DMPLogger': { DMPLogger: { d() {}, i() {} } },
     '../EventTrack/Tags': { Tags: {} },
@@ -145,7 +149,7 @@ function appManagerFixture() {
     navigatorManager: { resumePresentation() {} },
     notifyMiniProgramShow: (scene, referrerInfo) => shown.push({ scene, referrerInfo }),
   }
-  return { manager, app, storedConfig, shown }
+  return { manager, app, storedConfig, shown, setNow: value => { now = value } }
 }
 
 test('host re-entry refreshes the config used by later system foreground events', () => {
@@ -161,4 +165,34 @@ test('host re-entry refreshes the config used by later system foreground events'
   assert.deepEqual(f.shown, [{ scene: 1011, referrerInfo: undefined }, { scene: 1011, referrerInfo: undefined }])
   f.manager.resumeRetainedApp(f.app, {})
   assert.equal(f.storedConfig.scene, 1001)
+})
+
+
+test('retention evicts LRU, expires leases and preserves a pinned presentation', async () => {
+  const f = appManagerFixture()
+  const closed = []
+  const make = index => {
+    const app = { appIndex: index, navigatorManager: { isRetainedInBackground: true },
+      closeDimina: async () => { closed.push(index); f.manager.appPools.delete(index) } }
+    f.manager.appPools.set(index, app)
+    return app
+  }
+  const a = make(1); const b = make(2); const c = make(3)
+  f.manager.configureRetention({ maxBackgroundApps: 1, backgroundTimeoutMs: 100 })
+  f.manager.retentionVisibility(a, false)
+  f.setNow(10); f.manager.retentionVisibility(b, false)
+  f.setNow(20); f.manager.retentionVisibility(a, false)
+  c.navigatorManager.isRetainedInBackground = false
+  f.manager.retentionVisibility(c, false)
+  await f.manager.collectRetainedApps()
+  assert.deepEqual(closed, [1])
+  f.setNow(109); await f.manager.collectRetainedApps()
+  assert.deepEqual(closed, [1])
+  f.setNow(110); await f.manager.collectRetainedApps()
+  assert.deepEqual(closed, [1, 2])
+  f.manager.notifyMemoryPressure(); await f.manager.collectRetainedApps()
+  assert.ok(f.manager.appPools.has(3))
+  c.navigatorManager.isRetainedInBackground = true
+  f.manager.notifyMemoryPressure(); await f.manager.collectRetainedApps()
+  assert.deepEqual(closed, [1, 2, 3])
 })

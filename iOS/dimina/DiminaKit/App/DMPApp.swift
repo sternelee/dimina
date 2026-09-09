@@ -82,6 +82,12 @@ public class DMPApp {
             return false
         }
 
+        DMPAppManager.sharedInstance().collectRetainedApps()
+        if isDestroyed {
+            guard DMPAppManager.sharedInstance().restoreEvictedApp(self) else { return false }
+            isDestroyed = false
+            appVisibleDesired = true
+        }
         if navigator?.isRetainedInBackground == true {
             currentLaunchConfig?.scene = launchConfig.scene ?? DMPScene.fromMainEntry.rawValue
             currentLaunchConfig?.referrerInfo = launchConfig.referrerInfo
@@ -498,6 +504,7 @@ public class DMPApp {
     func notifyMiniProgramHide(webViewId: Int) {
         guard appVisibleDesired else { return }
         appVisibleDesired = false
+        DMPAppManager.sharedInstance().retentionVisibility(self, visible: false)
         guard appRuntimeReady else { return }
         appVisibleSent = false
         if webViewId > 0 {
@@ -541,6 +548,7 @@ public class DMPApp {
     ) {
         guard !appVisibleDesired else { return }
         appVisibleDesired = true
+        DMPAppManager.sharedInstance().retentionVisibility(self, visible: true)
         guard appRuntimeReady else { return }
         appVisibleSent = true
         let options = consumePendingShow(scene: scene, referrerInfo: referrerInfo)
@@ -619,6 +627,7 @@ public class DMPApp {
             return
         }
         isDestroyed = true
+        DMPAppManager.sharedInstance().retentionVisibility(self, visible: true)
         navigator?.destroyRetainedPages()
         DMPLogger.debug("app destroy")
         BluetoothAPIManager.shared.clearApp(appId)

@@ -1,4 +1,6 @@
 
+import { common } from '@kit.AbilityKit'
+import { systemDateTime } from '@kit.BasicServicesKit'
 import { DMPAppConfig } from './config/DMPAppConfig'
 import { DMPApp } from './DMPApp'
 import { DMPLogger } from '../EventTrack/DMPLogger'
@@ -27,6 +29,20 @@ class DMPResolvedMiniProgramConfig {
   }
 }
 
+export class DMPRetentionPolicy {
+  maxBackgroundApps: number
+  backgroundTimeoutMs: number
+
+  constructor(maxBackgroundApps: number = 3, backgroundTimeoutMs: number = 300000) {
+    if (!Number.isSafeInteger(maxBackgroundApps) || maxBackgroundApps < 0 ||
+      !Number.isSafeInteger(backgroundTimeoutMs) || backgroundTimeoutMs < 0) {
+      throw new Error('Retention limits must be non-negative safe integers')
+    }
+    this.maxBackgroundApps = maxBackgroundApps
+    this.backgroundTimeoutMs = backgroundTimeoutMs
+  }
+}
+
 export class DMPAppManager {
   private static instance: DMPAppManager
   appPools = new Map<number, DMPApp>();
@@ -36,6 +52,99 @@ export class DMPAppManager {
   // 宿主自己的前后台状态，由 DMPAppLifecycle 的 windowStage 事件维护。跨小程序恢复 opener
   // 时要看它，而不是看「谁在展示」——后者在宿主后台里同样会变。
   private hostVisible = true
+  private memoryObserver: number = -1
+
+  observeMemoryPressure(context: common.UIAbilityContext): void {
+    if (this.memoryObserver !== -1) return
+    this.memoryObserver = context.getApplicationContext().on('environment', {
+      onConfigurationUpdated: (): void => {},
+      onMemoryLevel: (): void => this.notifyMemoryPressure()
+    })
+  }
+
+  private retentionPolicy = new DMPRetentionPolicy()
+  private retainedSince = new Map<number, number>()
+  private retentionTimer: number = -1
+  private retentionQueued: boolean = false
+  private retentionRevision: number = 0
+  private retentionPressure: boolean = false
+
+  configureRetention(policy: DMPRetentionPolicy): void {
+    this.retentionPolicy = new DMPRetentionPolicy(policy.maxBackgroundApps, policy.backgroundTimeoutMs)
+    this.scheduleRetention()
+  }
+
+  /** Forward UIAbility.onMemoryLevel here; all evictable background instances are released. */
+  notifyMemoryPressure(): void {
+    this.retentionPressure = true
+    this.scheduleRetention()
+  }
+
+  retentionVisibility(app: DMPApp, visible: boolean): void {
+    if (visible) this.retainedSince.delete(app.appIndex)
+    else if (!this.retainedSince.has(app.appIndex)) this.retainedSince.set(app.appIndex, systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false))
+    this.scheduleRetention()
+  }
+
+  private scheduleRetention(): void {
+    this.retentionRevision++
+    if (this.retentionTimer !== -1) clearTimeout(this.retentionTimer)
+    this.retentionTimer = -1
+    if (this.retentionQueued) return
+    this.retentionQueued = true
+    Promise.resolve().then(async (): Promise<void> => {
+      this.retentionQueued = false
+      await this.collectRetainedApps()
+    }).catch((error: Error): void => {
+      DMPLogger.e(Tags.LAUNCH, `retention: ${error.message}`)
+    })
+  }
+
+  async collectRetainedApps(): Promise<void> {
+    if (this.retentionTimer !== -1) clearTimeout(this.retentionTimer)
+    this.retentionTimer = -1
+    if (this.miniProgramOperationInProgress) return
+    const revision = this.retentionRevision
+    const candidates: number[] = []
+    this.retainedSince.forEach((_since: number, index: number): void => {
+      const app = this.appPools.get(index)
+      if (!app) this.retainedSince.delete(index)
+      else if (app.navigatorManager.isRetainedInBackground) candidates.push(index)
+    })
+    candidates.sort((a: number, b: number): number =>
+      (this.retainedSince.get(a)! - this.retainedSince.get(b)!) || a - b)
+    const now = systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false)
+    const timeout = this.retentionPolicy.backgroundTimeoutMs
+    const pressure = this.retentionPressure
+    this.retentionPressure = false
+    let remaining = candidates.length
+    this.miniProgramOperationInProgress = true
+    try {
+      for (const index of candidates) {
+        const since = this.retainedSince.get(index)
+        const app = this.appPools.get(index)
+        if (since === undefined || !app?.navigatorManager.isRetainedInBackground) continue
+        if (pressure || remaining > this.retentionPolicy.maxBackgroundApps ||
+          (timeout > 0 && now - since >= timeout)) {
+          this.retainedSince.delete(index)
+          await app.closeDimina()
+          remaining--
+        }
+      }
+    } finally {
+      this.miniProgramOperationInProgress = false
+    }
+    if (revision !== this.retentionRevision) {
+      this.scheduleRetention()
+      return
+    }
+    const next = candidates.find((index: number): boolean => this.retainedSince.has(index))
+    if (next !== undefined && timeout > 0) {
+      this.retentionTimer = setTimeout((): void => this.scheduleRetention(),
+        Math.min(2147483647, Math.max(1, this.retainedSince.get(next)! + timeout - now)))
+    }
+  }
+
 
   public static sharedInstance(): DMPAppManager {
     if (!DMPAppManager.instance) {
@@ -127,6 +236,7 @@ export class DMPAppManager {
       })
     }
     if (index !== null) {
+      this.retainedSince.delete(index)
       this.appPools.delete(index)
       this.miniProgramPresentations.removeApp(index)
     }
@@ -354,6 +464,7 @@ export class DMPAppManager {
 
   private endMiniProgramOperation(): void {
     this.miniProgramOperationInProgress = false
+    this.scheduleRetention()
   }
 
   /** 宿主前后台状态的唯一入口，由 DMPAppLifecycle 在 windowStage SHOWN/HIDDEN 时更新。 */

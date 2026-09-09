@@ -1,6 +1,6 @@
 # 小程序多实例与后台留存
 
-不同 appId 可以同时保留运行状态；同一个 appId 从宿主入口再次打开时复用已有实例，恢复当前页面栈，不重新执行 `App.onLaunch`、`Page.onLoad`。
+不同 appId 可以同时保留运行状态；同一个 appId 从宿主入口再次打开时优先复用仍在缓存中的实例，恢复当前页面栈。实例已被回收时走冷启动，重新执行 `App.onLaunch`、`Page.onLoad`。
 
 ## 关闭界面与销毁实例
 
@@ -40,7 +40,73 @@ Android、iOS 和 Harmony 的后台实例不能操作前台导航栈。销毁后
 
 每个保留实例仍占用 JS 和 WebView 内存，宿主可通过主动销毁入口释放不再需要的实例。Harmony 隐藏期间的 TabBar 更新在恢复时应用；待处理更新最多 128 条，超过上限会失败，避免无限积压。
 
-当前没有统一的运行时挂起、留存超时或按内存压力自动淘汰策略。宿主保持前台、某个小程序处于后台时，其 JS 仍可能继续执行；需要控制实例数量时，应通过宿主销毁接口释放实例。
+四端共用逻辑层的协作式挂起：`App.onHide` 执行后暂停 `setTimeout`、`setInterval` 和普通业务消息回调，包括网络、扩展事件与 Canvas 动画回调。`App.onShow` 时恢复，定时器继续剩余等待时间，周期定时器不补跑隐藏期间错过的次数。业务消息按接收顺序分批处理，每批最多 64 条，避免为每条积压消息创建原生定时器。
+
+资源初始化、页面生命周期、销毁屏障和跨小程序导航的成功/失败/完成回调继续分发，避免隐藏后的退出或重启操作互相等待。挂起不抢占正在执行的 JS 或微任务，不冻结整个 Worker、WebView、原生网络或媒体任务；已到达但尚未分发的业务消息仍占用内存。原生能力继续遵循各自的隐藏与销毁规则。
+
+原生宿主需要同步更新共享 JSSDK 中的 `service.js`，才能启用上述挂起逻辑；只升级原生 SDK、继续使用旧 JSSDK 时，只会生效原生实例回收策略。
+
+## 宿主留存策略
+
+| 配置 | 默认值 | 含义 |
+| --- | --- | --- |
+| `maxBackgroundApps` | `3` | 可回收后台缓存实例的数量上限；`0` 表示界面关闭后不留存 |
+| `backgroundTimeoutMs` | `300000` | 自最近一次隐藏起的超时，单位毫秒；`0` 关闭超时回收 |
+
+配置必须是非负整数。这些默认值属于 Dimina，不是微信客户端固定数量或时长的承诺。配置更新后会重新检查已有缓存。
+
+超限时按最近使用顺序回收：最早隐藏且此后未重新显示的实例最先释放。重复隐藏不会延长超时；显示后再次隐藏才开始新的留存周期。每个管理器只维护最近一个到期计时器，不轮询、不为每个实例创建回收计时器。宿主进程被系统挂起期间不能保证准点执行；启动入口会在复用前再次检查期限。
+
+当前展示的实例，以及跨小程序导航中尚未解除的来源链，属于受保护的展示关系，不计入可回收缓存上限。宿主整体进入系统后台也不会立即解除该关系。因此总运行实例数可以大于 `maxBackgroundApps`，该配置不是进程总实例数的硬上限。实例脱离展示关系后才允许自动销毁，避免破坏返回页面与来源关系。
+
+内存压力会释放所有可回收后台实例，保留受保护的展示关系；之后再次打开被回收实例走冷启动。回收释放运行时、页面和实例资源，不清除 Storage 或用户文件，也不自动打开其他小程序。
+
+### Android
+
+在主线程配置；调用 `Dimina.init` 后即可设置：
+
+```kotlin
+import com.didi.dimina.core.RetentionPolicy
+
+dimina.configureRetention(RetentionPolicy(maxBackgroundApps = 3, backgroundTimeoutMs = 300_000))
+```
+
+SDK 自动监听应用的 `onLowMemory` 及低内存级别的 `onTrimMemory`，单纯的 `TRIM_MEMORY_UI_HIDDEN` 不当作内存告警。宿主也可主动调用 `dimina.notifyMemoryPressure()`。
+
+### iOS
+
+在主线程配置：
+
+```swift
+DMPAppManager.sharedInstance().configureRetention(
+    DMPRetentionPolicy(maxBackgroundApps: 3, backgroundTimeoutMs: 300_000)
+)
+```
+
+SDK 自动监听 `UIApplication.didReceiveMemoryWarningNotification`。宿主可在主线程主动调用 `DMPAppManager.sharedInstance().notifyMemoryPressure()`。
+
+### Harmony
+
+```typescript
+import { DMPAppManager, DMPRetentionPolicy } from 'dimina'
+
+DMPAppManager.sharedInstance().configureRetention(new DMPRetentionPolicy(3, 300000))
+```
+
+启动时 SDK 向应用上下文注册一次环境监听，在 `onMemoryLevel` 中发起回收。宿主也可主动调用 `DMPAppManager.sharedInstance().notifyMemoryPressure()`。
+
+### Web
+
+```typescript
+const container = createContainer({
+  mount,
+  retention: { maxBackgroundApps: 3, backgroundTimeoutMs: 300000 },
+})
+container.configureRetention({ maxBackgroundApps: 1, backgroundTimeoutMs: 60000 })
+container.notifyMemoryPressure()
+```
+
+配置和实例池按容器隔离。浏览器没有通用且可靠的内存告警事件，因此 Web 内存压力入口由宿主触发，不依据不可靠的堆大小估算主动淘汰。
 
 Harmony 的 `customLaunchPageCallBack` 自定义挂载页面没有框架路由入口，由宿主负责隐藏和恢复，不适用默认路由隐藏方法。
 
@@ -54,9 +120,15 @@ Harmony 的 `customLaunchPageCallBack` 自定义挂载页面没有框架路由�
 6. TabBar 场景重复上述操作，检查选中项、已加载 Tab、徽标及页面状态。
 7. 从不同场景重新打开同一实例，检查进入参数更新、旧来源关系清除，以及系统前后台切换后参数不回退。
 
+8. 把后台上限设为 1，依次关闭 A、B：A 应被回收；重新打开 A 应冷启动。
+9. 缩短超时，检查到期回收、显示后取消旧期限，以及回收时其他前台小程序不受影响。
+10. 主动发起内存压力，检查后台缓存释放；当前展示实例与返回来源链仍可使用。
+11. 隐藏期间检查业务定时器和回调不执行，恢复后顺序正确；隐藏后的退出/重启回调与销毁屏障仍能完成。
+
 回归入口：
 
-- Android：`:dimina:testDebugUnitTest`，以及示例应用中的任务栈切换。
+- Android：`:dimina:testDebugUnitTest`，其中 `BackgroundRetentionTest` 覆盖容量、期限与内存压力；界面仍需示例应用中的任务栈切换验证。
 - iOS：`DMPRetainedMiniProgramTests` 和 `DMPNavigatorCapsuleTests`。
-- Web：`retained-mini-program.spec.ts` 与容器 SDK 现有生命周期、并发打开测试。
+- Web：`retention-policy.spec.ts`、`retained-mini-program.spec.ts` 与容器 SDK 现有生命周期、并发打开测试。
+- 共享逻辑层：`background-scheduler.spec.js`、`background-lifecycle.spec.js`，验证挂起、恢复、定时器剩余时间和终止性回调的顺序。
 - Harmony：安装前端依赖后执行 `node --test harmony/scripts/retained-pages.test.mjs`；ArkUI 编译通过 `dimina:assembleHar` 验证，实际界面复用仍需设备验证。

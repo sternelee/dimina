@@ -1906,6 +1906,7 @@ class DiminaActivity : ComponentActivity() {
 
     fun hideMiniProgram() {
         if (!isMiniProgramForeground() || isFinishing) return
+        activityRegistry.snapshot(miniProgram.appId).forEach { it.retainedByHost = true }
         window.decorView.clearFocus()
         // Queue options before another task can receive onStart.
         queueOpenerReturn(null)
@@ -1981,7 +1982,11 @@ class DiminaActivity : ComponentActivity() {
      * bootstrap lands - the pending intent is not lost, it is left for
      * [reconcileAppVisibilityWithCore] to replay once a real JsCore exists.
      */
+    private var retainedByHost = false
+
     private fun dispatchMiniProgramShow() {
+        retainedByHost = false
+        miniApp.retentionVisibility(miniProgram.appId, true)
         val jsCore = miniApp.peekJsCore(miniProgram.appId)
         if (jsCore != null) {
             val showOptions = miniApp.consumePendingAppShowOptions(miniProgram.appId)?.apply {
@@ -1996,6 +2001,7 @@ class DiminaActivity : ComponentActivity() {
     }
 
     private fun dispatchMiniProgramHide() {
+        miniApp.retentionVisibility(miniProgram.appId, false)
         miniApp.peekJsCore(miniProgram.appId)?.appHide()
         com.didi.dimina.api.network.WebSocketManager.shared.setBackgrounded(miniProgram.appId, true)
     }
@@ -2588,6 +2594,11 @@ class DiminaActivity : ComponentActivity() {
             val activity = activityRegistry.lastRegistered(appId) ?: return false
             activity.exitMiniProgram()
             return true
+        }
+
+        internal fun canEvictRetainedApp(appId: String): Boolean {
+            val activity = activityRegistry.lastRegistered(appId) ?: return true
+            return activity.retainedByHost && !visibilityTracker.isForeground(appId)
         }
 
         internal fun closeForUninstall(appId: String) {

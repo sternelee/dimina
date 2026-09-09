@@ -66,3 +66,22 @@ it('refreshes host entry options without reviving an old mini-program opener', a
 		mount.remove()
 	}
 })
+
+
+it('reclaims a hidden runtime after capacity reduction and rebuilds it on next entry', async () => {
+	const mount = document.createElement('div')
+	document.body.appendChild(mount)
+	const container = createContainer({ mount, retention: { maxBackgroundApps: 1, backgroundTimeoutMs: 0 } })
+	const first = await container.openApp({ appId: 'evict-a' })
+	await container.application.dismissView(first, { destroy: false })
+	const second = await container.openApp({ appId: 'evict-b' })
+	container.configureRetention({ maxBackgroundApps: 0, backgroundTimeoutMs: 0 })
+	await vi.waitFor(() => expect(container.application.appManager.getAppById(first.appId)).toBeNull())
+	expect(FakeWorker.instances[0].terminate).toHaveBeenCalledTimes(1)
+	expect(container.application.views.at(-1)).toBe(second)
+	const restored = await container.openApp({ appId: 'evict-a' })
+	expect(restored).not.toBe(first)
+	await container.application.destroyRootView(restored)
+	await container.application.destroyRootView(second)
+	mount.remove()
+})

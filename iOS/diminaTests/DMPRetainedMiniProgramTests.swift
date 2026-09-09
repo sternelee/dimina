@@ -5,8 +5,10 @@ import UIKit
 @Suite(.serialized)
 @MainActor
 struct DMPRetainedMiniProgramTests {
-    private func makeApp(navigation hostNavigation: UINavigationController? = nil) async -> (DMPApp, DMPNavigator, UINavigationController) {
-        let app = DMPApp(appConfig: DMPAppConfig(appName: "retention", appId: UUID().uuidString), appIndex: -1)
+    private func makeApp(navigation hostNavigation: UINavigationController? = nil, registered: Bool = false) async -> (DMPApp, DMPNavigator, UINavigationController) {
+        let config = DMPAppConfig(appName: "retention", appId: UUID().uuidString)
+        let app = registered ? DMPAppManager.sharedInstance().appWithConfig(appConfig: config)
+            : DMPApp(appConfig: config, appIndex: -1)
         app.service = DMPService(app: app)
         app.render = DMPRender(app: app)
         let navigator = app.getNavigator()!
@@ -64,4 +66,45 @@ struct DMPRetainedMiniProgramTests {
         #expect(secondNavigation.topViewController === secondTop)
         await secondNavigator.hideMiniProgram()
     }
+    @Test func capacityExpiryAndPressureReclaimOnlyDetachedInstances() async {
+        let manager = DMPAppManager.sharedInstance()
+        var now: TimeInterval = 0
+        manager.retentionClock = { now }
+        manager.configureRetention(DMPRetentionPolicy(maxBackgroundApps: 1, backgroundTimeoutMs: 100_000))
+        let (first, firstNavigator, firstNavigation) = await makeApp(registered: true)
+        await firstNavigator.hideMiniProgram()
+        now = 10
+        let (second, secondNavigator, secondNavigation) = await makeApp(registered: true)
+        await secondNavigator.hideMiniProgram()
+        manager.collectRetainedApps()
+        #expect(manager.existApp(appId: first.getAppId()) == nil)
+        #expect(first.service == nil)
+        #expect(manager.existApp(appId: second.getAppId()) === second)
+
+        let (active, activeNavigator, navigation) = await makeApp(registered: true)
+        defer {
+            withExtendedLifetime((firstNavigation, secondNavigation)) {}
+            first.destroy(); second.destroy(); active.destroy()
+            manager.retentionClock = { DMPRetentionClock.now() }
+            manager.configureRetention(DMPRetentionPolicy())
+        }
+        let top = navigation.topViewController
+        now = 109
+        manager.collectRetainedApps()
+        #expect(manager.existApp(appId: second.getAppId()) === second)
+        now = 110
+        manager.collectRetainedApps()
+        #expect(manager.existApp(appId: second.getAppId()) == nil)
+        manager.notifyMemoryPressure()
+        manager.collectRetainedApps()
+        #expect(activeNavigator.isActiveNavigationOwner())
+        #expect(navigation.topViewController === top)
+        #expect(active.service != nil)
+        await activeNavigator.hideMiniProgram()
+        manager.notifyMemoryPressure()
+        manager.collectRetainedApps()
+        #expect(active.service == nil)
+        #expect(manager.existApp(appId: active.getAppId()) == nil)
+    }
+
 }

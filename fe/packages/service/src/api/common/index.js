@@ -117,7 +117,15 @@ function canReturnPromise(name, data) {
 	return true
 }
 
+const backgroundControlApis = new Set([
+	'navigateToMiniProgram', 'navigateBackMiniProgram', 'exitMiniProgram',
+	'restartMiniProgram', 'applyUpdate',
+])
+
 function invokeMessage(name, params, target) {
+	if (backgroundControlApis.has(name)) {
+		for (const key of ['success', 'fail', 'complete']) callback.allowInBackground(params?.[key])
+	}
 	const msg = {
 		type: 'invokeAPI',
 		target,

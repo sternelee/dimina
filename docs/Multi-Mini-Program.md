@@ -34,7 +34,7 @@ B 调用 `navigateBackMiniProgram` 或 `exitMiniProgram` 后：
 3. 恢复的仍是原来的 A 实例，不重新触发 `App.onLaunch`。
 4. A 以场景值 `1038` 触发 App Show 和当前 Page Show；`navigateBackMiniProgram` 的 `extraData` 放在 `referrerInfo.extraData` 中返回。
 
-这条“隐藏不等于销毁”的边界也适用于宿主直接缓存的 Web `MiniApp`：`closeApp()` 只从呈现栈摘除实例，后续再次 `openApp()` 同一 `appId` 会前置缓存实例；传入 `destroy: true` 才会销毁其它实例。
+这条“隐藏不等于销毁”的边界也适用于宿主直接缓存的 Web `MiniApp`：`closeApp()` 只从呈现栈摘除实例，后续再次 `openApp()` 同一 `appId` 会前置缓存实例；传入 `destroy: true` 会主动销毁其它实例；已脱离呈现栈的缓存还会按宿主留存策略自动回收。
 
 ## 平台实现
 
@@ -52,7 +52,7 @@ B 调用 `navigateBackMiniProgram` 或 `exitMiniProgram` 后：
 - `restartMiniProgram` 会替换当前实例的完整运行时，不属于后台恢复。
 - `exitMiniProgram` 会销毁当前目标实例；它不会销毁仍在呈现栈中的来源实例。
 - 后台保留是进程内能力，不是系统级持久化。宿主进程被系统终止后，需要按冷启动或宿主保存的恢复数据重新创建。
-- JavaScript 定时器、WebSocket、蓝牙和局域网等能力仍受各能力自身的后台限制及操作系统策略约束；例如 WebSocket 会按既有后台宽限策略中断。框架尚未实现统一的 JS 挂起或实例自动淘汰，详见[资源边界](./MiniProgram-Retention.md#生命周期与资源边界)。
+- JavaScript 定时器、WebSocket、蓝牙和局域网等能力仍受各能力自身的后台限制及操作系统策略约束；例如 WebSocket 会按既有后台宽限策略中断。框架在逻辑层协作式暂停定时器与普通业务回调，并为脱离展示链的后台缓存提供数量、超时和内存压力回收，详见[资源边界](./MiniProgram-Retention.md#生命周期与资源边界)及[宿主留存策略](./MiniProgram-Retention.md#宿主留存策略)。
 
 ## 验证建议
 

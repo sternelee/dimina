@@ -350,6 +350,7 @@ export class DMPApp {
   }
 
   async startPackageLoader(context: common.UIAbilityContext, launchConfig?: DMPLaunchConfig) {
+    await DMPAppManager.sharedInstance().collectRetainedApps()
     DMPLogger.i(Tags.LAUNCH, 'startPackageLoader start')
     const closeInProgress = this._closeInProgress
     if (closeInProgress) {
@@ -361,6 +362,7 @@ export class DMPApp {
       this._engineStatus.currentStatus != EngineStatus.LOADING) { // 已经启动jsEngine
       this._engineStatus.setStatus(EngineStatus.LOADING)
       DMPContextUtils.init(context)
+      DMPAppManager.sharedInstance().observeMemoryPressure(context)
       let fileManager: DMPFileManager = DMPFileManager.sharedInstance()
       fileManager.createLocalBundleDirectoryForApp(this.appConfig.appId)
       let installConfig =
@@ -507,6 +509,7 @@ export class DMPApp {
 
   /** Hide only this mini program; unlike DMPAppLifecycle this never broadcasts to every pooled app. */
   public notifyMiniProgramHide() {
+    DMPAppManager.sharedInstance().retentionVisibility(this, false)
     if (!this._visibilityLedger.request(false)) {
       return
     }
@@ -537,6 +540,7 @@ export class DMPApp {
 
   /** Reveal only this mini program and update App.onShow/GetEnterOptionsSync data. */
   public notifyMiniProgramShow(scene: DMPScene, referrerInfo?: DMPMap) {
+    DMPAppManager.sharedInstance().retentionVisibility(this, true)
     if (!this._visibilityLedger.request(true)) {
       return
     }
