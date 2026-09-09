@@ -107,4 +107,50 @@ struct DMPRetainedMiniProgramTests {
         #expect(manager.existApp(appId: active.getAppId()) == nil)
     }
 
+    @Test func reentryCancelsOldExpiryAndStartsANewLease() async {
+        let manager = DMPAppManager.sharedInstance()
+        var now: TimeInterval = 0
+        manager.retentionClock = { now }
+        manager.configureRetention(DMPRetentionPolicy(maxBackgroundApps: 3, backgroundTimeoutMs: 100_000))
+        let (app, navigator, navigation) = await makeApp(registered: true)
+        defer {
+            withExtendedLifetime(navigation) {}
+            app.destroy()
+            manager.retentionClock = { DMPRetentionClock.now() }
+            manager.configureRetention(DMPRetentionPolicy())
+        }
+        let service = app.service
+        await navigator.hideMiniProgram()
+        now = 90
+        await app.launch(launchConfig: DMPLaunchConfig())
+        now = 200
+        manager.collectRetainedApps()
+        #expect(app.service === service)
+        #expect(navigator.isActiveNavigationOwner())
+        await navigator.hideMiniProgram()
+        now = 299
+        manager.collectRetainedApps()
+        #expect(app.service === service)
+        now = 300
+        manager.collectRetainedApps()
+        #expect(app.service == nil)
+        #expect(manager.existApp(appId: app.getAppId()) == nil)
+    }
+
+    @Test func pressureWaitsForNavigationTransactionBeforeDestroyingRetainedPages() async throws {
+        let manager = DMPAppManager.sharedInstance()
+        let (app, navigator, navigation) = await makeApp(registered: true)
+        defer { withExtendedLifetime(navigation) {}; app.destroy() }
+        await navigator.hideMiniProgram()
+        try await manager.withMiniProgramOperation {
+            manager.notifyMemoryPressure()
+            manager.collectRetainedApps()
+            #expect(app.service != nil)
+            #expect(navigator.isRetainedInBackground)
+        }
+        manager.collectRetainedApps()
+        #expect(app.service == nil)
+        #expect(!navigator.isRetainedInBackground)
+    }
+
 }

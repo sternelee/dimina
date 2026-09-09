@@ -10,7 +10,7 @@ const require = createRequire(new URL('../../fe/packages/compiler/package.json',
 const { transformSync } = require('esbuild')
 const sourceRoot = new URL('../dimina/src/main/ets/', import.meta.url)
 
-function load(name, dependencies = {}) {
+function load(name, dependencies = {}, clock = {}) {
   const source = fs.readFileSync(new URL(name, sourceRoot), 'utf8')
   const { code } = transformSync(source, { loader: 'ts', format: 'cjs', target: 'es2022' })
   const module = { exports: {} }
@@ -18,6 +18,7 @@ function load(name, dependencies = {}) {
     module,
     setTimeout: (fn, ms) => setTimeout(fn, ms).unref(),
     clearTimeout,
+    ...clock,
     exports: module.exports,
     require: name => {
       assert.ok(name in dependencies, `Unexpected runtime dependency: ${name}`)
@@ -45,7 +46,7 @@ function fixture() {
   }
   const { DMPNavigatorManager } = load('Navigator/DMPNavigatorManager.ets', {
     '../Utils/DMPStack': load('Utils/DMPStack.ets'),
-    '../EventTrack/DMPLogger': { DMPLogger: { d() {}, i() {} } },
+    '../EventTrack/DMPLogger': { DMPLogger: { d() {}, i() {}, e() {} } },
     '../EventTrack/Tags': { Tags: {} },
     '../DPages/DMPPageLifecycle': { DMPPageLifecycle: class {} },
     './DRouter': { DRouter: { getInstance: () => router } },
@@ -123,7 +124,7 @@ test('rejects host-managed pages before notifying hide or detaching routes', () 
 })
 
 
-function appManagerFixture() {
+function appManagerFixture(clock = {}) {
   let now = 0
   const { DMPAppManager } = load('DApp/DMPAppManager.ets', {
     './DMPMiniProgramPresentationStack': load('DApp/DMPMiniProgramPresentationStack.ets', { '../Utils/DMPMap': {} }),
@@ -131,7 +132,7 @@ function appManagerFixture() {
     './config/DMPAppConfig': {},
     '@kit.BasicServicesKit': { systemDateTime: { TimeType: { STARTUP: 0 }, getUptime: () => now } },
     './DMPApp': {},
-    '../EventTrack/DMPLogger': { DMPLogger: { d() {}, i() {} } },
+    '../EventTrack/DMPLogger': { DMPLogger: { d() {}, i() {}, e() {} } },
     '../EventTrack/Tags': { Tags: {} },
     '../Utils/DMPContextUtils': {},
     '../Utils/DMPRawFileUtils': {},
@@ -139,7 +140,7 @@ function appManagerFixture() {
     '../Bundle/DMPRemoteUpdateManager': {},
     '../Bundle/Util/DMPMMKVManager': {},
     '../Utils/DMPPreference': {},
-  })
+  }, clock)
   const manager = new DMPAppManager()
   const storedConfig = { scene: 1037, referrerInfo: { appId: 'old-opener' }, appEntryPath: 'pages/detail' }
   const shown = []
@@ -195,4 +196,65 @@ test('retention evicts LRU, expires leases and preserves a pinned presentation',
   c.navigatorManager.isRetainedInBackground = true
   f.manager.notifyMemoryPressure(); await f.manager.collectRetainedApps()
   assert.deepEqual(closed, [1, 2, 3])
+})
+
+
+test('a failed eviction retains its lease and does not prevent reclaiming another background app', async () => {
+  const f = appManagerFixture()
+  let attempts = 0
+  const closed = []
+  const bad = { appIndex: 21, navigatorManager: { isRetainedInBackground: true },
+    closeDimina: async () => {
+      attempts++
+      f.manager.retentionVisibility(bad, false) // performClose repeats App hide before flushing.
+      await Promise.resolve()
+      if (attempts === 1) throw new Error('worker close failed')
+      closed.push(21); f.manager.appPools.delete(21)
+    } }
+  const good = { appIndex: 22, navigatorManager: { isRetainedInBackground: true },
+    closeDimina: async () => { closed.push(22); f.manager.appPools.delete(22) } }
+  f.manager.miniProgramOperationInProgress = true
+  f.manager.configureRetention({ maxBackgroundApps: 0, backgroundTimeoutMs: 0 })
+  for (const app of [bad, good]) {
+    f.manager.appPools.set(app.appIndex, app)
+    f.manager.retentionVisibility(app, false)
+  }
+  f.manager.notifyMemoryPressure()
+  await Promise.resolve() // Let the scheduled collection observe the navigation lock.
+  f.manager.miniProgramOperationInProgress = false
+  await assert.doesNotReject(f.manager.collectRetainedApps())
+  await new Promise(resolve => setImmediate(resolve))
+  assert.deepEqual(closed, [22])
+  assert.ok(f.manager.appPools.has(21))
+  f.manager.notifyMemoryPressure()
+  await f.manager.collectRetainedApps()
+  assert.deepEqual(closed, [22, 21])
+  assert.equal(attempts, 2)
+})
+
+test('an expired app that fails to close does not create an immediate retry timer', async () => {
+  const pending = new Map()
+  let nextTimer = 0
+  const f = appManagerFixture({
+    setTimeout(fn, ms) { const id = ++nextTimer; pending.set(id, { fn, ms }); return id },
+    clearTimeout(id) { pending.delete(id) },
+  })
+  let attempts = 0
+  const app = { appIndex: 31, navigatorManager: { isRetainedInBackground: true },
+    closeDimina: async () => { attempts++; throw new Error('close unavailable') } }
+  f.manager.miniProgramOperationInProgress = true
+  f.manager.configureRetention({ maxBackgroundApps: 3, backgroundTimeoutMs: 100 })
+  f.manager.appPools.set(app.appIndex, app)
+  f.manager.retentionVisibility(app, false)
+  await Promise.resolve()
+  f.manager.miniProgramOperationInProgress = false
+  f.setNow(100)
+  await assert.doesNotReject(f.manager.collectRetainedApps())
+  assert.equal(attempts, 1)
+  assert.ok(f.manager.appPools.has(app.appIndex))
+  assert.equal(pending.size, 0)
+  f.manager.notifyMemoryPressure()
+  await f.manager.collectRetainedApps()
+  assert.equal(attempts, 2)
+  assert.equal(pending.size, 0)
 })

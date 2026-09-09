@@ -1,3 +1,5 @@
+import { isWebWorker } from '@dimina/common'
+
 /** Cooperative suspension shared by Worker, QuickJS and JavaScriptCore services. */
 export class BackgroundScheduler {
 	constructor(clock) {
@@ -7,6 +9,11 @@ export class BackgroundScheduler {
 		this.nextId = 0
 		this.pending = []
 		this.drainHandle = undefined
+		this.draining = false
+		this.pendingHead = 0
+		this.epoch = 0
+		this.postTask = clock.postTask ?? (fn => clock.setTimeout(fn, 0))
+		this.cancelTask = clock.cancelTask ?? (id => clock.clearTimeout(id))
 	}
 
 	set(callback, delay = 0, repeat = false, args = []) {
@@ -20,9 +27,10 @@ export class BackgroundScheduler {
 	}
 
 	arm(id, timer) {
+		const generation = timer.generation = (timer.generation ?? 0) + 1
 		timer.due = this.clock.now() + timer.remaining
 		timer.handle = this.clock.setTimeout(() => {
-			if (this.paused || !this.timers.has(id)) return
+			if (this.paused || timer.generation !== generation || this.timers.get(id) !== timer) return
 			if (!timer.repeat) this.timers.delete(id)
 			try { timer.callback(...timer.args) }
 			finally {
@@ -35,7 +43,7 @@ export class BackgroundScheduler {
 	}
 
 	dispatch(action) {
-		if (this.paused || this.pending.length || this.drainHandle !== undefined) {
+		if (this.paused || this.draining || this.pendingHead < this.pending.length || this.drainHandle !== undefined) {
 			this.pending.push(action)
 			this.scheduleDrain()
 		}
@@ -43,20 +51,31 @@ export class BackgroundScheduler {
 	}
 
 	scheduleDrain() {
-		if (this.paused || !this.pending.length || this.drainHandle !== undefined) return
-		// One host wakeup per batch, rather than one native timer per queued message.
-		this.drainHandle = this.clock.setTimeout(() => {
+		if (this.paused || this.draining || this.pendingHead >= this.pending.length || this.drainHandle !== undefined) return
+		const epoch = this.epoch
+		// Each message needs a host task boundary so its entire Promise chain finishes
+		// before the next message. Keep only one scheduled task, not a timer per backlog item.
+		this.drainHandle = this.postTask(() => {
+			if (epoch !== this.epoch) return
 			this.drainHandle = undefined
-			const batch = this.pending.splice(0, 64)
-			for (let index = 0; index < batch.length; index++) {
-				if (this.paused) {
-					this.pending = batch.slice(index).concat(this.pending)
-					break
+			if (this.paused) return
+			const action = this.pending[this.pendingHead]
+			this.pending[this.pendingHead++] = undefined
+			this.draining = true
+			try { action() }
+			finally {
+				this.draining = false
+				if (this.pendingHead === this.pending.length) {
+					this.pending = []
+					this.pendingHead = 0
 				}
-				batch[index]()
+				else if (this.pendingHead >= 64 && this.pendingHead >= this.pending.length / 2) {
+					this.pending = this.pending.slice(this.pendingHead)
+					this.pendingHead = 0
+				}
+				this.scheduleDrain()
 			}
-			this.scheduleDrain()
-		}, 0)
+		})
 	}
 
 	clear(id) {
@@ -69,9 +88,11 @@ export class BackgroundScheduler {
 	pause() {
 		if (this.paused) return
 		this.paused = true
-		this.clock.clearTimeout(this.drainHandle)
+		this.epoch++
+		if (this.drainHandle !== undefined) this.cancelTask(this.drainHandle)
 		this.drainHandle = undefined
 		for (const timer of this.timers.values()) {
+			timer.generation = (timer.generation ?? 0) + 1
 			timer.remaining = Math.max(0, timer.due - this.clock.now())
 			this.clock.clearTimeout(timer.handle)
 		}
@@ -88,7 +109,29 @@ export class BackgroundScheduler {
 let scheduler
 export function installBackgroundScheduler(target = globalThis) {
 	if (scheduler) return scheduler
+	// MessageChannel avoids nested browser timer throttling while retaining task boundaries.
+	let channel
+	let serial = 0
+	const tasks = new Map()
+	const taskClock = isWebWorker && typeof target.MessageChannel === 'function' ? {
+		postTask(fn) {
+			if (!channel) {
+				channel = new target.MessageChannel()
+				channel.port1.onmessage = ({ data }) => {
+					const task = tasks.get(data)
+					tasks.delete(data)
+					task?.()
+				}
+			}
+			const id = ++serial
+			tasks.set(id, fn)
+			channel.port2.postMessage(id)
+			return id
+		},
+		cancelTask(id) { tasks.delete(id) },
+	} : {}
 	scheduler = new BackgroundScheduler({
+		...taskClock,
 		now: () => target.performance?.now?.() ?? Date.now(),
 		setTimeout: target.setTimeout.bind(target),
 		clearTimeout: target.clearTimeout.bind(target),

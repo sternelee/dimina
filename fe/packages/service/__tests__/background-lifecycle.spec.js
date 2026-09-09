@@ -30,3 +30,35 @@ it('hides before suspension, defers API callbacks, and keeps exit callbacks and 
 	vi.advanceTimersByTime(10)
 	expect(events).toEqual(['hide', 'exit', 'complete', 'show', 'network', 'timer'])
 })
+
+
+it('preserves business state derived by Promise callbacks before the API complete callback', async () => {
+	vi.resetModules()
+	vi.useFakeTimers()
+	globalThis.DiminaServiceBridge.invoke = vi.fn()
+	const service = (await import('../src/index')).default
+	globalThis.App({
+		globalData: { phase: 'initial', completedPhase: undefined },
+		onHide() { this.globalData.hidden = true },
+		onShow() { this.globalData.hidden = false },
+	})
+	const app = globalThis.getApp()
+	globalThis.wx.getStorageInfo({
+		success() {
+			Promise.resolve().then(() => { app.globalData.phase = 'decoded' })
+				.then(() => { app.globalData.phase = 'ready' })
+		},
+		complete() { app.globalData.completedPhase = app.globalData.phase },
+	})
+	const params = globalThis.DiminaServiceBridge.invoke.mock.calls.at(-1)[0].body.params
+	service.message.handleMsg({ type: 'appHide' })
+	service.message.handleMsg({ type: 'triggerCallback', body: { id: params.success, args: { keys: [] } } })
+	service.message.handleMsg({ type: 'triggerCallback', body: { id: params.complete } })
+	await vi.runAllTimersAsync()
+	expect(app.globalData.phase).toBe('initial')
+	expect(app.globalData.hidden).toBe(true)
+	service.message.handleMsg({ type: 'appShow', body: {} })
+	await vi.runAllTimersAsync()
+	expect(app.globalData.hidden).toBe(false)
+	expect(app.globalData.completedPhase).toBe('ready')
+})

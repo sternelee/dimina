@@ -81,8 +81,12 @@ export class DMPAppManager {
   }
 
   retentionVisibility(app: DMPApp, visible: boolean): void {
-    if (visible) this.retainedSince.delete(app.appIndex)
-    else if (!this.retainedSince.has(app.appIndex)) this.retainedSince.set(app.appIndex, systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false))
+    if (visible) {
+      if (!this.retainedSince.delete(app.appIndex)) return
+    } else {
+      if (this.retainedSince.has(app.appIndex)) return
+      this.retainedSince.set(app.appIndex, systemDateTime.getUptime(systemDateTime.TimeType.STARTUP, false))
+    }
     this.scheduleRetention()
   }
 
@@ -118,6 +122,7 @@ export class DMPAppManager {
     const pressure = this.retentionPressure
     this.retentionPressure = false
     let remaining = candidates.length
+    const failed = new Set<number>()
     this.miniProgramOperationInProgress = true
     try {
       for (const index of candidates) {
@@ -126,9 +131,16 @@ export class DMPAppManager {
         if (since === undefined || !app?.navigatorManager.isRetainedInBackground) continue
         if (pressure || remaining > this.retentionPolicy.maxBackgroundApps ||
           (timeout > 0 && now - since >= timeout)) {
-          this.retainedSince.delete(index)
-          await app.closeDimina()
-          remaining--
+          try {
+            await app.closeDimina()
+            this.retainedSince.delete(index)
+            remaining--
+          } catch (error) {
+            // Keep the lease for a later host/config/pressure retry, and keep reclaiming
+            // other apps. Do not spin an immediate timer against a failed expired lease.
+            failed.add(index)
+            DMPLogger.e(Tags.LAUNCH, `retention close failed: ${(error as Error).message}`)
+          }
         }
       }
     } finally {
@@ -138,7 +150,7 @@ export class DMPAppManager {
       this.scheduleRetention()
       return
     }
-    const next = candidates.find((index: number): boolean => this.retainedSince.has(index))
+    const next = candidates.find((index: number): boolean => this.retainedSince.has(index) && !failed.has(index))
     if (next !== undefined && timeout > 0) {
       this.retentionTimer = setTimeout((): void => this.scheduleRetention(),
         Math.min(2147483647, Math.max(1, this.retainedSince.get(next)! + timeout - now)))

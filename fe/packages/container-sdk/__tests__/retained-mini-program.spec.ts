@@ -85,3 +85,60 @@ it('reclaims a hidden runtime after capacity reduction and rebuilds it on next e
 	await container.application.destroyRootView(second)
 	mount.remove()
 })
+
+
+it('checks expiry before reopening even when the host expiry timer has not run', async () => {
+	const clock = vi.spyOn(performance, 'now').mockReturnValue(0)
+	const mount = document.createElement('div')
+	const container = createContainer({ mount, retention: { backgroundTimeoutMs: 100000 } })
+	try {
+		const first = await container.openApp({ appId: 'expired-entry' })
+		await container.application.dismissView(first, { destroy: false })
+		clock.mockReturnValue(100001)
+		const reopened = await container.openApp({ appId: first.appId })
+		expect(reopened).not.toBe(first)
+		expect(FakeWorker.instances[0].terminate).toHaveBeenCalledTimes(1)
+		expect(container.application.views.at(-1)).toBe(reopened)
+	} finally {
+		for (const app of [...container.application.appManager.apps.values()]) await container.application.destroyRootView(app)
+		clock.mockRestore()
+	}
+})
+
+it('keeps a cross-app return chain usable under memory pressure and a zero cache limit', async () => {
+	const container = createContainer({ mount: document.createElement('div'), retention: { maxBackgroundApps: 0 } })
+	const manager = container.application.appManager
+	try {
+		const source = await container.openApp({ appId: 'pinned-source' })
+		const target = await manager.navigateToMiniProgram({ appId: 'pinned-target' }, source)
+		container.notifyMemoryPressure()
+		await manager._enqueue(async () => {})
+		expect(manager.getAppById(source.appId)).toBe(source)
+		expect(manager.getAppById(target.appId)).toBe(target)
+		await manager.navigateBackMiniProgram(target, {}, async () => {})
+		expect(container.application.views.at(-1)).toBe(source)
+		expect(FakeWorker.instances[0].terminate).not.toHaveBeenCalled()
+	} finally {
+		for (const app of [...manager.apps.values()]) await container.application.destroyRootView(app)
+	}
+})
+
+it('isolates memory pressure across containers even when appIds match', async () => {
+	const one = createContainer({ mount: document.createElement('div') })
+	const two = createContainer({ mount: document.createElement('div') })
+	try {
+		const a = await one.openApp({ appId: 'same-id' })
+		const b = await two.openApp({ appId: 'same-id' })
+		await one.application.dismissView(a, { destroy: false })
+		await two.application.dismissView(b, { destroy: false })
+		one.notifyMemoryPressure()
+		await one.application.appManager._enqueue(async () => {})
+		expect(one.application.appManager.getAppById('same-id')).toBeNull()
+		expect(two.application.appManager.getAppById('same-id')).toBe(b)
+		expect(await two.openApp({ appId: 'same-id' })).toBe(b)
+	} finally {
+		for (const container of [one, two]) {
+			for (const app of [...container.application.appManager.apps.values()]) await container.application.destroyRootView(app)
+		}
+	}
+})
