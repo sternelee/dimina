@@ -48,6 +48,11 @@ const rootRef = ref()
 const surfaceRef = ref()
 const info = useInfo()
 const errorMessage = ref('')
+const errorHint = computed(() => {
+	if (/AMap (?:Web|Android|iOS|HarmonyOS) key is required/i.test(errorMessage.value)) return '未配置地图 Key'
+	if (/map provider is not configured/i.test(errorMessage.value)) return '地图未配置，请配置地图 Key 和服务提供方'
+	return '地图暂不可用'
+})
 let session
 
 function snapshot() {
@@ -82,7 +87,7 @@ onBeforeUnmount(() => {
 <template>
 	<div :id="id" ref="rootRef" v-bind="$attrs" class="dd-map">
 		<div ref="surfaceRef" class="dd-map-surface" />
-		<div v-if="errorMessage" class="dd-map-error" role="status">地图暂不可用</div>
+		<div v-if="errorMessage" class="dd-map-error" role="status">{{ errorHint }}</div>
 		<div class="dd-map-slot"><slot /></div>
 	</div>
 </template>
