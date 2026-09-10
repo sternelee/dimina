@@ -10,7 +10,7 @@ beforeEach(async () => {
 	page.id = ''; originalConsole = { ...console }; globalThis.__diminaDebug = true
 	debug = await import('../src/core/debug')
 })
-afterEach(() => { Object.assign(console, originalConsole); delete globalThis.__diminaDebug; delete globalThis.wx })
+afterEach(() => { Object.assign(console, originalConsole); delete globalThis.__diminaDebug; delete globalThis.wx; delete globalThis.__diminaDebugStorageSnapshot })
 it('does not collect without the native debug flag', () => {
 	globalThis.__diminaDebug = false; debug.installDebug()
 	const options = { url: '/test' }
@@ -73,4 +73,13 @@ it('instruments the public request API before callbacks enter the bridge', async
 	expect(options.success).toBeTypeOf('function')
 	options.success({ statusCode: 200, data: 'ok' })
 	expect(send.mock.lastCall[0].body.detail.value).toMatchObject({ url: '/public', readyState: 4, response: 'ok' })
+})
+
+it('uses the native MMKV snapshot when encrypted namespaces are available', async () => {
+	debug.installDebug(); page.id = 'a'; handlers.resourceLoaded({ bridgeId: 'a' })
+	const entries = [{ key: 'same', data: 'normal', encrypted: false }, { key: 'same', data: 'secret', encrypted: true }]
+	globalThis.__diminaDebugStorageSnapshot = () => entries
+	await handlers.debugStorage({ bridgeId: 'a' })
+	expect(send).toHaveBeenCalledOnce()
+	expect(send.mock.lastCall[0].body.detail).toEqual({ group: 'storage', value: entries })
 })

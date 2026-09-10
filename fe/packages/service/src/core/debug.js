@@ -64,6 +64,10 @@ export function installDebug() {
 	})
 	message.on('debugStorage', async ({ bridgeId }) => {
 		try {
+			if (typeof globalThis.__diminaDebugStorageSnapshot === 'function') {
+				emit({ group: 'storage', value: globalThis.__diminaDebugStorageSnapshot() }, bridgeId)
+				return
+			}
 			const { keys } = await globalThis.wx.getStorageInfo()
 			const entries = await Promise.all(keys.map(async key => {
 				const { data } = await globalThis.wx.getStorage({ key })
