@@ -1,5 +1,23 @@
 # Changelog
 
+## [v1.7.1] 2026-09-10
+
+### 新增
+
+- 调试模式下将逻辑线程的 `console.log/info/warn/error/debug` 转发到 vConsole，并在页面通道就绪前暂存最多 200 条启动日志。
+- vConsole 新增只读的 `MiniProgram Storage` 面板，按当前 `appId` 读取原生 MMKV 数据，与 WebView 浏览器存储分开展示。
+
+### 优化
+
+- `wx.request` 的请求及成功、失败结果可在 vConsole Network 面板中查看；上传、下载和 WebSocket 流量暂不采集。
+- Android、iOS 和 HarmonyOS 统一调试开关与 pageFrame 的 vConsole 初始化时机，未开启调试时不采集上述数据。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.7.1。
+- HarmonyOS 高德地图扩展模块 `@didi-dimina/map-amap` 与核心 SDK 同步升级到 1.7.1。
+- 编译器版本保持 1.2.1，JSSDK 升级到 1.0.43。
+
 ## [v1.7.0] 2026-09-10
 
 ### 新增
