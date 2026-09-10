@@ -73,6 +73,11 @@ class MyApplication : Application() {
 
 当 `setDebugMode(true)` 时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测到该启用标记时，pageFrame 才会在 render 初始化前同步初始化 vConsole。
 
+调试模式下，逻辑线程的 `console.log/info/warn/error/debug` 会转发到 vConsole，`wx.request` 的请求和成功/失败结果显示在 Network 面板。启动阶段日志会暂存，待页面渲染通道就绪后送达（最多 200 条）。
+
+`MiniProgram Storage` 面板通过小程序 Storage API 读取当前应用的持久化缓存，打开面板或点击 Refresh 时刷新；这是只读视图。vConsole 自带的 Storage 面板仍表示 WebView 的浏览器存储。上述逻辑线程采集仅在 Android SDK `setDebugMode(true)` 时启用；目前不包含 `uploadFile`、`downloadFile` 和 WebSocket 流量。
+
+
 ### 步骤 4: 启动小程序
 
 将编译好的小程序压缩包放入 `app/src/main/assets/jsapp` 文件夹，文件夹以小程序 ID 命名。仓库示例工程会在构建时从根目录 `shared/jsapp` 自动复制资源到该目录。每个小程序文件夹需包含以下内容：
