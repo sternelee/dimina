@@ -20,5 +20,7 @@ it('handles service logs, network and storage in a production render', async () 
 	handlers.loadResource({ bridgeId: 'page-a' })
 	window.dispatchEvent(new Event('dimina:debug-storage-request'))
 	expect(send).toHaveBeenCalledWith({ type: 'debugStorage', target: 'service', body: { bridgeId: 'page-a' } })
+	window.dispatchEvent(new CustomEvent('dimina:debug-storage-request', { detail: { action: 'set', key: 'key', data: false, encrypted: true, bridgeId: 'spoofed' } }))
+	expect(send.mock.lastCall[0].body).toEqual({ action: 'set', key: 'key', data: false, encrypted: true, bridgeId: 'page-a' })
 	log.mockRestore(); window.removeEventListener('dimina:debug-storage', storage); delete window.vConsole
 })

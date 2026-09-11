@@ -21,9 +21,9 @@ class Render {
 
 	init() {
 		let debugBridgeId
-		window.addEventListener('dimina:debug-storage-request', () => {
+		window.addEventListener('dimina:debug-storage-request', (event) => {
 			if (window.vConsole && debugBridgeId) {
-				this.message.send({ type: 'debugStorage', target: 'service', body: { bridgeId: debugBridgeId } })
+				this.message.send({ type: 'debugStorage', target: 'service', body: { action: event.detail?.action, key: event.detail?.key, data: event.detail?.data, encrypted: event.detail?.encrypted, bridgeId: debugBridgeId } })
 			}
 		})
 

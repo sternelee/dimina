@@ -39,7 +39,7 @@ it('bundles vConsole in production and initializes it before render', async () =
 			await vi.waitFor(() => expect(document.querySelector('#__vconsole')).not.toBeNull())
 			;(window as any).vConsole.showPlugin('dimina-storage')
 			window.dispatchEvent(new CustomEvent('dimina:debug-storage', { detail: { value: [{ key: 'persisted', data: 334 }] } }))
-			await vi.waitFor(() => expect((document.querySelector('#__vconsole')!.shadowRoot || document.querySelector('#__vconsole'))!.textContent).toContain('persisted'))
+			await vi.waitFor(() => expect(Array.from((document.querySelector('#__vconsole')!.shadowRoot || document.querySelector('#__vconsole'))!.querySelectorAll('input')).some(input => input.value === 'persisted')).toBe(true))
 		}
 		delete window.vConsole
 	}

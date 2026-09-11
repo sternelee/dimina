@@ -83,3 +83,51 @@ it('uses the native MMKV snapshot when encrypted namespaces are available', asyn
 	expect(send).toHaveBeenCalledOnce()
 	expect(send.mock.lastCall[0].body.detail).toEqual({ group: 'storage', value: entries })
 })
+
+it('writes and removes native storage before returning refreshed values', async () => {
+	debug.installDebug(); handlers.resourceLoaded({ bridgeId: 'a' })
+	const values = new Map([['existing', 1]])
+	globalThis.wx = {
+		setStorage: vi.fn(async ({ key, data }) => { values.set(key, data) }),
+		removeStorage: vi.fn(async ({ key }) => { values.delete(key) }),
+		getStorageInfo: async () => ({ keys: [...values.keys()] }),
+		getStorage: async ({ key }) => ({ data: values.get(key) }),
+	}
+	await handlers.debugStorage({ bridgeId: 'a', action: 'set', key: 'existing', data: { n: false }, encrypted: false })
+	expect(globalThis.wx.setStorage).toHaveBeenCalledWith({ key: 'existing', data: { n: false }, encrypt: false })
+	expect(send.mock.lastCall[0].body.detail.value).toEqual([{ key: 'existing', data: { n: false } }])
+	await handlers.debugStorage({ bridgeId: 'a', action: 'remove', key: 'existing' })
+	expect(send.mock.lastCall[0].body.detail.value).toEqual([])
+})
+it('preserves iOS encrypted writes and deletes and returns native failures', async () => {
+	debug.installDebug(); handlers.resourceLoaded({ bridgeId: 'a' })
+	globalThis.__diminaDebugStorageSnapshot = vi.fn(() => [])
+	globalThis.wx = { setStorage: vi.fn().mockResolvedValue({}), removeStorage: vi.fn().mockResolvedValue({}) }
+	await handlers.debugStorage({ bridgeId: 'a', action: 'set', key: 'same', data: 0, encrypted: true })
+	expect(globalThis.wx.setStorage).toHaveBeenCalledWith({ key: 'same', data: 0, encrypt: true })
+	await handlers.debugStorage({ bridgeId: 'a', action: 'remove', key: 'same', encrypted: true })
+	expect(globalThis.wx.removeStorage).toHaveBeenCalledWith({ key: 'same', encrypt: true })
+	globalThis.wx.setStorage.mockRejectedValue({ errMsg: 'setStorage:fail disk full' })
+	await handlers.debugStorage({ bridgeId: 'a', action: 'set', key: 'same', data: 1 })
+	expect(send.mock.lastCall[0].body.detail.error).toBe('setStorage:fail disk full')
+	globalThis.wx.setStorage.mockClear()
+	await handlers.debugStorage({ bridgeId: 'a', action: 'clear' })
+	expect(globalThis.wx.setStorage).not.toHaveBeenCalled()
+	expect(send.mock.lastCall[0].body.detail.error).toContain('Invalid storage operation')
+})
+
+it('waits for native write completion before taking the refreshed snapshot', async () => {
+	debug.installDebug(); handlers.resourceLoaded({ bridgeId: 'a' })
+	let complete
+	globalThis.wx = { setStorage: () => new Promise(resolve => { complete = resolve }) }
+	globalThis.__diminaDebugStorageSnapshot = vi.fn(() => [])
+	const pending = handlers.debugStorage({ bridgeId: 'a', action: 'set', key: 'key', data: null })
+	await Promise.resolve()
+	expect(globalThis.__diminaDebugStorageSnapshot).not.toHaveBeenCalled()
+	complete({}); await pending
+	expect(globalThis.__diminaDebugStorageSnapshot).toHaveBeenCalledOnce()
+	globalThis.__diminaDebug = false
+	globalThis.wx.setStorage = vi.fn()
+	await handlers.debugStorage({ bridgeId: 'a', action: 'set', key: 'key', data: 1 })
+	expect(globalThis.wx.setStorage).not.toHaveBeenCalled()
+})

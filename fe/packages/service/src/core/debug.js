@@ -62,8 +62,18 @@ export function installDebug() {
 			if (pending[i].bridgeId === bridgeId) pending.splice(i, 1)
 		}
 	})
-	message.on('debugStorage', async ({ bridgeId }) => {
+	message.on('debugStorage', async ({ bridgeId, action, key, data, encrypted }) => {
+		if (!globalThis.__diminaDebug) return
 		try {
+			if (action !== undefined) {
+				if (!['set', 'remove'].includes(action) || typeof key !== 'string' || !key) throw new Error('Invalid storage operation')
+				if (action === 'set') {
+					if (data === undefined) throw new Error('Storage value is required')
+					await globalThis.wx.setStorage({ key, data, encrypt: encrypted === true })
+				}
+				else await globalThis.wx.removeStorage({ key, encrypt: encrypted === true })
+			}
+
 			if (typeof globalThis.__diminaDebugStorageSnapshot === 'function') {
 				emit({ group: 'storage', value: globalThis.__diminaDebugStorageSnapshot() }, bridgeId)
 				return
@@ -76,7 +86,7 @@ export function installDebug() {
 			emit({ group: 'storage', value: entries }, bridgeId)
 		}
 		catch (error) {
-			emit({ group: 'storage', error: String(error) }, bridgeId)
+			emit({ group: 'storage', error: error?.errMsg || String(error) }, bridgeId)
 		}
 	})
 }
