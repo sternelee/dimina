@@ -1,5 +1,16 @@
 # Changelog
 
+## [v1.7.2] 2026-09-11
+
+### 新增
+
+- vConsole 的 `MiniProgram Storage` 面板支持使用 JSON 新增和编辑值，并可在确认后删除当前小程序的 MMKV 数据；操作完成后会重新读取原生存储。
+
+### 兼容性
+
+- HarmonyOS SDK 和高德地图扩展模块 `@didi-dimina/map-amap` 同步升级到 1.7.2。
+- JSSDK 升级到 1.0.44。
+
 ## [v1.7.1] 2026-09-10
 
 ### 新增
