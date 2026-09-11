@@ -101,7 +101,7 @@ public class DMPNavigator: NSObject {
     }
 
     func setCapsuleVisible(_ visible: Bool) {
-        capsuleView?.isHidden = !visible
+        capsuleView?.isHidden = !(visible && DMPAppManager.sharedInstance().showCapsule)
         if visible {
             setCapsuleEnabled(true)
         }

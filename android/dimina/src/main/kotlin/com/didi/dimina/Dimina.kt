@@ -52,11 +52,15 @@ class Dimina private constructor(context: Context) {
 
     // 配置类
     class DiminaConfig private constructor(builder: Builder) {
+        val showCapsule: Boolean = builder.showCapsule
         val debugMode: Boolean = builder.debugMode
         val apiNamespaces: List<String> = builder.apiNamespaces
         val virtualFilePrefix: String = builder.virtualFilePrefix
 
         class Builder {
+            var showCapsule: Boolean = true
+            fun setShowCapsule(show: Boolean): Builder { showCapsule = show; return this }
+
             var debugMode: Boolean = false
             internal var apiNamespaces: MutableList<String> = mutableListOf()
             internal var virtualFilePrefix: String = PathUtils.DEFAULT_VIRTUAL_DOMAIN_URL
@@ -171,6 +175,37 @@ class Dimina private constructor(context: Context) {
         val normalizedAppId = appId.trim()
         if (normalizedAppId.isEmpty()) return false
         return DiminaActivity.closeMiniProgramFromHost(normalizedAppId)
+    }
+
+    fun shouldShowCapsule(): Boolean = config.showCapsule
+
+    /** Queries installed disk contents, not whether a runtime is currently alive. */
+    fun isExistsApp(appId: String): Boolean = getAppVersionInfo(appId) != null
+
+    fun getAppVersionInfo(appId: String): org.json.JSONObject? =
+        RemoteUpdateManager.getAppVersionInfo(appContext, appId.trim())
+
+    /** Installs a Dimina ZIP containing config.json and main/. Keeps the source ZIP and user data. */
+    fun installMiniProgram(appId: String, packagePath: String,
+        completion: (Result<org.json.JSONObject>) -> Unit) {
+        val normalizedAppId = appId.trim()
+        try {
+            RemoteUpdateManager.beginUninstall(normalizedAppId)
+        } catch (error: Throwable) {
+            completion(Result.failure(error))
+            return
+        }
+        operationScope.launch {
+            val result = runCatching {
+                withContext(Dispatchers.Main.immediate) {
+                    DiminaActivity.closeForUninstall(normalizedAppId)
+                    MiniApp.getInstance().clear(normalizedAppId)
+                }
+                RemoteUpdateManager.installLocalPackage(appContext, normalizedAppId, packagePath)
+            }
+            RemoteUpdateManager.endUninstall(normalizedAppId)
+            withContext(Dispatchers.Main.immediate) { completion(result) }
+        }
     }
 
     /**

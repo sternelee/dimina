@@ -635,6 +635,7 @@ class DiminaActivity : ComponentActivity() {
                     val localVersion = VersionUtils.getAppVersion(appId)
                     BundledResourcePolicy.shouldExtract(
                         bundledVersion = miniProgram.versionCode,
+                        hostManaged = RemoteUpdateManager.getAppVersionInfo(applicationContext, appId)?.optBoolean("hostManaged") == true,
                         installedVersion = localVersion,
                         requiredResourcePresent =
                             findAppConfigFile("jsapp/$appId") != null &&
@@ -1736,14 +1737,16 @@ class DiminaActivity : ComponentActivity() {
                                 containerColor = navBarBgColor
                             ),
                             navigationIcon = {
-                                // 返回箭头（非栈底页面）与返回首页按钮可并存：
+                                // 返回箭头（非栈底页面，或宿主隐藏胶囊）与返回首页按钮可并存：
                                 // 页面配置 homeButton: true 的内页两者同时显示（微信实测样式）。
                                 // 两个 IconButton 默认触摸热区都比各自图标大（自带留白），
                                 // 不再额外叠加 Row 间距，否则视觉间距会远超微信原生
                                 // `.navigator-hd a+a{margin-left:10px}` 的 10dp
                                 Row {
-                                    if (!miniProgram.root) {
-                                        IconButton(onClick = { finish() }) {
+                                    if (!miniProgram.root || !Dimina.getInstance().shouldShowCapsule()) {
+                                        IconButton(onClick = {
+                                            if (miniProgram.root) hideMiniProgram() else finish()
+                                        }) {
                                             Icon(
                                                 imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                                                 contentDescription = "Back",
@@ -1870,7 +1873,7 @@ class DiminaActivity : ComponentActivity() {
                 )
             }
 
-            if (!isLoading.value) {
+            if (!isLoading.value && com.didi.dimina.Dimina.getInstance().shouldShowCapsule()) {
                 val configuration = LocalConfiguration.current
                 val (windowInfo, menuRect) = remember(
                     configuration.screenWidthDp,
