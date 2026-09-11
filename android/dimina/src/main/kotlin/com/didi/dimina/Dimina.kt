@@ -87,11 +87,11 @@ class Dimina private constructor(context: Context) {
     }
 
     /**
-     * 检查当前是否处于调试模式
+     * 检查宿主是否显式启用调试模式，与 SDK AAR 的构建类型无关。
      * @return 是否为调试模式
      */
     fun isDebugMode(): Boolean {
-        return BuildConfig.DEBUG && config.debugMode
+        return config.debugMode
     }
 
     @MainThread
@@ -135,7 +135,7 @@ class Dimina private constructor(context: Context) {
         this.config = config
         PathUtils.configureVirtualFilePrefix(config.virtualFilePrefix)
 
-		// A mini-program setting must never enable host logs in a release build.
+		// Debugging is explicitly controlled by the host, including with a release AAR.
 		LogUtils.initialize(isDebugMode())
     }
 

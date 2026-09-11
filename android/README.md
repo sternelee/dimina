@@ -71,7 +71,7 @@ class MyApplication : Application() {
 
 #### 调试模式与 vConsole
 
-当 `setDebugMode(true)` 时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测到该启用标记时，pageFrame 才会在 render 初始化前同步初始化 vConsole。
+在 `Dimina.init` 前配置 `setDebugMode(true)` 时，SDK 会在加载 pageFrame 时追加 `?vconsole=1`。该开关由宿主控制，对 Debug 和 Release AAR 均生效，默认关闭。JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测到该启用标记时，pageFrame 才会在 render 初始化前同步初始化 vConsole。
 
 调试模式下，逻辑线程的 `console.log/info/warn/error/debug` 会转发到 vConsole，`wx.request` 的请求和成功/失败结果显示在 Network 面板。启动阶段日志会暂存，待页面渲染通道就绪后送达（最多 200 条）。
 
