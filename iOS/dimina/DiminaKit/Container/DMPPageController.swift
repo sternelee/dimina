@@ -344,6 +344,7 @@ public class DMPPageController: UIViewController {
 
     private func makePageLoadingView() -> UIView {
         let container = UIView()
+        container.accessibilityIdentifier = "dimina.launchLoading"
         container.backgroundColor = .white
 
         let stackView = UIStackView()

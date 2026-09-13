@@ -1836,7 +1836,7 @@ class DiminaActivity : ComponentActivity() {
 
                         // 加载遮罩层使用 AnimatedVisibility 只添加淡出效果
                         androidx.compose.animation.AnimatedVisibility(
-                            visible = isLoading.value && miniProgram.root,
+                            visible = isLoading.value && miniProgram.root && Dimina.getInstance().shouldShowLaunchLoading(),
                             exit = fadeOut(animationSpec = tween(300)),
                             modifier = Modifier.fillMaxSize()
                         ) {
@@ -1909,6 +1909,11 @@ class DiminaActivity : ComponentActivity() {
 
     fun hideMiniProgram() {
         if (!isMiniProgramForeground() || isFinishing) return
+        if (!Dimina.getInstance().isMultiTaskEnabled()) {
+            // Shared-task pages must be popped; moving this task back would hide the host too.
+            exitMiniProgram()
+            return
+        }
         activityRegistry.snapshot(miniProgram.appId).forEach { it.retainedByHost = true }
         window.decorView.clearFocus()
         // Queue options before another task can receive onStart.
@@ -2527,6 +2532,10 @@ class DiminaActivity : ComponentActivity() {
         internal fun resumeRetainedMiniProgram(context: Context, appId: String): Boolean {
             val activity = activityRegistry.lastRegistered(appId) ?: return false
             if (activity.isFinishing || activity.isDestroyed) return false
+            if (!Dimina.getInstance().isMultiTaskEnabled()) {
+                // The host and mini program share a task; moving it forward cannot select a page.
+                return context === activity
+            }
             val manager = context.getSystemService(ActivityManager::class.java)
             val task = manager.appTasks.firstOrNull { it.taskInfo.taskId == activity.taskId } ?: return false
             task.moveToFront()
@@ -2560,7 +2569,9 @@ class DiminaActivity : ComponentActivity() {
             try {
                 // Excluded tasks are trimmed by Android when another task becomes active.
                 // Keep a normal task so switching mini programs does not destroy its pages.
-                launch(context, program, Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK)
+                launch(context, program, if (Dimina.getInstance().isMultiTaskEnabled()) {
+                    Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK
+                } else null)
             } catch (error: Exception) {
                 pendingLaunches.remove(program.appId)
                 throw error

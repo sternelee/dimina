@@ -53,11 +53,19 @@ class Dimina private constructor(context: Context) {
     // 配置类
     class DiminaConfig private constructor(builder: Builder) {
         val showCapsule: Boolean = builder.showCapsule
+        val enableMultiTask: Boolean = builder.enableMultiTask
+        val showLaunchLoading: Boolean = builder.showLaunchLoading
         val debugMode: Boolean = builder.debugMode
         val apiNamespaces: List<String> = builder.apiNamespaces
         val virtualFilePrefix: String = builder.virtualFilePrefix
 
         class Builder {
+            var enableMultiTask: Boolean = true
+            fun setEnableMultiTask(enable: Boolean): Builder { enableMultiTask = enable; return this }
+
+            var showLaunchLoading: Boolean = true
+            fun setShowLaunchLoading(show: Boolean): Builder { showLaunchLoading = show; return this }
+
             var showCapsule: Boolean = true
             fun setShowCapsule(show: Boolean): Builder { showCapsule = show; return this }
 
@@ -176,6 +184,10 @@ class Dimina private constructor(context: Context) {
         if (normalizedAppId.isEmpty()) return false
         return DiminaActivity.closeMiniProgramFromHost(normalizedAppId)
     }
+
+    fun isMultiTaskEnabled(): Boolean = config.enableMultiTask
+
+    fun shouldShowLaunchLoading(): Boolean = config.showLaunchLoading
 
     fun shouldShowCapsule(): Boolean = config.showCapsule
 

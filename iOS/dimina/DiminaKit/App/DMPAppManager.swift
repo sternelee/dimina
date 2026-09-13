@@ -400,6 +400,9 @@ public class DMPAppManager {
     /// Configure before launching mini programs. Defaults to the standard capsule UI.
     public var showCapsule: Bool = true
 
+    /// Controls only the default mini-program launch overlay, not business loading dialogs.
+    public var showLaunchLoading: Bool = true
+
     public func isExistsApp(appId: String) -> Bool {
         (try? getAppVersionInfo(appId: appId)) != nil
     }

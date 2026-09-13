@@ -163,6 +163,26 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         XCTAssertTrue(fixture.navigator.isRetainedInBackground)
     }
 
+    func testHostLaunchLoadingOptionCoversNormalAndTabRoots() async throws {
+        let manager = DMPAppManager.sharedInstance()
+        let previous = manager.showLaunchLoading
+        defer { manager.showLaunchLoading = previous }
+        func containsOverlay(_ view: UIView) -> Bool {
+            view.accessibilityIdentifier == "dimina.launchLoading" || view.subviews.contains(where: containsOverlay)
+        }
+        for tabbed in [false, true] {
+            for enabled in [true, false] {
+                manager.showLaunchLoading = enabled
+                let fixture = await makeRoutingFixture(name: "launch-overlay", bundleConfig: tabbed ? makeTabbedBundleConfig() : nil)
+                defer { destroyRoutingFixture(fixture) }
+                let launched = await fixture.navigator.launch(to: tabbed ? "pages/home/index" : "pages/index/index", animated: false)
+                XCTAssertTrue(launched)
+                XCTAssertEqual(containsOverlay(fixture.navigationController.view), enabled)
+                XCTAssertEqual(fixture.navigationController.viewControllers.count, 2)
+            }
+        }
+    }
+
     func testRepeatedSetupReplacesRatherThanDuplicatesCapsule() {
         let navigationController = UINavigationController()
         navigationController.loadViewIfNeeded()

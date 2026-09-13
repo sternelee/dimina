@@ -261,6 +261,7 @@ export class DMPAppManager {
 
   // Configure before launching. A hidden capsule requires a host-provided exit action.
   public showCapsule: boolean = true
+  public showLaunchLoading: boolean = true
 
   isExistsApp(appId: string): boolean {
     return this.getAppVersionInfo(appId) !== undefined
