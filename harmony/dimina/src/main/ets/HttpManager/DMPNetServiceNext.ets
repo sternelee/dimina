@@ -30,17 +30,19 @@ export class DMPNetServiceNext {
         }).catch((error: Error) => {
           fail(error)
         })
-      } else if (this.params.method.toUpperCase() === 'GET') {
+      } else if (['GET', 'HEAD', 'DELETE'].includes(this.params.method.toUpperCase())) {
         request({
           url: this.params.url,
-          methodType: http.RequestMethod.GET,
-          body: JSON.stringify(this.params.body),
+          // Service has already moved object data into the URL query.
+          methodType: this.params.method.toUpperCase() as http.RequestMethod,
           headers: this.params.headers
         }).then((res: http.HttpResponse) => {
           this.handleResponse(res, success)
         }).catch((error: Error) => {
           fail(error)
         })
+      } else {
+        fail(new Error('request:fail unsupported method ' + this.params.method));
       }
     })
   }
@@ -50,7 +52,7 @@ export class DMPNetServiceNext {
     let header = new DMPMap(res.header);
     let data: string = res.result as string; // 字符串数据
     let result: DMPMap = new DMPMap();
-    if (this.params.contentType.includes('json')) {
+    if (this.params.contentType.includes('json') && data.length > 0) {
       result.set('data', JSON.parse(data));
     } else {
       result.set('data', data);
