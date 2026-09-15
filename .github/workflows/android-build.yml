@@ -71,7 +71,10 @@ jobs:
       # 5. 安装 Android SDK
       - name: Setup Android SDK
         if: env.has_apk == 'false'
-        uses: android-actions/setup-android@v3
+        uses: android-actions/setup-android@v4
+        with:
+          # Avoid the legacy 'tools' package included in the action's defaults.
+          packages: 'platform-tools'
 
       # 6. 进入 android 目录并设置 Gradle 可执行权限
       - name: Set up Android build environment
