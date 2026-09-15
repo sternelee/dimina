@@ -1,5 +1,25 @@
 # Changelog
 
+## [v1.7.3] 2026-09-15
+
+### 新增
+
+- Android、iOS 和 HarmonyOS 的 `FileSystemManager` 支持在 `wx.env.USER_DATA_PATH` 下持久化文件，补齐目录、读写、删除、遍历、状态查询、复制和重命名的同步与异步接口。
+- 三端新增宿主管理小程序包能力，可查询已安装状态和版本，并从本地 Dimina ZIP 安装、升级、替换或降级小程序；安装失败时保留旧包。
+- 三端支持配置胶囊显隐和默认启动遮罩；Android 另可关闭独立小程序任务卡片，让页面进入宿主任务栈。
+
+### 修复
+
+- `wx.request` 会将 GET、HEAD 和 DELETE 请求中的对象参数统一编码到 URL query，数组使用重复键，空值不发送，三端不再携带请求体。
+- HarmonyOS 收到空 JSON 响应时不再执行 `JSON.parse`，避免无内容响应触发解析错误。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.7.3。
+- HarmonyOS 高德地图扩展模块 `@didi-dimina/map-amap` 与核心 SDK 同步升级到 1.7.3。
+- 编译器版本保持 1.2.1，JSSDK 升级到 1.0.45。
+- `oxc-parser` 升级到 0.149.0，Vitest 与覆盖率工具升级到 5.0.0。
+
 ## [v1.7.2] 2026-09-11
 
 ### 新增
