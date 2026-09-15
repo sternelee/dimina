@@ -33,7 +33,7 @@
 		"vue": "^3.5.42"
 	},
 	"devDependencies": {
-		"@vitejs/plugin-vue": "^6.0.8",
+		"@vitejs/plugin-vue": "^6.0.9",
 		"unplugin-auto-import": "^21.1.0"
 	}
 }
