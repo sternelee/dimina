@@ -63,12 +63,12 @@ DMCC converts mini program source into logic, view, style, and configuration res
 
 ### Platform runtimes
 
-| Platform | Logic engine | View container | Integration |
-| --- | --- | --- | --- |
-| Android | QuickJS | Android WebView | [Android SDK](./android/README.md) |
-| iOS | JavaScriptCore | WKWebView | [iOS SDK](./iOS/README.md) |
-| Harmony | QuickJS | Harmony WebView | [Harmony SDK](./harmony/dimina/README.md) |
-| Web | Web Worker | Browser | [Live demo](https://didi.github.io/dimina/) |
+| Platform | Logic engine | View container |
+| --- | --- | --- |
+| Android | QuickJS | Android WebView |
+| iOS | JavaScriptCore | WKWebView |
+| Harmony | QuickJS | Harmony WebView |
+| Web | Web Worker | Browser |
 
 ## Quick start
 

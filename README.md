@@ -63,12 +63,12 @@ DMCC 将小程序源码转换为逻辑、视图、样式和配置资源。进入
 
 ### 平台运行时
 
-| 平台 | 逻辑引擎 | 视图容器 | 接入入口 |
-| --- | --- | --- | --- |
-| Android | QuickJS | Android WebView | [Android SDK](./android/README.md) |
-| iOS | JavaScriptCore | WKWebView | [iOS SDK](./iOS/README.md) |
-| Harmony | QuickJS | Harmony WebView | [Harmony SDK](./harmony/dimina/README.md) |
-| Web | Web Worker | Browser | [在线演示](https://didi.github.io/dimina/) |
+| 平台 | 逻辑引擎 | 视图容器 |
+| --- | --- | --- |
+| Android | QuickJS | Android WebView |
+| iOS | JavaScriptCore | WKWebView |
+| Harmony | QuickJS | Harmony WebView |
+| Web | Web Worker | Browser |
 
 ## 最快上手
 
