@@ -1,5 +1,26 @@
 # Changelog
 
+## [v1.7.4] 2026-09-17
+
+### 新增
+
+- Android、iOS 和 HarmonyOS 新增 `destroyAllMiniPrograms`，宿主退出登录时可统一销毁前台、后台保活及跨小程序来源实例，同时保留已安装包和持久化数据。
+
+### 优化
+
+- 三端重新进入保活中的小程序时，会用本次入口更新 `App.onShow` 和 `getEnterOptionsSync()` 的路径、query、场景及来源信息；页面栈保持不变，也不会重复触发当前页的 `Page.onShow`。
+
+### 修复
+
+- 修复连续调用 `showLoading`、`hideLoading` 或用新提示替换旧提示时，旧的关闭动画或定时任务误关新提示的问题。
+- 修复 Android 启动遮罩在小程序名称为空、仅含空格或运行中变更时，首字显示异常或崩溃的问题。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.7.4。
+- HarmonyOS 高德地图扩展模块 `@didi-dimina/map-amap` 与核心 SDK 同步升级到 1.7.4。
+- 编译器版本保持 1.2.1，JSSDK 升级到 1.0.46。
+
 ## [v1.7.3] 2026-09-15
 
 ### 新增

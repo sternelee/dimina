@@ -1,5 +1,24 @@
 # Changelog
 
+## [v1.7.4] 2026-09-17
+
+### 新增
+
+- `DMPAppManager` 新增 `destroyAllMiniPrograms`，宿主退出登录时可统一销毁前台、后台保活及跨小程序来源实例，同时保留已安装包和持久化数据。
+
+### 优化
+
+- 重新进入保活中的小程序时，会用本次入口更新 `App.onShow` 和 `getEnterOptionsSync()` 的路径、query、场景及来源信息；页面栈保持不变，也不会重复触发当前页的 `Page.onShow`。
+
+### 修复
+
+- 修复连续调用 `showLoading`、`hideLoading` 时，旧的关闭任务可能误关新提示的问题。
+
+### 兼容性
+
+- HarmonyOS SDK 和高德地图扩展模块 `@didi-dimina/map-amap` 同步升级到 1.7.4。
+- JSSDK 升级到 1.0.46。
+
 ## [v1.7.3] 2026-09-15
 
 ### 新增
