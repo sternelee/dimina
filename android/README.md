@@ -133,7 +133,7 @@ Dimina.getInstance().startMiniProgram(context, miniProgram)
 ```kotlin
 val accepted = Dimina.getInstance().closeMiniProgram("wx92269e3b2f304afc")
 
-// 退出登录：主线程销毁全部实例，保留持久化数据
+// 主线程销毁全部小程序实例，保留持久化数据
 Dimina.getInstance().destroyAllMiniPrograms()
 ```
 

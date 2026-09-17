@@ -2571,7 +2571,7 @@ class DiminaActivity : ComponentActivity() {
 
         private fun isObsoleteHostLaunch(intent: Intent): Boolean =
             // A previous process's saved Intent is a legitimate cold restore, not an
-            // in-flight launch canceled by this process's logout.
+            // in-flight launch canceled by this process's destroyAllMiniPrograms call.
             intent.getStringExtra(HOST_SESSION_KEY) == hostSession &&
                 intent.getLongExtra(HOST_GENERATION_KEY, hostGeneration) != hostGeneration
 

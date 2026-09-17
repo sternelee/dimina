@@ -134,7 +134,7 @@ JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测
 ```swift
 try await app.closeMiniProgram()
 
-// 退出登录：MainActor 上销毁全部实例，保留持久化数据
+// MainActor 上销毁全部小程序实例，保留持久化数据
 try await DMPAppManager.sharedInstance().destroyAllMiniPrograms()
 ```
 

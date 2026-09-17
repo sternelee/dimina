@@ -4,7 +4,7 @@
 
 ### 新增
 
-- Android、iOS 和 HarmonyOS 新增 `destroyAllMiniPrograms`，宿主退出登录时可统一销毁前台、后台保活及跨小程序来源实例，同时保留已安装包和持久化数据。
+- Android、iOS 和 HarmonyOS 新增 `destroyAllMiniPrograms`，宿主可统一销毁前台、后台保活及跨小程序来源实例，同时保留已安装包和持久化数据。
 
 ### 优化
 

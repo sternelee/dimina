@@ -833,7 +833,7 @@ public class DMPNavigator: NSObject {
         return true
     }
 
-    /// During host logout, a suspended opener's controllers are not host content.
+    /// When destroying all mini programs, a suspended opener's controllers are not host content.
     @MainActor
     func prepareForDestroyAllMiniPrograms() {
         markPageTeardownReason(.exit)
