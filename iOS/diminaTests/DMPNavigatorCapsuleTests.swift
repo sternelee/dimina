@@ -1616,7 +1616,9 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         await waitForHostVisible(false, on: manager)
         XCTAssertFalse(manager.isHostVisibleForTesting())
         navigator.setup(navigationController: navigation)
-        await app.launch(launchConfig: DMPLaunchConfig(scene: 1011))
+        await app.launch(launchConfig: DMPLaunchConfig(
+            appEntryPath: "pages/index/index", query: ["id": "2", "from": "second"], scene: 1011
+        ))
         await app.service?.drainPendingContainerMessages()
         XCTAssertTrue(navigator.isActiveNavigationOwner())
         XCTAssertEqual(readEvents().filter { $0["type"] as? String == "appShow" }.count, showsBefore)
@@ -1626,7 +1628,50 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         await app.service?.drainPendingContainerMessages()
         let shows = readEvents().filter { $0["type"] as? String == "appShow" }
         XCTAssertEqual(shows.count, showsBefore + 1)
+        let body = try XCTUnwrap(shows.last?["body"] as? [String: Any])
+        XCTAssertEqual(body["path"] as? String, "pages/index/index")
+        XCTAssertEqual(body["query"] as? [String: String], ["id": "2", "from": "second"])
+        XCTAssertEqual(body["scene"] as? Int, 1011)
         await navigator.hideMiniProgram()
+    }
+
+    func testHostReentryUpdatesVisibleAppAndUsesCurrentPageAcrossForegroundCycles() async throws {
+        let app = DMPAppManager.sharedInstance().appWithConfig(appConfig: DMPAppConfig(
+            appName: "entry-options", appId: "entry-options-\(UUID().uuidString)"
+        ))
+        defer { app.destroy() }
+        let readEvents = await attachLifecycleCapture(to: app)
+        app.render = DMPRender(app: app)
+        let navigator = try XCTUnwrap(app.getNavigator())
+        let navigation = UINavigationController(rootViewController: UIViewController())
+        navigator.setup(navigationController: navigation)
+        _ = await navigator.launch(to: "pages/index/index", query: ["id": "1"], animated: false, showsLaunchLoading: false)
+        let originalRecord = navigator.getTopPageRecord()
+        await app.launch(launchConfig: DMPLaunchConfig(appEntryPath: "pages/detail/index?id=2&from=second"))
+        await app.service?.drainPendingContainerMessages()
+        var body = try XCTUnwrap(readEvents().last { $0["type"] as? String == "appShow" }?["body"] as? [String: Any])
+        XCTAssertEqual(body["query"] as? [String: String], ["id": "2", "from": "second"])
+        XCTAssertEqual(body["path"] as? String, "pages/detail/index")
+        XCTAssertEqual(navigator.getTopPageRecord()?.webViewId, originalRecord?.webViewId)
+
+        app.notifyMiniProgramHide()
+        app.notifyMiniProgramShow()
+        await app.service?.drainPendingContainerMessages()
+        body = try XCTUnwrap(readEvents().last { $0["type"] as? String == "appShow" }?["body"] as? [String: Any])
+        XCTAssertEqual(body["query"] as? [String: String], ["id": "1"])
+
+        XCTAssertEqual(body["path"] as? String, "pages/index/index")
+        await app.launch(launchConfig: DMPLaunchConfig(appEntryPath: "pages/detail/index"))
+        await app.service?.drainPendingContainerMessages()
+        body = try XCTUnwrap(readEvents().last { $0["type"] as? String == "appShow" }?["body"] as? [String: Any])
+        XCTAssertEqual((body["query"] as? [String: Any])?.count, 0)
+
+        await app.launch(launchConfig: DMPLaunchConfig())
+        await app.service?.drainPendingContainerMessages()
+        body = try XCTUnwrap(readEvents().last { $0["type"] as? String == "appShow" }?["body"] as? [String: Any])
+        XCTAssertEqual(body["path"] as? String, "pages/index/index")
+        XCTAssertEqual(body["query"] as? [String: String], ["id": "1"])
+        XCTAssertFalse(navigation.viewControllers.isEmpty)
     }
 
     func testNavigateBackMiniProgramLifecycleRunsOnceInOrder() async {

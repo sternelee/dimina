@@ -51,11 +51,11 @@ class Runtime {
 	}
 
 	getAppLaunchOptions() {
-		return this.appLaunchOptions
+		return { ...this.appLaunchOptions }
 	}
 
 	getAppEnterOptions() {
-		return this.appEnterOptions
+		return { ...this.appEnterOptions }
 	}
 
 	getApp(options = {}) {

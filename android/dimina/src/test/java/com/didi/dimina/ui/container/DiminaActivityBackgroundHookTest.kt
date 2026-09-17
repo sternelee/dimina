@@ -36,7 +36,7 @@ class DiminaActivityBackgroundHookTest {
 
     /** The brace-matched body of `fun [name]`, or a failure if that declaration is gone. */
     private fun bodyOf(name: String): String {
-        val signature = Regex("""\n\s*(?:private\s+)?(?:override\s+)?fun $name\(""").find(source)
+        val signature = Regex("""\n\s*(?:(?:private|internal)\s+)?(?:override\s+)?fun $name\(""").find(source)
             ?: throw AssertionError("DiminaActivity no longer declares `fun $name(`")
         val open = source.indexOf('{', signature.range.last)
         if (open < 0) throw AssertionError("no body found for `$name`")
@@ -49,6 +49,21 @@ class DiminaActivityBackgroundHookTest {
             }
         }
         throw AssertionError("unbalanced braces while reading the body of `$name`")
+    }
+
+    @Test
+    fun `host reentry queues explicit entry options before restoring a retained task`() {
+        val open = bodyOf("openMiniProgram")
+        val entry = open.indexOf("MiniProgramEntryOptions.from(program,")
+        val restore = open.indexOf("resumeRetainedMiniProgram(context,")
+        assertTrue(entry >= 0 && restore > entry)
+        assertTrue(open.substring(restore).contains("visibilityTracker.isForeground(program.appId)"))
+        assertTrue(open.substring(restore).contains("dispatchMiniProgramShow()"))
+
+        val newIntent = bodyOf("onNewIntent")
+        assertTrue(newIntent.contains("MiniProgramEntryOptions.from(program,"))
+        assertTrue(newIntent.contains("visibilityTracker.isForeground(program.appId)"))
+        assertTrue(newIntent.contains("dispatchMiniProgramShow()"))
     }
 
     @Test

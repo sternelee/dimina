@@ -26,6 +26,7 @@ import { EngineStatus, StatusMonitor } from './utils/DMPStatusMonitor'
 import { common } from '@kit.AbilityKit'
 import { DMPNavigatorDelegate } from '../Navigator/DMPNavigatorDelegate'
 import { DMPAppManager } from './DMPAppManager'
+import { DMPMiniProgramPathParser } from './DMPMiniProgramPresentationStack'
 import { DMPNavigatorManager } from '../Navigator/DMPNavigatorManager'
 import { DMPPageStateTeardown } from '../Navigator/DMPPageStateTeardown'
 import { DRouter } from '../Navigator/DRouter'
@@ -65,6 +66,8 @@ export class DMPApp {
   // 宿主后台期间攒下的那一次恢复要带的 enter options，见 [stashMiniProgramShow]。
   private _pendingShowScene: DMPScene | undefined = undefined
   private _pendingShowReferrer: DMPMap | undefined = undefined
+  private _hostEntryOptions: DMPMap | undefined = undefined
+  private _hostEntryPending: boolean = false
   private _closeInProgress?: Promise<void>
   private _deferredLaunchConfigs: DMPLaunchConfig[] = []
   private _webViewCachePool: DMPWebViewCachePool = new DMPWebViewCachePool(this)
@@ -297,6 +300,8 @@ export class DMPApp {
     this._webViewCachePool = new DMPWebViewCachePool(this);
     this._engineStatus = new StatusMonitor();
     this._runtimeLifecycle.markReady()
+    this._hostEntryOptions = undefined
+    this._hostEntryPending = false
     if (afterExit) {
       this._visibilityLedger.markRuntimeRelaunched()
       // 重新启动的小程序带的是自己的启动场景，退出前攒下的那次返回场景已经过期。
@@ -549,7 +554,8 @@ export class DMPApp {
   /** Reveal only this mini program and update App.onShow/GetEnterOptionsSync data. */
   public notifyMiniProgramShow(scene: DMPScene, referrerInfo?: DMPMap) {
     DMPAppManager.sharedInstance().retentionVisibility(this, true)
-    if (!this._visibilityLedger.request(true)) {
+    const wasVisible = this._visibilityLedger.isVisible
+    if (!this._visibilityLedger.request(true, this._hostEntryPending)) {
       return
     }
     if (this._pendingShowScene !== undefined) {
@@ -557,10 +563,10 @@ export class DMPApp {
       const pendingReferrer = this._pendingShowReferrer
       this._pendingShowScene = undefined
       this._pendingShowReferrer = undefined
-      this.dispatchAppShow(pendingScene, pendingReferrer)
+      this.dispatchAppShow(pendingScene, pendingReferrer, !wasVisible)
       return
     }
-    this.dispatchAppShow(scene, referrerInfo)
+    this.dispatchAppShow(scene, referrerInfo, !wasVisible)
   }
 
   /**
@@ -575,7 +581,28 @@ export class DMPApp {
     this._pendingShowReferrer = referrerInfo
   }
 
-  private dispatchAppShow(scene: DMPScene, referrerInfo?: DMPMap) {
+  public prepareHostEntry(config: DMPLaunchConfig): void {
+    const record = this.navigatorManager.getActivePageRecord()
+    const path = config.appEntryPath?.trim()
+    const parsed = path ? DMPMiniProgramPathParser.parse(path) : undefined
+    this._hostEntryOptions = new DMPMap({
+      path: parsed?.pagePath ?? record?.pagePath ?? '',
+      pagePath: parsed?.pagePath ?? record?.pagePath ?? '',
+      query: config.query ?? (parsed ? parsed.query : record?.params?.get('query')) ?? new DMPMap(),
+      scene: config.scene ?? DMPScene.fromMainEntry,
+      referrerInfo: config.referrerInfo ?? new DMPMap()
+    })
+    this._hostEntryPending = true
+    this._pendingShowScene = undefined
+    this._pendingShowReferrer = undefined
+  }
+
+  public clearHostEntryOptions(): void {
+    this._hostEntryOptions = undefined
+    this._hostEntryPending = false
+  }
+
+  private dispatchAppShow(scene: DMPScene, referrerInfo?: DMPMap, showPage: boolean = true) {
     const record = this.navigatorManager.getActivePageRecord()
     const bridgeId = record?.webViewId ?? -1
     const body = new DMPMap({
@@ -588,11 +615,18 @@ export class DMPApp {
     if (referrerInfo) {
       body.set('referrerInfo', referrerInfo)
     }
+    const entry = this._hostEntryOptions
+    if (entry) {
+      for (const key of ['path', 'pagePath', 'query', 'scene', 'referrerInfo']) {
+        body.set(key, entry.get(key))
+      }
+    }
+    this.clearHostEntryOptions()
     DMPChannelProxyNext.ContainerToService(new DMPMap({
       type: 'appShow',
       body
     }), this.appIndex)
-    if (bridgeId > 0) {
+    if (showPage && bridgeId > 0) {
       this.navigatorManager.dispatchPageShow(bridgeId)
     }
   }
@@ -764,6 +798,8 @@ export class DMPApp {
   public notifyServiceReady() {
     if (this._visibilityLedger.markServiceReady()) {
       this.dispatchAppHide()
+    } else if (this._hostEntryPending && this._visibilityLedger.isVisible) {
+      this.notifyMiniProgramShow(DMPScene.fromMainEntry)
     }
   }
 
@@ -773,7 +809,7 @@ export class DMPApp {
       return
     }
     if (!this.navigatorManager.isEmpty()) {
-      this.settleLaunchCompletion(launchConfig, true)
+      DMPAppManager.sharedInstance().resumeRetainedApp(this, launchConfig)
       return
     }
     DMPLogger.i(Tags.LAUNCH, "launchInner start");

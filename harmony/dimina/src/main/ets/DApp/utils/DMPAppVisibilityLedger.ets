@@ -18,6 +18,8 @@ export class DMPAppVisibilityLedger {
   private sent: boolean = true
   private ready: boolean = false
 
+  get isVisible(): boolean { return this.desired }
+
   /**
    * logic.js 已就绪，可以收生命周期消息了。返回 true 表示窗口期里欠了一次 appHide，
    * 调用方现在补发——运行时未就绪时送达状态恒为「已显示」，欠账只可能是这一个方向。
@@ -68,8 +70,8 @@ export class DMPAppVisibilityLedger {
    * 请求把可见状态切到 [visible]。返回 true 表示调用方现在就该派发对应事件；
    * 返回 false 表示状态没变，或运行时还没就绪、要等 markServiceReady 补发。
    */
-  request(visible: boolean): boolean {
-    if (this.desired === visible) {
+  request(visible: boolean, newEntry: boolean = false): boolean {
+    if (this.desired === visible && !(visible && newEntry)) {
       return false
     }
     this.desired = visible

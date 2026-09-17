@@ -208,8 +208,8 @@ class JsCore {
     }
 
     @Synchronized
-    fun appShow(options: JSONObject? = null) {
-        dispatchAppVisibility(appVisibilityLedger.onShow(options))
+    fun appShow(options: JSONObject? = null, newEntry: Boolean = options != null) {
+        dispatchAppVisibility(appVisibilityLedger.onShow(options, newEntry))
     }
 
     @Synchronized

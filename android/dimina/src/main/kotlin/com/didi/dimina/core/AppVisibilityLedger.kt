@@ -14,10 +14,15 @@ internal class AppVisibilityLedger {
     private var sentVisible: Boolean? = null
     private var pendingShowOptions: JSONObject? = null
 
+    // Current-page options refresh a real foreground transition; only a host entry
+    // may emit another onShow while already visible.
+    private var pendingNewEntry = false
+
     @Synchronized
-    fun onShow(options: JSONObject? = null): AppVisibilityDelivery? {
-        if (options != null) {
+    fun onShow(options: JSONObject? = null, newEntry: Boolean = options != null): AppVisibilityDelivery? {
+        if (options != null && (!pendingNewEntry || newEntry)) {
             pendingShowOptions = JSONObject(options.toString())
+            pendingNewEntry = newEntry
         }
         desiredVisible = true
         return flush()
@@ -44,12 +49,13 @@ internal class AppVisibilityLedger {
         desiredVisible = null
         sentVisible = null
         pendingShowOptions = null
+        pendingNewEntry = false
     }
 
     private fun flush(): AppVisibilityDelivery? {
         val visible = desiredVisible ?: return null
         if (!serviceReady) return null
-        if (sentVisible == visible && !(visible && pendingShowOptions != null)) return null
+        if (sentVisible == visible && !(visible && pendingNewEntry)) return null
 
         val delivery = AppVisibilityDelivery(
             visible = visible,
@@ -57,6 +63,7 @@ internal class AppVisibilityLedger {
         )
         if (visible) {
             pendingShowOptions = null
+            pendingNewEntry = false
         }
         sentVisible = visible
         return delivery

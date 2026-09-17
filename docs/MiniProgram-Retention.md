@@ -23,6 +23,8 @@ Web 基础示例列表打开小程序时不再传入 `destroy: true`。宿主仍
 
 从宿主重新打开缓存实例时，页面栈保持不变，`App.onShow` 的 `path/query` 对应当前页面，`scene/referrerInfo` 使用本次进入参数。未提供场景值时按宿主入口 `1001` 处理，不复用旧的来源小程序信息。完成返回后，旧的来源关系不再用于后续后台销毁。
 
+Android 的 `startMiniProgram` 显式提供 `path`，或 iOS / Harmony 的 `DMPLaunchConfig` 提供 `appEntryPath/query` 时，`App.onShow` 和 `getEnterOptionsSync()` 使用本次进入的路径及 query；显式路径不含 query 且未另传 query 时返回空对象，不沿用旧参数。未提供路径时，使用保留的当前页面参数。本次宿主入口参数仅覆盖此次进入事件；普通系统前后台切换重新读取当前页面的 path/query。热启动不重新执行 `App.onLaunch`，`globalData` 继续保留，`getLaunchOptionsSync()` 仍返回该实例首次冷启动的参数；只有销毁后重新初始化才更新首次启动参数。这项参数更新不重建保留的页面栈，也不额外触发 `Page.onLoad`。
+
 隐藏依次触发当前页的 `Page.onHide` 和 `App.onHide`，恢复依次触发 `App.onShow` 和当前页的 `Page.onShow`。宿主仍在系统后台时，重新挂载页面不等于实际显示，显示生命周期等到宿主回到前台时再派发。
 
 ## 各平台如何保留页面

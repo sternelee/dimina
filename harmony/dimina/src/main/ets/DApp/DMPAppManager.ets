@@ -439,13 +439,14 @@ export class DMPAppManager {
       throw new Error('resumeMiniProgram: another mini program is presented')
     }
     // The next windowStage SHOWN also reads this config; do not restore an old opener/scene.
+    app.prepareHostEntry(config)
     const retainedConfig = app.getLaunchConfig()
     if (retainedConfig) {
       retainedConfig.scene = config.scene ?? DMPScene.fromMainEntry
       retainedConfig.referrerInfo = config.referrerInfo
     }
     app.navigatorManager.resumePresentation()
-    this.resumeOpener(app, config.scene ?? DMPScene.fromMainEntry, config.referrerInfo)
+    this.resumeOpener(app, config.scene ?? DMPScene.fromMainEntry, config.referrerInfo, true)
     const completion = config.completion
     config.completion = undefined
     completion?.(true)
@@ -533,7 +534,8 @@ export class DMPAppManager {
    * 在后台完成）只暂存 enter options：此刻派发会让账本以为 opener 已经显示，宿主真正回到
    * 前台时那条 show 就被去重掉，小程序再也收不到本次返回的 onShow。
    */
-  private resumeOpener(opener: DMPApp, scene: DMPScene, referrerInfo?: DMPMap): void {
+  private resumeOpener(opener: DMPApp, scene: DMPScene, referrerInfo?: DMPMap, hostEntry: boolean = false): void {
+    if (!hostEntry && scene === DMPScene.fromMiniProgramBack) opener.clearHostEntryOptions()
     if (this.hostVisible) {
       opener.notifyMiniProgramShow(scene, referrerInfo)
     } else {

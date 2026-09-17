@@ -27,6 +27,8 @@ public class DMPApp {
             // 记在 appVisibleDesired 上，由新运行时就绪时结算。
             appRuntimeReady = false
             appVisibleSent = true
+            hostEntryOptions = nil
+            hostEntryPending = false
         }
     }
     public var container: DMPContainer?
@@ -49,6 +51,8 @@ public class DMPApp {
     // 先存在这里，等宿主真正回到前台、账本第一次派发 App.onShow 时一并交出去。
     private var pendingShowScene: Int?
     private var pendingShowReferrerInfo: [String: Any]?
+    private var hostEntryOptions: [String: Any]?
+    private var hostEntryPending = false
     
     public init(appConfig: DMPAppConfig, appIndex: Int) {
         self.appConfig = appConfig
@@ -90,12 +94,12 @@ public class DMPApp {
             appVisibleDesired = true
         }
         if navigator?.isRetainedInBackground == true {
-            currentLaunchConfig?.scene = launchConfig.scene ?? DMPScene.fromMainEntry.rawValue
-            currentLaunchConfig?.referrerInfo = launchConfig.referrerInfo
+            prepareHostEntry(launchConfig)
             return navigator?.resumeRetainedMiniProgram() == true
         }
         if service != nil, navigator?.getTopPageRecord() != nil {
-            // Reopening a presented app is idempotent as well.
+            prepareHostEntry(launchConfig)
+            if appVisibleDesired { flushAppVisibility() }
             return true
         }
 
@@ -475,6 +479,31 @@ public class DMPApp {
         )
     }
 
+    @MainActor
+    private func prepareHostEntry(_ config: DMPLaunchConfig) {
+        let scene = config.scene ?? DMPScene.fromMainEntry.rawValue
+        currentLaunchConfig?.scene = scene
+        currentLaunchConfig?.referrerInfo = config.referrerInfo
+        var options: [String: Any] = ["scene": scene, "referrerInfo": config.referrerInfo ?? [:]]
+        if let path = config.appEntryPath?.trimmingCharacters(in: .whitespacesAndNewlines), !path.isEmpty {
+            let parsed = DMPUtil.queryPath(path: path)
+            options["path"] = parsed["pagePath"]
+            options["query"] = config.query ?? (parsed["query"] as? [String: Any]) ?? [:]
+        } else if let record = navigator?.getTopPageRecord() {
+            options["path"] = record.pagePath
+            options["query"] = config.query ?? record.query ?? [:]
+        }
+        hostEntryOptions = options
+        hostEntryPending = true
+        pendingShowScene = nil
+        pendingShowReferrerInfo = nil
+    }
+
+    func clearHostEntryOptions() {
+        hostEntryOptions = nil
+        hostEntryPending = false
+    }
+
     func notifyAppShow(scene: Int? = nil, referrerInfo: [String: Any]? = nil) {
         var body: [String: Any] = [:]
         if let pageRecord = navigator?.getTopPageRecord() {
@@ -490,6 +519,8 @@ public class DMPApp {
         if let referrerInfo = referrerInfo ?? currentLaunchConfig?.referrerInfo {
             body["referrerInfo"] = referrerInfo
         }
+        if let entry = hostEntryOptions { body.merge(entry) { _, new in new } }
+        clearHostEntryOptions()
         DMPChannelProxy.containerToService(
             msg: DMPMap(["type": "appShow", "body": body]),
             app: self
@@ -588,7 +619,8 @@ public class DMPApp {
     /// 只补 App 级事件——页面级的 show/hide 由当时的页面栈决定，缺席期间那些
     /// 页面并不存在，补发一条针对旧 webViewId 的消息只会送到已经没了的页面。
     private func flushAppVisibility() {
-        guard appRuntimeReady, appVisibleSent != appVisibleDesired else { return }
+        guard appRuntimeReady,
+              appVisibleSent != appVisibleDesired || (appVisibleDesired && hostEntryPending) else { return }
         appVisibleSent = appVisibleDesired
         if appVisibleDesired {
             let options = consumePendingShow(scene: nil, referrerInfo: nil)

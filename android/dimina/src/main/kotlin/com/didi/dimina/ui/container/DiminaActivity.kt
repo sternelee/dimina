@@ -592,6 +592,14 @@ class DiminaActivity : ComponentActivity() {
         }
 
         miniProgram = program
+        if (isMiniProgramInitialized && program.root) {
+            miniApp.setPendingAppShowOptions(
+                program.appId, MiniProgramEntryOptions.from(program, getLaunchReferrerInfo()),
+            )
+            if (visibilityTracker.isForeground(program.appId)) {
+                dispatchMiniProgramShow()
+            }
+        }
         val url = program.path ?: return
         if (!::appConfig.isInitialized) {
             return
@@ -1997,13 +2005,17 @@ class DiminaActivity : ComponentActivity() {
         miniApp.retentionVisibility(miniProgram.appId, true)
         val jsCore = miniApp.peekJsCore(miniProgram.appId)
         if (jsCore != null) {
-            val showOptions = miniApp.consumePendingAppShowOptions(miniProgram.appId)?.apply {
+            val pendingEntry = miniApp.consumePendingAppShowOptions(miniProgram.appId)
+            val showOptions = (pendingEntry ?: JSONObject().apply {
+                put("scene", miniProgram.scene)
+                put("referrerInfo", JSONObject())
+            }).apply {
                 getActiveBridge()?.options?.pathInfo?.let { pathInfo ->
                     if (!has("pagePath")) put("pagePath", pathInfo.pagePath)
                     if (!has("query")) put("query", pathInfo.query ?: JSONObject())
                 }
             }
-            jsCore.appShow(showOptions)
+            jsCore.appShow(showOptions, newEntry = pendingEntry != null)
         }
         com.didi.dimina.api.network.WebSocketManager.shared.setBackgrounded(miniProgram.appId, false)
     }
@@ -2558,12 +2570,15 @@ class DiminaActivity : ComponentActivity() {
                         scene = program.scene,
                     )
                 }
-                MiniApp.getInstance().setPendingAppShowOptions(program.appId, JSONObject().apply {
-                    put("scene", program.scene)
-                    put("referrerInfo", existing.getLaunchReferrerInfo() ?: JSONObject())
-                })
+                MiniApp.getInstance().setPendingAppShowOptions(
+                    program.appId, MiniProgramEntryOptions.from(program, existing.getLaunchReferrerInfo()),
+                )
             }
-            if (resumeRetainedMiniProgram(context, program.appId)) return
+            if (resumeRetainedMiniProgram(context, program.appId)) {
+                // A new entry while already visible has no onStart transition to deliver it.
+                if (visibilityTracker.isForeground(program.appId)) existing?.dispatchMiniProgramShow()
+                return
+            }
             // A second tap can arrive before the first Activity's onCreate registers its task.
             if (!pendingLaunches.add(program.appId)) return
             try {

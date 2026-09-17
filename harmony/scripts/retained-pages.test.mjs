@@ -147,6 +147,7 @@ function appManagerFixture(clock = {}) {
   const app = {
     appIndex: 17, appConfig: { appId: 'retained' },
     getLaunchConfig: () => storedConfig,
+    prepareHostEntry(config) { this.entryConfig = config },
     navigatorManager: { resumePresentation() {} },
     notifyMiniProgramShow: (scene, referrerInfo) => shown.push({ scene, referrerInfo }),
   }
@@ -159,6 +160,7 @@ test('host re-entry refreshes the config used by later system foreground events'
   f.manager.resumeRetainedApp(f.app, { scene: 1011, completion: success => { completed = success } })
   assert.equal(completed, true)
   assert.equal(f.storedConfig.scene, 1011)
+  assert.equal(f.app.entryConfig.scene, 1011)
   assert.equal(f.storedConfig.referrerInfo, undefined)
   assert.equal(f.storedConfig.appEntryPath, 'pages/detail')
   // DMPAppLifecycle reads this config again after a system background/foreground cycle.

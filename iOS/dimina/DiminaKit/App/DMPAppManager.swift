@@ -721,6 +721,7 @@ public class DMPAppManager {
             referrerInfo["extraData"] = extraData
         }
         openerNavigator.reactivate()
+        opener.clearHostEntryOptions()
         openerNavigator.resumeAfterMiniProgramNavigation(
             scene: DMPScene.fromMiniProgramBack.rawValue,
             referrerInfo: referrerInfo,

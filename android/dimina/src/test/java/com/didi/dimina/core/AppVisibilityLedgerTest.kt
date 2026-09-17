@@ -10,6 +10,29 @@ import org.junit.Test
 class AppVisibilityLedgerTest {
 
     @Test
+    fun `ordinary foreground refreshes current page without duplicating cold show`() {
+        val ledger = AppVisibilityLedger()
+        val current = JSONObject("""{"pagePath":"pages/current","query":{"id":"3"}}""")
+        assertNull(ledger.onShow(current, newEntry = false))
+        assertNull(ledger.onServiceReady())
+        assertNull(ledger.onShow(current, newEntry = false))
+        ledger.onHide()
+        val delivery = ledger.onShow(current, newEntry = false)!!
+        assertEquals("3", delivery.options!!.getJSONObject("query").getString("id"))
+        assertNull(ledger.onShow(current, newEntry = false))
+    }
+
+    @Test
+    fun `ordinary show cannot replace a new entry waiting for service readiness`() {
+        val ledger = AppVisibilityLedger()
+        val entry = JSONObject("""{"query":{"id":"2"}}""")
+        assertNull(ledger.onShow(entry))
+        assertNull(ledger.onShow(JSONObject("""{"query":{"id":"1"}}"""), newEntry = false))
+        assertEquals("2", ledger.onServiceReady()!!.options!!.getJSONObject("query").getString("id"))
+        assertNull(ledger.onShow())
+    }
+
+    @Test
     fun `cold start uses the App show emitted while the service creates the app`() {
         val ledger = AppVisibilityLedger()
 
