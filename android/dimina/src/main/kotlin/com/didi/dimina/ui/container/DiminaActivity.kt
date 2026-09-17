@@ -2402,10 +2402,10 @@ class DiminaActivity : ComponentActivity() {
     @Composable
     fun LoadingAnimation(miniProgram: MiniProgram) {
         // 使用 remember 记忆颜色值，避免每次重组时重新创建
-        val iconColor = remember { Color(Utils.generateColorFromName(miniProgram.name)) }
+        val iconColor = remember(miniProgram.name) { Color(Utils.generateColorFromName(miniProgram.name)) }
         val trackColor = remember { Color.LightGray.copy(alpha = 0.3f) }
         val dotColor = remember { Color(0xFF4CAF50) }
-        val firstLetter = remember { miniProgram.name.substring(0, 1) }
+        val firstLetter = remember(miniProgram.name) { miniProgram.name.take(1).ifBlank { "小" } }
 
         // 使用 InfiniteTransition 创建无限循环动画
         val infiniteTransition = rememberInfiniteTransition(label = "loadingRotation")
