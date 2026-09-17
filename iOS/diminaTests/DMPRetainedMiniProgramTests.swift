@@ -5,7 +5,7 @@ import UIKit
 @Suite(.serialized)
 @MainActor
 struct DMPRetainedMiniProgramTests {
-    private func makeApp(navigation hostNavigation: UINavigationController? = nil, registered: Bool = false) async -> (DMPApp, DMPNavigator, UINavigationController) {
+    private func makeApp(navigation hostNavigation: UINavigationController? = nil, registered: Bool = false, preservingOpener: Bool = false) async -> (DMPApp, DMPNavigator, UINavigationController) {
         let config = DMPAppConfig(appName: "retention", appId: UUID().uuidString)
         let app = registered ? DMPAppManager.sharedInstance().appWithConfig(appConfig: config)
             : DMPApp(appConfig: config, appIndex: -1)
@@ -13,10 +13,56 @@ struct DMPRetainedMiniProgramTests {
         app.render = DMPRender(app: app)
         let navigator = app.getNavigator()!
         let navigation = hostNavigation ?? UINavigationController(rootViewController: UIViewController())
-        navigator.setup(navigationController: navigation)
+        if preservingOpener {
+            navigator.setup(navigationController: navigation, preserving: navigation.viewControllers)
+        } else {
+            navigator.setup(navigationController: navigation)
+        }
         _ = await navigator.launch(to: "pages/index/index", animated: false, showsLaunchLoading: false)
         await navigator.navigateTo(to: "pages/detail/index", animated: false)
         return (app, navigator, navigation)
+    }
+
+    @Test func destroyAllRemovesVisibleRetainedAndSuspendedInstancesWithoutRestoringOpener() async throws {
+        let manager = DMPAppManager.sharedInstance()
+        let (hidden, hiddenNavigator, hiddenNavigation) = await makeApp(registered: true)
+        await hiddenNavigator.hideMiniProgram()
+        let (opener, openerNavigator, navigation) = await makeApp(registered: true)
+        openerNavigator.suspendForMiniProgramNavigation()
+        let (target, _, _) = await makeApp(navigation: navigation, registered: true, preservingOpener: true)
+        manager.markOpenedByMiniProgramForTesting(target: target, opener: opener)
+        let host = navigation.viewControllers.first
+
+        try await manager.destroyAllMiniPrograms()
+        await Task.yield() // A queued opener restoration must not revive it.
+        for app in [hidden, opener, target] {
+            #expect(app.service == nil)
+            #expect(manager.existApp(appId: app.getAppId()) == nil)
+        }
+        #expect(!hiddenNavigator.isRetainedInBackground)
+        #expect(hiddenNavigation.viewControllers.count == 1)
+        #expect(navigation.viewControllers.count == 1)
+        #expect(navigation.topViewController === host)
+        try await manager.destroyAllMiniPrograms()
+        let fresh = manager.appWithConfig(appConfig: DMPAppConfig(appName: "fresh", appId: target.getAppId()))
+        #expect(fresh !== target)
+        fresh.destroy()
+    }
+
+    @Test func destroyAllRejectsOverlappingNavigationBeforeRemovingInstances() async throws {
+        let manager = DMPAppManager.sharedInstance()
+        let (app, navigator, _) = await makeApp(registered: true)
+        try await manager.withMiniProgramOperation {
+            do {
+                try await manager.destroyAllMiniPrograms()
+                Issue.record("Expected operationInProgress")
+            } catch {
+                #expect(manager.existApp(appId: app.getAppId()) === app)
+                #expect(app.service != nil)
+            }
+        }
+        await navigator.hideMiniProgram()
+        try await manager.destroyAllMiniPrograms()
     }
 
     @Test func restoresTheSamePagesAndRuntimeAcrossRepeatedHides() async throws {

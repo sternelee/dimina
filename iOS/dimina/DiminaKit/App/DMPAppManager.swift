@@ -96,6 +96,7 @@ public class DMPAppManager {
     /// 宿主自己的前后台状态，由 [setupSystemLifecycleObservers] 维护。跨小程序恢复 opener
     /// 时要看它，而不是看「谁在展示」——后者在宿主后台里同样会变。
     @MainActor private var hostVisible = true
+    @MainActor private(set) var isDestroyingAllMiniPrograms = false
 
     @MainActor var retentionClock: () -> TimeInterval = { DMPRetentionClock.now() }
     @MainActor private var retentionPolicy = DMPRetentionPolicy()
@@ -595,6 +596,32 @@ public class DMPAppManager {
         )
     }
 
+    /// Destroy all instances without restoring an opener. Persistent user data is retained.
+    /// Throws operationInProgress before changing state if a launch/navigation is in flight.
+    @MainActor
+    public func destroyAllMiniPrograms() async throws {
+        try await withMiniProgramOperation {
+            let apps = withStateLock { Array(appPools.values) }
+            guard !apps.contains(where: { $0.isLaunching || $0.getNavigator()?.hasPageRouteOperationInProgress() == true }) else {
+                throw DMPMiniProgramNavigationError.operationInProgress
+            }
+            isDestroyingAllMiniPrograms = true
+            defer { isDestroyingAllMiniPrograms = false }
+            withStateLock { miniProgramOpeners.removeAll() }
+            retentionTimer?.invalidate()
+            retentionTimer = nil
+            retainedSince.removeAll()
+            retentionPressure = false
+            // Mark every page before removing any visible stack, including suspended openers.
+            apps.forEach { $0.getNavigator()?.prepareForDestroyAllMiniPrograms() }
+            for app in apps {
+                await closeMiniProgram(app, animated: false)
+                await app.service?.drainPendingContainerMessages()
+                app.destroy()
+            }
+        }
+    }
+
     @MainActor
     func hideMiniProgram(_ app: DMPApp) async throws {
         try await withMiniProgramOperation {
@@ -697,13 +724,13 @@ public class DMPAppManager {
     }
 
     @MainActor
-    private func closeMiniProgram(_ app: DMPApp) async {
+    private func closeMiniProgram(_ app: DMPApp, animated: Bool = true) async {
         await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
             guard let navigator = app.getNavigator() else {
                 continuation.resume()
                 return
             }
-            navigator.closeMiniProgram {
+            navigator.closeMiniProgram(animated: animated) {
                 continuation.resume()
             }
         }
@@ -714,7 +741,8 @@ public class DMPAppManager {
         _ context: MiniProgramOpenerContext,
         extraData: [String: Any]?
     ) {
-        guard let opener = getApp(appIndex: context.openerAppIndex),
+        guard !isDestroyingAllMiniPrograms,
+              let opener = getApp(appIndex: context.openerAppIndex),
               let openerNavigator = opener.getNavigator() else { return }
         var referrerInfo: [String: Any] = ["appId": context.targetAppId]
         if let extraData {

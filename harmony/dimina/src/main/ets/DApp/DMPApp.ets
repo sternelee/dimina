@@ -347,6 +347,9 @@ export class DMPApp {
 
   async startDimina(context: common.UIAbilityContext, launchConfig: DMPLaunchConfig) {
     DMPContextUtils.init(context)
+    if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms()) {
+      throw new Error('destroyAllMiniPrograms in progress')
+    }
     if (DMPRemoteUpdateManager.sharedInstance().isPackageOperationInProgress(this.appConfig.appId)) {
       throw new Error('package operation in progress')
     }
@@ -360,11 +363,20 @@ export class DMPApp {
 
   async startPackageLoader(context: common.UIAbilityContext, launchConfig?: DMPLaunchConfig) {
     DMPContextUtils.init(context)
+    const requestedGeneration = this._runtimeGeneration
     await DMPAppManager.sharedInstance().collectRetainedApps()
+    if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms() || requestedGeneration !== this._runtimeGeneration) {
+      this.settleLaunchCompletion(launchConfig, false)
+      return
+    }
     DMPLogger.i(Tags.LAUNCH, 'startPackageLoader start')
     const closeInProgress = this._closeInProgress
     if (closeInProgress) {
       await closeInProgress
+    }
+    if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms() || requestedGeneration !== this._runtimeGeneration) {
+      this.settleLaunchCompletion(launchConfig, false)
+      return
     }
     if (DMPRemoteUpdateManager.sharedInstance().isPackageOperationInProgress(this.appConfig.appId)) {
       throw new Error('package operation in progress')
@@ -430,6 +442,10 @@ export class DMPApp {
 
   //启动页面
   launch(launchConfig: DMPLaunchConfig) {
+    if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms()) {
+      this.settleLaunchCompletion(launchConfig, false)
+      return
+    }
     if (this._runtimeLifecycle.shouldDeferLaunch()) {
       this._deferredLaunchConfigs.push(launchConfig)
       return

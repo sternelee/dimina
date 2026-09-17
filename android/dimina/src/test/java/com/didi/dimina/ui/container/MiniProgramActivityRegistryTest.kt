@@ -6,6 +6,25 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class MiniProgramActivityRegistryTest {
+    @org.junit.Test
+    fun `close every app drains all owners before callbacks and preserves newly registered pages`() {
+        val registry = MiniProgramActivityRegistry<String>()
+        registry.register("a", "a-root")
+        registry.register("a", "a-detail")
+        registry.register("b", "b-root")
+        val closed = mutableListOf<String>()
+        registry.closeEveryApp {
+            org.junit.Assert.assertNull(registry.lastRegistered("b"))
+            closed.add(it)
+            if (it == "a-root") registry.register("a", "new-root")
+        }
+        org.junit.Assert.assertEquals(listOf("b-root", "a-detail", "a-root"), closed)
+        org.junit.Assert.assertEquals("new-root", registry.lastRegistered("a"))
+        registry.closeEveryApp { closed.add(it) }
+        registry.closeEveryApp { error("empty cleanup must be idempotent") }
+        org.junit.Assert.assertEquals("new-root", closed.last())
+    }
+
     @Test
     fun `lastRegistered returns the current top page without removing it`() {
         val registry = MiniProgramActivityRegistry<String>()

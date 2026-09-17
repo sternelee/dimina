@@ -29,6 +29,15 @@ internal class MiniProgramActivityRegistry<T> {
     @Synchronized
     fun snapshot(appId: String): List<T> = activitiesByAppId[appId]?.toList().orEmpty()
 
+    fun closeEveryApp(close: (T) -> Unit) {
+        val activities = synchronized(this) {
+            val snapshot = activitiesByAppId.values.flatMap { it.toList() }
+            activitiesByAppId.clear()
+            snapshot
+        }
+        activities.asReversed().forEach(close)
+    }
+
     fun closeAll(appId: String, close: (T) -> Unit) {
         val activities = synchronized(this) {
             activitiesByAppId.remove(appId)?.toList().orEmpty()

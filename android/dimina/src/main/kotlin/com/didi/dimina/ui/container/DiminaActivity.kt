@@ -498,8 +498,17 @@ class DiminaActivity : ComponentActivity() {
         }
     }
 
+    private var initializationJob: kotlinx.coroutines.Job? = null
+    private var destroyedByHost = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (isObsoleteHostLaunch(intent)) {
+            destroyedByHost = true
+            preserveMiniAppOnDestroy = true
+            finish()
+            return
+        }
         enableEdgeToEdge()
 
         // 获取屏幕高度
@@ -577,13 +586,14 @@ class DiminaActivity : ComponentActivity() {
         }
 
         // 使用协程初始化JS引擎并加载小程序
-        CoroutineScope(Dispatchers.Main).launch {
+        initializationJob = CoroutineScope(Dispatchers.Main).launch {
             initialize()
         }
     }
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        if (destroyedByHost || isObsoleteHostLaunch(intent)) return
         setIntent(intent)
 
         val program = getMiniProgramFromIntent(intent) ?: return
@@ -1349,6 +1359,7 @@ class DiminaActivity : ComponentActivity() {
      * @return true如果操作立即执行，false如果操作被加入队列
      */
     private fun withWebView(action: (WebView) -> Unit): Boolean {
+        if (destroyedByHost) return false
         if (useTabBarContainer.value) {
             val state = tabPageStates[selectedTabIndex.intValue]
             return state?.webView?.let {
@@ -1387,6 +1398,10 @@ class DiminaActivity : ComponentActivity() {
      * @param webView 初始化完成的WebView实例
      */
     private fun onWebViewReady(webView: WebView) {
+        if (destroyedByHost) {
+            WebViewCacheManager.evictAndDestroy(listOf(webView))
+            return
+        }
         this.webView = webView
         webView.setBackgroundColor(parseCssColor(backgroundColor.value).toArgb())
         bindNativeComponentHost()
@@ -1411,6 +1426,10 @@ class DiminaActivity : ComponentActivity() {
     }
 
     private fun onTabWebViewReady(index: Int, webView: WebView) {
+        if (destroyedByHost) {
+            WebViewCacheManager.evictAndDestroy(listOf(webView))
+            return
+        }
         val state = tabPageStates[index] ?: return
         state.webView = webView
         webView.setBackgroundColor(parseCssColor(state.configInfo.backgroundColor).toArgb())
@@ -1610,7 +1629,7 @@ class DiminaActivity : ComponentActivity() {
      */
     override fun onStart() {
         super.onStart()
-        if (isMiniProgramInitialized && visibilityTracker.onActivityVisible(miniProgram.appId, this)) {
+        if (!destroyedByHost && isMiniProgramInitialized && visibilityTracker.onActivityVisible(miniProgram.appId, this)) {
             dispatchMiniProgramShow()
         }
         suspendedForMiniProgramNavigation = false
@@ -1625,6 +1644,7 @@ class DiminaActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+        if (destroyedByHost) return
         if (suspendedForMiniProgramNavigation) {
             if (visibilityTracker.onActivityVisible(miniProgram.appId, this)) {
                 dispatchMiniProgramShow()
@@ -1644,6 +1664,11 @@ class DiminaActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        initializationJob?.cancel()
+        if (!isMiniProgramInitialized) {
+            super.onDestroy()
+            return
+        }
         if (isMiniProgramInitialized) {
             activityRegistry.unregister(miniProgram.appId, this)
             if (activityRegistry.lastRegistered(miniProgram.appId) == null) {
@@ -2537,8 +2562,18 @@ class DiminaActivity : ComponentActivity() {
         /** 小程序前后台判据的唯一真相源，见 [DiminaActivity.onStart]/[DiminaActivity.onStop]。 */
         private val visibilityTracker = MiniProgramVisibilityTracker<DiminaActivity>()
 
+        private const val HOST_GENERATION_KEY = "dimina_host_generation"
+        private const val HOST_SESSION_KEY = "dimina_host_session"
+        private val hostSession = java.util.UUID.randomUUID().toString()
+        private var hostGeneration = 0L
         private val pendingLaunches = mutableSetOf<String>()
         private val returnTasks = mutableMapOf<String, Int>()
+
+        private fun isObsoleteHostLaunch(intent: Intent): Boolean =
+            // A previous process's saved Intent is a legitimate cold restore, not an
+            // in-flight launch canceled by this process's logout.
+            intent.getStringExtra(HOST_SESSION_KEY) == hostSession &&
+                intent.getLongExtra(HOST_GENERATION_KEY, hostGeneration) != hostGeneration
 
         /** Move the entire task to the front; CLEAR_TOP would discard the retained page stack. */
         internal fun resumeRetainedMiniProgram(context: Context, appId: String): Boolean {
@@ -2607,6 +2642,8 @@ class DiminaActivity : ComponentActivity() {
         ) {
             val intent = Intent(context, DiminaActivity::class.java).apply {
                 putExtra(MINI_PROGRAM_KEY, miniProgram)
+                putExtra(HOST_GENERATION_KEY, hostGeneration)
+                putExtra(HOST_SESSION_KEY, hostSession)
                 flag?.let {
                     addFlags(flag)
                 }
@@ -2628,6 +2665,27 @@ class DiminaActivity : ComponentActivity() {
         internal fun canEvictRetainedApp(appId: String): Boolean {
             val activity = activityRegistry.lastRegistered(appId) ?: return true
             return activity.retainedByHost && !visibilityTracker.isForeground(appId)
+        }
+
+        @androidx.annotation.MainThread
+        internal fun destroyAllMiniProgramsFromHost() {
+            hostGeneration++
+            pendingLaunches.clear()
+            returnTasks.clear()
+            activityRegistry.closeEveryApp { activity ->
+                activity.destroyedByHost = true
+                activity.initializationJob?.cancel()
+                activity.webViewReadyCallbacks.clear()
+                activity.pageReadyCallback = null
+                activity.tabPageStates.values.forEach { state ->
+                    state.webViewReadyCallbacks.clear()
+                    state.pageReadyCallback = null
+                }
+                activity.suspendForMiniProgramNavigation()
+                activity.prepareForColdRestart()
+                // Remove only tasks rooted in Dimina; never remove the host's shared task.
+                if (activity.isTaskRoot) activity.finishAndRemoveTask() else activity.finish()
+            }
         }
 
         internal fun closeForUninstall(appId: String) {

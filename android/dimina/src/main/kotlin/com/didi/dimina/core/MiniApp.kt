@@ -555,19 +555,15 @@ class MiniApp private constructor() {
         synchronized(this) {
             pendingAppShowOptions.clear()
         }
+        // Reuse per-owner cleanup so subscriptions, Bluetooth and local-network listeners
+        // are released too. Take the union before clear() mutates either map.
+        (jsCoreMap.keys + bridgeListMap.keys).toSet().forEach { clear(it) }
+        retentionPressure = false
+        retentionHandler.removeCallbacks(retentionTask)
         // Silently tear down every owner's WebSocket state before destroying JsCore instances.
         com.didi.dimina.api.network.WebSocketManager.shared.disposeAll()
         deviceNetworkApi.clearAll()
         fileApi.clearAll()
-
-        // Detach every generation before scheduling its own FIFO-safe destruction.
-        val jsCoresToDestroy = jsCoreMap.toMap()
-        jsCoreMap.clear()
-        jsCoresToDestroy.forEach { (appId, jsCore) ->
-            LogUtils.d(tag, "Scheduling JsCore destruction for appId: $appId")
-            com.didi.dimina.api.media.CanvasExportGeneration.invalidate(appId)
-            jsCore.destroyAfterMessages()
-        }
 
         // Clear all Bridge lists
         bridgeListMap.clear()

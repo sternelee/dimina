@@ -34,7 +34,7 @@ public class DMPApp {
     public var container: DMPContainer?
     public var containerApi: DMPContainerApi?
 
-    private var isLaunching = false
+    private(set) var isLaunching = false
     private var isDestroyed = false
 
     // App 级可见性账本。微信里 App.onShow/onHide 严格交替，同一个状态不会重复派发；
@@ -81,6 +81,7 @@ public class DMPApp {
 
     @MainActor
     private func performLaunch(launchConfig: DMPLaunchConfig) async -> Bool {
+        guard !DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms else { return false }
         guard !DMPRemoteUpdateManager.shared.isPackageOperationInProgress(appId: appId) else { return false }
         guard !isLaunching else {
             DMPLogger.debug("launch skipped: app is already launching")

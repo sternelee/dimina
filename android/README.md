@@ -132,6 +132,9 @@ Dimina.getInstance().startMiniProgram(context, miniProgram)
 
 ```kotlin
 val accepted = Dimina.getInstance().closeMiniProgram("wx92269e3b2f304afc")
+
+// 退出登录：主线程销毁全部实例，保留持久化数据
+Dimina.getInstance().destroyAllMiniPrograms()
 ```
 
 该方法必须在主线程调用。返回 `true` 表示运行中的页面已接受退出请求；返回 `false` 表示 `appId` 为空或当前没有对应 Activity。不要直接调用 `Activity.finish()` 或 `MiniApp.clear()`，否则会绕过退出生命周期和跨小程序来源恢复。

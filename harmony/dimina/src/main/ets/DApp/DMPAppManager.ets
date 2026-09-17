@@ -52,6 +52,48 @@ export class DMPAppManager {
   // 宿主自己的前后台状态，由 DMPAppLifecycle 的 windowStage 事件维护。跨小程序恢复 opener
   // 时要看它，而不是看「谁在展示」——后者在宿主后台里同样会变。
   private hostVisible = true
+  private destroyingAllMiniPrograms = false
+
+  isDestroyingAllMiniPrograms(): boolean { return this.destroyingAllMiniPrograms }
+
+  /** Destroy all live/retained instances. Packages and persistent user data are retained. */
+  async destroyAllMiniPrograms(): Promise<void> {
+    if (this.miniProgramOperationInProgress) {
+      throw new Error('destroyAllMiniPrograms:fail another mini program operation is in progress')
+    }
+    this.miniProgramOperationInProgress = true
+    this.destroyingAllMiniPrograms = true
+    const apps = Array.from(this.appPools.values())
+    // Follow actual presentation order, which need not match instance creation order.
+    const ordered: DMPApp[] = []
+    while (this.miniProgramPresentations.top()) {
+      const top = this.miniProgramPresentations.top()!
+      const app = this.appPools.get(top.appIndex)
+      if (app) ordered.push(app)
+      this.miniProgramPresentations.pop(top.appIndex)
+    }
+    apps.forEach((app: DMPApp): void => { if (!ordered.includes(app)) ordered.push(app) })
+    this.retentionRevision++
+    if (this.retentionTimer !== -1) clearTimeout(this.retentionTimer)
+    this.retentionTimer = -1
+    this.retainedSince.clear()
+    this.retentionPressure = false
+    let failure: Error | undefined
+    try {
+      for (const app of ordered) {
+        try {
+          await app.closeDimina()
+        } catch (error) {
+          // Still attempt every owner; report incomplete cleanup to the host.
+          failure = failure ?? error as Error
+        }
+      }
+      if (failure) throw failure
+    } finally {
+      this.destroyingAllMiniPrograms = false
+      this.endMiniProgramOperation()
+    }
+  }
   private memoryObserver: number = -1
 
   observeMemoryPressure(context: common.UIAbilityContext): void {

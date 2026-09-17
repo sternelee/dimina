@@ -133,6 +133,9 @@ JSSDK 直接依赖 vConsole，并随 pageFrame 静态同步打包；只有检测
 
 ```swift
 try await app.closeMiniProgram()
+
+// 退出登录：MainActor 上销毁全部实例，保留持久化数据
+try await DMPAppManager.sharedInstance().destroyAllMiniPrograms()
 ```
 
 `closeMiniProgram()` 会先完成页面退出、App/Page 隐藏和可能存在的来源小程序恢复，再销毁运行时。`destroy()` 是底层资源回收入口，不应代替可见小程序的正常关闭。

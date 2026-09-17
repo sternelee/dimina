@@ -19,6 +19,29 @@ Web 基础示例列表打开小程序时不再传入 `destroy: true`。宿主仍
 
 上述“主动销毁”属于 Dimina 的宿主接口契约，会释放页面与运行时，保留 Storage 等持久化数据。`exitMiniProgram` 在当前 Dimina 中也会销毁实例；不要将这一实现约定当作微信客户端保证立即回收进程或内存的承诺。
 
+## 退出登录时销毁所有实例
+
+原生宿主可调用 `destroyAllMiniPrograms`，关闭前台、后台保活及跨小程序来源实例，释放页面、JS 引擎、连接和订阅。不会恢复来源小程序，不卸载代码包，不清除 Storage 或文件系统等持久化数据；账号数据由宿主另行清理或隔离。
+
+```kotlin
+// Android，主线程；旧 Activity 的退出和引擎销毁在系统/引擎队列中完成。
+Dimina.getInstance().destroyAllMiniPrograms()
+```
+
+```swift
+// iOS，MainActor
+try await DMPAppManager.sharedInstance().destroyAllMiniPrograms()
+```
+
+```typescript
+// Harmony，UI 线程
+await DMPAppManager.sharedInstance().destroyAllMiniPrograms()
+```
+
+调用前暂停宿主的新启动请求，成功后再允许新账号打开小程序。空实例池和已完成后的重复调用安全；再次打开走冷启动。iOS / Harmony 与进行中的跨小程序导航、安装/卸载事务冲突时会抛出错误，iOS 也会拒绝与正在启动或页面路由中的实例重叠；等待该操作完成后重试，不应吞掉错误并当作退出清理成功。Harmony 某个实例关闭失败时会继续尝试其他实例，最后报告失败，可重试剩余实例。
+
+Android 会使调用前已发出的启动 Intent 失效，取消已登记页面的初始化任务，并防止旧页面晚到的销毁回调清理新实例。小程序的 TabBar 随所属页面一起释放；共享任务/导航栈中的宿主页面保留。
+
 ## 再次进入的参数和生命周期
 
 从宿主重新打开缓存实例时，页面栈保持不变，`App.onShow` 的 `path/query` 对应当前页面，`scene/referrerInfo` 使用本次进入参数。未提供场景值时按宿主入口 `1001` 处理，不复用旧的来源小程序信息。完成返回后，旧的来源关系不再用于后续后台销毁。
@@ -148,3 +171,11 @@ Harmony 的 `customLaunchPageCallBack` 自定义挂载页面没有框架路由�
 - Harmony 关闭失败不会丢失留存记录、阻断其他实例回收或立即循环重试。
 
 前端工作流会自动运行共享逻辑层、Web 容器及 Harmony 便携回归；Harmony 源码及脚本变更也会触发该工作流。Android 和 iOS 用例沿用各自的测试工作流。便携测试与模拟器测试不能替代真机压力和长时间运行验证。
+
+### 批量销毁回归（2026-09-17）
+
+- Android：登记表、可见性和留存策略共 26 个定向单元测试通过，SDK Kotlin 编译通过。隔离副本省略批量清空登记表时，新用例因仍能查到旧 Activity 而失败；恢复后同组测试通过。
+- iOS：`DMPRetainedMiniProgramTests` 的 7 个用例在 iOS 26.2 模拟器通过，覆盖前台、后台保活、带来源页面的共享导航栈、重复调用及导航事务冲突。隔离副本省略批量页面栈准备后，用例因来源页面残留、栈顶不是宿主页面而失败；恢复后全部通过。测试命令临时指定 `IPHONEOS_DEPLOYMENT_TARGET=15.0`，以兼容本机 Xcode 对旧依赖部署目标的限制，未改项目配置。
+- Harmony：保活及批量销毁脚本 11 个用例通过，`dimina:assembleHar` 编译通过。隔离副本省略按展示栈确定关闭顺序后，顺序断言失败；恢复后通过。
+
+以上不覆盖 Android 真机上待启动 Intent、初始化取消和晚到 WebView 回调的完整竞态，也不覆盖 Harmony 真机路由动画及三端所有原生资源的长时间泄漏验证。持久化数据清理不属于此 API 的职责。

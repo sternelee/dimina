@@ -260,3 +260,59 @@ test('an expired app that fails to close does not create an immediate retry time
   assert.equal(attempts, 2)
   assert.equal(pending.size, 0)
 })
+
+
+test('destroy all closes the presentation top first, includes retained apps and is repeatable', async () => {
+  const { manager } = appManagerFixture()
+  const closed = []
+  const make = index => {
+    const app = { appIndex: index, appConfig: { appId: `app-${index}` },
+      closeDimina: async () => {
+        assert.equal(manager.isDestroyingAllMiniPrograms(), true)
+        assert.equal(manager.getPresentedApp(), undefined)
+        closed.push(index)
+        manager.exitApp(app.appConfig.appId, index)
+      } }
+    manager.appPools.set(index, app)
+    return app
+  }
+  make(3); make(1); make(2)
+  // Reused app 1 was created before its current opener 2.
+  manager.miniProgramPresentations.ensureRoot(2, 'app-2')
+  manager.miniProgramPresentations.push(2, 1, 'app-1')
+  await manager.destroyAllMiniPrograms()
+  assert.deepEqual(closed, [1, 2, 3])
+  assert.equal(manager.appPools.size, 0)
+  assert.equal(manager.isDestroyingAllMiniPrograms(), false)
+  await manager.destroyAllMiniPrograms()
+  assert.deepEqual(closed, [1, 2, 3])
+  assert.equal(manager.miniProgramPresentations.ensureRoot(4, 'fresh'), true)
+})
+
+test('destroy all rejects busy operations without changing the pool', async () => {
+  const { manager, app } = appManagerFixture()
+  manager.appPools.set(app.appIndex, app)
+  manager.miniProgramOperationInProgress = true
+  await assert.rejects(manager.destroyAllMiniPrograms(), /operation is in progress/)
+  assert.equal(manager.appPools.get(app.appIndex), app)
+})
+
+test('destroy all attempts remaining owners after a failure and allows retry', async () => {
+  const { manager } = appManagerFixture()
+  let fail = true
+  const closed = []
+  for (const index of [1, 2]) {
+    manager.appPools.set(index, { appIndex: index, closeDimina: async () => {
+      if (index === 1 && fail) throw new Error('flush failed')
+      closed.push(index)
+      manager.appPools.delete(index)
+    } })
+  }
+  await assert.rejects(manager.destroyAllMiniPrograms(), /flush failed/)
+  assert.deepEqual(closed, [2])
+  assert.equal(manager.isDestroyingAllMiniPrograms(), false)
+  fail = false
+  await manager.destroyAllMiniPrograms()
+  assert.deepEqual(closed, [2, 1])
+  assert.equal(manager.appPools.size, 0)
+})

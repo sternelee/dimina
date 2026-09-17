@@ -185,6 +185,18 @@ class Dimina private constructor(context: Context) {
         return DiminaActivity.closeMiniProgramFromHost(normalizedAppId)
     }
 
+    /** Destroy every foreground/background instance, preserving installed packages and user data.
+     * Call on the main thread. Stop issuing launches before calling this API.
+     */
+    @MainThread
+    fun destroyAllMiniPrograms() {
+        check(android.os.Looper.myLooper() == android.os.Looper.getMainLooper()) {
+            "destroyAllMiniPrograms must run on the main thread"
+        }
+        DiminaActivity.destroyAllMiniProgramsFromHost()
+        MiniApp.getInstance().clearAll()
+    }
+
     fun isMultiTaskEnabled(): Boolean = config.enableMultiTask
 
     fun shouldShowLaunchLoading(): Boolean = config.showLaunchLoading
