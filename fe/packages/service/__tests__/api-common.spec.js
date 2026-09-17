@@ -171,6 +171,33 @@ describe('invokeAPI promise-like behavior', () => {
 })
 
 describe('invokeAPI success/fail/complete callback handling', () => {
+	it('completes two loading cycles without a host queueMicrotask API', async () => {
+		const { bridge, callback, invokeAPI } = await loadCommonApi()
+		const original = globalThis.queueMicrotask
+		const events = []
+		try {
+			globalThis.queueMicrotask = undefined
+			for (const name of ['showLoading', 'hideLoading', 'showLoading', 'hideLoading']) {
+				invokeAPI(name, {
+					success: () => events.push(`${name}:success`),
+					complete: () => events.push(`${name}:complete`),
+				})
+				const params = bridge.invoke.mock.calls.at(-1)[0].body.params
+				callback.invoke(params.success, { errMsg: `${name}:ok` })
+				callback.invoke(params.complete, { errMsg: `${name}:ok` })
+				await Promise.resolve()
+				for (const id of [params.success, params.fail, params.complete]) {
+					expect(callback.callbacks[id]).toBeUndefined()
+				}
+			}
+			expect(events).toEqual(['showLoading', 'hideLoading', 'showLoading', 'hideLoading']
+				.flatMap(name => [`${name}:success`, `${name}:complete`]))
+		}
+		finally {
+			globalThis.queueMicrotask = original
+		}
+	})
+
 	it('registers a function passed as success and can invoke it back through the callback registry', async () => {
 		const { bridge, callback, invokeAPI } = await loadCommonApi()
 		const success = vi.fn()

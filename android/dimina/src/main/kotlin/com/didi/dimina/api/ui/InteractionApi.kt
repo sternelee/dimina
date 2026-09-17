@@ -72,6 +72,7 @@ class InteractionApi : BaseApiHandler() {
     private var handler = Handler(Looper.getMainLooper())
 
     // Toast management
+    private var dismissToast: Runnable? = null
     private var currentToastView: ComposeView? = null
     private var currentMaskView: View? = null
     private var currentModalView: ComposeView? = null
@@ -283,17 +284,21 @@ class InteractionApi : BaseApiHandler() {
      * Hides the currently displayed toast.
      */
     private fun hideToast(context: Context) {
-        val rootView = (context as Activity).window.decorView.rootView as ViewGroup
+        // Serialize hide with show, including calls arriving from the service thread.
+        handler.post { removeCurrentToast() }
+    }
+
+    private fun removeCurrentToast() {
+        dismissToast?.let { handler.removeCallbacks(it) }
+        dismissToast = null
+        // The caller may now be on another Activity. Remove from the owning parent.
         currentToastView?.let {
-            rootView.removeView(it)
-            currentToastView = null
+            (it.parent as? ViewGroup)?.removeView(it)
+            it.disposeComposition()
         }
-        currentMaskView?.let {
-            rootView.removeView(it)
-            currentMaskView = null
-        }
-        // Clear any pending handler callbacks
-        handler.removeCallbacksAndMessages(null)
+        currentToastView = null
+        currentMaskView?.let { (it.parent as? ViewGroup)?.removeView(it) }
+        currentMaskView = null
     }
 
     private fun showToast(
@@ -305,10 +310,11 @@ class InteractionApi : BaseApiHandler() {
     ) {
 
         handler.post {
-            // Remove any existing toast
-            hideToast(context)
-
-            val rootView = (context as Activity).window.decorView.rootView as ViewGroup
+            // Only cancel the old timeout; queued API calls must retain FIFO order.
+            removeCurrentToast()
+            val activity = context as Activity
+            if (activity.isFinishing || activity.isDestroyed) return@post
+            val rootView = activity.window.decorView.rootView as ViewGroup
 
             if (mask) {
                 val maskView = View(context).apply {
@@ -324,10 +330,6 @@ class InteractionApi : BaseApiHandler() {
                 )
                 currentMaskView = maskView // Store reference
 
-                handler.postDelayed({
-                    rootView.removeView(maskView)
-                    currentMaskView = null
-                }, duration.toLong())
             }
 
             val composeView = ComposeView(context).apply {
@@ -354,10 +356,14 @@ class InteractionApi : BaseApiHandler() {
             )
             currentToastView = composeView // Store reference
 
-            // Schedule removal
-            handler.postDelayed({
-                hideToast(context)
-            }, duration.toLong())
+            // A timeout belongs to this presentation, never to a later loading/toast.
+            if (duration != Int.MAX_VALUE) {
+                val dismiss = Runnable {
+                    if (currentToastView === composeView) removeCurrentToast()
+                }
+                dismissToast = dismiss
+                handler.postDelayed(dismiss, duration.toLong().coerceAtLeast(0))
+            }
         }
     }
 }

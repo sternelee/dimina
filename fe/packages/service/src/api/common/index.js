@@ -193,7 +193,8 @@ function storeSettlerPair(params, success, fail) {
 	// 宿主只报 complete 时仍然清得掉，outcome 后到时也还在表里。
 	const cleanupAfterComplete = () => {
 		callback.remove(completeId)
-		queueMicrotask(cleanupOutcomeCallbacks)
+		// QuickJS hosts may not expose the browser queueMicrotask API.
+		Promise.resolve().then(cleanupOutcomeCallbacks)
 	}
 
 	successId = callback.store((res) => {

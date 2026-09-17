@@ -33,6 +33,7 @@ public class ToastManager {
     
     /// Work item for dismissal
     private var dismissWorkItem: DispatchWorkItem?
+    private var presentationGeneration: UInt64 = 0
     
     /// Private initializer to enforce singleton pattern
     private init() {}
@@ -54,8 +55,14 @@ public class ToastManager {
             self.dismissWorkItem?.cancel()
             self.dismissWorkItem = nil
             
-            // Create a dedicated window for the toast
-            self.createToastWindow()
+            // Invalidate the old fade/timeout before interrupting its animation. Reusing
+            // the window avoids overlapping UIKit appearance transitions on rapid shows.
+            self.presentationGeneration &+= 1
+            let generation = self.presentationGeneration
+            self.toastWindow?.layer.removeAllAnimations()
+            if self.toastWindow == nil { self.createToastWindow() }
+            self.toastWindow?.rootViewController?.view.subviews.forEach { $0.removeFromSuperview() }
+            self.containerView = nil
             
             // Create toast content
             self.createToastContent(title: title, type: type, mask: mask)
@@ -68,8 +75,11 @@ public class ToastManager {
                 let durationInSeconds = Double(duration) / 1000.0
                 
                 // Create a new work item for dismissal
-                let workItem = DispatchWorkItem { [weak self] in
-                    self?.hideToast()
+                let window = self.toastWindow
+                let workItem = DispatchWorkItem { [weak self, weak window] in
+                    guard let self, let window, self.toastWindow === window,
+                          self.presentationGeneration == generation else { return }
+                    self.hideToastOnMainThread()
                 }
                 self.dismissWorkItem = workItem
                 
@@ -82,23 +92,27 @@ public class ToastManager {
     /// Hide the currently displayed toast
     public func hideToast() {
         DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-            
-            // Cancel any pending dismiss work
-            self.dismissWorkItem?.cancel()
-            self.dismissWorkItem = nil
-            
-            // Animate out and remove toast window
-            UIView.animate(withDuration: 0.3, animations: {
-                self.toastWindow?.alpha = 0
-            }) { _ in
-                self.toastWindow?.isHidden = true
-                self.toastWindow = nil
-                self.containerView = nil
-            }
+            self?.hideToastOnMainThread()
         }
     }
-    
+
+    private func hideToastOnMainThread() {
+        dismissWorkItem?.cancel()
+        dismissWorkItem = nil
+        guard let window = toastWindow else { return }
+        presentationGeneration &+= 1
+        let generation = presentationGeneration
+        UIView.animate(withDuration: 0.3, delay: 0, options: [.beginFromCurrentState], animations: {
+            window.alpha = 0
+        }) { [weak self] _ in
+            guard let self, self.presentationGeneration == generation,
+                  self.toastWindow === window else { return }
+            window.isHidden = true
+            self.toastWindow = nil
+            self.containerView = nil
+        }
+    }
+
     // MARK: - Private Methods
     
     /// Create a dedicated window for the toast
