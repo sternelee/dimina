@@ -7,14 +7,13 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A33500000000000000000001 /* DMPFileSystemCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33500000000000000000002 /* DMPFileSystemCacheTests.swift */; };
-		44A000002609090000000001 /* DMPRetainedMiniProgramTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A000002609090000000002 /* DMPRetainedMiniProgramTests.swift */; };
-		44A000002609170000000001 /* LoadingSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A000002609170000000002 /* LoadingSequenceTests.swift */; };
 		14603AA5921BC560B952F3E9 /* DMPUtilPathTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61DD3E623362F9D7264941CD /* DMPUtilPathTests.swift */; };
 		1A2B3C4D5E6F700000000001 /* Alamofire in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000101 /* Alamofire */; };
 		1A2B3C4D5E6F700000000002 /* MMKV in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000102 /* MMKV */; };
 		1A2B3C4D5E6F700000000003 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = 1A2B3C4D5E6F700000000103 /* ZIPFoundation */; };
 		1AE8A186852DBE677D065599 /* DMPWebSocketTestDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3A624932ADE9898E587249FA /* DMPWebSocketTestDoubles.swift */; };
+		44A000002609090000000001 /* DMPRetainedMiniProgramTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A000002609090000000002 /* DMPRetainedMiniProgramTests.swift */; };
+		44A000002609170000000001 /* LoadingSequenceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44A000002609170000000002 /* LoadingSequenceTests.swift */; };
 		4AAB204EFEBA61F955A67553 /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 69C73737CB86CC434E8DE5B7 /* Foundation.framework */; };
 		4F8C9A102F23000100000001 /* DMPWebResourceLoaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F8C9A102F23000100000002 /* DMPWebResourceLoaderTests.swift */; };
 		7500C22DE15B570EC7A4FD2B /* DMPWebSocketValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FAB6B466B43575C7978B1BAD /* DMPWebSocketValidationTests.swift */; };
@@ -22,6 +21,7 @@
 		7C4A5E132F23000100000001 /* CanvasTempFileValidationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C4A5E132F23000100000002 /* CanvasTempFileValidationTests.swift */; };
 		9A1D30A12F12000100000001 /* DMPNavigatorCapsuleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A1D30A12F12000100000002 /* DMPNavigatorCapsuleTests.swift */; };
 		9E9F7EDCE127D18B2331A8DC /* DMPWebSocketManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 23EDE52DA8E2C3DFF607829B /* DMPWebSocketManagerTests.swift */; };
+		A33500000000000000000001 /* DMPFileSystemCacheTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A33500000000000000000002 /* DMPFileSystemCacheTests.swift */; };
 		B41C7E52A0D34F0891C6D311 /* DMPServiceRenderOrderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B41C7E52A0D34F0891C6D310 /* DMPServiceRenderOrderTests.swift */; };
 		D3AF9DC58D4F29D8D2A8F71F /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 2EAA9C0614F7638987B22EAC /* Foundation.framework */; };
 		E90FD67E791E4377923344EF /* DMPEngineTimerThreadTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 898FFD601DB04AFEBBAAAE0A /* DMPEngineTimerThreadTests.swift */; };
@@ -45,13 +45,12 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		A33500000000000000000002 /* DMPFileSystemCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMPFileSystemCacheTests.swift; sourceTree = "<group>"; };
-		44A000002609090000000002 /* DMPRetainedMiniProgramTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMPRetainedMiniProgramTests.swift; sourceTree = "<group>"; };
-		44A000002609170000000002 /* LoadingSequenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingSequenceTests.swift; sourceTree = "<group>"; };
 		0A6F85D82DAE3D7D0047A006 /* dimina.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = dimina.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		23EDE52DA8E2C3DFF607829B /* DMPWebSocketManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPWebSocketManagerTests.swift; sourceTree = "<group>"; };
 		2EAA9C0614F7638987B22EAC /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = System/Library/Frameworks/Foundation.framework; sourceTree = SDKROOT; };
 		3A624932ADE9898E587249FA /* DMPWebSocketTestDoubles.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPWebSocketTestDoubles.swift; sourceTree = "<group>"; };
+		44A000002609090000000002 /* DMPRetainedMiniProgramTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMPRetainedMiniProgramTests.swift; sourceTree = "<group>"; };
+		44A000002609170000000002 /* LoadingSequenceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoadingSequenceTests.swift; sourceTree = "<group>"; };
 		4F8C9A102F23000100000002 /* DMPWebResourceLoaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPWebResourceLoaderTests.swift; sourceTree = "<group>"; };
 		5D995E363EB06797E5E3DB0D /* diminaTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = diminaTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		61DD3E623362F9D7264941CD /* DMPUtilPathTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPUtilPathTests.swift; sourceTree = "<group>"; };
@@ -60,6 +59,7 @@
 		7C4A5E132F23000100000002 /* CanvasTempFileValidationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CanvasTempFileValidationTests.swift; sourceTree = "<group>"; };
 		898FFD601DB04AFEBBAAAE0A /* DMPEngineTimerThreadTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPEngineTimerThreadTests.swift; sourceTree = "<group>"; };
 		9A1D30A12F12000100000002 /* DMPNavigatorCapsuleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPNavigatorCapsuleTests.swift; sourceTree = "<group>"; };
+		A33500000000000000000002 /* DMPFileSystemCacheTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DMPFileSystemCacheTests.swift; sourceTree = "<group>"; };
 		AE429915A2BA3583BF99A758 /* DiminaKitTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DiminaKitTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		B41C7E52A0D34F0891C6D310 /* DMPServiceRenderOrderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPServiceRenderOrderTests.swift; sourceTree = "<group>"; };
 		FAB6B466B43575C7978B1BAD /* DMPWebSocketValidationTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DMPWebSocketValidationTests.swift; sourceTree = "<group>"; };
@@ -257,7 +257,7 @@
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1620;
-				LastUpgradeCheck = 2650;
+				LastUpgradeCheck = 2700;
 				TargetAttributes = {
 					0A6F85D72DAE3D7D0047A006 = {
 						CreatedOnToolsVersion = 16.2;
@@ -534,7 +534,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -572,7 +572,7 @@
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -590,7 +590,6 @@
 		410698C041695C27E7C612D8 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
@@ -598,7 +597,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.didi.dimina.diminaTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
@@ -617,7 +616,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -642,7 +641,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				ENABLE_TESTABILITY = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -660,7 +659,6 @@
 		BDBAD9C9F0C0C97BA6E50B44 /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CLANG_ENABLE_OBJC_WEAK = NO;
 				"CODE_SIGNING_ALLOWED[sdk=iphonesimulator*]" = NO;
@@ -668,7 +666,7 @@
 				CODE_SIGN_STYLE = Automatic;
 				DEVELOPMENT_TEAM = "";
 				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 14.0;
+				IPHONEOS_DEPLOYMENT_TARGET = "$(RECOMMENDED_IPHONEOS_DEPLOYMENT_TARGET)";
 				PRODUCT_BUNDLE_IDENTIFIER = com.didi.dimina.diminaTests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = iphoneos;
