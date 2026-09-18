@@ -49,6 +49,9 @@ export default defineConfig(({ command, mode }) => {
 			},
 		},
 		build: {
+			// Android 11 devices may retain WebView 83 (issue #343).
+			// Lower vendor syntax too: vConsole's ||= otherwise prevents all render startup.
+			target: 'chrome83',
 			modulePreload: false,
 			minify: mode === 'production',
 			// 离线 JSSDK 的 pageFrame 内联渲染层、组件和 vConsole。

@@ -337,7 +337,7 @@ export async function createAMap({ element, props, emit, options: config, getLoc
 		invoke(command, params) {
 			assertActive()
 			validateMapCommand(command, params)
-			if (!Object.hasOwn(methods, command)) throw new Error(`AMap provider does not support ${command}`)
+			if (!Object.prototype.hasOwnProperty.call(methods, command)) throw new Error(`AMap provider does not support ${command}`)
 			return methods[command](params)
 		},
 	}

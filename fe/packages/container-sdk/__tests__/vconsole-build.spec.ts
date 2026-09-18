@@ -4,12 +4,30 @@ import { resolve } from 'node:path'
 import { build, createLogger, createServer } from 'vite'
 import { expect, it, vi } from 'vitest'
 
-it('bundles vConsole in production and initializes it before render', async () => {
+async function buildPageFrame(configFile: string) {
 	const result: any = await build({
-		configFile: resolve(process.cwd(), 'vite.config.mjs'),
+		configFile: resolve(process.cwd(), configFile),
 		logLevel: 'silent', mode: 'production',
 		define: { 'import.meta.env.DEV': 'false', 'import.meta.env.PROD': 'true' },
 		plugins: [{
+			name: 'assert-webview83-syntax',
+			generateBundle(_options, bundle) {
+				const visit = (node: any) => {
+					if (!node || typeof node !== 'object') return
+					// Chrome 83 cannot parse logical assignments, even in disabled debug code.
+					if (node.type === 'AssignmentExpression') {
+						expect(['||=', '&&=', '??=']).not.toContain(node.operator)
+					}
+					for (const child of Object.values(node)) {
+						if (Array.isArray(child)) child.forEach(visit)
+						else if (child && typeof child === 'object') visit(child)
+					}
+				}
+				for (const chunk of Object.values(bundle)) {
+					if (chunk.type === 'chunk') visit(this.parse(chunk.code))
+				}
+			},
+		}, {
 			name: 'page-frame-build-fixtures', enforce: 'pre',
 			resolveId(id) {
 				if (id.startsWith('@dimina/') || /\.(scss|css)$/.test(id)) return `\0fixture:${id}`
@@ -21,12 +39,21 @@ it('bundles vConsole in production and initializes it before render', async () =
 				return ''
 			},
 		}],
-		build: { write: false, lib: { entry: resolve(process.cwd(), 'src/pages/pageFrame/pageFrame.ts') } },
+		build: { write: false, rollupOptions: { input: resolve(process.cwd(), 'src/pages/pageFrame/pageFrame.ts') }, lib: { entry: resolve(process.cwd(), 'src/pages/pageFrame/pageFrame.ts'), formats: ['es'] } },
 	})
 	const chunks = (Array.isArray(result) ? result.flatMap(item => item.output) : result.output).filter((item: any) => item.type === 'chunk')
 	const entry = chunks.find((item: any) => item.isEntry)
 	expect(entry.imports).toEqual([])
 	expect(entry.dynamicImports).toEqual([])
+	return entry
+}
+
+it.each(['../container-sdk/vite.config.mjs', '../container/vite.config.mjs'])('lowers vendor syntax for WebView 83 (%s)', async (configFile) => {
+	await buildPageFrame(configFile)
+})
+
+it('bundles vConsole in production and initializes it before render', async () => {
+	const entry = await buildPageFrame('../container-sdk/vite.config.mjs')
 	// A consumer must be able to read the bundle without mistaking vConsole's
 	// runtime CSS source-map template for the JavaScript file's own source map.
 	const root = await mkdtemp(resolve(tmpdir(), 'dimina-page-frame-'))

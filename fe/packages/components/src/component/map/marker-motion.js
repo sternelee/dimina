@@ -12,7 +12,7 @@ export function distance(a, b) {
 export function markerMotion(path, { angle = 0, rotate = angle, autoRotate = false, separateRotation = false } = {}) {
 	const lengths = [0]
 	for (let i = 1; i < path.length; i++) lengths.push(lengths[i - 1] + distance(path[i - 1], path[i]))
-	const total = lengths.at(-1)
+	const total = lengths[lengths.length - 1]
 	return (progress) => {
 		const rotation = separateRotation ? Math.min(1, progress * 2) : progress
 		const movement = separateRotation ? Math.max(0, progress * 2 - 1) : progress

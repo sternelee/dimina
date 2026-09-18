@@ -8,8 +8,8 @@ const builtInProviders = Object.freeze({ amap: Object.freeze({ create: createAMa
 export function resolveMapProvider(config) {
 	const name = config.provider
 	const providers = config.providers || {}
-	const provider = Object.hasOwn(providers, name) ? providers[name]
-		: Object.hasOwn(builtInProviders, name) ? builtInProviders[name] : null
+	const provider = Object.prototype.hasOwnProperty.call(providers, name) ? providers[name]
+		: Object.prototype.hasOwnProperty.call(builtInProviders, name) ? builtInProviders[name] : null
 	if (!provider || typeof provider.create !== 'function') {
 		throw new Error(`map provider is not registered: ${name || '(empty)'}`)
 	}

@@ -34,7 +34,7 @@ function appendRichTextNode(parent, node, spaceType) {
 
 	if (node.type === 'text') {
 		const replacement = spaceCharacters[spaceType] ?? ' '
-		parent.append(document.createTextNode(String(node.text ?? '').replaceAll(' ', replacement)))
+		parent.append(document.createTextNode(String(node.text ?? '').replace(/ /g, replacement)))
 		return
 	}
 

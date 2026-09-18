@@ -3299,7 +3299,7 @@ export class MiniApp {
 		close.style.cssText = 'position:absolute;right:16px;top:calc(env(safe-area-inset-top) + 8px);z-index:3;border:0;background:transparent;color:white;font-size:36px;'
 		const render = async () => {
 			const renderIndex = current
-			content.replaceChildren()
+			content.textContent = ''
 			const source = sources[current]
 			try {
 				const url = await this._resolveMediaObjectUrl(source.url!)

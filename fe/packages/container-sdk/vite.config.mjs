@@ -73,6 +73,9 @@ export default defineConfig({
 		},
 	},
 	build: {
+		// Android 11 devices may retain WebView 83 (issue #343).
+		// Lower vendor syntax too: vConsole's ||= otherwise prevents all render startup.
+		target: 'chrome83',
 		outDir: 'dist',
 		// watch 模式不清空 outDir：清库空窗期会让并行启动的消费方解析包失败，
 		// 且 Vite 缓存失败解析、不自愈。产物文件名全固定（无 hash），增量覆盖写安全。

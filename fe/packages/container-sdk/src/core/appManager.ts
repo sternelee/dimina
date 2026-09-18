@@ -164,7 +164,7 @@ export class AppManager {
 		if (cacheApp) {
 			// A host entry starts a new presentation relationship while retaining the page stack.
 			cacheApp.opener = opts.opener ?? null
-			if (dimina.views.at(-1) !== cacheApp) {
+			if (dimina.views[dimina.views.length - 1] !== cacheApp) {
 				cacheApp.queueAppShowOptions({
 					scene: scene ?? 1001,
 					path: cacheApp.getCurrentPagePath(),

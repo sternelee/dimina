@@ -83,6 +83,18 @@ function mountPopup(wrap) {
 }
 
 describe('event ownership through slots', () => {
+	it('mounts forwarding components without Object.hasOwn on WebView 83', () => {
+		const descriptor = Object.getOwnPropertyDescriptor(Object, 'hasOwn')
+		try {
+			Object.defineProperty(Object, 'hasOwn', { value: undefined, configurable: true })
+			const { host } = mountPopup(content => h(ThemedForwarder, null, { default: content }))
+			expect(host.querySelector('#icon')?.textContent).toBe('×')
+		}
+		finally {
+			Object.defineProperty(Object, 'hasOwn', descriptor)
+		}
+	})
+
 	it.each([
 		['direct slot', content => content()[0]],
 		['view wrapper', content => h(View, null, { default: content })],

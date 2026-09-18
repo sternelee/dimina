@@ -1052,7 +1052,7 @@ class Runtime {
 			let element = root.parentElement
 			while (element) {
 				const moduleIds = this.moduleRootIds.get(element) || []
-				const parentId = moduleIds.findLast(id => id !== moduleId)
+				const parentId = moduleIds.slice().reverse().find(id => id !== moduleId)
 				if (parentId) {
 					return parentId
 				}

@@ -10,7 +10,7 @@ function useInfo() {
 	let owner = instance.vnode.ctx
 	// 只有显式声明 path 才建立事件上下文；theme 等无关 provide 不构成边界。
 	while (owner?.vnode.ctx && owner.vnode.ctx !== owner && (
-		owner.provides === owner.parent?.provides || !Object.hasOwn(owner.provides, 'path')
+		owner.provides === owner.parent?.provides || !Object.prototype.hasOwnProperty.call(owner.provides, 'path')
 	)) {
 		owner = owner.vnode.ctx
 	}

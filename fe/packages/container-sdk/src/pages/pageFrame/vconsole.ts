@@ -86,7 +86,8 @@ function addMiniProgramStorage(vConsole: VConsole) {
 		if (error) { status.textContent = error; return }
 		entries = value
 		status.textContent = 'MMKV values (JSON). Save and delete take effect immediately.'
-		fields.replaceChildren(...entries.map(entry => editor(entry)), editor())
+		fields.textContent = ''
+		fields.append(...entries.map(entry => editor(entry)), editor())
 	}
 	plugin.on('renderTab', (callback: (element: HTMLElement) => void) => callback(content))
 	plugin.on('show', refresh)
