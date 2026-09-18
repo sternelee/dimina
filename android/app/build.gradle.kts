@@ -61,14 +61,13 @@ dependencies {
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
-    androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
 
-// Add task to copy shared jsapp files to Android app's assets folder
 tasks.register<Copy>("copySharedJsappToAssets") {
+    description = "Add task to copy shared jsapp files to Android app's assets folder"
     // Delete all files except .gitkeep before copying
     doFirst {
         val targetDir = file("${rootProject.projectDir}/app/src/main/assets/jsapp")
