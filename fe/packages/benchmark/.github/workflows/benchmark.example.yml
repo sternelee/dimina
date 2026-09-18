@@ -1,0 +1,65 @@
+name: benchmark
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'fe/packages/render/**'
+      - 'fe/packages/compiler/**'
+      - 'fe/packages/components/**'
+      - 'fe/packages/container-sdk/**'
+      - 'fe/packages/benchmark/**'
+
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: fe
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.2.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.22.3
+          cache: pnpm
+          cache-dependency-path: fe/pnpm-lock.yaml
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm --filter @dimina/benchmark exec playwright install --with-deps chromium
+
+      - name: Start benchmark host
+        run: |
+          pnpm --filter @dimina/benchmark dev > /tmp/dimina-benchmark.log 2>&1 &
+          echo $! > /tmp/dimina-benchmark.pid
+
+      - name: Wait for benchmark host
+        run: |
+          for i in $(seq 1 90); do
+            if curl -fsS http://127.0.0.1:5174/ >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+
+          cat /tmp/dimina-benchmark.log
+          exit 1
+
+      - name: Run benchmark
+        env:
+          DIMINA_BENCH_URL: http://127.0.0.1:5174/
+          DIMINA_BENCH_WARMUP: 5
+          DIMINA_BENCH_ITERATIONS: 30
+        run: pnpm --filter @dimina/benchmark bench -- --mode baseline
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-results
+          path: fe/packages/benchmark/results/*.json

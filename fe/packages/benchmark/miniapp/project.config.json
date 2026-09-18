@@ -1,0 +1,22 @@
+{
+  "description": "Dimina benchmark mini program",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": true,
+    "minified": false
+  },
+  "compileType": "miniprogram",
+  "libVersion": "3.3.3",
+  "appid": "wxbench00000000001",
+  "projectname": "dimina-benchmark",
+  "condition": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  }
+}

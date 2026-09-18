@@ -1,0 +1,11 @@
+{
+  "pages": [
+    "pages/benchmark/index"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#ffffff",
+    "navigationBarTitleText": "Dimina Benchmark",
+    "navigationBarTextStyle": "black"
+  }
+}

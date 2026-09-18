@@ -1,0 +1,64 @@
+<view class="page">
+	<view class="header">
+		<text class="title">Dimina Benchmark</text>
+		<text class="meta">{{activeCase}}</text>
+	</view>
+
+	<view wx:if="{{activeCase == 'set-data-primitive'}}" class="fixture">
+		<text id="primitive-value">{{count}}</text>
+	</view>
+
+	<view wx:if="{{activeCase == 'set-data-deep-path'}}" class="fixture">
+		<text id="deep-value">{{user.profile.name}}</text>
+	</view>
+
+	<view wx:if="{{activeCase == 'set-data-batch-100'}}" class="fixture compact-list">
+		<view
+			wx:for="{{batchItems}}"
+			wx:key="id"
+			class="row {{item.selected ? 'selected' : ''}}"
+		>
+			<text>{{item.id}}:{{item.selected}}</text>
+		</view>
+	</view>
+
+	<view wx:if="{{activeCase == 'mount-1000-nodes'}}" class="fixture compact-list">
+		<view wx:for="{{mountItems}}" wx:key="id" class="row">
+			<text>{{item.label}}</text>
+		</view>
+	</view>
+
+	<view
+		wx:if="{{activeCase == 'list-create-1000' || activeCase == 'list-update-one-1000' || activeCase == 'list-replace-1000'}}"
+		class="fixture compact-list"
+	>
+		<view
+			wx:for="{{listItems}}"
+			wx:key="id"
+			class="row {{item.selected ? 'selected' : ''}}"
+		>
+			<text>{{item.id}} {{item.name}}</text>
+		</view>
+	</view>
+
+	<view wx:if="{{activeCase == 'wx-if-toggle-1000'}}" class="fixture compact-list">
+		<view wx:if="{{conditionalVisible}}">
+			<view wx:for="{{conditionalItems}}" wx:key="id" class="row">
+				<text>{{item.label}}</text>
+			</view>
+		</view>
+	</view>
+
+	<view wx:if="{{activeCase == 'component-500-update'}}" class="fixture compact-list">
+		<bench-item
+			wx:for="{{componentItems}}"
+			wx:key="id"
+			item-id="{{item.id}}"
+			value="{{item.value}}"
+		/>
+	</view>
+
+	<view wx:if="{{activeCase == 'cold-start'}}" class="fixture">
+		<text id="cold-ready">ready</text>
+	</view>
+</view>

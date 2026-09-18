@@ -1,0 +1,3 @@
+<view class="bench-item">
+	<text>{{itemId}}:{{value}}</text>
+</view>

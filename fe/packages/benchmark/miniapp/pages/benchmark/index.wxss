@@ -1,0 +1,39 @@
+.page {
+	min-height: 100vh;
+	padding: 12px;
+	box-sizing: border-box;
+}
+
+.header {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	margin-bottom: 10px;
+}
+
+.title {
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.meta {
+	font-size: 11px;
+	color: #777;
+}
+
+.fixture {
+	width: 100%;
+}
+
+.compact-list {
+	font-size: 10px;
+	line-height: 12px;
+}
+
+.row {
+	min-height: 12px;
+}
+
+.selected {
+	font-weight: 600;
+}

@@ -1,0 +1,5 @@
+{
+  "usingComponents": {
+    "bench-item": "/components/bench-item/index"
+  }
+}
