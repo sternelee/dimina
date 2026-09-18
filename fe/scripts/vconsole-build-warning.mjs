@@ -23,3 +23,21 @@ export function onVConsoleBuildWarning(warning, warn) {
 	}
 	warn(warning)
 }
+
+/**
+ * 转义 vConsole 的 CSS source map 模板中的换行，保持运行时字符串不变。
+ * 必须在压缩完成后处理，避免 Vite 消费 SDK 时把行首的 CSS source map
+ * 注释误认成 JS source map，并尝试将 ${btoa(...)} 当作 base64 解码。
+ */
+export function escapeRuntimeCssSourcemapPlugin() {
+	return {
+		name: 'escape-runtime-css-sourcemap',
+		generateBundle(_options, bundle) {
+			for (const file of Object.values(bundle)) {
+				if (file.type === 'chunk') {
+					file.code = file.code.replace(/\n(?=\/\*# sourceMappingURL=data:application\/json;base64,\$\{)/g, '\\n')
+				}
+			}
+		},
+	}
+}

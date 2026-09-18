@@ -1,5 +1,7 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { build } from 'vite'
+import { build, createLogger, createServer } from 'vite'
 import { expect, it, vi } from 'vitest'
 
 it('bundles vConsole in production and initializes it before render', async () => {
@@ -25,6 +27,25 @@ it('bundles vConsole in production and initializes it before render', async () =
 	const entry = chunks.find((item: any) => item.isEntry)
 	expect(entry.imports).toEqual([])
 	expect(entry.dynamicImports).toEqual([])
+	// A consumer must be able to read the bundle without mistaking vConsole's
+	// runtime CSS source-map template for the JavaScript file's own source map.
+	const root = await mkdtemp(resolve(tmpdir(), 'dimina-page-frame-'))
+	const logger = createLogger('silent')
+	const warn = vi.spyOn(logger, 'warn')
+	const server = await createServer({
+		root, configFile: false, customLogger: logger,
+		server: { middlewareMode: true, watch: null, ws: false },
+		optimizeDeps: { noDiscovery: true },
+	})
+	try {
+		await writeFile(resolve(root, 'pageFrame.js'), entry.code)
+		expect(await server.transformRequest('/pageFrame.js')).not.toBeNull()
+		expect(warn.mock.calls.filter(([message]) => message.includes('Failed to load source map'))).toEqual([])
+	}
+	finally {
+		await server.close()
+		await rm(root, { recursive: true, force: true })
+	}
 	const originalConsole = { ...console }
 	for (const enabled of [false, true]) {
 		window.history.replaceState({}, '', enabled ? '/?vconsole=1' : '/')

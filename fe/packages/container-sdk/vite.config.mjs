@@ -1,7 +1,7 @@
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
-import { onVConsoleBuildWarning } from '../../scripts/vconsole-build-warning.mjs'
+import { escapeRuntimeCssSourcemapPlugin, onVConsoleBuildWarning } from '../../scripts/vconsole-build-warning.mjs'
 
 /**
  * 把 `@dimina/service?url` 落成 dist 里独立的静态文件 + 指向它的 URL 常量。
@@ -62,7 +62,7 @@ function diminaServiceUrlPlugin() {
 //   pageFrame —— 渲染层 iframe 里跑的独立入口（挂 modDefine/modRequire、
 //                按需加载 vconsole、引入 @dimina/components 样式与 @dimina/render）。
 export default defineConfig({
-	plugins: [diminaServiceUrlPlugin()],
+	plugins: [diminaServiceUrlPlugin(), escapeRuntimeCssSourcemapPlugin()],
 	css: {
 		preprocessorOptions: {
 			scss: {
