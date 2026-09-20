@@ -4,5 +4,7 @@
             android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
         <activity android:name="com.didi.dimina.api.ui.LoadingTestActivity"
             android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+        <activity android:name="com.didi.dimina.ui.view.InputFocusTestActivity"
+            android:exported="true" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
     </application>
 </manifest>

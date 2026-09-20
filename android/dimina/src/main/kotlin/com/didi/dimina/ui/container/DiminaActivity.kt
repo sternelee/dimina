@@ -1841,6 +1841,7 @@ class DiminaActivity : ComponentActivity() {
                                             onTabNativeOverlayReady(tabIndex, overlay)
                                         },
                                         identifier = tabWebViewIdentifier(tabIndex),
+                                        isPageActive = isSelected,
                                         modifier = Modifier
                                             .fillMaxSize()
                                             .alpha(if (isSelected) 1f else 0f)

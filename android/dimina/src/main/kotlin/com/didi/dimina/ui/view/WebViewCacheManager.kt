@@ -658,6 +658,11 @@ internal fun createWebViewClientWithInterceptor(
 ): WebViewClient {
     val assetLoader = createWebViewAssetLoader(context)
     return object : WebViewClient() {
+        override fun onPageStarted(view: WebView, url: String, favicon: Bitmap?) {
+            (view as? MiniProgramWebView)?.resetKeyboardFocus()
+            super.onPageStarted(view, url, favicon)
+        }
+
 		override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
 			val allowed = isTrustedRenderNavigation(request.url.toString())
 			if (!allowed) {
@@ -679,6 +684,7 @@ internal fun createWebViewClientWithInterceptor(
             super.onPageFinished(view, url)
             LogUtils.d(WEBVIEW_TAG, "WebView page finished loading: $url")
             if (url.contains("pageFrame.html")) {
+                (view as? MiniProgramWebView)?.installKeyboardFocusObserver()
                 onPageFinished(url)
             }
         }
@@ -743,7 +749,7 @@ private fun isUnderRoot(file: File, root: File): Boolean =
  */
 @SuppressLint("SetJavaScriptEnabled")
 internal fun createWebView(context: Context, onPageLoadFinished: () -> Unit, appId: String = ""): WebView {
-    return WebView(context).apply {
+    return MiniProgramWebView(context).apply {
         // Ensure WebView has explicit layoutParams.
         // Chromium determines viewport size during initial layout.
         // Missing layoutParams may cause vh/vw and window.innerHeight to be incorrect.

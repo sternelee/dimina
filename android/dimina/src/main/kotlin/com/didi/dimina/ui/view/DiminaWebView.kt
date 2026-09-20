@@ -61,6 +61,7 @@ fun DiminaWebView(
     identifier: String? = null,
     appId: String = "",
     enableCache: Boolean = true,
+    isPageActive: Boolean = true,
     onNativeOverlayReady: (overlay: FrameLayout) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -112,13 +113,15 @@ fun DiminaWebView(
                     // 传统方式创建WebView（使用WebViewCacheManager中的统一配置）
                     createWebView(context, onPageCompleted, appId)
                 }.apply {
+                    (this as? MiniProgramWebView)?.isPageActive = isPageActive
                     applyMiniProgramWindowInsetsPolicy()
                     webViewReference.value = this
                     onInitReady(this)
                     LogUtils.d(TAG, "WebView initialized with identifier: $webViewIdentifier")
                     LogUtils.d(TAG, "Cache info: ${getWebViewCacheInfo()}")
                 }
-            }
+            },
+            update = { (it as? MiniProgramWebView)?.isPageActive = isPageActive }
         )
     }
 }
