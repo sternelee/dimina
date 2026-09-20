@@ -569,6 +569,10 @@ export class DMPAppManager {
     this.hostVisible = visible
   }
 
+  isHostVisible(): boolean {
+    return this.hostVisible
+  }
+
   /**
    * 把展示关系交还给 opener。
    *

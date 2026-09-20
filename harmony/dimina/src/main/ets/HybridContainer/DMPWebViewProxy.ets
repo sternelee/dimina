@@ -38,4 +38,9 @@ export class DMPWebViewProxy {
       return;
     }
   }
+
+  async requestKeyboard(revision: number) {
+    const app = DMPAppManager.sharedInstance().getApp(this.appIndex)
+    await app?.render.getController(this.webViewId)?.showFocusedKeyboard(revision)
+  }
 }

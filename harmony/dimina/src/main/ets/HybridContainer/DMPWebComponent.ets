@@ -14,6 +14,7 @@ import { DMPPageRecord } from '../Navigator/DMPPageRecord'
 import { DMPMap } from '../Utils/DMPMap'
 import { systemDateTime } from '@kit.BasicServicesKit'
 import { DMPContextUtils } from '../Utils/DMPContextUtils'
+import { DMP_KEYBOARD_FOCUS_SCRIPT } from './DMPKeyboardFocus'
 
 
 @Component
@@ -31,6 +32,7 @@ export struct DMPWebComponent {
   @State componentIdArr: Array<string> = [];
   @State modalInteractionBlocked: boolean = false
   private modalInteractionBlockCount: number = 0
+  hasWebFocus: boolean = false
   private requestCallback: RequestCallback = new RequestCallback(this.appIndex);
   startTime: number = 0
   endTime: number = 0
@@ -95,6 +97,15 @@ export struct DMPWebComponent {
         .verticalScrollBarAccess(false)
         .domStorageAccess(true)
         .geolocationAccess(true)
+        .javaScriptOnDocumentStart([{ script: DMP_KEYBOARD_FOCUS_SCRIPT, scriptRules: ['*'] }])
+        .onFocus(() => {
+          this.hasWebFocus = true
+          this.controller.flushFocusedKeyboard()
+        })
+        .onBlur(() => {
+          this.hasWebFocus = false
+          this.controller.cancelFocusedKeyboard()
+        })
         .javaScriptProxy(
           this.controller.genProxy()
         )
