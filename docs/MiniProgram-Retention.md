@@ -172,10 +172,18 @@ Harmony 的 `customLaunchPageCallBack` 自定义挂载页面没有框架路由�
 
 前端工作流会自动运行共享逻辑层、Web 容器及 Harmony 便携回归；Harmony 源码及脚本变更也会触发该工作流。Android 和 iOS 用例沿用各自的测试工作流。便携测试与模拟器测试不能替代真机压力和长时间运行验证。
 
-### 批量销毁回归（2026-09-17）
+### 批量销毁回归
 
 - Android：登记表、可见性和留存策略共 26 个定向单元测试通过，SDK Kotlin 编译通过。隔离副本省略批量清空登记表时，新用例因仍能查到旧 Activity 而失败；恢复后同组测试通过。
 - iOS：`DMPRetainedMiniProgramTests` 的 7 个用例在 iOS 26.2 模拟器通过，覆盖前台、后台保活、带来源页面的共享导航栈、重复调用及导航事务冲突。隔离副本省略批量页面栈准备后，用例因来源页面残留、栈顶不是宿主页面而失败；恢复后全部通过。测试命令临时指定 `IPHONEOS_DEPLOYMENT_TARGET=15.0`，以兼容本机 Xcode 对旧依赖部署目标的限制，未改项目配置。
 - Harmony：保活及批量销毁脚本 11 个用例通过，`dimina:assembleHar` 编译通过。隔离副本省略按展示栈确定关闭顺序后，顺序断言失败；恢复后通过。
 
 以上不覆盖 Android 真机上待启动 Intent、初始化取消和晚到 WebView 回调的完整竞态，也不覆盖 Harmony 真机路由动画及三端所有原生资源的长时间泄漏验证。持久化数据清理不属于此 API 的职责。
+
+### Android 同 appId 的系统任务复用
+
+多任务模式下，宿主入口以 appId 查找已有任务，业务 path/query 不参与实例标识。先选择仍有效的页面 Activity；最后登记的页面正在结束时，继续查找同 appId 的有效页面。内存登记丢失时，再查询 Android 保留的系统任务，找到后移动原任务到前台，并交付本次入口参数，避免直接以 `MULTIPLE_TASK` 创建新任务。
+
+任务根 Intent 的 data URI 保存 appId 及销毁代次标记，不包含业务路径与 query。[Android 12 的 `Task.fillTaskInfo`](https://android.googlesource.com/platform/frameworks/base/+/refs/heads/android12-release/services/core/java/com/android/server/wm/Task.java) 在剥离 extras 时使用 `cloneFilter()`，因此不能仅依赖 Parcelable extras 识别任务。只有组件属于 Dimina 且身份匹配的任务可作为系统查找候选；同一进程主动销毁前的任务标记失效。旧任务没有标识且其 extras 已丢失时无法可靠判断归属，不按名称或页面地址猜测匹配。
+
+这保证任务复用的查找不依赖业务 query；系统杀死进程后 JS 运行时仍须重新初始化，不能承诺保留进程内 globalData。关闭多任务模式时仍遵循原有宿主共享栈策略。

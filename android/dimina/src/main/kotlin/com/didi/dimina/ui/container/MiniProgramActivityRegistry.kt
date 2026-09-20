@@ -27,6 +27,10 @@ internal class MiniProgramActivityRegistry<T> {
     fun lastRegistered(appId: String): T? = activitiesByAppId[appId]?.lastOrNull()
 
     @Synchronized
+    fun lastMatching(appId: String, matches: (T) -> Boolean): T? =
+        activitiesByAppId[appId]?.lastOrNull(matches)
+
+    @Synchronized
     fun snapshot(appId: String): List<T> = activitiesByAppId[appId]?.toList().orEmpty()
 
     fun closeEveryApp(close: (T) -> Unit) {

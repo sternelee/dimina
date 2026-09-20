@@ -628,15 +628,6 @@ class DiminaActivity : ComponentActivity() {
         }
     }
 
-    private fun getMiniProgramFromIntent(intent: Intent): MiniProgram? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            intent.getParcelableExtra(MINI_PROGRAM_KEY, MiniProgram::class.java)
-        } else {
-            @Suppress("DEPRECATION")
-            intent.getParcelableExtra(MINI_PROGRAM_KEY) as? MiniProgram
-        }
-    }
-
 
     /**
      * Create and initialize the QuickJS engine after UI setup
@@ -2575,19 +2566,42 @@ class DiminaActivity : ComponentActivity() {
             intent.getStringExtra(HOST_SESSION_KEY) == hostSession &&
                 intent.getLongExtra(HOST_GENERATION_KEY, hostGeneration) != hostGeneration
 
+        private fun getMiniProgramFromIntent(intent: Intent): MiniProgram? {
+            return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                intent.getParcelableExtra(MINI_PROGRAM_KEY, MiniProgram::class.java)
+            } else {
+                @Suppress("DEPRECATION")
+                intent.getParcelableExtra(MINI_PROGRAM_KEY) as? MiniProgram
+            }
+        }
+
         /** Move the entire task to the front; CLEAR_TOP would discard the retained page stack. */
         internal fun resumeRetainedMiniProgram(context: Context, appId: String): Boolean {
-            val activity = activityRegistry.lastRegistered(appId) ?: return false
-            if (activity.isFinishing || activity.isDestroyed) return false
+            val activity = findLiveActivity(appId)
             if (!Dimina.getInstance().isMultiTaskEnabled()) {
-                // The host and mini program share a task; moving it forward cannot select a page.
+                // A shared host task cannot be selected by moving the whole task forward.
                 return context === activity
             }
             val manager = context.getSystemService(ActivityManager::class.java)
-            val task = manager.appTasks.firstOrNull { it.taskInfo.taskId == activity.taskId } ?: return false
+            val tasks = manager.appTasks
+            val task = MiniProgramTaskLookup.find(
+                tasks, activity?.taskId, appId,
+                taskId = { it.taskInfo.taskId },
+                rootAppId = { task ->
+                    val intent = task.taskInfo.baseIntent
+                    if (intent.component?.className == DiminaActivity::class.java.name &&
+                        !isObsoleteHostLaunch(intent)) {
+                        MiniProgramTaskIdentity.appId(intent, hostSession, hostGeneration)
+                            ?: runCatching { getMiniProgramFromIntent(intent)?.appId }.getOrNull()
+                    } else null
+                },
+            ) ?: return false
             task.moveToFront()
             return true
         }
+
+        private fun findLiveActivity(appId: String): DiminaActivity? =
+            activityRegistry.lastMatching(appId) { !it.isFinishing && !it.isDestroyed }
 
         internal fun openMiniProgram(context: Activity, program: MiniProgram) {
             // Page navigation belongs to the current task; only app launches may reuse a task.
@@ -2595,7 +2609,7 @@ class DiminaActivity : ComponentActivity() {
                 launch(context, program)
                 return
             }
-            val existing = activityRegistry.lastRegistered(program.appId)
+            val existing = findLiveActivity(program.appId)
             if (existing?.taskId != context.taskId) returnTasks[program.appId] = context.taskId
             if (existing != null && !existing.isFinishing && !existing.isDestroyed) {
                 activityRegistry.snapshot(program.appId).forEach { activity ->
@@ -2605,15 +2619,18 @@ class DiminaActivity : ComponentActivity() {
                         scene = program.scene,
                     )
                 }
-                MiniApp.getInstance().setPendingAppShowOptions(
-                    program.appId, MiniProgramEntryOptions.from(program, existing.getLaunchReferrerInfo()),
-                )
             }
+            // The Android task may survive after all its Activity objects were reclaimed.
+            // Queue the new entry even in that case, before restoring the task.
+            MiniApp.getInstance().setPendingAppShowOptions(
+                program.appId, MiniProgramEntryOptions.from(program, existing?.getLaunchReferrerInfo()),
+            )
             if (resumeRetainedMiniProgram(context, program.appId)) {
                 // A new entry while already visible has no onStart transition to deliver it.
                 if (visibilityTracker.isForeground(program.appId)) existing?.dispatchMiniProgramShow()
                 return
             }
+            MiniApp.getInstance().consumePendingAppShowOptions(program.appId)
             // A second tap can arrive before the first Activity's onCreate registers its task.
             if (!pendingLaunches.add(program.appId)) return
             try {
@@ -2641,6 +2658,9 @@ class DiminaActivity : ComponentActivity() {
             flag: Int? = null,
         ) {
             val intent = Intent(context, DiminaActivity::class.java).apply {
+                if (miniProgram.root) {
+                    MiniProgramTaskIdentity.attach(this, miniProgram.appId, hostSession, hostGeneration)
+                }
                 putExtra(MINI_PROGRAM_KEY, miniProgram)
                 putExtra(HOST_GENERATION_KEY, hostGeneration)
                 putExtra(HOST_SESSION_KEY, hostSession)
