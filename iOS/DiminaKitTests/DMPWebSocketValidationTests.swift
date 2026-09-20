@@ -631,6 +631,22 @@ final class DMPMiniGameRuntimeConfigTests: XCTestCase {
         XCTAssertFalse(config.isContainsPage(pagePath: "game"))
     }
 
+    func test_gameDeclarationsDoNotSynthesizePageModules() {
+        let config = DMPBundleAppConfig(data: [
+            "app": [
+                "runtimeType": "game",
+                "pages": ["game"],
+                "subPackages": [["root": "levels", "pages": ["first"]]],
+            ],
+            "modules": [:],
+        ])
+
+        XCTAssertEqual(config.entryPagePath, "game")
+        XCTAssertNil(config.getModuleConfig(pagePath: "game"))
+        XCTAssertNil(config.getModuleConfig(pagePath: "levels/first"))
+        XCTAssertTrue(config.moduleMaps.isEmpty)
+    }
+
     func test_missingRuntimeTypeDefaultsToMiniProgram() {
         let config = DMPBundleAppConfig(data: ["app": ["pages": ["pages/index/index"]]])
         XCTAssertEqual(config.runtimeType, "miniProgram")

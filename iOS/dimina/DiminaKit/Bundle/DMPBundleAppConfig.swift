@@ -40,15 +40,18 @@ public class DMPBundleAppConfig {
         // app.pages / subPackages 声明页面；modules 只是可选的页面配置。
         // 远程包可能完全省略页面私有配置，不能因此拒绝已声明的入口。
         var maps = [String: ModuleConfig]()
-        for pagePath in self.pages ?? [] where !pagePath.isEmpty {
-            maps[pagePath] = ModuleConfig(root: "main", pages: [pagePath])
-        }
-        for package in self.subPackages {
-            let root = package.root.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-            guard !root.isEmpty else { continue }
-            for page in package.pages where !page.isEmpty {
-                let pagePath = root + "/" + page
-                maps[pagePath] = ModuleConfig(root: root, pages: [pagePath])
+        // 小游戏入口不是普通页面，不从 pages / subPackages 合成页面模块。
+        if self.runtimeType == "miniProgram" {
+            for pagePath in self.pages ?? [] where !pagePath.isEmpty {
+                maps[pagePath] = ModuleConfig(root: "main", pages: [pagePath])
+            }
+            for package in self.subPackages {
+                let root = package.root.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+                guard !root.isEmpty else { continue }
+                for page in package.pages where !page.isEmpty {
+                    let pagePath = root + "/" + page
+                    maps[pagePath] = ModuleConfig(root: root, pages: [pagePath])
+                }
             }
         }
         
