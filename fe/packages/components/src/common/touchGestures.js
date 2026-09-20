@@ -1,6 +1,7 @@
 import { hasCatchEvent, hasEvent, triggerEvent } from './events'
 import {
 	ACTIVATION_TAP_EVENT,
+	DEFAULT_MOVE_THRESHOLD,
 	enqueueAfterTouchEnd,
 	eventIdentifiers,
 	firstPoint,
@@ -50,7 +51,7 @@ export function attachTouchEvents(info, element, options = {}) {
 
 	const {
 		longPressThreshold = 350,
-		moveThreshold = 10,
+		moveThreshold = DEFAULT_MOVE_THRESHOLD,
 		getRelativeElement = null,
 		tapHandler = null,
 		disableScroll = false,

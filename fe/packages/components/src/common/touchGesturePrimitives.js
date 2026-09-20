@@ -1,3 +1,5 @@
+export const DEFAULT_MOVE_THRESHOLD = 10
+
 // 合成的 TouchEvent 可能带着空的 touches 列表（自动化工具就是这么派发的），
 // 拿不到触摸点时退回原点，序列本身仍要正常走完
 export const ORIGIN_POINT = {

@@ -45,15 +45,15 @@ useTouchEvents(info, viewRef)
 
 useNativeEvents(info, viewRef, ['transitionend', 'animationend'])
 
-const { isHover, onHoverCancel, onHoverEnd, onHoverStart } = useHover(props)
+const { isHover, onHoverCancel, onHoverEnd, onHoverMove, onHoverStart } = useHover(props)
 </script>
 
 <template>
 	<div
 		ref="viewRef" v-bind="$attrs" class="dd-view" :class="isHover ? hoverClass : undefined"
 		:style="inline ? { display: 'inline' } : undefined" :data-session-from="sessionFrom"
-		@touchstart="onHoverStart" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
-		@mousedown="onHoverStart" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
+		@touchstart="onHoverStart" @touchmove.passive="onHoverMove" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
+		@mousedown="onHoverStart" @mousemove="onHoverMove" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
 	>
 		<slot />
 	</div>

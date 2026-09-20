@@ -107,7 +107,7 @@ const props = defineProps({
 	},
 })
 
-const { isHover, onHoverCancel, onHoverEnd, onHoverStart } = useHover(props)
+const { isHover, onHoverCancel, onHoverEnd, onHoverMove, onHoverStart } = useHover(props)
 
 const info = useInfo()
 function invokeNavigationAPI(apiName, params, event) {
@@ -194,8 +194,8 @@ useTouchEvents(info, rootRef, { tapHandler: handleTap })
 	<span
 		ref="rootRef" v-bind="$attrs" class="dd-navigator" role="link" tabindex="0" :class="[isHover ? hoverClass : undefined]"
 		@keydown.enter.prevent="handleKeyboard"
-		@touchstart="onHoverStart" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
-		@mousedown="onHoverStart" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
+		@touchstart="onHoverStart" @touchmove.passive="onHoverMove" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
+		@mousedown="onHoverStart" @mousemove="onHoverMove" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
 	>
 		<slot />
 	</span>

@@ -152,7 +152,7 @@ const loadingParsed = computed(() => {
 	return Boolean(props.loading) === true ? true : undefined
 })
 
-const { isHover, onHoverCancel, onHoverEnd, onHoverStart } = useHover(props)
+const { isHover, onHoverCancel, onHoverEnd, onHoverMove, onHoverStart } = useHover(props)
 const info = useInfo()
 const rootRef = ref(null)
 const handleFormEvent = inject('formEvent', undefined)
@@ -224,8 +224,8 @@ function handleOpenType(event) {
 			isHover ? hoverClass : undefined,
 		]"
 		@keydown.enter.prevent="handleKeyboard" @keydown.space.prevent="handleKeyboard"
-		@touchstart="onHoverStart" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
-		@mousedown="onHoverStart" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
+		@touchstart="onHoverStart" @touchmove.passive="onHoverMove" @touchend="onHoverEnd" @touchcancel="onHoverCancel"
+		@mousedown="onHoverStart" @mousemove="onHoverMove" @mouseup="onHoverEnd" @mouseleave="onHoverCancel"
 	>
 		<slot />
 	</span>
