@@ -29,16 +29,32 @@ public class DMPBundleAppConfig {
         self.tabBar = DMPTabBarConfig.from(self.app["tabBar"] as? [String: Any])
         self.style = self.app["style"] as? String ?? ""
         self.sitemapLocation = self.app["sitemapLocation"] as? String ?? ""
-        self.subPackages = self.app["subPackages"] as? [SubPackageConfig] ?? []
+        self.subPackages = (self.app["subPackages"] as? [[String: Any]] ?? []).compactMap { package in
+            guard let root = package["root"] as? String, !root.isEmpty,
+                  let pages = package["pages"] as? [String] else { return nil }
+            return SubPackageConfig(root: root, pages: pages)
+        }
         self._entryPagePath = self.app["entryPagePath"] as? String ?? ""
         self.runtimeType = self.app["runtimeType"] as? String == "game" ? "game" : "miniProgram"
         
-        // 初始化 moduleMaps
+        // app.pages / subPackages 声明页面；modules 只是可选的页面配置。
+        // 远程包可能完全省略页面私有配置，不能因此拒绝已声明的入口。
         var maps = [String: ModuleConfig]()
+        for pagePath in self.pages ?? [] where !pagePath.isEmpty {
+            maps[pagePath] = ModuleConfig(root: "main", pages: [pagePath])
+        }
+        for package in self.subPackages {
+            let root = package.root.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+            guard !root.isEmpty else { continue }
+            for page in package.pages where !page.isEmpty {
+                let pagePath = root + "/" + page
+                maps[pagePath] = ModuleConfig(root: root, pages: [pagePath])
+            }
+        }
         
         for (pagePath, moduleData) in self.modules {
             guard let moduleDict = moduleData as? [String: Any] else { continue }
-            let root = moduleDict["root"] as? String ?? "main"
+            let root = moduleDict["root"] as? String ?? maps[pagePath]?.root ?? "main"
             let moduleConfig = ModuleConfig(root: root, pages: [pagePath])
             maps[pagePath] = moduleConfig
         }
@@ -184,5 +200,5 @@ struct ModuleConfig {
 
 struct SubPackageConfig {
     var root: String
-    var navigationBarTitleText: [String]
+    var pages: [String]
 }
