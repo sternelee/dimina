@@ -24,7 +24,14 @@
 
 仓库示例 App 不预置高德接入配置。宿主负责提供平台 Key、隐私授权和定位权限，并在打开小程序前注册 provider。
 
-应用从源码依赖可选模块，现有核心依赖可保留：
+适配器独立发布为 `com.github.didi.dimina:map-amap`，与核心 SDK 使用同一版本。发布包含此配置的新 tag 后，宿主可从 JitPack 接入（旧 tag 不会自动补发）：
+
+```kotlin
+// repositories 中需包含 maven("https://jitpack.io")
+implementation("com.github.didi.dimina:map-amap:<与核心一致的版本>")
+```
+
+该依赖会传递引入核心 SDK 和固定版本的高德 SDK；核心 SDK 本身不引入高德。仓库源码集成仍可使用：
 
 ```kotlin
 // 宿主 app/build.gradle.kts
@@ -70,14 +77,19 @@ Android 使用仓库现有的原生组件兼容路径：原生组件层位于透
 
 ## iOS
 
-仓库示例 App 不预置高德接入配置。宿主需自行添加官方 Framework、链接所需系统库，将 `MAMapKit.framework/AMap.bundle` 加入应用资源，并提供平台 Key 和实际的隐私授权状态。
+仓库示例 App 不预置高德接入配置。Swift Package 用户从新版本 GitHub Release 下载 `DiminaMapAMap-<version>.zip`，解压后通过 Xcode **Add Package Dependencies → Add Local** 添加，并链接 `DiminaMapAMap` product。它是独立 Swift Package，包含高德 XCFramework，并精确依赖同版本 `Dimina`；主仓库 URL 的 `Dimina` product 仍只提供核心 SDK。
 
-高德实现位于 `DiminaKit/Map/DMPAMapProvider.swift`，以 `canImport(MAMapKit)` 和 `canImport(AMapFoundationKit)` 条件编译。**从源码构建 DiminaKit 的 target** 需要配置高德 Framework Search Paths 和链接依赖；仅在应用 target 链接高德，不能给已经构建的 DiminaKit 二进制补出该类型。
+将包内 `Sources/DiminaMapAMap/Resources/AMap.bundle` 加入宿主 **Copy Bundle Resources**，因为高德从应用主 bundle 查找地图资源。宿主仍需提供平台 Key 和实际的隐私授权状态。不要再重复链接另一份高德 Framework。
 
-本次核对版本为 AMap3DMap **11.2.100**、AMapFoundation **1.9.1**。按[高德 iOS 接入说明](https://developer.amap.com/api/ios-sdk/guide/create-project/note) 添加官方 framework 及要求的系统库，然后在主线程注册：
+打包脚本固定 AMap3DMap **11.2.100**、AMapFoundation **1.9.1** 的官方下载及 SHA-256，转换为 XCFramework。官方二进制只含 **arm64 真机和 x86_64 模拟器**；Apple Silicon 上需使用 x86_64/Rosetta 模拟器或真机，不支持 arm64 模拟器。[完整包说明](../iOS/MapAMap/README.md)。
+
+在主线程注册：
 
 ```swift
-DMPMapProviders.register("amap", provider: DMPAMapProvider(
+import Dimina
+import DiminaMapAMap
+
+DMPMapProviders.register("amap", provider: DiminaMapAMap.DMPAMapProvider(
     apiKey: apiKey,
     hasPrivacyConsent: { privacyConsentGranted }
 ))
@@ -91,7 +103,13 @@ UIView 在 WKWebView 的原生 overlay 中显示，支持页面滚动及矩形�
 
 仓库示例 App 不预置高德接入配置。宿主需自行添加模块依赖、提供平台 Key 和实际的隐私授权状态，并在打开小程序前注册 provider。
 
-可选 HAR 源码模块为 `harmony/map_amap`，依赖 `@amap/amap_lbs_map3d:11.2.0` 与 `@amap/amap_lbs_common:11.2.0`。在宿主 module 的 `oh-package.json5` 加入源码依赖：
+可选 HAR 为 `@didi-dimina/map-amap`，依赖固定版本的 Dimina、`@amap/amap_lbs_map3d:11.2.0` 与 `@amap/amap_lbs_common:11.2.0`。适配器发布到 OHPM 后，在宿主模块目录安装与核心一致的版本：
+
+```sh
+ohpm install @didi-dimina/map-amap@<与核心一致的版本>
+```
+
+仓库源码集成仍可使用本地模块：
 
 ```json
 { "dependencies": { "@didi-dimina/map-amap": "file:../map_amap" } }
@@ -108,7 +126,7 @@ DMPMapProviders.register('amap', new DMPAMapProvider(context, apiKey, () => priv
 
 `context` 为宿主 UIAbilityContext。宿主声明 `ohos.permission.INTERNET`；定位另需 `ohos.permission.APPROXIMATELY_LOCATION` 和 `ohos.permission.LOCATION`，在 module.json5 中配置真实的 reason 与 usedScene。适配器按需发起运行时授权。
 
-原生地图通过现有 Web native/map embed → DMPNodeController → 高德 MapViewComponent 承载；用唯一 mapViewName 关联 SDK 回调，多个地图不会共用实例。不要使用旧版 Harmony Java SDK 的接入步骤，参考 [HarmonyOS NEXT 地图文档](https://lbs.amap.com/api/harmonyosnext-map3d-sdk/guide/create-map/show-map)。可选 HAR 的本地 Dimina 依赖适合仓库源码集成；发布 HAR 前应改为已发布的 Dimina 版本依赖。
+原生地图通过现有 Web native/map embed → DMPNodeController → 高德 MapViewComponent 承载；用唯一 mapViewName 关联 SDK 回调，多个地图不会共用实例。不要使用旧版 Harmony Java SDK 的接入步骤，参考 [HarmonyOS NEXT 地图文档](https://lbs.amap.com/api/harmonyosnext-map3d-sdk/guide/create-map/show-map)。发布元数据已使用正式 Dimina 版本依赖；仓库工程级 `overrides` 将其映射回本地源码，发布时无需手工修改依赖。
 
 同层 `NodeContainer` 使用 embed 的实际尺寸约束内容，px 通过所属 `UIContext` 转成 vp 并保留小数；尺寸状态在创建、更新、销毁时同步，避免整页地图纹理缩放到较小 embed 后变形。高德 `getMapAsync` 完成初始化后通知 ready；地图结果和事件通过 `ContainerToRender` 发给小程序 Render，不能走内嵌 `<web-view>` 的 `subController` 通道。
 
@@ -236,3 +254,11 @@ SDK 隐私授权与系统定位权限分别处理，Key 使用对应平台产品
 回归覆盖授权前不加载、provider 替换/配置隔离、命令顺序、卸载与超时、页面/组件作用域、错误与回调结算、标记与坐标映射，以及 Android 裁剪与多指转发。Web SDK 测试使用调用记录替身，不访问真实地图服务。
 
 原生编译和这些回归不能证明真实底图、Key 校验、GPU 合成或定位效果。使用合法平台 Key 后仍需分别验收真机：地图/标记、缩放拖动、scroll-view 裁剪、覆盖按钮、多地图、页面重建、前后台、拒绝权限后恢复、弱网/错误 Key、不同系统 WebView 版本。
+
+## 发布可选地图适配器
+
+- Android：根 `jitpack.yml` 显式安装 `engine_qjs`、`dimina`、`map-amap` 的 Maven publication。可用 `./gradlew :map-amap:publishReleasePublicationToMavenLocal` 本地检查 AAR、源码包和 POM。
+- iOS：Release 工作流生成并附加 `DiminaMapAMap-<version>.zip`。本地执行 `python3 scripts/package-ios-amap.py --version <核心版本> --output /tmp/dimina-map-release` 仅生成文件，不上传。
+- Harmony：`bash harmony/upload.sh --build-only` 构建两个 release HAR；确认发布凭据后，`bash harmony/upload.sh` 依次发布核心和地图适配器。若核心该版本已发布，可单独执行 `ohpm publish harmony/map_amap/build/default/outputs/default/map_amap.har`。
+
+以上配置在新版本实际发布后才形成可用的远程制品；不能将本地构建成功等同于 JitPack/OHPM 已上线。地图 Key、隐私授权和地图功能的真机验证仍由接入流程完成。

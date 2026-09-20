@@ -89,3 +89,29 @@ jobs:
 
       - name: Build iOS example
         run: xcodebuild -project iOS/dimina.xcodeproj -scheme dimina -destination 'generic/platform=iOS Simulator' build
+
+  ios-map-amap:
+    runs-on: macos-26
+    needs: native-dependency-versions
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref }}
+      - name: Package optional AMap Swift package
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          python3 scripts/package-ios-amap.py --version "${RELEASE_TAG#v}" --output "$RUNNER_TEMP/map-release"
+      - name: Build optional Swift package
+        env:
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          cd "$RUNNER_TEMP/map-release/DiminaMapAMap-${RELEASE_TAG#v}"
+          xcodebuild -scheme DiminaMapAMap -destination 'generic/platform=iOS' -derivedDataPath "$RUNNER_TEMP/map-build" CODE_SIGNING_ALLOWED=NO build
+      - name: Attach Swift package to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+          files: ${{ runner.temp }}/map-release/DiminaMapAMap-*.zip

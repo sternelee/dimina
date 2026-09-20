@@ -4,8 +4,13 @@
   "description": "Dimina optional AMap native map provider",
   "main": "Index.ets",
   "dependencies": {
-    "@didi-dimina/dimina": "file:../dimina",
+    "@didi-dimina/dimina": "1.7.4",
     "@amap/amap_lbs_map3d": "11.2.0",
     "@amap/amap_lbs_common": "11.2.0"
-  }
+  },
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/didi/dimina",
+  "repository": "https://github.com/didi/dimina",
+  "compatibleSdkVersion": "12",
+  "compatibleSdkType": "HarmonyOS"
 }

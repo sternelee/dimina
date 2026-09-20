@@ -149,6 +149,19 @@ jobs:
           --parallel
           --no-daemon
 
+      - name: Build optional AMap HAR
+        working-directory: ./harmony
+        run: >-
+          hvigorw --mode module
+          -p product=default
+          -p module=map_amap@default
+          -p buildMode=release
+          assembleHar --no-daemon
+
+      - name: Verify AMap HAR publication metadata
+        working-directory: ./harmony
+        run: python3 scripts/check-map-publication.py
+
       - name: Build Harmony example app
         working-directory: ./harmony
         run: >-

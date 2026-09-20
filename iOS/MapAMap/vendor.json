@@ -1,0 +1,12 @@
+{
+  "MAMapKit": {
+    "version": "11.2.100",
+    "url": "https://a.amap.com/lbs/static/zip/AMap_iOS_3DMap_Lib_V11.2.100.zip",
+    "sha256": "76b5d1695d801c8308400eb066df2ef3616e2d569592147734244a4a09a78c15"
+  },
+  "AMapFoundationKit": {
+    "version": "1.9.1",
+    "url": "https://amappc.oss-cn-zhangjiakou.aliyuncs.com/lbs/static/zip/AMap_iOS_Foundation_Lib_V1.9.1.zip",
+    "sha256": "b980aed2057dac41d815dd2c13c33de35fbe42551617bb9eb57aba8de374a8cd"
+  }
+}

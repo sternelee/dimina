@@ -4,3 +4,6 @@ jdk:
 before_install:
   - cd android
   - ./gradlew :dimina:copySharedJssdkToAssets
+
+install:
+  - cd "$(git rev-parse --show-toplevel)/android" && ./gradlew :engine_qjs:publishToMavenLocal :dimina:publishToMavenLocal :map-amap:publishToMavenLocal

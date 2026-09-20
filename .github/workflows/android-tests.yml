@@ -50,6 +50,10 @@ jobs:
         working-directory: ./android
         run: ./gradlew testDebugUnitTest --no-daemon --parallel
         
+      - name: Verify optional AMap publication
+        working-directory: ./android
+        run: ./gradlew :map-amap:publishReleasePublicationToMavenLocal --no-daemon
+
       - name: Upload unit test reports
         if: always()
         uses: actions/upload-artifact@v4

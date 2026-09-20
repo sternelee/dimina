@@ -1,4 +1,4 @@
 jdk:
   - openjdk17
-before_install:
-  - ./gradlew build
+install:
+  - ./gradlew :engine_qjs:publishToMavenLocal :dimina:publishToMavenLocal :map-amap:publishToMavenLocal

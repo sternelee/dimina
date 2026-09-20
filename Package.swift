@@ -31,6 +31,8 @@ let package = Package(
                 "diminaApp.swift",
                 "Assets.xcassets",
                 "Preview Content",
+                // Distributed separately with explicit vendor dependencies by DiminaMapAMap.
+                "DiminaKit/Map/DMPAMapProvider.swift",
             ],
             sources: [
                 "DiminaKit"
