@@ -717,8 +717,9 @@ public class DMPNavigator: NSObject {
                 return
             }
 
-            let viewControllers = [pageController]
-            navigationController.setViewControllers(viewControllers, animated: false)
+            // 混合宿主可能暂时只展示小程序 VC，根页面替换仍须保留进入前的宿主栈。
+            let hostControllers = hostViewControllers(in: navigationController)
+            navigationController.setViewControllers(hostControllers + [pageController], animated: false)
 
             dispatchPageShow(webViewId: pageController.getWebView().getWebViewId())
 

@@ -516,6 +516,51 @@ final class DMPNavigatorCapsuleTests: XCTestCase {
         )
     }
 
+    func testRedirectRootRestoresPreservedHostStackAndAllowsNativePop() async throws {
+        let fixture = await makeRoutingFixture(name: "redirect-preserved-host", includesHost: false)
+        defer { destroyRoutingFixture(fixture) }
+        let host = UIViewController()
+        let hostDetail = UIViewController()
+        fixture.navigator.setup(
+            navigationController: fixture.navigationController,
+            preserving: [host, hostDetail]
+        )
+        _ = await fixture.navigator.launch(to: "pages/index/index", animated: false, showsLaunchLoading: false)
+        let oldPage = try XCTUnwrap(fixture.navigationController.topViewController as? DMPPageController)
+        // 混合宿主仅展示小程序 VC 时，Navigator 仍持有进入前的完整宿主栈。
+        fixture.navigationController.setViewControllers([oldPage], animated: false)
+
+        await fixture.navigator.redirectTo(to: "pages/replaced/index")
+
+        let controllers = fixture.navigationController.viewControllers
+        XCTAssertEqual(controllers.count, 3)
+        XCTAssertTrue(controllers.first === host)
+        XCTAssertTrue(controllers.dropFirst().first === hostDetail)
+        XCTAssertFalse(controllers.contains { $0 === oldPage })
+        let newPage = try XCTUnwrap(controllers.last as? DMPPageController)
+        fixture.navigationController.popViewController(animated: false)
+        XCTAssertTrue(fixture.navigationController.topViewController === hostDetail)
+        XCTAssertTrue(fixture.navigationController.viewControllers.first === host)
+        newPage.destroy()
+    }
+
+    func testRedirectRootKeepsMultipleHostControllersAndNavigateBackReturnsToHost() async throws {
+        let fixture = await makeRoutingFixture(name: "redirect-multiple-hosts")
+        defer { destroyRoutingFixture(fixture) }
+        let host = try XCTUnwrap(fixture.navigationController.viewControllers.first)
+        let hostDetail = UIViewController()
+        fixture.navigationController.setViewControllers([host, hostDetail], animated: false)
+        _ = await fixture.navigator.launch(to: "pages/index/index", animated: false, showsLaunchLoading: false)
+
+        await fixture.navigator.redirectTo(to: "pages/replaced/index")
+        XCTAssertEqual(fixture.navigationController.viewControllers.count, 3)
+        XCTAssertTrue(fixture.navigationController.viewControllers.first === host)
+        fixture.navigator.navigateBack(delta: 1, animated: false)
+        XCTAssertEqual(fixture.navigationController.viewControllers.count, 2)
+        XCTAssertTrue(fixture.navigationController.topViewController === hostDetail)
+        XCTAssertTrue(fixture.navigationController.viewControllers.first === host)
+    }
+
     func testRelaunchDispatchesOneUnloadForEachRemovedPage() async throws {
         let fixture = await makeRoutingFixture(name: "relaunch")
         defer { destroyRoutingFixture(fixture) }
