@@ -30,7 +30,7 @@
 	"dependencies": {
 		"@dimina/common": "workspace:^",
 		"dompurify": "^3.4.15",
-		"vue": "^3.5.42"
+		"vue": "^3.5.43"
 	},
 	"devDependencies": {
 		"@vitejs/plugin-vue": "^6.0.9",
