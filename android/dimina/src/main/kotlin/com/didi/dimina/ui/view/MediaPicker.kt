@@ -1,8 +1,10 @@
 package com.didi.dimina.ui.view
 
+import android.Manifest
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.provider.MediaStore
 import androidx.activity.result.contract.ActivityResultContract
@@ -10,11 +12,13 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.content.ContextCompat
 import androidx.core.content.FileProvider
 import java.io.File
 
@@ -70,24 +74,22 @@ fun MediaPickerRoot(
     var cameraUri by remember { mutableStateOf<Uri?>(null) }
     var videoCameraUri by remember { mutableStateOf<Uri?>(null) }
 
+    val captureRequest = remember { CameraCaptureRequest() }
+    DisposableEffect(captureRequest) {
+        onDispose { captureRequest.clear() }
+    }
+    val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        captureRequest.onPermissionResult(it)
+    }
+
     val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { success ->
-        if (success) {
-            cameraUri?.let { uri ->
-                onSelected(listOf(uri))
-            }
-        } else {
-            onSelected(emptyList())
-        }
+        onSelected(if (success) listOfNotNull(cameraUri) else emptyList())
+        cameraUri = null
     }
 
     val videoCameraLauncher = rememberLauncherForActivityResult(CaptureVideoWithOptions()) { success ->
-        if (success) {
-            videoCameraUri?.let { uri ->
-                onSelected(listOf(uri))
-            }
-        } else {
-            onSelected(emptyList())
-        }
+        onSelected(if (success) listOfNotNull(videoCameraUri) else emptyList())
+        videoCameraUri = null
     }
 
     // Launcher for picking media
@@ -119,17 +121,30 @@ fun MediaPickerRoot(
                     PickVisualMediaRequest(mediaType = ActivityResultContracts.PickVisualMedia.ImageAndVideo)
                 )
             }
-            MediaType.CAMERA -> {
-                val photoFile = File.createTempFile("IMG_${System.currentTimeMillis()}", ".jpg", context.cacheDir)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
-                cameraUri = uri
-                cameraLauncher.launch(uri)
-            }
-            MediaType.CAMERA_VIDEO -> {
-                val videoFile = File.createTempFile("VID_${System.currentTimeMillis()}", ".mp4", context.cacheDir)
-                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", videoFile)
-                videoCameraUri = uri
-                videoCameraLauncher.launch(VideoCaptureRequest(uri, videoCaptureOptions))
+            MediaType.CAMERA, MediaType.CAMERA_VIDEO -> {
+                captureRequest.start(
+                    hasPermission = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) ==
+                        PackageManager.PERMISSION_GRANTED,
+                    requestPermission = { permissionLauncher.launch(Manifest.permission.CAMERA) },
+                    capture = {
+                        if (type == MediaType.CAMERA) {
+                            val photoFile = File.createTempFile("IMG_${System.currentTimeMillis()}", ".jpg", context.cacheDir)
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", photoFile)
+                            cameraUri = uri
+                            cameraLauncher.launch(uri)
+                        } else {
+                            val videoFile = File.createTempFile("VID_${System.currentTimeMillis()}", ".mp4", context.cacheDir)
+                            val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", videoFile)
+                            videoCameraUri = uri
+                            videoCameraLauncher.launch(VideoCaptureRequest(uri, videoCaptureOptions))
+                        }
+                    },
+                    onCancelled = {
+                        cameraUri = null
+                        videoCameraUri = null
+                        onSelected(emptyList())
+                    },
+                )
             }
             MediaType.NONE -> {
                 // Do nothing or handle as needed
