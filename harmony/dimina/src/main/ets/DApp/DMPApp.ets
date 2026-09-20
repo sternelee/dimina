@@ -72,6 +72,7 @@ export class DMPApp {
   private _deferredLaunchConfigs: DMPLaunchConfig[] = []
   private _webViewCachePool: DMPWebViewCachePool = new DMPWebViewCachePool(this)
   private _service: DMPService
+  private _lastLaunchFailed: boolean = false
   private _engineStatus: StatusMonitor<EngineStatus> = new StatusMonitor()
   private _render: DMPRender = new DMPRender(this)
   router: DRouter = DRouter.getInstance();
@@ -362,81 +363,93 @@ export class DMPApp {
   }
 
   async startPackageLoader(context: common.UIAbilityContext, launchConfig?: DMPLaunchConfig) {
-    DMPContextUtils.init(context)
-    const requestedGeneration = this._runtimeGeneration
-    await DMPAppManager.sharedInstance().collectRetainedApps()
-    if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms() || requestedGeneration !== this._runtimeGeneration) {
-      this.settleLaunchCompletion(launchConfig, false)
-      return
-    }
-    DMPLogger.i(Tags.LAUNCH, 'startPackageLoader start')
-    const closeInProgress = this._closeInProgress
-    if (closeInProgress) {
-      await closeInProgress
-    }
-    if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms() || requestedGeneration !== this._runtimeGeneration) {
-      this.settleLaunchCompletion(launchConfig, false)
-      return
-    }
-    if (DMPRemoteUpdateManager.sharedInstance().isPackageOperationInProgress(this.appConfig.appId)) {
-      throw new Error('package operation in progress')
-    }
-    this.restoreRuntimeIfDestroyed()
-    const generation = this._runtimeGeneration
-    if (this._engineStatus.currentStatus != EngineStatus.RUN &&
-      this._engineStatus.currentStatus != EngineStatus.LOADING) { // 已经启动jsEngine
-      this._engineStatus.setStatus(EngineStatus.LOADING)
+    this._lastLaunchFailed = false
+    let requestGeneration = this._runtimeGeneration
+    try {
       DMPContextUtils.init(context)
-      DMPAppManager.sharedInstance().observeMemoryPressure(context)
-      let fileManager: DMPFileManager = DMPFileManager.sharedInstance()
-      fileManager.createLocalBundleDirectoryForApp(this.appConfig.appId)
-      let installConfig =
-        new DMPBundleInstallConfig(DMPContextUtils.getUIAbilityContext(), this.appConfig.appId, this.appIndex);
-      installConfig.launchAppType = this.appConfig.launchAppType;
-
-      const failLaunch = (code: number, errMsg: string): void => {
-        if (generation !== this._runtimeGeneration) {
-          return
-        }
-        DMPLogger.e(Tags.LAUNCH, `startPackageLoader failed code=${code} errMsg=${errMsg}`)
-        this._engineStatus.setStatus(EngineStatus.STOP)
+      const requestedGeneration = this._runtimeGeneration
+      await DMPAppManager.sharedInstance().collectRetainedApps()
+      if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms() || requestedGeneration !== this._runtimeGeneration) {
         this.settleLaunchCompletion(launchConfig, false)
+        return
       }
+      DMPLogger.i(Tags.LAUNCH, 'startPackageLoader start')
+      const closeInProgress = this._closeInProgress
+      if (closeInProgress) {
+        await closeInProgress
+      }
+      if (DMPAppManager.sharedInstance().isDestroyingAllMiniPrograms() || requestedGeneration !== this._runtimeGeneration) {
+        this.settleLaunchCompletion(launchConfig, false)
+        return
+      }
+      if (DMPRemoteUpdateManager.sharedInstance().isPackageOperationInProgress(this.appConfig.appId)) {
+        throw new Error('package operation in progress')
+      }
+      this.restoreRuntimeIfDestroyed()
+      const generation = this._runtimeGeneration
+      requestGeneration = generation
+      if (this._engineStatus.currentStatus != EngineStatus.RUN &&
+        this._engineStatus.currentStatus != EngineStatus.LOADING) { // 已经启动jsEngine
+        this._engineStatus.setStatus(EngineStatus.LOADING)
+        DMPContextUtils.init(context)
+        DMPAppManager.sharedInstance().observeMemoryPressure(context)
+        let fileManager: DMPFileManager = DMPFileManager.sharedInstance()
+        fileManager.createLocalBundleDirectoryForApp(this.appConfig.appId)
+        let installConfig =
+          new DMPBundleInstallConfig(DMPContextUtils.getUIAbilityContext(), this.appConfig.appId, this.appIndex);
+        installConfig.launchAppType = this.appConfig.launchAppType;
 
-      let waitLaunchBundleReady = async (config: DMPBundleLoadInfo) => {
-        try {
+        const failLaunch = (code: number, errMsg: string): void => {
           if (generation !== this._runtimeGeneration) {
             return
           }
-          DMPLogger.i(Tags.LAUNCH,
-            "launchBundleReady: launchType: " + DMPLaunchType[installConfig.launchAppType]);
-          await this._bundleManager.loadConfigFile()
-          if (generation !== this._runtimeGeneration) {
-            return
-          }
-          this._service.updateWorkerAppData();
-          await this.startEngineService()
-          if (generation !== this._runtimeGeneration) {
-            return
-          }
-          await this.startMainService()
-          if (generation !== this._runtimeGeneration) {
-            return
-          }
-          this.startRemoteUpdateCheck()
-
-          this._engineStatus.setStatus(EngineStatus.RUN)
-        } catch (error) {
-          failLaunch(-1, (error as Error).message)
+          DMPLogger.e(Tags.LAUNCH, `startPackageLoader failed code=${code} errMsg=${errMsg}`)
+          this._lastLaunchFailed = true
+          this._engineStatus.setStatus(EngineStatus.STOP)
+          this.settleLaunchCompletion(launchConfig, false)
         }
-      };
 
-      const loadComplete = (config: DMPBundleLoadInfo) => {
+        let waitLaunchBundleReady = async (config: DMPBundleLoadInfo) => {
+          try {
+            if (generation !== this._runtimeGeneration) {
+              return
+            }
+            DMPLogger.i(Tags.LAUNCH,
+              "launchBundleReady: launchType: " + DMPLaunchType[installConfig.launchAppType]);
+            await this._bundleManager.loadConfigFile()
+            if (generation !== this._runtimeGeneration) {
+              return
+            }
+            this._service.updateWorkerAppData();
+            await this.startEngineService()
+            if (generation !== this._runtimeGeneration) {
+              return
+            }
+            await this.startMainService()
+            if (generation !== this._runtimeGeneration) {
+              return
+            }
+            this.startRemoteUpdateCheck()
 
+            this._engineStatus.setStatus(EngineStatus.RUN)
+          } catch (error) {
+            failLaunch(-1, (error as Error).message)
+          }
+        };
+
+        const loadComplete = (config: DMPBundleLoadInfo) => {
+
+        }
+        const loadError = (code: number, errMsg: string) => failLaunch(code, errMsg)
+        //安装小程序包
+        await this._bundleManager.install(installConfig, waitLaunchBundleReady, loadComplete, loadError)
       }
-      const loadError = (code: number, errMsg: string) => failLaunch(code, errMsg)
-      //安装小程序包
-      await this._bundleManager.install(installConfig, waitLaunchBundleReady, loadComplete, loadError)
+    } catch (error) {
+      if (requestGeneration !== this._runtimeGeneration) return
+      this._lastLaunchFailed = true
+      this._engineStatus.setStatus(EngineStatus.STOP)
+      this.settleLaunchCompletion(launchConfig, false)
+      DMPLogger.e(Tags.LAUNCH, `startPackageLoader failed: ${(error as Error).message}`)
     }
   }
 
@@ -461,13 +474,18 @@ export class DMPApp {
   }
 
   private launchWhenRuntimeReady(launchConfig: DMPLaunchConfig) {
-    if (this._engineStatus.currentStatus == EngineStatus.RUN) {
+    if (this._lastLaunchFailed) {
+      this.settleLaunchCompletion(launchConfig, false)
+    } else if (this._engineStatus.currentStatus == EngineStatus.RUN) {
       this.launchInner(launchConfig)
     } else {
       const listener = (status: EngineStatus) => {
         if (status == EngineStatus.RUN) {
           this._engineStatus.removeStatusListener(listener)
           this.launchInner(launchConfig)
+        } else if (status == EngineStatus.STOP) {
+          this._engineStatus.removeStatusListener(listener)
+          this.settleLaunchCompletion(launchConfig, false)
         }
       };
       this._engineStatus.addStatusListener(listener);

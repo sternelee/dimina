@@ -51,11 +51,18 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
     bundleLoadInfo.appId = installConfig.appId
     bundleLoadInfo.appIndex = installConfig.appIndex;
     this.installConfig = installConfig;
-    this.fileManager.initRootDir(this.installConfig!.appId)
-    await this.loadAppVersion(bundleLoadInfo);
-    await this.loadLocalPackage(bundleLoadInfo);
-
-    this.clearHistoryVersion(bundleLoadInfo)
+    try {
+      this.fileManager.initRootDir(this.installConfig!.appId)
+      await this.loadAppVersion(bundleLoadInfo);
+      await this.loadLocalPackage(bundleLoadInfo);
+      // 只有完整启动配置已交付，才允许清理历史版本。
+      if (this.isLaunchBundleReady) {
+        await this.clearHistoryVersion(bundleLoadInfo)
+        loadComplete?.(bundleLoadInfo)
+      }
+    } catch (error) {
+      this.handleException(Tags.LOAD_LOCAL_BUNDLE, ErrorCode.LOAD_LOCAL_BUNDLE_FAILED, error);
+    }
     DMPLogger.i(Tags.BUNDLE, "ReleaseBundleLoader install end");
     return bundleLoadInfo;
   }
@@ -104,6 +111,8 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
   //加载底包
   async loadLocalPackage(bundleLoadInfo: DMPBundleLoadInfo) {
     try {
+      // 调试模式、宿主升级、无底包都先读取沙箱中已安装的远程版本。
+      this.loadCacheConfig(bundleLoadInfo);
       if (bundleLoadInfo.isAppUpdate() || this.isDebugMode()) {
         DMPLogger.i(Tags.LOAD_LOCAL_BUNDLE, '应用有更新或处于调试模式');
         //加载本地配置
@@ -115,9 +124,6 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
         //安装成功以后，存储version
         DMPPreference.getInstance().put(bundleLoadInfo.appId + "_versionName", bundleLoadInfo.appVersionName!)
         DMPPreference.getInstance().put(bundleLoadInfo.appId + "_versionCode", bundleLoadInfo.appVersionCode!)
-      } else {
-        DMPLogger.i(Tags.BUNDLE, "加载缓存包")
-        this.loadCacheConfig(bundleLoadInfo);
       }
       await this.installManifestPackageIfNeeded(bundleLoadInfo);
       this.tryLaunchApp(bundleLoadInfo);
@@ -129,27 +135,19 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
   private async installManifestPackageIfNeeded(bundleLoadInfo: DMPBundleLoadInfo): Promise<void> {
     const installed = await DMPRemoteUpdateManager.sharedInstance()
       .installInitialPackageIfNeeded(this.app);
-    if (!installed) {
-      return;
-    }
-
     const cacheJSAppConfig = this.fileManager.loadJSAppConfig(bundleLoadInfo.appId);
     bundleLoadInfo.cacheJSAppBundleConfig = DMJSAppBundleConfig.fromJson(cacheJSAppConfig);
     if (bundleLoadInfo.cacheJSAppBundleConfig == null) {
-      throw new Error('manifest package installed without a valid config');
+      throw new Error('mini program package has no valid cached config');
     }
-    DMPLogger.i(Tags.LOAD_REMOTE_BUNDLE, 'ManifestUrl 首次安装完成');
+    if (installed) DMPLogger.i(Tags.LOAD_REMOTE_BUNDLE, 'ManifestUrl 首次安装完成');
   }
 
   private loadCacheConfig(bundleLoadInfo: DMPBundleLoadInfo) {
-    try {
-      let cacheJSAppConfig = this.fileManager.loadJSAppConfig(bundleLoadInfo.appId);
-      let cacheJSSdkConfig = this.fileManager.loadJSSdkConfig();
-      bundleLoadInfo.cacheJSAppBundleConfig = DMJSAppBundleConfig.fromJson(cacheJSAppConfig);
-      bundleLoadInfo.cacheJSSdkBundleConfig = DMPJSSdkBundleConfig.fromJson(cacheJSSdkConfig);
-    } catch (e) {
-      this.handleException(Tags.LOAD_CACHE_CONFIG, ErrorCode.LOAD_CACHE_CONFIG_FAILED, e);
-    }
+    bundleLoadInfo.cacheJSAppBundleConfig = DMJSAppBundleConfig.fromJson(
+      this.fileManager.loadJSAppConfig(bundleLoadInfo.appId));
+    bundleLoadInfo.cacheJSSdkBundleConfig = DMPJSSdkBundleConfig.fromJson(
+      this.fileManager.loadJSSdkConfig());
   }
 
   private tryLaunchApp(bundleLoadInfo: DMPBundleLoadInfo) {
@@ -158,7 +156,7 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
       if (this._launchBundleReady == null) {
         DMPLogger.i(Tags.BUNDLE, '小程序已启动');
       } else if (!this.checkCacheConfigExist(bundleLoadInfo)) {
-        DMPLogger.e(Tags.BUNDLE, '小程序配置不完整不允许启动');
+        this.waitLoadError(ErrorCode.LAUNCH_FAILED, '小程序配置不完整不允许启动');
       } else {
         DMPLogger.i(Tags.BUNDLE, '启动包已准备好,确认可以启动');
         DMPLogger.i(Tags.BUNDLE,
@@ -167,11 +165,12 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
         DMPLogger.i(Tags.BUNDLE,
           '启动配置：jsSdk:versionCode=' + bundleLoadInfo.cacheJSSdkBundleConfig?.versionCode + " versionName=" +
             bundleLoadInfo.cacheJSSdkBundleConfig?.versionName);
-        this._launchBundleReady(bundleLoadInfo);
-        this._launchBundleReady = null;
-        this.isLaunchBundleReady = true;
         bundleLoadInfo.currentJsAppBundleConfig = bundleLoadInfo.cacheJSAppBundleConfig
         bundleLoadInfo.currentJsSdkBundleConfig = bundleLoadInfo.cacheJSSdkBundleConfig
+        const ready = this._launchBundleReady;
+        this._launchBundleReady = null;
+        ready(bundleLoadInfo);
+        this.isLaunchBundleReady = true;
       }
     } catch (e) {
       this.handleException(Tags.LAUNCH, ErrorCode.LAUNCH_FAILED, e)
@@ -257,7 +256,10 @@ export class DMPReleaseBundleLoader implements DMPBundleLoader {
   }
 
   waitLoadError(code: number, errMsg: string) {
-    this._loadError!!(code, errMsg)
+    const loadError = this._loadError;
+    this._loadError = null;
+    this._launchBundleReady = null;
+    loadError?.(code, errMsg)
     if (this.isLaunchBundleReady) {
       this.onUpdateFailed()
     }
