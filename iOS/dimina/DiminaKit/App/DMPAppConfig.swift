@@ -19,11 +19,7 @@ public struct DMPAppConfig : Identifiable {
 
     /// Keep service collection and pageFrame activation on the same policy.
     var isVConsoleEnabled: Bool {
-        #if DEBUG
-        return true
-        #else
-        return isDebugMode
-        #endif
+        isDebugMode
     }
 
     var color: Color?

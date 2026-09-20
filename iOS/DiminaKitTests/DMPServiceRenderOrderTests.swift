@@ -17,6 +17,40 @@ import XCTest
 
 final class DMPServiceRenderOrderTests: XCTestCase {
 
+    func testVConsoleFollowsExplicitDebugFlagInEveryBuildConfiguration() {
+        var config = DMPAppConfig(appName: "debug-policy", appId: UUID().uuidString)
+        XCTAssertFalse(config.isVConsoleEnabled)
+        config.isDebugMode = true
+        XCTAssertTrue(config.isVConsoleEnabled)
+        config.isDebugMode = false
+        XCTAssertFalse(config.isVConsoleEnabled)
+    }
+
+    @MainActor
+    func testReusedAppRefreshesOnlyDebugModeAndNewServiceReceivesIt() async throws {
+        let manager = DMPAppManager.sharedInstance()
+        var config = DMPAppConfig(appName: "debug-policy", appId: UUID().uuidString)
+        config.updateManifestUrl = "https://example.com/original.json"
+        let app = manager.appWithConfig(appConfig: config)
+        defer { app.destroy() }
+        for enabled in [true, false] {
+            config.isDebugMode = enabled
+            config.updateManifestUrl = "https://example.com/replacement.json"
+            let reused = manager.appWithConfig(appConfig: config)
+            XCTAssertTrue(reused === app)
+            XCTAssertEqual(reused.getAppConfig()?.isDebugMode, enabled)
+            XCTAssertEqual(reused.getAppConfig()?.updateManifestUrl, "https://example.com/original.json")
+            let service = DMPService(app: reused)
+            let result = await service.getEngine().evaluateScript("globalThis.__diminaDebug")
+            XCTAssertEqual(result?.toBool(), enabled)
+            service.destroy()
+        }
+        app.setDebugMode(true)
+        XCTAssertEqual(app.getAppConfig()?.isVConsoleEnabled, true)
+        app.setDebugMode(false)
+        XCTAssertEqual(app.getAppConfig()?.isVConsoleEnabled, false)
+    }
+
     func testDebugFlagIsAvailableBeforeFirstServiceScript() async {
         for enabled in [false, true] {
             let engine = DMPEngine(debugEnabled: enabled)

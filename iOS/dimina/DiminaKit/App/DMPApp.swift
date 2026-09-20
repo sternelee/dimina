@@ -170,6 +170,11 @@ public class DMPApp {
         service = DMPService(app: self)
     }
 
+    /// 更新后续 Service 与页面创建时使用的调试配置；不会重载已运行的小程序。
+    public func setDebugMode(_ enabled: Bool) {
+        appConfig?.isDebugMode = enabled
+    }
+
     public func getNavigator() -> DMPNavigator? {
         return navigator
     }

@@ -289,6 +289,7 @@ public class DMPAppManager {
             if let existingApp = appPools.values.first(where: {
                 $0.getAppId() == appConfig.appId
             }) {
+                existingApp.setDebugMode(appConfig.isDebugMode)
                 return existingApp
             }
             appIndex += 1

@@ -237,6 +237,8 @@ final class DiminaFlutterHost {
 }
 ```
 
+iOS 的 vConsole 仅由 `isDebugMode` 决定，Debug 编译不会强制开启。再次调用 `appWithConfig` 获取同一 appId 时，会同步传入的 `isDebugMode`；持有实例的宿主也可以在启动前调用 `app.setDebugMode(true)` 或 `app.setDebugMode(false)`。该设置用于后续创建的 Service 和页面，不会重载已运行或后台保留的小程序；需要整次运行统一切换时，先 `await app.closeMiniProgram()`，再按新配置打开。
+
 `DMPApp.closeMiniProgram()` 会先走导航和 App/Page 隐藏链路，再销毁运行时；不要用 `app.destroy()` 代替可见小程序的正常关闭。
 
 ### Channel 回调
