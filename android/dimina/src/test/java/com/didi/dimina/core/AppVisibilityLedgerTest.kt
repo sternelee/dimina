@@ -9,6 +9,47 @@ import org.junit.Test
 
 class AppVisibilityLedgerTest {
 
+    private fun entry(id: String) = JSONObject().apply {
+        put("pagePath", "pages/index/index")
+        put("query", JSONObject().put("id", id))
+        put("scene", 1001)
+    }
+
+    @Test
+    fun `A then B entry keeps B through repeated task switcher resumes`() {
+        val ledger = AppVisibilityLedger()
+        val first = entry("A")
+        assertNull(ledger.onShow(first, newEntry = false))
+        assertNull(ledger.onServiceReady())
+        ledger.onHide()
+        val second = entry("B")
+        assertEquals("B", ledger.onShow(second)!!.options!!.getJSONObject("query").getString("id"))
+        second.getJSONObject("query").put("id", "caller mutation")
+        repeat(3) {
+            ledger.onHide()
+            val resumed = ledger.onShow(first, newEntry = false)!!.options!!
+            assertEquals("B", resumed.getJSONObject("query").getString("id"))
+            resumed.getJSONObject("query").put("id", "delivery mutation")
+            assertNull(ledger.onShow(first, newEntry = false))
+        }
+    }
+
+    @Test
+    fun `empty new entry replaces B and reset discards retained entry`() {
+        val ledger = AppVisibilityLedger()
+        ledger.onServiceReady()
+        ledger.onShow(entry("B"))
+        val empty = entry("unused").put("query", JSONObject())
+        ledger.onShow(empty)
+        ledger.onHide()
+        assertEquals(0, ledger.onShow(entry("A"), newEntry = false)!!.options!!.getJSONObject("query").length())
+        ledger.reset()
+        assertNull(ledger.onShow(entry("C"), newEntry = false))
+        assertNull(ledger.onServiceReady())
+        ledger.onHide()
+        assertEquals("C", ledger.onShow(entry("C"), newEntry = false)!!.options!!.getJSONObject("query").getString("id"))
+    }
+
     @Test
     fun `ordinary foreground refreshes current page without duplicating cold show`() {
         val ledger = AppVisibilityLedger()

@@ -14,14 +14,21 @@ internal class AppVisibilityLedger {
     private var sentVisible: Boolean? = null
     private var pendingShowOptions: JSONObject? = null
 
-    // Current-page options refresh a real foreground transition; only a host entry
-    // may emit another onShow while already visible.
+    // Retained pages may still carry the cold-start query after a host reentry.
+    // Keep the latest explicit entry for this runtime, separate from visibility deduplication.
+    private var latestEntryOptions: JSONObject? = null
+
+    // Only a new entry may emit another onShow while already visible.
     private var pendingNewEntry = false
 
     @Synchronized
     fun onShow(options: JSONObject? = null, newEntry: Boolean = options != null): AppVisibilityDelivery? {
-        if (options != null && (!pendingNewEntry || newEntry)) {
-            pendingShowOptions = JSONObject(options.toString())
+        if (newEntry && options != null) {
+            latestEntryOptions = JSONObject(options.toString())
+        }
+        val effectiveOptions = latestEntryOptions ?: options
+        if (effectiveOptions != null && (!pendingNewEntry || newEntry)) {
+            pendingShowOptions = JSONObject(effectiveOptions.toString())
             pendingNewEntry = newEntry
         }
         desiredVisible = true
@@ -47,6 +54,7 @@ internal class AppVisibilityLedger {
     fun reset() {
         serviceReady = false
         desiredVisible = null
+        latestEntryOptions = null
         sentVisible = null
         pendingShowOptions = null
         pendingNewEntry = false
