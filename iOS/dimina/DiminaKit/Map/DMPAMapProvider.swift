@@ -1,4 +1,7 @@
 #if canImport(MAMapKit) && canImport(AMapFoundationKit)
+#if SWIFT_PACKAGE
+import Dimina
+#endif
 import UIKit
 import CoreLocation
 import MAMapKit

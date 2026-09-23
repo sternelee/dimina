@@ -1,15 +1,13 @@
 # DiminaMapAMap（Swift Package）
 
-为 Dimina 提供可选的高德地图能力。生成的发布 ZIP 包包含独立 Swift Package、固定版本的高德官方 XCFramework 和 `AMap.bundle`。地图包依赖同版本的 Dimina；仅安装核心包不会引入高德 SDK。
+Dimina 主仓库提供两个 Swift Package product：`Dimina` 核心 SDK 和可选的 `DiminaMapAMap` 高德地图适配器。
 
-推荐通过独立仓库 [didi/dimina-map-amap](https://github.com/didi/dimina-map-amap) 接入：在 Xcode 的 **Add Package Dependencies** 中输入 `https://github.com/didi/dimina-map-amap.git`，选择与核心 SDK 一致的版本并链接 `DiminaMapAMap` product。SwiftPM 会从 Dimina Release 下载高德 XCFramework，并验证 SHA-256。
+## 通过同一仓库接入
 
-需要离线接入时，仍可使用本地包：
-
-1. 从对应的 GitHub Release 下载 `DiminaMapAMap-<version>.zip` 并解压。
-2. 在 Xcode 中选择 **Add Package Dependencies → Add Local**，选中解压目录，将 `DiminaMapAMap` 产品链接到应用 target。请将包目录保存在项目或依赖存储中，供 CI 构建使用。
-3. 将 `Sources/DiminaMapAMap/Resources/AMap.bundle` 加入应用 target 的 **Copy Bundle Resources**。高德从应用主 bundle 查找此资源，仅有 SwiftPM 资源 bundle 并不足够。
-4. 注册 provider 前，准备好平台 Key、实际的隐私授权状态和定位权限：
+1. 在 Xcode **Add Package Dependencies** 中添加 `https://github.com/didi/dimina.git`，选择包含地图 product 的版本或分支。
+2. 将 `DiminaMapAMap` product 链接到应用 target，它会依赖同一份 `Dimina` 核心 target。
+3. 从 SwiftPM 下载的 `MAMapKit.xcframework/ios-arm64/MAMapKit.framework/AMap.bundle` 中取得资源，将其加入应用 target 的 **Copy Bundle Resources**。Xcode 下载的 XCFramework 位于 DerivedData 的 `SourcePackages/artifacts` 下；也可从 Release 的本地包中取得同一资源，保存在宿主项目中供 CI 使用。高德从应用主 bundle 查找资源，仅有框架内资源不足够。
+4. 在主 actor 上、打开小程序前注册：
 
 ```swift
 import Dimina
@@ -21,30 +19,24 @@ DMPMapProviders.register("amap", provider: DiminaMapAMap.DMPAMapProvider(
 ))
 ```
 
-请在主 actor 上注册。使用定位功能时，需配置 `NSLocationWhenInUseUsageDescription`。不要再手动链接其他版本的 MAMapKit 或 AMapFoundationKit。
+Key 和实际隐私授权由宿主提供；定位需要 `NSLocationWhenInUseUsageDescription`。不要重复链接其他版本的 MAMapKit 或 AMapFoundationKit。
 
-当前固定版本的官方库支持 **arm64 iOS 真机和 x86_64 iOS 模拟器**，不包含 arm64 模拟器架构。在 Apple Silicon 上请使用 x86_64/Rosetta 模拟器或真机，不能将 arm64 真机二进制用于模拟器。
+只选择 `Dimina` 不会链接高德 SDK；同一个 package 的二进制 target 在 SwiftPM 解析时仍可能被下载。
 
-维护者可在 macOS 上执行以下命令生成包：
+**版本边界：** 已发布的 `v1.7.5` tag 尚未包含主仓库地图 product。新增 manifest 合入并推送后，可暂时选择包含该改动的分支或 commit；正式版本接入需使用后续包含该改动的 tag。不能仅靠补充 Release 附件改变旧 tag 中的 Package.swift。
+
+## 离线接入
+
+从 Dimina Release 下载 `DiminaMapAMap-<version>.zip` 并解压，通过 **Add Package Dependencies → Add Local** 添加，链接 `DiminaMapAMap` product。资源位于 `Sources/DiminaMapAMap/Resources/AMap.bundle`，同样需要复制到宿主主 bundle。
+
+当前固定的高德官方库支持 arm64 iOS 真机和 x86_64 iOS 模拟器，不包含 arm64 模拟器架构。Apple Silicon 请使用真机或 x86_64/Rosetta 模拟器。
+
+## 发布维护
 
 ```sh
 python3 scripts/package-ios-amap.py --version <core-sdk-version> --output /tmp/dimina-map-release
 ```
 
-脚本会校验固定的 SHA-256，按平台拆分官方多架构 Framework，并生成明确声明二进制 target 依赖的 Swift Package。脚本本身不会上传文件；Release 工作流会将生成的 ZIP 附加到新的 GitHub Release。已有 tag 不会自动补发适配器。
+脚本校验厂商 SHA-256，生成本地 Swift Package ZIP 和两个 XCFramework ZIP。Release 流程构建本地包和主仓库地图 product，再附加产物；不会覆盖已存在的二进制附件。
 
-## 独立仓库发布
-
-同一次生成还会输出 `DiminaMapAMap-<version>-repository/`（仓库源码）、其 ZIP，以及两个 `*.xcframework.zip`。二进制 ZIP 放在 Dimina 对应版本的 GitHub Release；源码目录中的 `Package.swift` 使用远程 URL 和校验值，不含二进制文件。
-
-先完成本地包的 iOS 构建，再上传两个二进制 ZIP，最后同步源码仓库：
-
-```sh
-bash scripts/publish-ios-amap-repository.sh \
-  /tmp/dimina-map-release/DiminaMapAMap-<version>-repository \
-  didi/dimina-map-amap <version>
-```
-
-同步脚本先执行真实的远程 SwiftPM 依赖解析，再普通推送源码和版本 tag；不会覆盖已存在的 tag。目标仓库必须事先创建。源码只在主仓库维护，独立仓库由发布流程生成。
-
-自动同步需在主仓库配置 Actions variable `DIMINA_MAP_AMAP_REPOSITORY=didi/dimina-map-amap` 和 secret `DIMINA_MAP_AMAP_TOKEN`（对目标仓库拥有 Contents 读写权限的凭据）。默认 `GITHUB_TOKEN` 仅对当前仓库授权，不能用于写入另一个仓库。未配置时，Release 仍生成并上传分发文件，日志提示跳过跨仓库同步。
+根目录 `Package.swift` 固定远程二进制 URL 和 checksum；当前复用 `v1.7.5` Release 的高德附件。核心版本更新不必重新发布相同的高德二进制。升级高德版本时，应先在新的不可变 URL 发布并验证 XCFramework，再更新 manifest 的 URL 和 `swift package compute-checksum` 结果，最后发布引用该 manifest 的核心版本 tag。

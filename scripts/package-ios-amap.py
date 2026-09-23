@@ -18,14 +18,9 @@ def run(*args):
     subprocess.run([str(arg) for arg in args], check=True)
 
 
-def package(version, output, cache, binary_repository="didi/dimina"):
+def package(version, output, cache):
     if not re.fullmatch(r"\d+\.\d+\.\d+(?:-[A-Za-z0-9.-]+)?", version):
         raise ValueError("version must be the core SDK's release version, without v")
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", binary_repository):
-        raise ValueError("binary repository must be owner/repository")
-    repository = output / f"DiminaMapAMap-{version}-repository"
-    if repository.exists():
-        raise FileExistsError(repository)
     destination = output / f"DiminaMapAMap-{version}"
     archive = output / f"DiminaMapAMap-{version}.zip"
     if destination.exists() or archive.exists():
@@ -78,6 +73,7 @@ def package(version, output, cache, binary_repository="didi/dimina"):
         if not source.startswith(guard) or not source.rstrip().endswith("#endif"):
             raise ValueError("Provider source layout changed; review the package generator")
         # This package explicitly depends on both SDKs: a missing SDK must fail compilation.
+        source = source.replace("#if SWIFT_PACKAGE\nimport Dimina\n#endif\n", "")
         source = "import Dimina\n" + source[len(guard):].rstrip().removesuffix("#endif")
         (sources / "DMPAMapProvider.swift").write_text(source)
         template = (ROOT / "iOS/MapAMap/Package.swift.template").read_text()
@@ -91,30 +87,13 @@ def package(version, output, cache, binary_repository="didi/dimina"):
         )
         shutil.copytree(package_root, destination)
     run("ditto", "-c", "-k", "--sequesterRsrc", "--keepParent", destination, archive)
-    # Keep the local package available for offline use and pre-publication builds.
-    # The Git repository contains source/resources only; binary targets use Release assets.
-    shutil.copytree(destination, repository, ignore=shutil.ignore_patterns("Frameworks"))
-    manifest = (repository / "Package.swift").read_text()
+    # Also publish XCFramework assets for the main repository's optional SwiftPM product.
     for name, vendor in vendors.items():
         binary_archive = output / f"{name}-{vendor['version']}.xcframework.zip"
         if binary_archive.exists():
             raise FileExistsError(binary_archive)
         run("ditto", "-c", "-k", "--keepParent", destination / "Frameworks" / f"{name}.xcframework", binary_archive)
-        checksum = hashlib.sha256(binary_archive.read_bytes()).hexdigest()
-        url = f"https://github.com/{binary_repository}/releases/download/v{version}/{binary_archive.name}"
-        local_target = f'.binaryTarget(name: "{name}", path: "Frameworks/{name}.xcframework")'
-        if manifest.count(local_target) != 1:
-            raise ValueError(f"Expected exactly one local binary target for {name}")
-        manifest = manifest.replace(
-            local_target,
-            f'.binaryTarget(name: "{name}", url: "{url}", checksum: "{checksum}")',
-        )
-    (repository / "Package.swift").write_text(manifest)
-    (repository / ".gitignore").write_text(".build/\n.swiftpm/\n.DS_Store\n")
-    (repository / "README.md").write_text((ROOT / "iOS/MapAMap/Repository-README.md").read_text().replace("@VERSION@", version))
-    run("ditto", "-c", "-k", "--keepParent", repository, output / f"{repository.name}.zip")
     print(archive)
-    print(repository)
 
 
 if __name__ == "__main__":
@@ -122,6 +101,5 @@ if __name__ == "__main__":
     parser.add_argument("--version", required=True)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--cache", type=Path, default=Path(tempfile.gettempdir()) / "dimina-amap-downloads")
-    parser.add_argument("--binary-repository", default="didi/dimina", help="GitHub repository hosting the XCFramework Release assets")
     args = parser.parse_args()
-    package(args.version, args.output.resolve(), args.cache.resolve(), args.binary_repository)
+    package(args.version, args.output.resolve(), args.cache.resolve())
