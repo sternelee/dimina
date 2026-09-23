@@ -2117,15 +2117,18 @@ class DiminaActivity : ComponentActivity() {
     }
 
     private fun coldRestartMiniProgram(program: MiniProgram) {
+        if (isFinishing || isDestroyed) return
         // Re-enter is an app-level reload, not wx.reLaunch: destroy the shared
         // JS runtime and transient API resources so the new root Activity runs
         // the complete initialization and loading flow again.
-        activityRegistry.closeAll(miniProgram.appId) { activity ->
+        activityRegistry.snapshot(miniProgram.appId).asReversed().forEach { activity ->
             activity.prepareForColdRestart()
-            activity.finish()
         }
         miniApp.clear(miniProgram.appId)
+        // Start while the source Activity still belongs to a live task. Finishing the
+        // entire stack first lets Android allocate a new task and leave the old card behind.
         DiminaActivity.launch(this, program)
+        activityRegistry.closeAll(miniProgram.appId) { it.finish() }
     }
 
     private fun getDefaultEntryPagePath(): String? {
@@ -2160,11 +2163,14 @@ class DiminaActivity : ComponentActivity() {
      * 共享同一 DiminaActivity 类的下层实例，所以改用 activityRegistry 精确关栈
      */
     private fun relaunchStack(url: String) {
-        activityRegistry.closeAll(miniProgram.appId) { activity ->
+        if (isFinishing || isDestroyed) return
+        activityRegistry.snapshot(miniProgram.appId).forEach { activity ->
             activity.preserveMiniAppOnDestroy = true
-            activity.finish()
         }
+        // Keep the source task alive until its replacement root has been launched.
+        // No NEW_TASK/CLEAR_TOP flags: shared host tasks and other apps must survive.
         DiminaActivity.launch(this, miniProgram.copy(root = true, path = url))
+        activityRegistry.closeAll(miniProgram.appId) { it.finish() }
     }
 
     /**
