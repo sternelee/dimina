@@ -114,4 +114,22 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
-          files: ${{ runner.temp }}/map-release/DiminaMapAMap-*.zip
+          # Existing binary URLs may already be pinned by a published Swift Package checksum.
+          overwrite_files: false
+          files: |
+            ${{ runner.temp }}/map-release/DiminaMapAMap-*.zip
+            ${{ runner.temp }}/map-release/*.xcframework.zip
+      - name: Publish independent Swift Package repository
+        env:
+          GH_TOKEN: ${{ secrets.DIMINA_MAP_AMAP_TOKEN }}
+          PACKAGE_REPOSITORY: ${{ vars.DIMINA_MAP_AMAP_REPOSITORY }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || github.ref_name }}
+        run: |
+          if [[ -z "$GH_TOKEN" || -z "$PACKAGE_REPOSITORY" ]]; then
+            echo "::notice::Independent package sync requires DIMINA_MAP_AMAP_REPOSITORY and DIMINA_MAP_AMAP_TOKEN; generated package and binary assets are attached to the release."
+            exit 0
+          fi
+          gh auth setup-git
+          bash scripts/publish-ios-amap-repository.sh \
+            "$RUNNER_TEMP/map-release/DiminaMapAMap-${RELEASE_TAG#v}-repository" \
+            "$PACKAGE_REPOSITORY" "${RELEASE_TAG#v}"

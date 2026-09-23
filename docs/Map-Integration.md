@@ -77,7 +77,7 @@ Android 使用仓库现有的原生组件兼容路径：原生组件层位于透
 
 ## iOS
 
-仓库示例 App 不预置高德接入配置。Swift Package 用户从新版本 GitHub Release 下载 `DiminaMapAMap-<version>.zip`，解压后通过 Xcode **Add Package Dependencies → Add Local** 添加，并链接 `DiminaMapAMap` product。它是独立 Swift Package，包含高德 XCFramework，并精确依赖同版本 `Dimina`；主仓库 URL 的 `Dimina` product 仍只提供核心 SDK。
+仓库示例 App 不预置高德接入配置。Swift Package 用户可在 Xcode 的 **Add Package Dependencies** 中添加独立仓库 `https://github.com/didi/dimina-map-amap.git`，选择与核心一致的版本，并链接 `DiminaMapAMap` product。SwiftPM 下载高德 XCFramework 时会校验 SHA-256。离线接入也可从新版本 GitHub Release 下载 `DiminaMapAMap-<version>.zip`，解压后通过 Xcode **Add Package Dependencies → Add Local** 添加，并链接 `DiminaMapAMap` product。它是独立 Swift Package，包含高德 XCFramework，并精确依赖同版本 `Dimina`；主仓库 URL 的 `Dimina` product 仍只提供核心 SDK。
 
 将包内 `Sources/DiminaMapAMap/Resources/AMap.bundle` 加入宿主 **Copy Bundle Resources**，因为高德从应用主 bundle 查找地图资源。宿主仍需提供平台 Key 和实际的隐私授权状态。不要再重复链接另一份高德 Framework。
 
@@ -258,7 +258,7 @@ SDK 隐私授权与系统定位权限分别处理，Key 使用对应平台产品
 ## 发布可选地图适配器
 
 - Android：根 `jitpack.yml` 显式安装 `engine_qjs`、`dimina`、`map-amap` 的 Maven publication。可用 `./gradlew :map-amap:publishReleasePublicationToMavenLocal` 本地检查 AAR、源码包和 POM。
-- iOS：Release 工作流生成并附加 `DiminaMapAMap-<version>.zip`。本地执行 `python3 scripts/package-ios-amap.py --version <核心版本> --output /tmp/dimina-map-release` 仅生成文件，不上传。
+- iOS：Release 工作流生成本地 Swift Package ZIP、独立仓库源码 ZIP 和两个 XCFramework ZIP；配置跨仓库同步凭据后自动发布 `didi/dimina-map-amap`，具体步骤见 [Swift Package 发布说明](../iOS/MapAMap/README.md#独立仓库发布)。本地执行 `python3 scripts/package-ios-amap.py --version <核心版本> --output /tmp/dimina-map-release` 仅生成文件，不上传。
 - Harmony：`bash harmony/upload.sh --build-only` 构建两个 release HAR；确认发布凭据后，`bash harmony/upload.sh` 依次发布核心和地图适配器。若核心该版本已发布，可单独执行 `ohpm publish harmony/map_amap/build/default/outputs/default/map_amap.har`。
 
 以上配置在新版本实际发布后才形成可用的远程制品；不能将本地构建成功等同于 JitPack/OHPM 已上线。地图 Key、隐私授权和地图功能的真机验证仍由接入流程完成。
