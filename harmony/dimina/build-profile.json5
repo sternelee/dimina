@@ -1,6 +1,13 @@
 {
   "apiType": "stageMode",
   "buildOption": {
+    // Explicit assets avoid treating .gitignore negation rules as HAR exclusions.
+    "packingOptions": {
+      "asset": {
+        "include": ["LICENSE", "README.md", "CHANGELOG.md"],
+        "exclude": ["**/.DS_Store"]
+      }
+    },
     "externalNativeOptions": {
       "path": "./src/main/cpp/CMakeLists.txt",
       "arguments": "",

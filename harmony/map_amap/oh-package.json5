@@ -1,10 +1,15 @@
 {
   "name": "@didi-dimina/map-amap",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "description": "Dimina optional AMap native map provider",
   "main": "Index.ets",
+  "author": {
+    "name": "doslin",
+    "email": "doslino@gmail.com",
+    "url": "https://github.com/didi/dimina"
+  },
   "dependencies": {
-    "@didi-dimina/dimina": "1.7.4",
+    "@didi-dimina/dimina": "1.7.5",
     "@amap/amap_lbs_map3d": "11.2.0",
     "@amap/amap_lbs_common": "11.2.0"
   },

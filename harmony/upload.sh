@@ -14,6 +14,7 @@ core=dimina/build/default/outputs/default/dimina.har
 adapter=map_amap/build/default/outputs/default/map_amap.har
 test -s "$core"
 test -s "$adapter"
+python3 scripts/check-core-publication.py "$core"
 python3 scripts/check-map-publication.py "$adapter"
 if [[ "${1:-}" == "--build-only" ]]; then
     exit 0

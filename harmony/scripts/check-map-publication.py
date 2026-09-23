@@ -12,6 +12,9 @@ with tarfile.open(archive) as har:
     metadata = json.load(har.extractfile("package/oh-package.json5"))
     assert metadata["name"] == "@didi-dimina/map-amap"
     assert metadata["version"] == core["version"], "adapter and core versions must match"
+    author = metadata.get("author")
+    assert isinstance(author, dict) and isinstance(author.get("name"), str) and author["name"].strip(), "missing or invalid package author"
+    assert author == core["author"], "adapter author must match core package author"
     assert metadata["dependencies"][core["name"]] == core["version"], "HAR must use a versioned core dependency"
     assert not any(value.startswith("file:") for value in metadata["dependencies"].values()), "local dependency in published HAR"
     for filename in ["README.md", "LICENSE", "CHANGELOG.md", metadata.get("types", metadata.get("main", "Index.ets"))]:

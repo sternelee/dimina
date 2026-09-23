@@ -144,10 +144,15 @@ jobs:
           hvigorw --mode module
           -p product=default
           -p module=dimina@default
+          -p buildMode=release
           assembleHar
           --analyze=normal
           --parallel
           --no-daemon
+
+      - name: Verify core HAR publication metadata
+        working-directory: ./harmony
+        run: python3 scripts/check-core-publication.py
 
       - name: Build optional AMap HAR
         working-directory: ./harmony
