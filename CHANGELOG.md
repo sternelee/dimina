@@ -1,5 +1,22 @@
 # Changelog
 
+## [v1.7.6] 2026-09-24
+
+### 新增
+
+- iOS 主仓库新增可选的 `DiminaMapAMap` Swift Package product，可通过同一个仓库 URL 接入核心 SDK 和高德地图适配器；高德 XCFramework 使用固定 URL 和 SHA-256 校验。
+- iOS 新增 Objective-C 宿主接入接口及示例，方便现有 Objective-C 应用使用 Dimina。
+
+### 优化
+
+- iOS 地图发布流程增加主仓库地图 product 构建验证，并保留离线 Swift Package 接入方式。
+
+### 兼容性
+
+- Android、iOS 和 HarmonyOS SDK 版本统一升级到 1.7.6，高德地图可选适配器与核心 SDK 使用相同版本。
+- 编译器保持 1.2.1，JSSDK 保持 1.0.49。
+- iOS 高德二进制继续复用 v1.7.5 Release 的固定附件和校验值；仍需将 `AMap.bundle` 复制到宿主主 bundle，且不支持 arm64 模拟器。
+
 ## [v1.7.5] 2026-09-23
 
 ### 新增

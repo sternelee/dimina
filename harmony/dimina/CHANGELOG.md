@@ -1,5 +1,12 @@
 # Changelog
 
+## [v1.7.6] 2026-09-24
+
+### 兼容性
+
+- 与 Android、iOS SDK 统一版本号，核心 SDK 和高德地图扩展模块 `@didi-dimina/map-amap` 同步升级到 1.7.6。
+- 本版未新增 HarmonyOS 功能，JSSDK 保持 1.0.49。
+
 ## [v1.7.5] 2026-09-23
 
 ### 优化

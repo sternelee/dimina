@@ -79,7 +79,7 @@ Android 使用仓库现有的原生组件兼容路径：原生组件层位于透
 
 仓库示例 App 不预置高德接入配置。Swift Package 用户在 Xcode 的 **Add Package Dependencies** 中添加主仓库 `https://github.com/didi/dimina.git`，选择包含地图 product 的版本或分支，并链接 `DiminaMapAMap`。它依赖同一个 package 的 `Dimina` 核心 target；只链接核心 product 不会链接高德，但 SwiftPM 解析时仍可能下载二进制 target。
 
-已发布的 `v1.7.5` tag 尚未包含此 product；改动合入并推送后，可先按分支或 commit 接入，或等待包含它的新 tag。离线接入仍可下载 Release 中的 `DiminaMapAMap-<version>.zip`，解压后使用 **Add Local**。
+`DiminaMapAMap` product 从 1.7.6 开始提供，1.7.5 及更早的 tag 不包含它；1.7.6 tag 发布前可按包含该改动的分支或 commit 接入。离线接入仍可下载 Release 中的 `DiminaMapAMap-<version>.zip`，解压后使用 **Add Local**。
 
 将 SwiftPM 下载的 `MAMapKit.xcframework/ios-arm64/MAMapKit.framework/AMap.bundle`（或本地包的 `Sources/DiminaMapAMap/Resources/AMap.bundle`）加入宿主 **Copy Bundle Resources**，因为高德从应用主 bundle 查找地图资源。宿主仍需提供平台 Key 和实际隐私授权状态。不要重复链接另一份高德 Framework。
 

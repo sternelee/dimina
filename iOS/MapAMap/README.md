@@ -23,7 +23,7 @@ Key 和实际隐私授权由宿主提供；定位需要 `NSLocationWhenInUseUsag
 
 只选择 `Dimina` 不会链接高德 SDK；同一个 package 的二进制 target 在 SwiftPM 解析时仍可能被下载。
 
-**版本边界：** 已发布的 `v1.7.5` tag 尚未包含主仓库地图 product。新增 manifest 合入并推送后，可暂时选择包含该改动的分支或 commit；正式版本接入需使用后续包含该改动的 tag。不能仅靠补充 Release 附件改变旧 tag 中的 Package.swift。
+**版本边界：** 主仓库地图 product 从 1.7.6 开始提供，1.7.5 及更早的 tag 不包含它。1.7.6 tag 发布前，可选择包含该改动的分支或 commit；仅补充 Release 附件不会改变旧 tag 中的 Package.swift。
 
 ## 离线接入
 
