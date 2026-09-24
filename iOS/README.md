@@ -140,6 +140,51 @@ try await DMPAppManager.sharedInstance().destroyAllMiniPrograms()
 
 `closeMiniProgram()` 会先完成页面退出、App/Page 隐藏和可能存在的来源小程序恢复，再销毁运行时。`destroy()` 是底层资源回收入口，不应代替可见小程序的正常关闭。
 
+## Objective-C 工程接入
+
+OC 工程也通过上面的 Swift Package Manager 步骤添加 **Dimina** product，不需要把宿主迁移为 Swift。以下 `DMPObjC*` 接口需使用包含本次适配的源码版本；旧版本没有这些类。
+
+在 `.m` 文件导入 SwiftPM 生成的模块（`Enable Modules (C and Objective-C)` 设为 `YES`，不需要宿主 Bridging Header）：
+
+```objc
+@import Dimina;
+```
+
+在主线程创建实例，并接入宿主现有的 `UINavigationController`：
+
+```objc
+DMPObjCManager *manager = DMPObjCManager.shared;
+[manager setupWithApiNamespaces:@[]];
+DMPObjCAppConfig *config = [[DMPObjCAppConfig alloc]
+    initWithAppName:@"小程序名称" appId:@"wx92269e3b2f304afc"];
+config.isDebugMode = YES; // 按需开启，线上通常关闭
+// 没有内置包时，设置真实的远程 manifest 地址：
+// config.updateManifestUrl = @"https://your-server/jsapp/wx92269e3b2f304afc.json";
+DMPObjCApp *app = [manager appWithConfig:config];
+[app setupWithNavigationController:self.navigationController];
+
+DMPObjCLaunchConfig *launch = [DMPObjCLaunchConfig new];
+launch.query = @{ @"from": @"objc-host" };
+launch.launchAnimated = @YES;
+[app launchWithConfig:launch completion:^(BOOL launched) {
+    if (!launched) {
+        NSLog(@"小程序启动失败或有操作正在进行");
+    }
+}];
+```
+
+- 宿主需持有 `DMPObjCApp`，后续可调用 `hideWithCompletion:` 保留后台实例、`closeWithCompletion:` 正常退出并销毁，或 `[manager destroyAllMiniProgramsWithCompletion:...]` 销毁全部实例。这些关闭接口的回调参数是 `NSError *`，成功为 `nil`，不会清除持久化用户数据。
+- 管理器和实例接口在主线程调用，异步完成回调也在主线程执行一次。启动返回 `YES` 表示原生启动路径成功，不代表 JS 页面已触发 `onReady`。
+- `appEntryPath`、`query`、`scene`、`referrerInfo` 等启动字段与 Swift 版本一致。可选布尔值使用 `NSNumber *`，`nil` 保留 SDK 默认值，显式关闭应传 `@NO`。启动配置在调用时复制，之后修改不会影响本次启动。
+- 首次启动前设置导航容器；同一实例再次进入时直接调用 `launchWithConfig:completion:`，避免重复重设导航栈。
+- 资源格式与 Swift 接入相同。使用远程 SPM 依赖时，可配置 `updateManifestUrl` 下载首包；内置包方式需随本地 SDK 的 `Resources/JsApp.bundle` 打包。当前 SPM 优先读取 SDK 自身的资源 bundle，不能仅把业务包放到宿主 bundle 并假定会覆盖它。
+
+可复制的完整控制器示例：[DMPExampleViewController.h](Examples/ObjectiveC/DMPExampleViewController.h)、[DMPExampleViewController.m](Examples/ObjectiveC/DMPExampleViewController.m)。把它们加入链接了 Dimina product 的 OC target，将控制器放入宿主导航栈，再从按钮调用 `openMiniProgram`。示例中的 appId 和资源/manifest 需替换成实际小程序。
+
+可在仓库根目录运行 `bash iOS/Examples/ObjectiveC/verify.sh`，构建真实 SwiftPM SDK 并编译 arm64/x86_64 模拟器 OC 示例；这项检查不包含启动运行或真机验证。
+
+此适配覆盖宿主启动与实例生命周期；Swift 扩展模块、地图 provider 等协议暂未通过此 OC facade 导出。
+
 ## 权限处理
 
 如果小程序会使用相机、位置等系统能力，需要在 `Info.plist` 中添加对应的权限说明：
