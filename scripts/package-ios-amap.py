@@ -32,9 +32,7 @@ def package(version, output, cache):
         work = Path(temp)
         package_root = work / destination.name
         frameworks = package_root / "Frameworks"
-        sources = package_root / "Sources/DiminaMapAMap"
         frameworks.mkdir(parents=True)
-        sources.mkdir(parents=True)
         for name, vendor in vendors.items():
             download = cache / f"{name}-{vendor['version']}.zip"
             if not download.exists():
@@ -48,7 +46,7 @@ def package(version, output, cache):
                 sdk.extractall(extracted)
             original = extracted / f"{name}.framework"
             if name == "MAMapKit":
-                resources = sources / "Resources"
+                resources = package_root / "Resources"
                 resources.mkdir()
                 shutil.copytree(original / "AMap.bundle", resources / "AMap.bundle")
             # Official fat archives contain arm64 device + x86_64 simulator, not arm64 simulator.
@@ -68,16 +66,24 @@ def package(version, output, cache):
                 slices.extend(["-framework", framework])
             run("xcodebuild", "-create-xcframework", *slices, "-output", frameworks / f"{name}.xcframework")
 
-        source = (ROOT / "iOS/dimina/DiminaKit/Map/DMPAMapProvider.swift").read_text()
-        guard = "#if canImport(MAMapKit) && canImport(AMapFoundationKit)\n"
-        if not source.startswith(guard) or not source.rstrip().endswith("#endif"):
-            raise ValueError("Provider source layout changed; review the package generator")
-        # This package explicitly depends on both SDKs: a missing SDK must fail compilation.
-        source = source.replace("#if SWIFT_PACKAGE\nimport Dimina\n#endif\n", "")
-        source = "import Dimina\n" + source[len(guard):].rstrip().removesuffix("#endif")
-        (sources / "DMPAMapProvider.swift").write_text(source)
-        template = (ROOT / "iOS/MapAMap/Package.swift.template").read_text()
-        (package_root / "Package.swift").write_text(template.replace("@VERSION@", version))
+        # Reuse the main package graph, including the core sources. Depending on the
+        # remote Dimina package would declare all three map targets a second time.
+        manifest = (ROOT / "Package.swift").read_text()
+        for name in vendors:
+            pattern = (
+                r'(\.binaryTarget\(\s*name: "' + re.escape(name)
+                + r'",)\s*url: "[^"]+",\s*checksum: "[^"]+"'
+            )
+            manifest, count = re.subn(
+                pattern,
+                rf'\1\n            path: "Frameworks/{name}.xcframework"',
+                manifest,
+            )
+            if count != 1:
+                raise ValueError(f"Expected one remote binary target for {name}")
+        (package_root / "Package.swift").write_text(manifest)
+        shutil.copytree(ROOT / "iOS/dimina", package_root / "iOS/dimina",
+                        ignore=shutil.ignore_patterns(".DS_Store"))
         shutil.copy(ROOT / "iOS/MapAMap/README.md", package_root / "README.md")
         shutil.copy(ROOT / "LICENSE", package_root / "LICENSE")
         shutil.copy(ROOT / "iOS/MapAMap/vendor.json", package_root / "vendor.json")

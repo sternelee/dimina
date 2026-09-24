@@ -27,7 +27,9 @@ Key 和实际隐私授权由宿主提供；定位需要 `NSLocationWhenInUseUsag
 
 ## 离线接入
 
-从 Dimina Release 下载 `DiminaMapAMap-<version>.zip` 并解压，通过 **Add Package Dependencies → Add Local** 添加，链接 `DiminaMapAMap` product。资源位于 `Sources/DiminaMapAMap/Resources/AMap.bundle`，同样需要复制到宿主主 bundle。
+从 Dimina Release 下载 `DiminaMapAMap-<version>.zip` 并解压，通过 **Add Package Dependencies → Add Local** 添加，链接 `DiminaMapAMap` product。资源位于 `Resources/AMap.bundle`，同样需要复制到宿主主 bundle。
+
+本地包包含同版本的 `Dimina` 核心源码和高德二进制，同时提供 `Dimina`、`DiminaMapAMap` 两个 product。它替代远程 Dimina package；已有远程依赖时，先移除，再将应用需要的两个 product 链接到本地包，不能同时添加两份。核心 SDK 的第三方依赖仍需联网解析或使用已有缓存。
 
 当前固定的高德官方库支持 arm64 iOS 真机和 x86_64 iOS 模拟器，不包含 arm64 模拟器架构。Apple Silicon 请使用真机或 x86_64/Rosetta 模拟器。
 

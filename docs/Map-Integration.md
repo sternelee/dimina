@@ -81,7 +81,7 @@ Android 使用仓库现有的原生组件兼容路径：原生组件层位于透
 
 `DiminaMapAMap` product 从 1.7.6 开始提供，1.7.5 及更早的 tag 不包含它；1.7.6 tag 发布前可按包含该改动的分支或 commit 接入。离线接入仍可下载 Release 中的 `DiminaMapAMap-<version>.zip`，解压后使用 **Add Local**。
 
-将 SwiftPM 下载的 `MAMapKit.xcframework/ios-arm64/MAMapKit.framework/AMap.bundle`（或本地包的 `Sources/DiminaMapAMap/Resources/AMap.bundle`）加入宿主 **Copy Bundle Resources**，因为高德从应用主 bundle 查找地图资源。宿主仍需提供平台 Key 和实际隐私授权状态。不要重复链接另一份高德 Framework。
+将 SwiftPM 下载的 `MAMapKit.xcframework/ios-arm64/MAMapKit.framework/AMap.bundle`（或本地包的 `Resources/AMap.bundle`）加入宿主 **Copy Bundle Resources**，因为高德从应用主 bundle 查找地图资源。宿主仍需提供平台 Key 和实际隐私授权状态。不要重复链接另一份高德 Framework。
 
 打包脚本固定 AMap3DMap **11.2.100**、AMapFoundation **1.9.1** 的官方下载及 SHA-256，转换为 XCFramework。官方二进制只含 **arm64 真机和 x86_64 模拟器**；Apple Silicon 上需使用 x86_64/Rosetta 模拟器或真机，不支持 arm64 模拟器。[完整包说明](../iOS/MapAMap/README.md)。
 
